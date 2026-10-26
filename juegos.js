@@ -4,6 +4,6 @@
 // - Juego pesado en su propio repo: { ..., url: "https://usuario.github.io/otro-repo/" }
 export const JUEGOS = [
   { id: "ejemplo", nombre: "Reflejos", icono: "🎯", descripcion: "Toca el blanco lo más rápido que puedas en 15 segundos.", carpeta: "ejemplo" },
-  { id: "doodle", nombre: "Saltarín", icono: "🦘", descripcion: "Salta de plataforma en plataforma sin caer (estilo Doodle Jump).", carpeta: "doodle" },
+  { id: "doodle", nombre: "Saltarín", icono: "🦘", descripcion: "Sube lo más alto que puedas: plataformas trampa, enemigos, monedas y un gorro que te lanza 100 m (estilo Doodle Jump).", carpeta: "doodle" },
   { id: "piano", nombre: "Piano", icono: "🎹", descripcion: "Toca las teclas negras que bajan sin fallar ninguna.", carpeta: "piano" },
 ];

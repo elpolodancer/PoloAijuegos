@@ -15,7 +15,7 @@ Cada archivo trae en su **primera línea** su ruta dentro del repo (`Ruta: ...`)
 | `compartido/estilos.css` | Estilos comunes de todos los juegos |
 | `ejemplo/index.html` | Página del juego de plantilla «Reflejos» (no es el portal) |
 | `ejemplo/juego.js` | Lógica de «Reflejos» |
-| `doodle/index.html`, `doodle/juego.js` | Juego «Saltarín» (estilo Doodle Jump) |
+| `doodle/index.html`, `doodle/juego.js` | Juego «Saltarín» (estilo Doodle Jump): plataformas normales, móviles, trampolín (salto doble), que se rompen y de un solo salto; enemigos, monedas, gorro de 100 m y marcador de metros. Los ajustes (gravedad, metros del gorro, puntos) están al inicio de `juego.js` |
 | `piano/index.html`, `piano/juego.js` | Juego «Piano» (estilo Piano Tiles, con sonido) |
 | `firestore.rules` | Reglas de seguridad; se pegan en la consola de Firebase |
 
@@ -33,6 +33,7 @@ Cada archivo trae en su **primera línea** su ruta dentro del repo (`Ruta: ...`)
 - [ ] Authentication (Google) y Firestore activados; reglas pegadas
 - [ ] Dominio `tuusuario.github.io` agregado en dominios autorizados
 - [ ] Repo publicado en GitHub Pages
+- Saltarín mejorado (enemigos, monedas, plataformas especiales, gorro de 100 m, metros de altura): hecho, probado con simulación; falta probarlo a mano en el navegador
 - Juegos: `ejemplo` (plantilla), `doodle`, `piano`. Pendientes: ajedrez (con puntos y ligas)
 - Juegos en repo propio (con `url` en `juegos.js`): ninguno por ahora
 
