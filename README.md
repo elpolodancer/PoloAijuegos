@@ -17,6 +17,7 @@ Cada archivo trae en su **primera línea** su ruta dentro del repo (`Ruta: ...`)
 | `ejemplo/juego.js` | Lógica de «Reflejos» |
 | `doodle/index.html`, `doodle/juego.js` | Juego «Saltarín» (estilo Doodle Jump): plataformas normales, móviles, trampolín (salto doble), que se rompen y de un solo salto; enemigos, monedas, gorro de 100 m y marcador de metros. Los ajustes (gravedad, metros del gorro, puntos) están al inicio de `juego.js` |
 | `piano/index.html`, `piano/juego.js` | Juego «Piano» (estilo Piano Tiles, con sonido) |
+| `corredor/index.html`, `corredor/juego.js` | Juego «Corredor» (estilo Subway Surfers): 3 carriles en perspectiva, trenes, barreras, barras altas, monedas e imán. Los ajustes (velocidad, salto, puntos) están al inicio de `juego.js` |
 | `firestore.rules` | Reglas de seguridad; se pegan en la consola de Firebase |
 
 **Regla de las carpetas:** cada juego vive en su carpeta (`nombre-del-juego/index.html` + sus archivos) y llama a lo común con `../compartido/...`. Esa ruta relativa en los `import` y en el `<link>` también indica dónde está cada archivo.
@@ -34,7 +35,8 @@ Cada archivo trae en su **primera línea** su ruta dentro del repo (`Ruta: ...`)
 - [ ] Dominio `tuusuario.github.io` agregado en dominios autorizados
 - [ ] Repo publicado en GitHub Pages
 - Saltarín mejorado (enemigos, monedas, plataformas especiales, gorro de 100 m, metros de altura): hecho, probado con simulación; falta probarlo a mano en el navegador
-- Juegos: `ejemplo` (plantilla), `doodle`, `piano`. Pendientes: ajedrez (con puntos y ligas)
+- Corredor (estilo Subway Surfers): hecho y probado con simulación; falta probarlo a mano en el navegador
+- Juegos: `ejemplo` (plantilla), `doodle`, `piano`, `corredor`. Pendientes: ajedrez (con puntos y ligas)
 - Juegos en repo propio (con `url` en `juegos.js`): ninguno por ahora
 
 ## Puesta en marcha

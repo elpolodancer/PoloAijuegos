@@ -1,0 +1,27 @@
+<!doctype html>
+<!-- Ruta: corredor/index.html (página del juego «corredor») -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Corredor</title>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+</head>
+<body>
+  <header class="barra">
+    <a class="volver" href="../index.html">‹ Juegos</a>
+    <h1>🏃 Corredor</h1>
+  </header>
+  <main>
+    <canvas id="lienzo" class="lienzo" width="360" height="560"></canvas>
+    <p id="estado">Flechas o A/D: cambiar de carril · ↑, W o espacio: saltar · ↓ o S: agacharte. En el celular, desliza el dedo hacia donde quieras ir.</p>
+    <p style="color: var(--suave); font-size: 0.9rem; line-height: 1.5;">
+      Salta las barreras naranjas, agáchate bajo las barras amarillas y cambia de carril para esquivar los trenes.
+      Un golpe te hace tropezar; si chocas otra vez en 2,5 segundos, te atrapan. Junta monedas y el imán 🧲 para atraerlas.
+    </p>
+    <button id="jugar" class="btn" type="button">Jugar</button>
+    <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
+  </main>
+  <script type="module" src="juego.js"></script>
+</body>
+</html>
