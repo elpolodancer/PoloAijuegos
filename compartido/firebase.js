@@ -8,10 +8,12 @@ import { getAuth } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-aut
 import { getFirestore } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
 export const FIREBASE_CONFIG = {
-  apiKey: "PEGA_AQUI",
-  authDomain: "TU-PROYECTO.firebaseapp.com",
-  projectId: "TU-PROYECTO",
-  appId: "PEGA_AQUI",
+  apiKey: "AIzaSyA80l29AWAR3x1NCDoRPyhtM6c0JOYqoAA",
+  authDomain: "elpolodancer.firebaseapp.com",
+  projectId: "elpolodancer",
+  storageBucket: "elpolodancer.firebasestorage.app",
+  messagingSenderId: "397139900415",
+  appId: "1:397139900415:web:65046c5fc273eb9963d9ca",
 };
 
 // Mientras no pegues tu configuración, los juegos funcionan pero sin sesión ni puntos

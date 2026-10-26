@@ -29,7 +29,7 @@ Cada archivo trae en su **primera línea** su ruta dentro del repo (`Ruta: ...`)
 
 ## Estado (actualízalo al terminar cada sesión)
 
-- [ ] Configuración de Firebase pegada en `compartido/firebase.js`
+- [x] Configuración de Firebase pegada en `compartido/firebase.js` (proyecto `elpolodancer`)
 - [ ] Authentication (Google) y Firestore activados; reglas pegadas
 - [ ] Dominio `tuusuario.github.io` agregado en dominios autorizados
 - [ ] Repo publicado en GitHub Pages
