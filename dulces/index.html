@@ -1,0 +1,169 @@
+<!doctype html>
+<!-- Ruta: dulces/index.html (página del juego «dulces», estilo Candy Crush) -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Dulces</title>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    [hidden] { display: none !important; }
+    body { background: radial-gradient(circle at 50% 0%, #3b2a7a 0%, #1a1440 55%, #0f1220 100%) fixed; }
+    main { padding: 10px 10px 28px; }
+    .barra .der { display: flex; gap: 8px; align-items: center; }
+    .btn.peq { padding: 4px 10px; font-size: 1rem; }
+    .btn.sec { background: #3a3f66; }
+    .btn.grande { padding: 12px 22px; font-size: 1.1rem; border-radius: 14px; }
+
+    /* ---- Mapa de niveles ---- */
+    #mapa h2 { margin: 6px 0 4px; }
+    .niveles { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 10px; margin: 12px 0; }
+    .nivel { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; aspect-ratio: 1; font: inherit; font-weight: 800; font-size: 1.25rem; color: #fff; background: linear-gradient(160deg, #ff7eb3, #c13584); border: 3px solid #ffd1e8; border-radius: 50%; cursor: pointer; box-shadow: 0 4px 0 #7d1f55; }
+    .nivel small { font-size: 0.65rem; letter-spacing: 1px; color: #ffe27a; line-height: 1; }
+    .nivel.hecho { background: linear-gradient(160deg, #ffb347, #e8590c); border-color: #ffe0b3; box-shadow: 0 4px 0 #8f3507; }
+    .nivel:disabled { cursor: default; color: #7b7fa6; background: #262b4d; border-color: #3a3f66; box-shadow: none; }
+    .nivel:not(:disabled):active { transform: translateY(3px); box-shadow: 0 1px 0 #7d1f55; }
+
+    /* ---- Panel superior ---- */
+    #hud { display: flex; align-items: stretch; justify-content: center; gap: 8px; max-width: 520px; margin: 0 auto 8px; }
+    .caja { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 58px; padding: 4px 6px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 14px; text-align: center; }
+    .caja small { color: var(--suave); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .caja b { font-size: 1.5rem; line-height: 1.1; }
+    #objetivo { flex: 2; }
+    #objetivo .metas { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; justify-content: center; font-weight: 800; font-size: 1.15rem; }
+    .meta { display: flex; align-items: center; gap: 5px; }
+    .meta .forma { width: 24px; height: 24px; flex: none; }
+    .meta.listo { color: #6bff9a; }
+    .gelito { width: 22px; height: 22px; border: 2px solid #dff6ff; border-radius: 5px; background: rgba(140, 215, 255, 0.55); }
+    #movs.poco { color: #ff7a7a; animation: latido 0.6s ease-in-out infinite alternate; }
+
+    /* ---- Barra de puntos ---- */
+    #barra { position: relative; max-width: 520px; height: 26px; margin: 0 auto 10px; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 13px; overflow: hidden; }
+    #relleno { height: 100%; width: 0; background: linear-gradient(90deg, #ff7eb3, #ffd54f); border-radius: 13px; transition: width 0.4s ease-out; }
+    #puntos { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.85rem; text-shadow: 0 1px 3px #000; }
+    .marca { position: absolute; top: 0; height: 100%; width: 22px; margin-left: -22px; display: flex; align-items: center; justify-content: center; font-size: 0.95rem; color: #6f739c; }
+    .marca.on { color: #ffd54f; text-shadow: 0 0 8px #ffb300; }
+
+    /* ---- Tablero ---- */
+    #marco { position: relative; width: 100%; max-width: 520px; margin: 0 auto; }
+    #tablero { position: relative; margin: 0 auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+    #fondo, #dulces, #efectos { position: absolute; inset: 0; }
+    #efectos { pointer-events: none; z-index: 5; overflow: hidden; }
+    #tablero.fuera #dulces { pointer-events: none; }
+    .celda { position: absolute; left: 0; top: 0; width: var(--t); height: var(--t); background: rgba(255, 255, 255, 0.09); }
+    .celda.p { background: rgba(255, 255, 255, 0.15); }
+    .gel { position: absolute; inset: 0; background: rgba(150, 220, 255, 0.5); border: 2px solid rgba(225, 248, 255, 0.9); box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.6); }
+    .gel.g2 { background: rgba(80, 165, 255, 0.72); box-shadow: inset 0 0 0 4px rgba(150, 215, 255, 0.55), inset 0 0 10px rgba(255, 255, 255, 0.7); }
+    .gel.rompe { animation: rompe 0.4s ease-out forwards; }
+
+    /* ---- Dulces ---- */
+    .dulce { position: absolute; left: 0; top: 0; width: var(--t); height: var(--t); padding: calc(var(--t) * 0.07); transition-property: transform; transition-duration: 0.2s; transition-timing-function: cubic-bezier(0.3, 0.7, 0.4, 1); will-change: transform; }
+    .forma { position: relative; width: 100%; height: 100%; }
+    .c0 { background: radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.9) 0 9%, rgba(255, 255, 255, 0) 30%), linear-gradient(155deg, #ff7f8d, #e0203a); clip-path: circle(47%); }
+    .c1 { background: radial-gradient(circle at 36% 28%, rgba(255, 255, 255, 0.85) 0 8%, rgba(255, 255, 255, 0) 28%), linear-gradient(155deg, #ffbe5c, #f06a00); clip-path: polygon(50% 1%, 99% 50%, 50% 99%, 1% 50%); }
+    .c2 { background: radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.9) 0 9%, rgba(255, 255, 255, 0) 30%), linear-gradient(155deg, #fff27a, #f2b600); clip-path: polygon(26% 5%, 74% 5%, 99% 50%, 74% 95%, 26% 95%, 1% 50%); }
+    .c3 { background: radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.85) 0 9%, rgba(255, 255, 255, 0) 30%), linear-gradient(155deg, #6df08f, #12a24a); clip-path: inset(6% round 26%); }
+    .c4 { background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.85) 0 8%, rgba(255, 255, 255, 0) 28%), linear-gradient(155deg, #7cc4ff, #1565d8); clip-path: ellipse(50% 38% at 50% 50%); }
+    .c5 { background: radial-gradient(circle at 40% 30%, rgba(255, 255, 255, 0.8) 0 8%, rgba(255, 255, 255, 0) 28%), linear-gradient(155deg, #d9a0ff, #8a2be2); clip-path: polygon(50% 1%, 62% 36%, 99% 38%, 70% 60%, 81% 95%, 50% 74%, 19% 95%, 30% 60%, 1% 38%, 38% 36%); }
+    /* Rayas: la dirección de las rayas es la dirección en la que limpia */
+    .e-h::after, .e-v::after { content: ""; position: absolute; inset: 0; }
+    .e-h::after { background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.92) 0 10%, rgba(255, 255, 255, 0) 10% 24%); }
+    .e-v::after { background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.92) 0 10%, rgba(255, 255, 255, 0) 10% 24%); }
+    /* Envuelto: cuadrito blanco alrededor */
+    .e-w::after { content: ""; position: absolute; inset: 19%; border: 3px solid #fff; border-radius: 30%; background: rgba(255, 255, 255, 0.22); box-shadow: 0 0 8px rgba(255, 255, 255, 0.9); animation: brillo 1s ease-in-out infinite alternate; }
+    /* Bomba de color */
+    .forma.e-b { background: radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.55) 0 9%, rgba(255, 255, 255, 0) 28%), radial-gradient(circle at 24% 58%, #ff4d5e 0 7%, transparent 8%), radial-gradient(circle at 72% 30%, #3aa0ff 0 7%, transparent 8%), radial-gradient(circle at 55% 78%, #ffe14a 0 7%, transparent 8%), radial-gradient(circle at 80% 62%, #3ddc6b 0 7%, transparent 8%), radial-gradient(circle at 42% 18%, #b05cff 0 7%, transparent 8%), radial-gradient(circle at 50% 50%, #8a5a3a, #2a1507); clip-path: circle(48%); animation: brillo 0.8s ease-in-out infinite alternate; }
+    .dulce.sel .forma { animation: salto 0.35s ease-in-out infinite alternate; filter: brightness(1.2); }
+    .dulce.pista .forma { animation: salto 0.45s ease-in-out infinite alternate; }
+    .dulce.flash .forma { filter: brightness(2.2) saturate(0.5); }
+    .forma.pop { animation: pop 0.28s ease-in forwards; }
+    .forma.aparece { animation: aparece 0.35s ease-out; }
+    .dulce.sacude .forma { animation: sacude 0.25s; }
+
+    /* ---- Efectos ---- */
+    .chispa { position: absolute; width: calc(var(--t) * 0.16); height: calc(var(--t) * 0.16); margin: calc(var(--t) * -0.08) 0 0 calc(var(--t) * -0.08); border-radius: 50%; background: var(--col, #fff); animation: chispa 0.5s ease-out forwards; }
+    .rayo { position: absolute; background: linear-gradient(90deg, rgba(255, 255, 255, 0), #fff 30%, #fff 70%, rgba(255, 255, 255, 0)); box-shadow: 0 0 14px #fff; opacity: 0; }
+    .rayo.f { left: 0; width: 100%; height: calc(var(--t) * 0.45); animation: rayoF 0.5s ease-out; }
+    .rayo.c { top: 0; height: 100%; width: calc(var(--t) * 0.45); background: linear-gradient(180deg, rgba(255, 255, 255, 0), #fff 30%, #fff 70%, rgba(255, 255, 255, 0)); animation: rayoC 0.5s ease-out; }
+    .anillo { position: absolute; border: 5px solid #fff; border-radius: 50%; box-shadow: 0 0 16px #fff, inset 0 0 16px #fff; transform: translate(-50%, -50%) scale(0.15); opacity: 0.95; animation: anillo 0.5s ease-out forwards; }
+    .zap { position: absolute; height: 4px; transform-origin: 0 50%; background: linear-gradient(90deg, #fff, #ffe14a); box-shadow: 0 0 8px #fff; animation: zap 0.55s ease-out forwards; }
+    .etq { position: absolute; transform: translate(-50%, -50%); font-weight: 900; font-size: calc(var(--t) * 0.42); color: #fff; text-shadow: 0 2px 0 #7d1f55, 0 0 6px #000; white-space: nowrap; animation: sube 0.9s ease-out forwards; }
+    #aviso { position: absolute; left: 0; right: 0; top: 42%; z-index: 6; text-align: center; pointer-events: none; font-weight: 900; font-size: 2.1rem; color: #fff; text-shadow: 0 3px 0 #c13584, 0 0 14px #ff7eb3; opacity: 0; }
+    #aviso.ver { animation: aviso 1.1s ease-out; }
+
+    @keyframes pop { 0% { transform: scale(1); } 35% { transform: scale(1.3); opacity: 1; } 100% { transform: scale(0.05); opacity: 0; } }
+    @keyframes aparece { 0% { transform: scale(0); } 65% { transform: scale(1.3); } 100% { transform: scale(1); } }
+    @keyframes salto { from { transform: translateY(0) scale(1); } to { transform: translateY(-7%) scale(1.1); } }
+    @keyframes brillo { from { filter: brightness(1); } to { filter: brightness(1.3); } }
+    @keyframes sacude { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8%); } 75% { transform: translateX(8%); } }
+    @keyframes chispa { to { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; } }
+    @keyframes rayoF { 0% { opacity: 1; transform: scaleX(0); } 55% { opacity: 1; transform: scaleX(1); } 100% { opacity: 0; transform: scaleX(1); } }
+    @keyframes rayoC { 0% { opacity: 1; transform: scaleY(0); } 55% { opacity: 1; transform: scaleY(1); } 100% { opacity: 0; transform: scaleY(1); } }
+    @keyframes anillo { to { transform: translate(-50%, -50%) scale(1); opacity: 0; } }
+    @keyframes zap { 0% { opacity: 1; transform: rotate(var(--ang)) scaleX(0); } 40% { opacity: 1; transform: rotate(var(--ang)) scaleX(1); } 100% { opacity: 0; transform: rotate(var(--ang)) scaleX(1); } }
+    @keyframes sube { 0% { opacity: 0; margin-top: 0; } 15% { opacity: 1; } 100% { opacity: 0; margin-top: calc(var(--t) * -0.9); } }
+    @keyframes aviso { 0% { opacity: 0; transform: scale(0.4); } 25% { opacity: 1; transform: scale(1.15); } 70% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1) translateY(-20px); } }
+    @keyframes rompe { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.4); } }
+    @keyframes latido { from { transform: scale(1); } to { transform: scale(1.15); } }
+    @keyframes estrella { 0% { transform: scale(0) rotate(-90deg); opacity: 0; } 70% { transform: scale(1.4) rotate(10deg); opacity: 1; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
+
+    .acciones { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
+    #estado { text-align: center; }
+
+    /* ---- Ventana ---- */
+    .modal { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(8, 6, 26, 0.72); }
+    .panel { width: 100%; max-width: 360px; padding: 22px 18px; text-align: center; background: linear-gradient(170deg, #5a3fa8, #2b1d63); border: 3px solid #ffd1e8; border-radius: 22px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); }
+    .panel h2 { margin: 0 0 8px; font-size: 1.6rem; text-shadow: 0 2px 0 #7d1f55; }
+    .panel p { margin: 6px 0; }
+    .panel .botones { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+    .panel .metas { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 16px; margin: 12px 0; font-size: 1.3rem; font-weight: 800; }
+    .panel .meta .forma { width: 34px; height: 34px; }
+    .panel .gelito { width: 30px; height: 30px; }
+    .estrellas { display: flex; justify-content: center; gap: 6px; margin: 8px 0; font-size: 3rem; line-height: 1; }
+    .estrellas span { color: #4a4380; }
+    .estrellas span.on { color: #ffd54f; text-shadow: 0 0 14px #ffb300; animation: estrella 0.6s ease-out backwards; }
+    .estrellas span.on:nth-child(2) { animation-delay: 0.25s; }
+    .estrellas span.on:nth-child(3) { animation-delay: 0.5s; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <a class="volver" href="../index.html">‹ Juegos</a>
+    <h1>🍬 Dulces</h1>
+    <div class="der"><button id="sonido" class="btn peq sec" type="button" aria-label="Sonido">🔊</button></div>
+  </header>
+  <main>
+    <section id="mapa">
+      <h2>Elige un nivel</h2>
+      <p id="resumen" style="color: var(--suave); margin: 0"></p>
+      <div id="niveles" class="niveles"></div>
+      <div class="acciones"><button id="entrarMapa" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button></div>
+    </section>
+
+    <section id="juego" hidden>
+      <div id="hud">
+        <div class="caja"><small>Nivel</small><b id="nnivel">1</b></div>
+        <div id="objetivo" class="caja"></div>
+        <div class="caja"><small>Movimientos</small><b id="movs">0</b></div>
+      </div>
+      <div id="barra"><div id="relleno"></div><div id="puntos">0</div></div>
+      <div id="marco">
+        <div id="tablero">
+          <div id="fondo"></div>
+          <div id="dulces"></div>
+          <div id="efectos"></div>
+        </div>
+        <div id="aviso"></div>
+      </div>
+      <div class="acciones">
+        <button id="reiniciar" class="btn" type="button">Reiniciar</button>
+        <button id="atras" class="btn sec" type="button">Niveles</button>
+        <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
+      </div>
+      <p id="estado">Desliza un dulce hacia otro (o toca dos dulces juntos) para intercambiarlos. Junta 3 o más del mismo color.</p>
+    </section>
+  </main>
+  <div id="modal" class="modal" hidden><div id="panel" class="panel"></div></div>
+  <script type="module" src="juego.js"></script>
+</body>
+</html>

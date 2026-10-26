@@ -18,6 +18,8 @@ Cada archivo trae en su **primera línea** su ruta dentro del repo (`Ruta: ...`)
 | `doodle/index.html`, `doodle/juego.js` | Juego «Saltarín» (estilo Doodle Jump): plataformas normales, móviles, trampolín (salto doble), que se rompen y de un solo salto; enemigos, monedas, gorro de 100 m y marcador de metros. Los ajustes (gravedad, metros del gorro, puntos) están al inicio de `juego.js` |
 | `piano/index.html`, `piano/juego.js` | Juego «Piano» (estilo Piano Tiles, con sonido) |
 | `corredor/index.html`, `corredor/juego.js` | Juego «Corredor» (estilo Subway Surfers): 3 carriles en perspectiva, trenes, barreras, barras altas, monedas e imán. Los ajustes (velocidad, salto, puntos) están al inicio de `juego.js` |
+| `solitario/index.html`, `solitario/juego.js` | Juego «Solitario» (Klondike clásico): 7 columnas, mazo, descarte y 4 bases; toca para seleccionar y mover, toca la carta seleccionada para subirla a la base, deshacer, tiempo y puntos estilo Windows. Los ajustes (cartas por robada `ROBAR`, puntos, bono de victoria) están al inicio de `juego.js` |
+| `dulces/index.html`, `dulces/juego.js`, `dulces/logica.js`, `dulces/niveles.js` | Juego «Dulces» (estilo Candy Crush): 3 en línea, 4 en línea → dulce de rayas, L/T → envuelto, 5 en línea → bomba de color, combinaciones entre especiales, cascadas, gelatina, 3 tipos de objetivo (puntos, gelatina, recoger), 40 niveles con estrellas y bono por movimientos sobrantes. `logica.js` son solo las reglas (sin pantalla); `niveles.js` tiene los moldes y la tabla `AJUSTES` con movimientos/metas de cada nivel (calibrada con simulaciones). Al perfil se envía 1 punto por cada 50 del juego (`PUNTOS_POR_PERFIL` en `juego.js`); las estrellas se guardan en el navegador |
 | `firestore.rules` | Reglas de seguridad; se pegan en la consola de Firebase |
 
 **Regla de las carpetas:** cada juego vive en su carpeta (`nombre-del-juego/index.html` + sus archivos) y llama a lo común con `../compartido/...`. Esa ruta relativa en los `import` y en el `<link>` también indica dónde está cada archivo.
@@ -36,7 +38,9 @@ Cada archivo trae en su **primera línea** su ruta dentro del repo (`Ruta: ...`)
 - [ ] Repo publicado en GitHub Pages
 - Saltarín mejorado (enemigos, monedas, plataformas especiales, gorro de 100 m, metros de altura): hecho, probado con simulación; falta probarlo a mano en el navegador
 - Corredor (estilo Subway Surfers): hecho y probado con simulación; falta probarlo a mano en el navegador
-- Juegos: `ejemplo` (plantilla), `doodle`, `piano`, `corredor`. Pendientes: ajedrez (con puntos y ligas)
+- Solitario (Klondike): hecho y probado con simulación de partidas (reglas y deshacer); falta probarlo a mano en el navegador
+- Dulces (estilo Candy Crush): hecho; reglas probadas con simulaciones y la interfaz probada en un navegador (24 jugadas de un nivel hasta la victoria); falta probarlo a mano en el celular
+- Juegos: `ejemplo` (plantilla), `doodle`, `piano`, `corredor`, `solitario`, `dulces`. Pendientes: ajedrez (con puntos y ligas)
 - Juegos en repo propio (con `url` en `juegos.js`): ninguno por ahora
 
 ## Puesta en marcha

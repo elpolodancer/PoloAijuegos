@@ -7,4 +7,6 @@ export const JUEGOS = [
   { id: "doodle", nombre: "Saltarín", icono: "🦘", descripcion: "Sube lo más alto que puedas: plataformas trampa, enemigos, monedas y un gorro que te lanza 100 m (estilo Doodle Jump).", carpeta: "doodle" },
   { id: "piano", nombre: "Piano", icono: "🎹", descripcion: "Toca las teclas negras que bajan sin fallar ninguna.", carpeta: "piano" },
   { id: "corredor", nombre: "Corredor", icono: "🏃", descripcion: "Corre por las vías esquivando trenes y barreras y junta monedas (estilo Subway Surfers).", carpeta: "corredor" },
+  { id: "solitario", nombre: "Solitario", icono: "🃏", descripcion: "El clásico Klondike: ordena las cartas en las 4 bases, con deshacer y puntos.", carpeta: "solitario" },
+  { id: "dulces", nombre: "Dulces", icono: "🍬", descripcion: "Junta 3 o más dulces del mismo color: rayas, envueltos, bombas de color, gelatina y 40 niveles (estilo Candy Crush).", carpeta: "dulces" },
 ];
