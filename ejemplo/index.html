@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- Ruta: ejemplo/index.html (página del juego «ejemplo», NO es el portal) -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reflejos</title>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    #area { position: relative; height: 60vh; margin-top: 12px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; overflow: hidden; touch-action: manipulation; }
+    #blanco { position: absolute; width: 48px; height: 48px; font-size: 1.6rem; background: var(--acento); border: 0; border-radius: 50%; cursor: pointer; }
+    #inicio { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+    #info { display: flex; justify-content: space-between; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <a class="volver" href="../index.html">‹ Juegos</a>
+    <h1>🎯 Reflejos</h1>
+  </header>
+  <main>
+    <div id="info"><span>Puntos: <span id="marcador">0</span></span><span>Tiempo: <span id="tiempo">15</span></span></div>
+    <div id="area">
+      <button id="blanco" type="button" hidden aria-label="Blanco">🎯</button>
+      <button id="inicio" class="btn" type="button">Jugar</button>
+    </div>
+    <p id="estado"></p>
+    <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
+  </main>
+  <script type="module" src="juego.js"></script>
+</body>
+</html>

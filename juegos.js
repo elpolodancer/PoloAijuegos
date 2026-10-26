@@ -1,0 +1,9 @@
+// Ruta: juegos.js (raíz del repo)
+// Lista de juegos del portal. Para agregar uno: copia la carpeta «ejemplo», cámbiale el nombre y añade una línea aquí.
+// - Juego dentro de este repo:      { ..., carpeta: "ajedrez" }
+// - Juego pesado en su propio repo: { ..., url: "https://usuario.github.io/otro-repo/" }
+export const JUEGOS = [
+  { id: "ejemplo", nombre: "Reflejos", icono: "🎯", descripcion: "Toca el blanco lo más rápido que puedas en 15 segundos.", carpeta: "ejemplo" },
+  { id: "doodle", nombre: "Saltarín", icono: "🦘", descripcion: "Salta de plataforma en plataforma sin caer (estilo Doodle Jump).", carpeta: "doodle" },
+  { id: "piano", nombre: "Piano", icono: "🎹", descripcion: "Toca las teclas negras que bajan sin fallar ninguna.", carpeta: "piano" },
+];

@@ -1,0 +1,15 @@
+// Ruta: firestore.rules (raíz del repo; se pega en Firebase, no lo lee la página)
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Cada jugador solo escribe en sus propios documentos; todos pueden leer (para los rankings)
+    match /perfiles/{uid} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /juegos/{juego}/jugadores/{uid} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

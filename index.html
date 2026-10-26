@@ -1,0 +1,63 @@
+<!doctype html>
+<!-- Ruta: index.html (portal, en la raíz del repo) -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Juegos</title>
+  <link rel="stylesheet" href="compartido/estilos.css" />
+</head>
+<body>
+  <header class="barra">
+    <h1>🎮 Juegos</h1>
+    <div id="sesion"></div>
+  </header>
+  <main>
+    <div id="lista" class="rejilla"></div>
+  </main>
+  <script type="module">
+    import { JUEGOS } from "./juegos.js";
+    import { alCambiarSesion, entrar, salir, leerPerfil } from "./compartido/jugador.js";
+
+    // Lista de juegos: cada tarjeta lleva a su carpeta (o a su repo propio si tiene «url»)
+    const lista = document.getElementById("lista");
+    JUEGOS.forEach((j) => {
+      const a = document.createElement("a");
+      a.className = "tarjeta";
+      a.href = j.url || j.carpeta + "/";
+      const ico = document.createElement("span");
+      ico.className = "tarjeta-ico";
+      ico.textContent = j.icono || "🎲";
+      const n = document.createElement("b");
+      n.textContent = j.nombre;
+      const d = document.createElement("small");
+      d.textContent = j.descripcion || "";
+      a.append(ico, n, d);
+      lista.appendChild(a);
+    });
+
+    // Sesión con Google y puntos totales (los mismos para todos los juegos)
+    const zona = document.getElementById("sesion");
+    alCambiarSesion(async (u) => {
+      zona.innerHTML = "";
+      const b = document.createElement("button");
+      b.className = "btn";
+      if (!u) {
+        b.textContent = "Entrar con Google";
+        b.addEventListener("click", () => entrar().catch((e) => alert(e.message)));
+        zona.appendChild(b);
+        return;
+      }
+      const t = document.createElement("span");
+      t.textContent = (u.displayName || "Jugador") + " · ";
+      b.textContent = "Salir";
+      b.addEventListener("click", salir);
+      zona.append(t, b);
+      try {
+        const p = await leerPerfil();
+        t.textContent = (u.displayName || "Jugador") + " · " + (p ? p.total || 0 : 0) + " pts · ";
+      } catch (e) {}
+    });
+  </script>
+</body>
+</html>
