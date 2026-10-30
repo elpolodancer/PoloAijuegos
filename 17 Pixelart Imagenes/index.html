@@ -1,0 +1,129 @@
+<!doctype html>
+<!-- Ruta: pixelart/index.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Pixelart por números</title>
+  <meta name="theme-color" content="#1b2330" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    [hidden] { display: none !important; }
+    :root { --pa-fondo: #1b2330; --pa-panel: #243044; --pa-linea: #34425c; --pa-texto: #e8eef7; --pa-suave: #9aa9bf; --pa-acento: #ffc83d; }
+    html, body { margin: 0; height: 100%; background: var(--pa-fondo); color: var(--pa-texto); overscroll-behavior: none; }
+    #app { height: 100dvh; display: flex; flex-direction: column; }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    .b { background: var(--pa-panel); border: 1px solid var(--pa-linea); border-radius: 10px; padding: 8px 12px; }
+    .b:hover, .b:focus-visible { border-color: var(--pa-acento); outline: none; }
+    .b.on { background: var(--pa-acento); color: #1b1500; border-color: var(--pa-acento); font-weight: 700; }
+    .b.fuerte { background: var(--pa-acento); color: #1b1500; border-color: var(--pa-acento); font-weight: 700; }
+    .b:disabled { opacity: .5; cursor: default; }
+
+    /* ---------- Menú ---------- */
+    #menu { flex: 1; overflow-y: auto; padding: 14px 16px calc(24px + env(safe-area-inset-bottom)); max-width: 880px; width: 100%; margin: 0 auto; box-sizing: border-box; }
+    #menu header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    #menu h1 { margin: 0; font-size: 1.5rem; }
+    #menu a.volver { color: var(--pa-suave); text-decoration: none; padding: 6px 10px; border: 1px dashed var(--pa-linea); border-radius: 999px; }
+    #menu p.intro { color: var(--pa-suave); line-height: 1.5; max-width: 60ch; }
+    #subir { display: inline-block; }
+    #estadoSubida { margin-left: 10px; color: var(--pa-suave); font-size: .9rem; }
+    #galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 12px; }
+    .foto { position: relative; background: var(--pa-panel); border: 1px solid var(--pa-linea); border-radius: 12px; overflow: hidden; padding: 0; text-align: left; }
+    .foto img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; background: #111827; }
+    .foto span { display: block; padding: 6px 8px; font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .foto .x { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,.6); border: 0; padding: 0; line-height: 1; }
+    .vacio { color: var(--pa-suave); grid-column: 1 / -1; padding: 18px 0; }
+
+    #preparar { position: fixed; inset: 0; background: rgba(8,12,20,.8); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 20; }
+    #preparar .caja { background: var(--pa-panel); border: 1px solid var(--pa-linea); border-radius: 16px; padding: 16px; width: min(440px, 100%); max-height: 100%; overflow-y: auto; box-sizing: border-box; }
+    #preparar img { width: 100%; max-height: 38vh; object-fit: contain; background: #111827; border-radius: 10px; }
+    #tamanos { display: grid; gap: 8px; margin: 12px 0; }
+    #tamanos .b { display: flex; justify-content: space-between; align-items: center; text-align: left; }
+    #tamanos small { color: inherit; opacity: .75; }
+    #preparar .fila { display: flex; gap: 8px; justify-content: flex-end; }
+
+    /* ---------- Juego ---------- */
+    #juego { flex: 1; display: flex; flex-direction: column; min-height: 0; padding-top: env(safe-area-inset-top); }
+    .herr { display: flex; align-items: center; gap: 6px; padding: 6px 8px; flex-wrap: wrap; background: var(--pa-panel); border-bottom: 1px solid var(--pa-linea); }
+    .herr .b { padding: 6px 10px; }
+    #pct { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 700; }
+    #lienzo { position: relative; flex: 1; min-height: 0; background: #2b221a; }
+    #lienzo canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+    .pie { background: var(--pa-panel); border-top: 1px solid var(--pa-linea); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
+    .pie .linea { display: flex; align-items: center; gap: 10px; font-size: .85rem; color: var(--pa-suave); padding-bottom: 6px; }
+    .pie input[type=range] { width: 110px; accent-color: var(--pa-acento); }
+    #info { margin-left: auto; color: var(--pa-texto); }
+    #paleta { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+    .chip { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 10px; border: 2px solid transparent; font-weight: 800; font-size: .95rem; padding: 0; position: relative; box-shadow: inset 0 0 0 1px rgba(0,0,0,.35); }
+    .chip.sel { border-color: #fff; outline: 3px solid var(--pa-acento); outline-offset: 1px; }
+    .chip.hecho { opacity: .35; }
+    .chip.hecho::after { content: "✓"; position: absolute; right: 3px; top: 0; font-size: .75rem; }
+
+    /* ---------- Avisos ---------- */
+    #cargando { position: fixed; inset: 0; background: rgba(8,12,20,.88); display: flex; flex-direction: column; gap: 14px; align-items: center; justify-content: center; z-index: 30; padding: 20px; text-align: center; }
+    .progreso { width: min(320px, 80vw); height: 10px; background: var(--pa-linea); border-radius: 999px; overflow: hidden; }
+    .progreso i { display: block; height: 100%; width: 0; background: var(--pa-acento); transition: width .15s; }
+    #aviso { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); background: #0d1320; border: 1px solid var(--pa-acento); padding: 8px 14px; border-radius: 999px; z-index: 40; max-width: 90vw; text-align: center; }
+    @media (prefers-reduced-motion: reduce) { .progreso i { transition: none; } }
+  </style>
+</head>
+<body>
+<div id="app">
+  <section id="menu">
+    <header>
+      <a class="volver" href="../">← Portal</a>
+      <h1>🎨 Pixelart por números</h1>
+    </header>
+    <p class="intro">Sube una foto: se divide en hasta 60 colores numerados (120 en el tamaño más grande) y tú la vas pintando celda por celda. Cada imagen se guarda en tu galería y tu avance se conserva en este navegador.</p>
+    <div>
+      <label class="b fuerte" id="subir" for="archivo">📤 Subir imagen</label>
+      <input type="file" id="archivo" accept="image/*" hidden />
+      <span id="estadoSubida"></span>
+    </div>
+    <h2 style="font-size:1.1rem;margin:22px 0 0">Mis imágenes</h2>
+    <div id="galeria"></div>
+  </section>
+
+  <section id="juego" hidden>
+    <div class="herr">
+      <button class="b" id="volver" title="Guardar y volver al menú">← Menú</button>
+      <button class="b on" id="mPincel" data-modo="pincel" title="Pincel: arrastra para pintar">✏️ Pincel</button>
+      <button class="b" id="mRelleno" data-modo="relleno" title="Relleno: toca una zona para llenarla">🪣 Relleno</button>
+      <button class="b" id="mMover" data-modo="mover" title="Mover la imagen (también con dos dedos)">✋ Mover</button>
+      <button class="b" id="bVista" title="Ver la imagen completa a color">👁</button>
+      <button class="b" id="bEncajar" title="Ver toda la imagen">⛶</button>
+      <button class="b" id="bReiniciar" title="Borrar el avance">↺</button>
+      <span id="pct">0%</span>
+    </div>
+    <div id="lienzo"><canvas id="cv"></canvas></div>
+    <div class="pie">
+      <div class="linea">
+        <label for="radio">Pincel</label>
+        <input type="range" id="radio" min="3" max="90" value="18" />
+        <span id="info"></span>
+      </div>
+      <div id="paleta" role="listbox" aria-label="Colores"></div>
+    </div>
+  </section>
+</div>
+
+<div id="preparar" hidden>
+  <div class="caja">
+    <img id="prevImg" alt="Imagen elegida" />
+    <p style="margin:12px 0 0;color:var(--pa-suave);font-size:.9rem">Elige en cuántas celdas se divide el lado más largo. Más celdas = más detalle y mucho más trabajo.</p>
+    <div id="tamanos"></div>
+    <div class="fila">
+      <button class="b" id="cerrarPrep">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div id="cargando" hidden>
+  <div id="cargandoMsg">Cargando…</div>
+  <div class="progreso"><i id="cargandoBarra"></i></div>
+</div>
+<div id="aviso" hidden></div>
+
+<script type="module" src="juego.js"></script>
+</body>
+</html>

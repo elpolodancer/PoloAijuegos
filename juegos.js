@@ -15,4 +15,5 @@ export const JUEGOS = [
   { id: "burbujas", nombre: "Burbujas", icono: "🫧", descripcion: "Apunta y dispara burbujas de colores: junta 3 o más del mismo color para reventarlas y despeja el tablero (estilo Bubble Shooter).", carpeta: "burbujas" },
   { id: "globos", nombre: "Lluvia de globos", icono: "🎈", descripcion: "Revienta los globos que caen antes de que toquen el suelo: rachas con más puntos, estrellas, vidas extra, hielo y bombas que no debes tocar.", carpeta: "globos" },
   { id: "puzles", nombre: "Pequeños puzles", icono: "🧩", descripcion: "Encaja piezas de formas raras en la cuadrícula: 70 niveles, algunos con límite de tiempo.", carpeta: "pequenos-puzles" },
+  { id: "pixelart", nombre: "Pixelart por números", icono: "🎨", descripcion: "Sube una foto y píntala por números: se divide en 60 colores y hasta 100 millones de celdas (1000, 2500, 5000 o 10 000, este último con 120 colores).", carpeta: "pixelart" },
 ];

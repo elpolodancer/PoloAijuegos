@@ -1,0 +1,60 @@
+<!doctype html>
+<!-- Ruta: rompecabezas/index.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Rompecabezas</title>
+  <meta name="theme-color" content="#1b2330" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    [hidden] { display: none !important; }
+    html, body { height: 100%; margin: 0; }
+    body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+    .titulo { display: flex; align-items: center; gap: 10px; }
+    #panel { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 10px; }
+    #opciones { display: flex; gap: 4px; flex-wrap: wrap; }
+    .btn.sel { outline: 2px solid var(--acento, #6cf); }
+    #info { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--suave, #aab); }
+    #lienzo { flex: 1; min-height: 0; width: 100%; display: block; touch-action: none; background: #10151d; cursor: grab; }
+    #galeria { padding: 0 10px; }
+    #miniaturas { display: flex; gap: 6px; overflow-x: auto; padding: 6px 0; }
+    #miniaturas button { padding: 0; border: 1px solid var(--borde, #345); border-radius: 8px; background: none; cursor: pointer; flex: none; }
+    #miniaturas img { display: block; width: 72px; height: 54px; object-fit: cover; border-radius: 7px; }
+    #msg { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+           background: #000c; color: #fff; padding: 10px 16px; border-radius: 12px; max-width: 90vw; text-align: center; z-index: 5; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <div class="titulo">
+      <a class="btn" href="../" aria-label="Volver al portal">←</a>
+      <h1>🧩 Rompecabezas</h1>
+    </div>
+  </header>
+
+  <div id="panel">
+    <label class="btn" for="archivo">📷 Elegir imagen</label>
+    <input type="file" id="archivo" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
+    <button class="btn" id="guardar" disabled title="Sube la imagen a imgbb (requiere sesión con Google)">☁️ Guardar</button>
+    <button class="btn" id="enlace" disabled title="Copiar enlace para compartir">🔗</button>
+    <span id="opciones"></span>
+    <button class="btn" id="zmenos" aria-label="Alejar">➖</button>
+    <button class="btn" id="zmas" aria-label="Acercar">➕</button>
+    <button class="btn" id="ajustar" aria-label="Ver todo">⤢</button>
+    <button class="btn" id="ver" aria-label="Ver guía">👁</button>
+    <button class="btn" id="reiniciar" aria-label="Mezclar de nuevo">🔀</button>
+    <span id="info"></span>
+  </div>
+
+  <details id="galeria" hidden>
+    <summary>Mis imágenes guardadas</summary>
+    <div id="miniaturas"></div>
+  </details>
+
+  <canvas id="lienzo"></canvas>
+  <div id="msg" hidden></div>
+
+  <script type="module" src="juego.js"></script>
+</body>
+</html>
