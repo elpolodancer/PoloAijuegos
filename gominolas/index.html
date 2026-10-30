@@ -1,0 +1,52 @@
+<!doctype html>
+<!-- Ruta: gominolas/index.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Conecta gominolas</title>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    .caja { max-width: 440px; margin: 0 auto; padding: 10px; user-select: none; -webkit-user-select: none; }
+    .hud { display: flex; justify-content: space-between; align-items: end; gap: 8px; margin: 4px 2px 8px; }
+    .hud div { display: flex; flex-direction: column; font-size: 12px; opacity: .8; }
+    .hud b { font-size: 26px; line-height: 1; opacity: 1; font-variant-numeric: tabular-nums; }
+    .tiempo { height: 12px; border-radius: 99px; background: #0003; overflow: hidden; margin-bottom: 10px; }
+    #barra { height: 100%; width: 100%; border-radius: 99px; background: linear-gradient(90deg, #ff7aa8, #ffd24d); transition: width .1s linear; }
+    #barra.poco { background: #ff4d5e; }
+    .tablero { position: relative; border-radius: 22px; overflow: hidden; background: linear-gradient(160deg, #6a3d9a, #3b2a73); box-shadow: 0 8px 0 #251a4d; touch-action: none; }
+    canvas { display: block; width: 100%; touch-action: none; }
+    .ovl { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; background: #251a4dd9; color: #fff; }
+    .ovl.oculto { display: none; }
+    .ovl h2 { margin: 0; font-size: 30px; }
+    .ovl p { margin: 0; max-width: 28ch; line-height: 1.4; }
+    .ovl .btn { font-size: 18px; padding: 10px 26px; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <a class="volver" href="../index.html">‹ Juegos</a>
+    <h1>🐻 Conecta gominolas</h1>
+  </header>
+  <main>
+    <div class="caja">
+      <div class="hud">
+        <div>Puntos<b id="pts">0</b></div>
+        <div>Tiempo<b id="seg">60</b></div>
+        <div>Mejor<b id="mejor">0</b></div>
+      </div>
+      <div class="tiempo"><div id="barra"></div></div>
+      <div class="tablero">
+        <canvas id="lienzo"></canvas>
+        <div class="ovl" id="ovl">
+          <h2 id="ovlTitulo">Conecta gominolas</h2>
+          <p id="ovlTexto">Arrastra el dedo por 3 o más gominolas iguales que estén juntas (también en diagonal).</p>
+          <button class="btn" id="ovlBtn">Jugar</button>
+        </div>
+      </div>
+      <button id="entrar" class="btn" type="button" hidden style="margin-top:10px">Entrar con Google para guardar puntos</button>
+    </div>
+  </main>
+  <script type="module" src="juego.js"></script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<!-- Ruta: pradera/index.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Pradera</title>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    [hidden] { display: none !important; }
+    body { overscroll-behavior: none; }
+    #caja { position: relative; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 4px 4px 16px; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+    #marco { position: relative; line-height: 0; border-radius: 8px; overflow: hidden; box-shadow: 0 0 0 3px #1b2330; }
+    #lienzo { display: block; touch-action: none; image-rendering: pixelated; }
+    #panel { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px; text-align: center; line-height: 1.35; background: rgba(15, 22, 33, .78); color: #fff; }
+    #panel h2 { margin: 0; font-size: 1.5rem; }
+    #panel p { margin: 0; max-width: 34ch; font-size: .95rem; color: #dbe4ec; white-space: pre-line; }
+    #mandos { display: flex; justify-content: space-between; width: 100%; max-width: 560px; padding: 0 8px; touch-action: none; }
+    .grupo { display: flex; gap: 14px; }
+    .mando { width: 74px; height: 74px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .35); background: rgba(27, 35, 48, .85); color: #fff; font-size: 1.7rem; line-height: 1; display: grid; place-items: center; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; padding: 0; }
+    .mando small { display: block; font-size: .6rem; margin-top: 2px; opacity: .8; }
+    .mando.on { background: var(--acento, #4a90d9); border-color: #fff; }
+    .mando:focus-visible { outline: 3px solid #ffd54a; }
+    /* En horizontal los mandos se superponen al juego para que quepa más pantalla */
+    #caja.sobre { padding: 2px; }
+    #caja.sobre #mandos { position: absolute; left: 0; right: 0; bottom: 14px; max-width: none; padding: 0 18px; pointer-events: none; }
+    #caja.sobre .mando { pointer-events: auto; width: 66px; height: 66px; opacity: .72; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <a class="btn" href="../">← Portal</a>
+    <h1>🦊 Pradera</h1>
+    <button class="btn" id="bSonido" aria-label="Sonido">🔊</button>
+  </header>
+  <main>
+    <div id="caja">
+      <div id="marco">
+        <canvas id="lienzo" aria-label="Nivel 1 de Pradera"></canvas>
+        <div id="panel">
+          <h2 id="pTitulo"></h2>
+          <p id="pTexto"></p>
+          <button class="btn" id="pBoton"></button>
+        </div>
+      </div>
+      <div id="mandos" oncontextmenu="return false">
+        <div class="grupo">
+          <button class="mando" data-k="izq" aria-label="Izquierda">◀</button>
+          <button class="mando" data-k="der" aria-label="Derecha">▶</button>
+        </div>
+        <div class="grupo">
+          <button class="mando" data-k="correr" aria-label="Correr">💨<small>correr</small></button>
+          <button class="mando" data-k="salto" aria-label="Saltar">⬆<small>saltar</small></button>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script type="module" src="juego.js"></script>
+</body>
+</html>

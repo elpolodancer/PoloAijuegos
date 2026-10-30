@@ -1,0 +1,68 @@
+<!doctype html>
+<!-- Ruta: pequenos-puzles/index.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Pequeños puzles</title>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    body { overscroll-behavior: none; }
+    .puz-centro { max-width: 540px; margin: 0 auto; padding: 8px 10px 24px; }
+    .puz-hud { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0 8px; }
+    .puz-hud b { font-size: 1.05rem; }
+    .puz-botones { display: flex; gap: 6px; }
+    .puz-barra { display: none; height: 14px; border-radius: 999px; background: rgba(128,128,128,.25); overflow: hidden; margin-bottom: 8px; }
+    .puz-barra > i { display: block; height: 100%; width: 100%; background: #38bdf8; transform-origin: left; }
+    .puz-barra.urge > i { background: #f87171; }
+    #lienzo { display: block; margin: 0 auto; touch-action: none; user-select: none; -webkit-user-select: none; border-radius: 14px;
+      background: radial-gradient(ellipse at 50% 35%, #f3e3b0 0%, #e4c981 60%, #d4b36a 100%); }
+    #niveles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 10px; }
+    #niveles button { aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--borde, #555); background: transparent; color: inherit; font-size: 1.05rem; font-weight: 700; cursor: pointer; position: relative; }
+    #niveles button:disabled { opacity: .35; cursor: default; }
+    #niveles button.hecho { border-color: #4ade80; }
+    #niveles button.hecho::after { content: "✓"; position: absolute; top: 3px; right: 6px; font-size: .7rem; color: #4ade80; }
+    #niveles button:not(:disabled):hover, #niveles button:not(:disabled):focus-visible { border-color: var(--acento, #38bdf8); }
+    #velo { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.55); z-index: 10; padding: 16px; }
+    #velo.ver { display: flex; }
+    #velo-caja { background: var(--panel, #1f2937); color: var(--texto, #f3f4f6); border-radius: 16px; padding: 20px 22px; max-width: 340px; width: 100%; text-align: center; }
+    #velo-caja h2 { margin: 0 0 6px; }
+    #velo-caja p { margin: 0 0 14px; color: var(--suave, #9ca3af); }
+    #velo-botones { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <div class="titulo" style="display:flex;align-items:center;gap:10px">
+      <a class="btn" href="../">← Juegos</a>
+      <h1>🧩 Pequeños puzles</h1>
+    </div>
+  </header>
+  <main class="puz-centro">
+    <section id="menu">
+      <p id="menu-texto"></p>
+      <div id="niveles"></div>
+    </section>
+    <section id="juego" hidden>
+      <div class="puz-hud">
+        <b id="titulo-nivel"></b>
+        <b id="tiempo"></b>
+        <div class="puz-botones">
+          <button class="btn" id="b-reiniciar" title="Reiniciar nivel">↻</button>
+          <button class="btn" id="b-menu" title="Elegir nivel">☰</button>
+        </div>
+      </div>
+      <div class="puz-barra" id="barra"><i id="barra-i"></i></div>
+      <canvas id="lienzo"></canvas>
+    </section>
+  </main>
+  <div id="velo">
+    <div id="velo-caja">
+      <h2 id="velo-titulo"></h2>
+      <p id="velo-texto"></p>
+      <div id="velo-botones"></div>
+    </div>
+  </div>
+  <script type="module" src="juego.js"></script>
+</body>
+</html>
