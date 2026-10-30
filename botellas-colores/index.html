@@ -1,0 +1,60 @@
+<!doctype html>
+<!-- Ruta: botellas-colores/index.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Botellas de colores</title>
+  <meta name="theme-color" content="#1b2330" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    [hidden] { display: none !important; }
+    :root { --b-borde: #3a4658; --b-fondo: #222c3b; }
+    .zona { max-width: 480px; margin: 0 auto; padding: 12px 12px 28px; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+    #niveles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; width: 100%; }
+    #niveles button { aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--b-borde); background: var(--b-fondo); color: inherit; font-size: 1.2rem; font-weight: 700; cursor: pointer; }
+    #niveles button:disabled { opacity: .35; cursor: default; }
+    #niveles button.hecho { border-color: #6ee7a8; }
+    .fila { display: flex; gap: 8px; width: 100%; justify-content: space-between; align-items: center; }
+    #info { font-weight: 700; }
+    #mesa { display: flex; flex-wrap: wrap; justify-content: center; gap: 22px 12px; width: 100%; padding-top: 18px; }
+    .bot { --alto: 28px; width: 46px; display: flex; flex-direction: column-reverse; padding: 3px; box-sizing: content-box; border: 2px solid #9fb0c8; border-top-width: 0; border-radius: 0 0 22px 22px; background: #ffffff0d; cursor: pointer; transition: transform .15s; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    .bot.sel { transform: translateY(-16px); }
+    .bot.lista { border-color: #6ee7a8; box-shadow: 0 0 10px #6ee7a866; }
+    .seg { height: var(--alto); width: 100%; }
+    .seg:first-child { border-radius: 0 0 18px 18px; }
+    #final { text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+    #final b { font-size: 1.2rem; color: #6ee7a8; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <div class="titulo">
+      <a class="btn" href="../">←</a>
+      <h1>🍾 Botellas</h1>
+    </div>
+  </header>
+  <main class="zona">
+    <section id="menu" style="width:100%">
+      <p style="text-align:center;margin:0 0 12px">Elige un nivel</p>
+      <div id="niveles"></div>
+    </section>
+    <section id="juego" hidden style="width:100%;display:flex;flex-direction:column;gap:12px;align-items:center">
+      <div class="fila">
+        <button class="btn" id="volver">☰ Niveles</button>
+        <span id="info"></span>
+        <span style="display:flex;gap:6px">
+          <button class="btn" id="deshacer">↩</button>
+          <button class="btn" id="reiniciar">⟲</button>
+        </span>
+      </div>
+      <div id="mesa"></div>
+      <div id="final" hidden>
+        <b id="textoFinal"></b>
+        <button class="btn" id="siguiente">Siguiente nivel ▶</button>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="juego.js"></script>
+</body>
+</html>
