@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- Ruta: solitario/index.html (página del juego «solitario») -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Solitario</title>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    #info { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-weight: 700; }
+    .tablero { --w: min(11vw, 76px); display: grid; grid-template-columns: repeat(7, var(--w)); gap: calc(var(--w) * 0.2) calc(var(--w) * 0.1); justify-content: center; align-items: start; padding: 10px 10px calc(var(--w) * 1.2); background: #1f6b3f; border: 1px solid var(--borde); border-radius: 16px; user-select: none; touch-action: manipulation; }
+    .pila { position: relative; width: var(--w); height: calc(var(--w) * 1.4); cursor: pointer; }
+    .pila::before { content: ""; position: absolute; top: 0; left: 0; width: var(--w); height: calc(var(--w) * 1.4); border: 2px dashed rgba(255, 255, 255, 0.3); border-radius: calc(var(--w) * 0.1); box-sizing: border-box; }
+    .carta { position: absolute; left: 0; width: var(--w); height: calc(var(--w) * 1.4); box-sizing: border-box; background: #fff; color: #111; border: 1px solid #888; border-radius: calc(var(--w) * 0.1); font-weight: 700; font-size: calc(var(--w) * 0.3); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); overflow: hidden; }
+    .carta.roja { color: #d32f2f; }
+    .carta .e { position: absolute; top: 2px; left: 4px; line-height: 1; }
+    .carta .g { position: absolute; right: 4px; bottom: 2px; font-size: calc(var(--w) * 0.55); line-height: 1; }
+    .carta.abajo { color: transparent; border-color: #fff; background: repeating-linear-gradient(45deg, #3b4cca, #3b4cca 6px, #2c3aa8 6px, #2c3aa8 12px); }
+    .carta.sel { outline: 3px solid #ffd54f; outline-offset: -3px; background: #fff8dc; }
+    .reciclar { position: absolute; top: 0; left: 0; width: var(--w); height: calc(var(--w) * 1.4); display: flex; align-items: center; justify-content: center; font-size: calc(var(--w) * 0.6); color: rgba(255, 255, 255, 0.6); }
+    .acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <a class="volver" href="../index.html">‹ Juegos</a>
+    <h1>🃏 Solitario</h1>
+  </header>
+  <main>
+    <div id="info">
+      <span>Puntos: <span id="marcador">0</span></span>
+      <span>Movimientos: <span id="movs">0</span></span>
+      <span>Tiempo: <span id="tiempo">0:00</span></span>
+    </div>
+    <div id="tablero" class="tablero"></div>
+    <p id="estado">Toca una carta y luego el lugar donde quieres ponerla. Toca una carta seleccionada otra vez para subirla a la base.</p>
+    <div class="acciones">
+      <button id="nueva" class="btn" type="button">Nueva partida</button>
+      <button id="deshacer" class="btn" type="button">Deshacer</button>
+      <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
+    </div>
+  </main>
+  <script type="module" src="juego.js"></script>
+</body>
+</html>

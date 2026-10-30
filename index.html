@@ -6,10 +6,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Juegos</title>
   <link rel="stylesheet" href="compartido/estilos.css" />
+  <style>
+    .titulo { display: flex; align-items: center; gap: 10px; }
+    .mini { padding: 3px 8px; font-size: .7rem; color: var(--suave); text-decoration: none; border: 1px dashed var(--borde); border-radius: 999px; opacity: .7; }
+    .mini:hover, .mini:focus-visible { opacity: 1; border-color: var(--acento); color: var(--texto); }
+  </style>
 </head>
 <body>
   <header class="barra">
-    <h1>🎮 Juegos</h1>
+    <div class="titulo">
+      <h1>🎮 Juegos</h1>
+      <!-- Juego escondido: «Reflejos» (carpeta ejemplo/), ya no está en juegos.js -->
+      <a class="mini" href="ejemplo/">Juego de prueba</a>
+    </div>
     <div id="sesion"></div>
   </header>
   <main>

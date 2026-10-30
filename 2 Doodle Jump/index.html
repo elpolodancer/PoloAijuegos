@@ -1,0 +1,27 @@
+<!doctype html>
+<!-- Ruta: doodle/index.html (página del juego «doodle») -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Saltarín</title>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+</head>
+<body>
+  <header class="barra">
+    <a class="volver" href="../index.html">‹ Juegos</a>
+    <h1>🦘 Saltarín</h1>
+  </header>
+  <main>
+    <canvas id="lienzo" class="lienzo" width="360" height="540"></canvas>
+    <p id="estado">Flechas o A/D para moverte; en el celular, toca la mitad izquierda o derecha de la pantalla.</p>
+    <p style="color: var(--suave); font-size: 0.9rem; line-height: 1.5;">
+      Verde: normal · Azul: se mueve · Naranja con resorte: salto doble · Café con grietas: se rompe y no rebotas · Blanca: solo sirve una vez.
+      Pisa a los monstruos desde arriba para derrotarlos; si los tocas de lado, caes. Junta monedas y atrapa el gorro 🧢 para volar 100 m sin que nada te toque.
+    </p>
+    <button id="jugar" class="btn" type="button">Jugar</button>
+    <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
+  </main>
+  <script type="module" src="juego.js"></script>
+</body>
+</html>

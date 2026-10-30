@@ -1,0 +1,23 @@
+<!doctype html>
+<!-- Ruta: rompeladrillos/index.html (página del juego «rompeladrillos») -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Rompe Ladrillos</title>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+</head>
+<body>
+  <header class="barra">
+    <a class="volver" href="../index.html">‹ Juegos</a>
+    <h1>🧱 Rompe Ladrillos</h1>
+  </header>
+  <main>
+    <canvas id="lienzo" class="lienzo" width="320" height="480"></canvas>
+    <p id="estado">Mueve la paleta con el dedo (o con las flechas) y rompe todos los ladrillos. Tienes 3 vidas.</p>
+    <button id="jugar" class="btn" type="button">Jugar</button>
+    <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
+  </main>
+  <script type="module" src="juego.js"></script>
+</body>
+</html>

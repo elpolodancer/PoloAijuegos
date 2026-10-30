@@ -1,0 +1,51 @@
+<!doctype html>
+<!-- Ruta: burbujas/index.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Burbujas</title>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #2a1450; font-family: system-ui, sans-serif; color: #fff; }
+    body { display: flex; flex-direction: column; align-items: center; }
+    .hud { width: 100%; max-width: 480px; display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; gap: 8px; font-weight: 700; }
+    .hud a { color: #ffd6f5; text-decoration: none; font-size: 15px; }
+    .hud .dato { text-align: center; line-height: 1.1; font-size: 13px; opacity: .9; }
+    .hud .dato b { display: block; font-size: 20px; }
+    #zona { position: relative; flex: 1; min-height: 0; width: 100%; max-width: 480px; display: flex; justify-content: center; }
+    canvas { height: 100%; max-width: 100%; touch-action: none; border-radius: 18px 18px 0 0; box-shadow: 0 0 40px #0008; }
+    .velo { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: #1b0a3acc; text-align: center; padding: 24px; border-radius: 18px 18px 0 0; }
+    .velo.activo { display: flex; }
+    .velo h2 { margin: 0; font-size: 30px; }
+    .velo p { margin: 0; opacity: .9; max-width: 300px; line-height: 1.4; }
+    .velo button { font: inherit; font-weight: 700; font-size: 18px; padding: 12px 32px; border: 0; border-radius: 999px; color: #3a0f5c; background: linear-gradient(#ffe27a, #ffb347); box-shadow: 0 4px 0 #b86b00; cursor: pointer; }
+    .velo button:active { transform: translateY(3px); box-shadow: 0 1px 0 #b86b00; }
+    .sonido { font-size: 20px; background: #ffffff22; border: 0; border-radius: 50%; width: 38px; height: 38px; color: #fff; cursor: pointer; }
+    button:focus-visible, a:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <a href="../index.html">← Juegos</a>
+    <div class="dato">Nivel<b id="nivel">1</b></div>
+    <div class="dato">Puntos<b id="puntos">0</b></div>
+    <div class="dato">Récord<b id="record">0</b></div>
+    <button id="sonido" class="sonido" aria-label="Silenciar">🔊</button>
+  </div>
+  <div id="zona">
+    <canvas id="lienzo"></canvas>
+    <div id="inicio" class="velo activo">
+      <h2>🫧 Burbujas</h2>
+      <p>Apunta con el dedo y suelta para disparar. Junta 3 o más del mismo color para reventarlas. Toca la burbuja de abajo a la izquierda para cambiarla.<br>Si revientas muchas de un tiro, haces caer varias o encadenas 3 tiros seguidos, ganas una bomba 💣, un arcoíris 🌈 o un rayo ⚡.</p>
+      <button id="jugar">Jugar</button>
+    </div>
+    <div id="fin" class="velo">
+      <h2 id="finTitulo">Se acabó</h2>
+      <p id="finTexto"></p>
+      <button id="otra">Jugar otra vez</button>
+    </div>
+  </div>
+  <script type="module" src="juego.js"></script>
+</body>
+</html>
