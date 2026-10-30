@@ -3,13 +3,24 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Juegos</title>
+  <meta name="theme-color" content="#1b2330" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="iconos/icono-192.png" />
+  <link rel="apple-touch-icon" href="iconos/icono-180.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Juegos" />
   <link rel="stylesheet" href="compartido/estilos.css" />
   <style>
-    .titulo { display: flex; align-items: center; gap: 10px; }
+    [hidden] { display: none !important; }
+    .titulo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .mini { padding: 3px 8px; font-size: .7rem; color: var(--suave); text-decoration: none; border: 1px dashed var(--borde); border-radius: 999px; opacity: .7; }
     .mini:hover, .mini:focus-visible { opacity: 1; border-color: var(--acento); color: var(--texto); }
+    #sinred { font-size: .75rem; color: var(--suave); border: 1px solid var(--borde); border-radius: 999px; padding: 3px 8px; }
+    #ayudaIos { margin: 8px 12px 0; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 10px; font-size: .9rem; color: var(--suave); }
+    #ayudaIos button { margin-left: 8px; }
   </style>
 </head>
 <body>
@@ -18,15 +29,20 @@
       <h1>🎮 Juegos</h1>
       <!-- Juego escondido: «Reflejos» (carpeta ejemplo/), ya no está en juegos.js -->
       <a class="mini" href="ejemplo/">Juego de prueba</a>
+      <button class="btn" id="instalar" hidden>📲 Instalar</button>
+      <span id="sinred" hidden>Sin conexión</span>
     </div>
     <div id="sesion"></div>
   </header>
+  <div id="ayudaIos" hidden>
+    Para instalarlo en iPhone/iPad: toca <b>Compartir</b> (el cuadro con la flecha) y luego <b>Agregar a pantalla de inicio</b>.
+    <button class="btn" id="cerrarAyuda">Entendido</button>
+  </div>
   <main>
     <div id="lista" class="rejilla"></div>
   </main>
   <script type="module">
     import { JUEGOS } from "./juegos.js";
-    import { alCambiarSesion, entrar, salir, leerPerfil } from "./compartido/jugador.js";
 
     // Lista de juegos: cada tarjeta lleva a su carpeta (o a su repo propio si tiene «url»)
     const lista = document.getElementById("lista");
@@ -45,28 +61,69 @@
       lista.appendChild(a);
     });
 
-    // Sesión con Google y puntos totales (los mismos para todos los juegos)
-    const zona = document.getElementById("sesion");
-    alCambiarSesion(async (u) => {
-      zona.innerHTML = "";
-      const b = document.createElement("button");
-      b.className = "btn";
-      if (!u) {
-        b.textContent = "Entrar con Google";
-        b.addEventListener("click", () => entrar().catch((e) => alert(e.message)));
-        zona.appendChild(b);
-        return;
+    // ----- Sin conexión + instalar en la pantalla de inicio -----
+    const $ = (id) => document.getElementById(id);
+    const marcarRed = () => ($("sinred").hidden = navigator.onLine);
+    addEventListener("online", marcarRed);
+    addEventListener("offline", marcarRed);
+    marcarRed();
+
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+
+    const instalada = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+    const esIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    let evento = null;
+    if (!instalada) {
+      if (esIos) {
+        // iOS no permite instalar con un botón: se muestran los pasos
+        $("instalar").hidden = false;
+        $("instalar").addEventListener("click", () => ($("ayudaIos").hidden = false));
+        $("cerrarAyuda").addEventListener("click", () => ($("ayudaIos").hidden = true));
+      } else {
+        addEventListener("beforeinstallprompt", (e) => {
+          e.preventDefault();
+          evento = e;
+          $("instalar").hidden = false;
+        });
+        $("instalar").addEventListener("click", async () => {
+          if (!evento) return;
+          evento.prompt();
+          await evento.userChoice.catch(() => {});
+          evento = null;
+          $("instalar").hidden = true;
+        });
       }
-      const t = document.createElement("span");
-      t.textContent = (u.displayName || "Jugador") + " · ";
-      b.textContent = "Salir";
-      b.addEventListener("click", salir);
-      zona.append(t, b);
-      try {
-        const p = await leerPerfil();
-        t.textContent = (u.displayName || "Jugador") + " · " + (p ? p.total || 0 : 0) + " pts · ";
-      } catch (e) {}
-    });
+    }
+    addEventListener("appinstalled", () => ($("instalar").hidden = true));
+
+    // ----- Sesión con Google y puntos totales (los mismos para todos los juegos) -----
+    // Se carga aparte: si Firebase no está disponible (sin conexión la primera vez), el portal igual se ve.
+    const zona = $("sesion");
+    try {
+      const { alCambiarSesion, entrar, salir, leerPerfil } = await import("./compartido/jugador.js");
+      alCambiarSesion(async (u) => {
+        zona.innerHTML = "";
+        const b = document.createElement("button");
+        b.className = "btn";
+        if (!u) {
+          b.textContent = "Entrar con Google";
+          b.addEventListener("click", () => entrar().catch((e) => alert(e.message)));
+          zona.appendChild(b);
+          return;
+        }
+        const t = document.createElement("span");
+        t.textContent = (u.displayName || "Jugador") + " · ";
+        b.textContent = "Salir";
+        b.addEventListener("click", salir);
+        zona.append(t, b);
+        try {
+          const p = await leerPerfil();
+          t.textContent = (u.displayName || "Jugador") + " · " + (p ? p.total || 0 : 0) + " pts · ";
+        } catch (e) {}
+      });
+    } catch (e) {
+      zona.textContent = "Sesión no disponible sin conexión";
+    }
   </script>
 </body>
 </html>
