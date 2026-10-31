@@ -23,6 +23,7 @@ const JUEGOS = {
   globos: ["juego.js"],
   "pequenos-puzles": ["juego.js", "logica.js", "niveles.js"],
   pixelart: ["juego.js"],
+  supermercado: ["juego.js"],
   buscaminas: ["juego.js"],
   ajedrez: ["juego.js", "logica.js", "ia.js"],
 };
