@@ -14,6 +14,11 @@ Cada archivo trae en su **primera línea** su ruta dentro del repo (`Ruta: ...`)
 | `compartido/jugador.js` | Login con Google, puntos totales, mejor marca por juego y ranking |
 | `compartido/configs.js` | Enlaces y ajustes comunes: URL del Apps Script que sube imágenes a imgbb (`URL_SUBIDA_IMAGENES`) y enlace de la hoja «Polo Ai Juegos» (`HOJA_JUEGOS`). Aquí no van claves secretas |
 | `compartido/estilos.css` | Estilos comunes de todos los juegos |
+| `compartido/pantalla-completa.js` | Botón flotante ⛶ de pantalla completa (solo en táctiles y si la app no está instalada). Se agrega con una línea `<script type="module">` al final del `<body>` de cada página |
+| `sw.js` | Service worker: guarda el portal y los juegos para abrirlos sin internet (primero red, con copia de respaldo). Cada juego nuevo se anota en su lista `JUEGOS`; al cambiar esa lista se sube `VERSION` |
+| `manifest.webmanifest` | Datos para instalar el portal como app (nombre, colores, íconos) |
+| `iconos/` | `icono-180.png`, `icono-192.png`, `icono-512.png` (los usan el portal, el manifest y `sw.js`) |
+| `apps-script/subir-imagen.gs` | Código del Apps Script que sube imágenes a imgbb (se pega en script.google.com, no lo lee la página) |
 | `ejemplo/index.html` | Página del juego de plantilla «Reflejos» (no es el portal) |
 | `ejemplo/juego.js` | Lógica de «Reflejos» |
 | `doodle/index.html`, `doodle/juego.js` | Juego «Saltarín» (estilo Doodle Jump): plataformas normales, móviles, trampolín (salto doble), que se rompen y de un solo salto; enemigos, monedas, gorro de 100 m y marcador de metros. Los ajustes (gravedad, metros del gorro, puntos) están al inicio de `juego.js` |
@@ -61,6 +66,35 @@ Cada archivo trae en su **primera línea** su ruta dentro del repo (`Ruta: ...`)
 - Hoja de Google Sheets «Polo Ai Juegos» (enlace en `compartido/configs.js`, `HOJA_JUEGOS`): creada por El Polo y disponible para usarse si hace falta (registro de subidas, ligas, etc.). Aún no la usa ningún juego; si se usa, anotar aquí qué pestañas/columnas se crearon
 - Juegos: `ejemplo` (plantilla, escondida tras el botón «Juego de prueba» del portal), `doodle`, `piano`, `corredor`, `solitario`, `dulces`, `gominolas`, `rompeladrillos`, `burbujas`, `globos`, `pequenos-puzles`, `pixelart`. Pendientes: ajedrez (con puntos y ligas)
 - Juegos en repo propio (con `url` en `juegos.js`): ninguno por ahora
+
+- Revisión de `compartido/` (31 oct 2026): `firestore.rules` ahora valida campos y topes de puntos (`MAX_ENVIO` = 1000, igual que `MAX_PUNTOS_POR_ENVIO` en `jugador.js`); `sumarPuntos` redondea y limita; `sw.js` en VERSION 3 (agregados `pantalla-completa.js` y `rompecabezas`, errores de caché controlados); `estilos.css` con `[hidden]` y foco visible; descripción del manifest corregida. **Falta pegar las nuevas reglas en la consola de Firebase** y subir los archivos al repo. Si un juego deja de guardar puntos tras pegar las reglas, revisar que no escriba campos distintos a `nombre/foto/actualizado/total/mejor`
+- Pendiente (seguridad): restringir la `apiKey` de Firebase por dominio en Google Cloud Console (ver «Seguridad»); valorar Firebase App Check más adelante
+- Pendiente: `buscaminas` existe en el repo pero falta su línea en `juegos.js`; `ajedrez` aún no existe (está reservado en `sw.js`)
+
+## Plan: muchos juegos y uso sin internet (notas para seguir en otra sesión)
+
+Meta: llegar a cientos de juegos pequeños, que se puedan jugar sin internet una y otra vez (como una app de minijuegos), y que con internet sumen puntos y ranking.
+
+**1. Un solo repo mientras sea posible.** Los juegos son solo código (HTML/JS/CSS de unas decenas de KB), así que cientos caben sin problema en un repo de GitHub Pages (los límites aproximados son ~1 GB de sitio y ~100 GB/mes de tráfico; confirmar en la documentación vigente de GitHub Pages). Lo que sí pesa son las imágenes y el audio: por eso los juegos usan emojis, canvas y sonidos generados con WebAudio, y conviene seguir así. Un solo repo = una sola app instalable, una sola sesión de Google, un solo caché.
+
+**2. Cuándo dividir en varios repos.** Solo si el sitio se acerca a ~500 MB o un juego trae archivos pesados: ese juego va a su repo propio y en `juegos.js` se usa `url` en lugar de `carpeta`. Costo: cada repo es otra app/otro service worker/otro caché y no funciona sin internet desde el portal salvo que se abra antes. Si todos viven bajo el mismo usuario de `github.io`, comparten el mismo origen (mismo `localStorage` y misma sesión de Google), pero cada service worker solo controla su propia ruta. No dividir por «orden» ni «para no saturar»: no hace falta.
+
+**3. Sin internet (cómo funciona hoy).** `sw.js` precarga el núcleo (portal, `compartido/`, íconos) y los archivos de cada juego listado en `JUEGOS`; después, todo lo que se abre con internet se guarda y se reutiliza sin conexión. Los archivos del SDK de Firebase se guardan la primera vez. Para que un juego nuevo funcione offline: agregarlo a `JUEGOS` de `sw.js` y subir `VERSION`. **Escalado:** al pasar de ~60 juegos, cambiar el precargado total por «núcleo + cada juego al abrirlo» (ya ocurre con lo visitado) y agregar un botón «Descargar para jugar sin internet» por juego (o por categoría) que le pida al SW guardar su carpeta.
+
+**4. Progreso y puntos.** El progreso va en `localStorage` o IndexedDB (funciona sin internet). Los puntos al perfil (`sumarPuntos`) necesitan internet y sesión; si falla, se pierde ese envío. Pendiente: guardar los puntos no enviados en `localStorage` y reenviarlos al volver la conexión (respetando el tope de la regla).
+
+**5. Imágenes sin internet (Pixelart, Rompecabezas).** Hoy suben la imagen a imgbb y guardan la URL `ibb.co`, por eso necesitan internet. Plan nativo: elegir el archivo → reducirlo con canvas → guardar el Blob en IndexedDB (por imagen) y usarlo desde ahí; imgbb queda solo como opción para respaldar/compartir. Ojo con la memoria en celulares modestos (Pixelart de 10 000 celdas).
+
+**6. Organizar cientos de juegos.** Cuando la lista sea larga: agregar `categoria` a cada entrada de `juegos.js`, filtros por categoría y un buscador en el portal, y marcar favoritos/recientes en `localStorage`. El portal sigue leyendo solo `juegos.js`.
+
+**7. Lista para cada juego nuevo.** (a) copiar `ejemplo/`, cambiar `ID` y la línea `Ruta:`; (b) línea en `juegos.js`; (c) carpeta en `JUEGOS` de `sw.js` y subir `VERSION`; (d) fila en el mapa de archivos y nota en **Estado**; (e) probar sin conexión (modo avión tras abrirlo una vez con internet).
+
+## Seguridad (resumen)
+
+- Nada secreto en el repo: la key de imgbb y la `apiKey` usada por el Apps Script viven en las **Propiedades del script**. La `apiKey` de `compartido/firebase.js` no es secreta, pero conviene **restringirla**: Google Cloud Console → APIs y servicios → Credenciales → esa clave → «Restricciones de sitios web» con `elpologr.github.io` y `localhost`.
+- La seguridad real de los datos está en `firestore.rules` (solo escribes tu propio perfil, con campos y topes validados) y en los dominios autorizados de Firebase Authentication.
+- Los puntos los calcula el navegador: las reglas solo limitan el daño (topes por envío), no impiden el truco por completo. Para ligas serias: Cloud Functions y/o Firebase App Check.
+- Apps Script de imágenes: activar `CORREOS_PERMITIDOS` si solo lo usará una persona; el límite es 10 subidas por hora por usuario.
 
 ## Puesta en marcha
 1. Crea el repo en GitHub, sube estos archivos (con sus carpetas) y activa **Settings → Pages** (rama main, carpeta raíz).

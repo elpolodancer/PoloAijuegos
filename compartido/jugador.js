@@ -24,10 +24,14 @@ export async function entrar() {
 }
 export const salir = () => (auth ? signOut(auth) : Promise.resolve());
 
+// Máximo de puntos por envío. Debe coincidir con MAX_ENVIO (el 1000) de firestore.rules
+const MAX_PUNTOS_POR_ENVIO = 1000;
+
 // Suma puntos al perfil (total de todos los juegos) y guarda tu mejor marca de ese juego
 export async function sumarPuntos(juego, puntos) {
   const u = auth && auth.currentUser;
-  if (!u || !(puntos > 0)) return false;
+  puntos = Math.min(Math.floor(Number(puntos)), MAX_PUNTOS_POR_ENVIO); // entero y con tope (NaN queda descartado abajo)
+  if (!u || !db || !(puntos > 0)) return false;
   const datos = { nombre: u.displayName || "Jugador", foto: u.photoURL || "", actualizado: serverTimestamp() };
   const perfil = doc(db, "perfiles", u.uid);
   const marca = doc(db, "juegos", juego, "jugadores", u.uid);

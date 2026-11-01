@@ -1,0 +1,53 @@
+// Ruta: firestore.rules (raíz del repo; se pega en Firebase, no lo lee la página)
+// Cada jugador solo escribe en sus propios documentos y todos pueden leer (para los rankings).
+// Además se valida QUÉ se escribe: solo los campos esperados, sin borrar, y los puntos
+// no pueden bajar ni subir más de MAX_ENVIO de una sola vez.
+// IMPORTANTE: MAX_ENVIO (1000) debe coincidir con MAX_PUNTOS_POR_ENVIO de compartido/jugador.js.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function esDueno(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+    function textoOk(v, max) {
+      return v is string && v.size() <= max;
+    }
+    // Campos comunes de «perfiles» y de «juegos/.../jugadores»
+    function datosOk() {
+      let d = request.resource.data;
+      return textoOk(d.nombre, 100)
+          && textoOk(d.foto, 500)
+          && d.actualizado == request.time;
+    }
+    // Puntaje nuevo (campo = 'total' o 'mejor'): entero, sin bajar y subiendo como máximo MAX_ENVIO
+    function puntajeOk(nuevo, previo) {
+      return nuevo is int && nuevo >= previo && nuevo - previo <= 1000;
+    }
+
+    match /perfiles/{uid} {
+      allow read: if true;
+      allow create: if esDueno(uid)
+        && request.resource.data.keys().hasOnly(['nombre', 'foto', 'actualizado', 'total'])
+        && datosOk()
+        && puntajeOk(request.resource.data.total, 0);
+      allow update: if esDueno(uid)
+        && request.resource.data.keys().hasOnly(['nombre', 'foto', 'actualizado', 'total'])
+        && datosOk()
+        && puntajeOk(request.resource.data.total, resource.data.total);
+      // sin «delete»: nadie puede borrar perfiles desde el navegador
+    }
+
+    match /juegos/{juego}/jugadores/{uid} {
+      allow read: if true;
+      allow create: if esDueno(uid) && juego.size() <= 40
+        && request.resource.data.keys().hasOnly(['nombre', 'foto', 'actualizado', 'mejor'])
+        && datosOk()
+        && puntajeOk(request.resource.data.mejor, 0);
+      allow update: if esDueno(uid) && juego.size() <= 40
+        && request.resource.data.keys().hasOnly(['nombre', 'foto', 'actualizado', 'mejor'])
+        && datosOk()
+        && puntajeOk(request.resource.data.mejor, resource.data.mejor);
+    }
+  }
+}

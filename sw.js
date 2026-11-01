@@ -5,7 +5,7 @@
 // - SDK de Firebase (www.gstatic.com/firebasejs): se guarda la primera vez y se reutiliza.
 // - Login, Firestore y demás llamadas a Google NO se tocan.
 // Al agregar un juego: añádelo a «JUEGOS» de abajo. Para forzar que todos vuelvan a descargar todo, sube el número de VERSION.
-const VERSION = 2;
+const VERSION = 3;
 const CACHE = "juegos-v" + VERSION;
 const ESPERA_RED = 3000;
 
@@ -23,6 +23,7 @@ const JUEGOS = {
   globos: ["juego.js"],
   "pequenos-puzles": ["juego.js", "logica.js", "niveles.js"],
   pixelart: ["juego.js"],
+  rompecabezas: ["juego.js"],
   supermercado: ["juego.js"],
   buscaminas: ["juego.js"],
   ajedrez: ["juego.js", "logica.js", "ia.js"],
@@ -31,7 +32,7 @@ const JUEGOS = {
 const ARCHIVOS = [
   "./", "index.html", "juegos.js", "manifest.webmanifest",
   "iconos/icono-180.png", "iconos/icono-192.png", "iconos/icono-512.png",
-  "compartido/estilos.css", "compartido/firebase.js", "compartido/jugador.js", "compartido/configs.js",
+  "compartido/estilos.css", "compartido/firebase.js", "compartido/jugador.js", "compartido/configs.js", "compartido/pantalla-completa.js",
 ];
 for (const [carpeta, extra] of Object.entries(JUEGOS)) {
   ARCHIVOS.push(carpeta + "/", carpeta + "/index.html", ...extra.map((f) => carpeta + "/" + f));
@@ -67,7 +68,7 @@ self.addEventListener("activate", (ev) => {
 async function redLuegoCopia(req) {
   const cache = await caches.open(CACHE);
   const red = fetch(req).then((r) => {
-    if (r && r.ok) cache.put(req, r.clone());
+    if (r && r.ok) cache.put(req, r.clone()).catch(() => {}); // si el almacenamiento está lleno, no rompe
     return r;
   });
   try {
@@ -87,7 +88,7 @@ async function copiaLuegoRed(req) {
   const copia = await cache.match(req);
   if (copia) return copia;
   const r = await fetch(req);
-  if (r && (r.ok || r.type === "opaque")) cache.put(req, r.clone());
+  if (r && (r.ok || r.type === "opaque")) cache.put(req, r.clone()).catch(() => {});
   return r;
 }
 
