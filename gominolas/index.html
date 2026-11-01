@@ -19,7 +19,7 @@
     .ovl { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; background: #251a4dd9; color: #fff; }
     .ovl.oculto { display: none; }
     .ovl h2 { margin: 0; font-size: 30px; }
-    .ovl p { margin: 0; max-width: 28ch; line-height: 1.4; }
+    .ovl p { margin: 0; max-width: 34ch; line-height: 1.4; }
     .ovl .btn { font-size: 18px; padding: 10px 26px; }
   </style>
 </head>
@@ -32,15 +32,16 @@
     <div class="caja">
       <div class="hud">
         <div>Puntos<b id="pts">0</b></div>
-        <div>Tiempo<b id="seg">60</b></div>
-        <div>Mejor<b id="mejor">0</b></div>
+        <div>Movimientos<b id="movs">0</b></div>
+        <div>Negras<b id="negras">0</b></div>
+        <div>Nivel<b id="nivel">1</b></div>
       </div>
       <div class="tiempo"><div id="barra"></div></div>
       <div class="tablero">
         <canvas id="lienzo"></canvas>
         <div class="ovl" id="ovl">
           <h2 id="ovlTitulo">Conecta gominolas</h2>
-          <p id="ovlTexto">Arrastra el dedo por 3 o más gominolas iguales que estén juntas (también en diagonal).</p>
+          <p id="ovlTexto">Arrastra el dedo por 3 o más gominolas iguales y juntas (también en diagonal). Rompe las que rodean a las negras para eliminarlas antes de quedarte sin movimientos.</p>
           <button class="btn" id="ovlBtn">Jugar</button>
         </div>
       </div>
