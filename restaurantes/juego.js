@@ -54,7 +54,7 @@ const KEY_PARTIDAS = "restaurantes_partidas";
 const NUM_PARTIDAS = 6; // recuadros de la cuadrícula de partidas
 const AUTOGUARDADO_MS = 10000; // además de guardar en cada cobro/compra, se guarda cada tantos ms y al salir de la página
 
-// ----- Personal (se compra en la tienda de la recepción) -----
+// ----- Personal (se contrata y mejora en el botón fijo «👥 Empleados», no en la tienda de la recepción) -----
 const PRECIO_RECEP = 20;                                 // contratar a la recepcionista (da mesa sola)
 const PRECIO_MESERO = 20;                                // contratar al mesero (lleva solo los platillos)
 const RECEP_TIEMPOS_MS = [6500, 5000, 3800, 2800, 2000, 1600, 1300, 1050, 850, 700]; // por nivel (10 niveles): lo que tarda en dar mesa a un grupo (el nivel 1 es lento a propósito)
@@ -213,6 +213,7 @@ let puntosEnviados = 0, umbralPuntos = PUNTOS_LOTE, enviando = false; // puntos 
 let ranura = null; // partida activa (0, 1 o 2); null = estás en el menú y no se guarda nada
 let cocinero = 1, cocinero2 = 0, nMesas = MESAS_BASE.length; // nivel del cocinero (1 a 10), del segundo cocinero (0 = sin contratar) y mesas que hay en el comedor
 let mesaMejora = null; // mesa cuyo panel de mejoras está abierto (null = la tienda de la recepción)
+let vistaEmpleados = false; // true = el panel abierto es el de «Empleados» (botón fijo en la esquina de la pantalla)
 const nuevasMejoras = () => Object.fromEntries(MEJORAS_MESA.map((c) => [c.id, 0])); // cuántas mejoras tiene cada cosa de una mesa (0 a 5)
 const bonoAcum = (k) => BONO_MEJORAS.slice(0, k).reduce((t, b) => t + b, 0);        // lo que suman en total las primeras k mejoras
 const bonoMesa = (m) => MEJORAS_MESA.reduce((t, c) => t + bonoAcum(m.mejoras[c.id]), 0); // extra por cliente de esa mesa
@@ -249,7 +250,7 @@ function nuevaPartida(datos = null) { // datos: partida guardada que se carga (n
   if (habiaCambios || datos) armarFondo(); // quita la plaza y los lugares de la partida anterior (o dibuja los de la partida cargada)
   cerrarTienda();
   $("tiempo").textContent = fmtTiempo(Math.floor(reloj / 1000));
-  info("Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para contratar personal y una mesa para mejorarla.");
+  info("Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para comprar mesas, terreno y estacionamiento, una mesa para mejorarla, y 👥 Empleados (arriba a la derecha) para el personal.");
   actualizar();
 }
 
@@ -596,17 +597,18 @@ async function banio(c, ida, i, P = PUERTAS[0]) {
 }
 
 // ----- Tienda y personal -----
-function abrirTienda(mesa = null) { // sin mesa: la tienda de la recepción; con mesa: el panel de mejoras de esa mesa
+function abrirTienda(mesa = null, empleados = false) { // sin mesa: la tienda de la recepción; con mesa: el panel de mejoras de esa mesa; empleados: el panel de personal
   mesaMejora = mesa;
+  vistaEmpleados = empleados;
   pintarTienda();
   $("tienda").hidden = false;
   ponerPausa(true);
-  info(mesa ? "⏸️ Juego en pausa mientras mejoras la mesa " + mesa.id + "." : "⏸️ Juego en pausa mientras estás en la tienda.");
+  info(mesa ? "⏸️ Juego en pausa mientras mejoras la mesa " + mesa.id + "." : empleados ? "⏸️ Juego en pausa mientras ves a tus empleados." : "⏸️ Juego en pausa mientras estás en la tienda.");
 }
 function abrirMejorasMesa(m) { abrirTienda(m); }
 function cerrarTienda() {
   const estabaEnPausa = pausado;
-  mesaMejora = null;
+  mesaMejora = null; vistaEmpleados = false;
   $("tienda").hidden = true;
   ponerPausa(false);
   if (estabaEnPausa) info("▶️ Juego reanudado.");
@@ -700,32 +702,47 @@ function pintarTienda() {
   lista.style.cssText = "max-height:52vh;overflow-y:auto"; // con tantas filas, la lista se desplaza
   lista.innerHTML = "";
   if (mesaMejora) { pintarMejorasMesa(mesaMejora, lista); return; }
+  if (vistaEmpleados) { pintarEmpleados(lista); return; }
   $("tiendaTitulo").textContent = "🛒 Tienda";
-  const txtRecep = (n) => "Nivel " + n + " de " + (RECEP_PRECIOS_MEJORA.length + 1) + " · da mesa en " + (RECEP_TIEMPOS_MS[n - 1] / 1000).toFixed(1) + " s";
-  const txtCocinero = (n) => "Nivel " + n + " de " + (COCINERO_PRECIOS_MEJORA.length + 1) + " · un pedido para 4 personas tarda " + (tiempoCocina(4) / 1000).toFixed(1) + " s (con todos los cocineros)";
-  const txtMesero = (n) => "Nivel " + n + " de " + (MESERO_PRECIOS_MEJORA.length + 1) + " · lleva los platillos a su paso";
+  const hint = document.createElement("small");
+  hint.style.cssText = "display:block;margin:2px 0 6px;color:var(--suave)";
+  hint.textContent = "El personal (cocineros, meseros y recepcionistas) está en el botón 👥 Empleados, arriba a la derecha.";
   lista.append(
-    filaTienda("🧑‍💼", "Recepcionista", receps[0], PRECIO_RECEP, RECEP_PRECIOS_MEJORA, txtRecep, () => contratarRecep(0), () => mejorarRecep(0)),
-    filaTienda("👨‍🍳", "Cocinero", { nivel: cocinero }, 0, COCINERO_PRECIOS_MEJORA, txtCocinero, null, mejorarCocinero),
-    filaTienda("👩‍🍳", "Segundo cocinero", cocinero2 ? { nivel: cocinero2 } : null, PRECIO_COCINERO2, COCINERO_PRECIOS_MEJORA, txtCocinero, contratarCocinero2, mejorarCocinero2),
+    hint,
     filaMesaNueva(),
-    filaTienda("🤵", "Mesero", meseros[0], PRECIO_MESERO, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(0), () => mejorarMesero(0)),
     filaTerreno(),
-    filaTienda("🤵‍♀️", "Segundo mesero", meseros[1], PRECIO_MESERO2, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(1), () => mejorarMesero(1),
-      !meseros[0] ? "Primero contrata al mesero." : ""),
     filaSimple("🚪", "Segunda puerta",
       puerta2 ? "Los clientes también llegan por la puerta de atrás, con su propia fila y mostrador." : terreno2 ? "Una entrada nueva en el terreno de atrás: doble de lugares de espera." : "Se desbloquea al ampliar el terreno.",
       puerta2 ? "Comprada" : terreno2 ? "Comprar " + pesos(PRECIO_PUERTA2) : "🔒 Bloqueado", puerta2 || !terreno2 || dinero < PRECIO_PUERTA2, comprarPuerta2),
-    filaTienda("👩‍💼", "Segunda recepcionista", receps[1], PRECIO_RECEP2, RECEP_PRECIOS_MEJORA, txtRecep, () => contratarRecep(1), () => mejorarRecep(1),
-      !receps[0] ? "Primero contrata a la recepcionista." : puerta2 ? "" : "Se desbloquea con la segunda puerta en el nuevo terreno."),
     filaEstac()
   );
+}
+// Panel «Empleados»: primero los contratados (con su nivel y su botón de mejora) y luego los que todavía se pueden contratar
+function pintarEmpleados(lista) {
+  $("tiendaTitulo").textContent = "👥 Empleados";
+  const txtRecep = (n) => "Nivel " + n + " de " + (RECEP_PRECIOS_MEJORA.length + 1) + " · da mesa en " + (RECEP_TIEMPOS_MS[n - 1] / 1000).toFixed(1) + " s";
+  const txtCocinero = (n) => "Nivel " + n + " de " + (COCINERO_PRECIOS_MEJORA.length + 1) + " · un pedido para 4 personas tarda " + (tiempoCocina(4) / 1000).toFixed(1) + " s (con todos los cocineros)";
+  const txtMesero = (n) => "Nivel " + n + " de " + (MESERO_PRECIOS_MEJORA.length + 1) + " · lleva los platillos a su paso";
+  const filas = [
+    { existe: !!receps[0], f: () => filaTienda("🧑‍💼", "Recepcionista", receps[0], PRECIO_RECEP, RECEP_PRECIOS_MEJORA, txtRecep, () => contratarRecep(0), () => mejorarRecep(0)) },
+    { existe: true, f: () => filaTienda("👨‍🍳", "Cocinero", { nivel: cocinero }, 0, COCINERO_PRECIOS_MEJORA, txtCocinero, null, mejorarCocinero) },
+    { existe: !!cocinero2, f: () => filaTienda("👩‍🍳", "Segundo cocinero", cocinero2 ? { nivel: cocinero2 } : null, PRECIO_COCINERO2, COCINERO_PRECIOS_MEJORA, txtCocinero, contratarCocinero2, mejorarCocinero2) },
+    { existe: !!meseros[0], f: () => filaTienda("🤵", "Mesero", meseros[0], PRECIO_MESERO, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(0), () => mejorarMesero(0)) },
+    { existe: !!meseros[1], f: () => filaTienda("🤵‍♀️", "Segundo mesero", meseros[1], PRECIO_MESERO2, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(1), () => mejorarMesero(1),
+      !meseros[0] ? "Primero contrata al mesero." : "") },
+    { existe: !!receps[1], f: () => filaTienda("👩‍💼", "Segunda recepcionista", receps[1], PRECIO_RECEP2, RECEP_PRECIOS_MEJORA, txtRecep, () => contratarRecep(1), () => mejorarRecep(1),
+      !receps[0] ? "Primero contrata a la recepcionista." : puerta2 ? "" : "Se desbloquea con la segunda puerta (se compra en la tienda, en el terreno nuevo).") },
+  ];
+  const titulo = (t) => { const e = document.createElement("small"); e.style.cssText = "display:block;margin:6px 0 2px;color:var(--suave);font-weight:700"; e.textContent = t; return e; };
+  const hay = filas.filter((x) => x.existe), faltan = filas.filter((x) => !x.existe);
+  lista.append(titulo("Contratados (" + hay.length + ")"), ...hay.map((x) => x.f()));
+  if (faltan.length) lista.append(titulo("Por contratar"), ...faltan.map((x) => x.f()));
 }
 function contratarCocinero2() {
   if (cocinero2 || dinero < PRECIO_COCINERO2) return;
   dinero -= PRECIO_COCINERO2;
   cocinero2 = 1;
-  info("Contrataste al segundo cocinero: cocina junto con el primero y ahora un pedido para 4 personas tarda " + (tiempoCocina(4) / 1000).toFixed(1) + " s. Mejóralo en la tienda.");
+  info("Contrataste al segundo cocinero: cocina junto con el primero y ahora un pedido para 4 personas tarda " + (tiempoCocina(4) / 1000).toFixed(1) + " s. Mejóralo en 👥 Empleados.");
   actualizar();
 }
 function mejorarCocinero2() {
@@ -819,8 +836,8 @@ function contratarRecep(k) {
   if (receps[k] || dinero < precio || (k && (!puerta2 || !receps[0]))) return;
   dinero -= precio;
   receps[k] = { nivel: 1, g: null, t0: 0, emoji: k ? "👩‍💼" : "🧑‍💼" };
-  info(k ? "Contrataste a la segunda recepcionista: atiende la puerta de atrás, pero todavía es lenta. Mejórala en la tienda."
-         : "Contrataste a la recepcionista: da mesa sola, pero todavía es lenta. Mejórala en la tienda.");
+  info(k ? "Contrataste a la segunda recepcionista: atiende la puerta de atrás, pero todavía es lenta. Mejórala en 👥 Empleados."
+         : "Contrataste a la recepcionista: da mesa sola, pero todavía es lenta. Mejórala en 👥 Empleados.");
   actualizar();
 }
 function mejorarRecep(k) {
@@ -839,7 +856,7 @@ function contratarMesero(k) {
   const ent = nuevaEnt(k ? "🤵‍♀️" : "🤵", post[0], post[1]);
   ent.vel = MESERO_VEL[0];
   meseros[k] = { nivel: 1, ocupado: false, ent, post };
-  info((k ? "Contrataste al segundo mesero" : "Contrataste al mesero") + ": lleva solo los platillos, pero camina despacio. Mejóralo en la tienda.");
+  info((k ? "Contrataste al segundo mesero" : "Contrataste al mesero") + ": lleva solo los platillos, pero camina despacio. Mejóralo en 👥 Empleados.");
   actualizar();
 }
 function mejorarMesero(k) {
@@ -1509,6 +1526,12 @@ $("acercar").addEventListener("click", () => zoomEn(camara.z + PASO_ZOOM, CW / 2
 $("alejar").addEventListener("click", () => zoomEn(camara.z - PASO_ZOOM, CW / 2, CH / 2));
 $("centrar").addEventListener("click", centrarCamara);
 $("cerrarTienda").addEventListener("click", cerrarTienda);
+const btnEmpleados = $("btnEmpleados"); // botón anclado a la pantalla (no al mapa): se ve igual aunque muevas o acerques la vista
+if (btnEmpleados) btnEmpleados.addEventListener("click", () => {
+  if ($("menu").hidden === false) return; // con el menú abierto no se usa
+  if (!$("tienda").hidden && vistaEmpleados) cerrarTienda();
+  else abrirTienda(null, true);
+});
 $("reiniciar").addEventListener("click", () => {
   if (!confirm("¿Empezar de cero esta partida?" + (ranura !== null ? " Se perderá lo que tienes guardado en la Partida " + (ranura + 1) + "." : ""))) return;
   enviarPuntos(true); // antes de empezar de cero, manda los puntos que falten

@@ -14,6 +14,8 @@
     .marcador b { color: var(--texto); }
     #estado { min-height: 1.4em; margin: 6px 0; text-align: center; }
     .acciones { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
+    .barra { padding-right: 150px; } /* deja libre la esquina donde va el botón fijo «Empleados» */
+    .btn-empleados { position: fixed; z-index: 90; top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(8px + env(safe-area-inset-right, 0px)); box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
     .tienda { position: fixed; z-index: 100; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(92vw, 420px); padding: 14px; background: var(--tarjeta); border: 1px solid var(--acento); border-radius: 16px; box-shadow: 0 8px 30px rgba(0, 0, 0, .5); }
     .tienda-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
     .tienda-fila { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--borde); }
@@ -51,7 +53,7 @@
       <span>🏆 Récord $<b id="record">0</b> pesos</span>
     </div>
     <canvas id="lienzo" class="lienzo" width="720" height="480" aria-label="Restaurante en vista isométrica con cocina, baño, recepción y cuatro mesas; toca a los clientes que esperan para darles mesa"></canvas>
-    <p id="estado">Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para contratar personal y una mesa para mejorarla.</p>
+    <p id="estado">Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para comprar mesas, terreno y estacionamiento, una mesa para mejorarla, y 👥 Empleados (arriba a la derecha) para el personal.</p>
     <div class="acciones">
       <button class="btn" id="alejar" aria-label="Alejar" title="Alejar">➖</button>
       <button class="btn" id="acercar" aria-label="Acercar" title="Acercar">➕</button>
@@ -91,6 +93,7 @@
     </div>
     <div id="tiendaLista"></div>
   </div>
+  <button class="btn btn-empleados" id="btnEmpleados" aria-label="Empleados">👥 Empleados</button>
   <script type="module" src="juego.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
