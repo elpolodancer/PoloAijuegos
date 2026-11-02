@@ -152,12 +152,20 @@ let terreno2 = false, puerta2 = false;             // ampliación comprada / seg
 let nEstac = ESTAC_INICIALES, proxAuto = 0, autosPerdidos = 0; // lugares de estacionamiento disponibles, cuándo pasa el próximo auto, autos que no hallaron lugar
 let puntero = { x: -99, y: -99 };       // último punto tocado/señalado en el lienzo (para dibujar el platillo)
 
-const ahora = () => performance.now();
+// Reloj del juego: se detiene mientras la tienda está abierta (pausa). Todo lo que depende de «ahora()» y de «esp()» se congela con él.
+let pausado = false, inicioPausa = 0, tiempoPausado = 0;
+const ahora = () => (pausado ? inicioPausa : performance.now()) - tiempoPausado;
+function ponerPausa(v) {
+  if (v === pausado) return;
+  if (v) inicioPausa = performance.now(); else tiempoPausado += performance.now() - inicioPausa;
+  pausado = v;
+}
+let esperas = []; // esperas pendientes: { fin, g, r }
 // Espera que no continúa si se reinició la partida mientras tanto
-const esp = (ms) => { const g = gen; return new Promise((r) => setTimeout(() => { if (g === gen) r(); }, ms)); };
+const esp = (ms) => { const g = gen; return new Promise((r) => esperas.push({ fin: ahora() + ms, g, r })); };
 
 function nuevaPartida() {
-  gen++;
+  gen++; esperas = [];
   ents = []; globos = []; monedas = [];
   mesas = MESAS_BASE.map((m) => ({ ...m, ocupada: false, plato: false, barra: null, esperando: false, tomado: false, enojo: false, listoDesde: 0, res: null, clientes: [] }));
   recepcion = Array(SLOTS.length).fill(null);
@@ -168,7 +176,7 @@ function nuevaPartida() {
   if (habiaCambios) armarFondo(); // quita la plaza y los lugares de estacionamiento de la partida anterior
   reloj = 0; proxLlegada = PRIMERA_LLEGADA_MS; ultimoSeg = -1; fin = false;
   $("fin").hidden = true;
-  $("tienda").hidden = true;
+  cerrarTienda();
   $("tiempo").textContent = Math.ceil(DURACION_DIA_MS / 1000);
   info("Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para contratar personal.");
   actualizar();
@@ -387,7 +395,7 @@ const dentro = (p, x0, y0, x1, y1) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && 
 function aMundo(sx, sy, z) { const u = (sx - OX) / ISO, v = ((sy + z - OY) * 2) / ISO; return [(u + v) / 2, (v - u) / 2]; }
 
 function tocar(sx, sy) {
-  if (fin) return;
+  if (fin || pausado) return; // con la tienda abierta el juego está en pausa
   puntero = { x: sx, y: sy };
   const [wx, wy] = aMundo(sx, sy, 20);
   const grupo = recepcion.find((g) => {
@@ -424,7 +432,18 @@ async function banio(c, ida, i, P = PUERTAS[0]) {
 }
 
 // ----- Tienda y personal -----
-function abrirTienda() { pintarTienda(); $("tienda").hidden = false; }
+function abrirTienda() {
+  pintarTienda();
+  $("tienda").hidden = false;
+  ponerPausa(true);
+  info("⏸️ Juego en pausa mientras estás en la tienda.");
+}
+function cerrarTienda() {
+  const estabaEnPausa = pausado;
+  $("tienda").hidden = true;
+  ponerPausa(false);
+  if (estabaEnPausa && !fin) info("▶️ Juego reanudado.");
+}
 function filaTienda(ico, nombre, p, precio, mejoras, texto, comprar, mejorar, bloqueo) {
   const fila = document.createElement("div");
   fila.className = "tienda-fila";
@@ -498,12 +517,12 @@ function pintarTienda() {
       terreno2 ? "Ya tienes la plaza detrás del restaurante." : "Compra un terreno nuevo detrás del restaurante. Desbloquea el segundo mesero y la segunda puerta.",
       terreno2 ? "Comprado" : "Comprar $" + PRECIO_TERRENO, terreno2 || dinero < PRECIO_TERRENO, comprarTerreno),
     filaTienda("🤵‍♀️", "Segundo mesero", meseros[1], PRECIO_MESERO2, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(1), () => mejorarMesero(1),
-      terreno2 ? "" : "Se desbloquea al ampliar el terreno."),
+      !meseros[0] ? "Primero contrata al mesero." : terreno2 ? "" : "Se desbloquea al ampliar el terreno."),
     filaSimple("🚪", "Segunda puerta",
       puerta2 ? "Los clientes también llegan por la puerta de atrás, con su propia fila y mostrador." : terreno2 ? "Una entrada nueva en el terreno de atrás: doble de lugares de espera." : "Se desbloquea al ampliar el terreno.",
       puerta2 ? "Comprada" : terreno2 ? "Comprar $" + PRECIO_PUERTA2 : "🔒 Bloqueado", puerta2 || !terreno2 || dinero < PRECIO_PUERTA2, comprarPuerta2),
     filaTienda("👩‍💼", "Segunda recepcionista", receps[1], PRECIO_RECEP2, RECEP_PRECIOS_MEJORA, txtRecep, () => contratarRecep(1), () => mejorarRecep(1),
-      puerta2 ? "" : "Se desbloquea con la segunda puerta en el nuevo terreno."),
+      !receps[0] ? "Primero contrata a la recepcionista." : puerta2 ? "" : "Se desbloquea con la segunda puerta en el nuevo terreno."),
     filaEstac()
   );
 }
@@ -525,7 +544,7 @@ function comprarPuerta2() {
 }
 function contratarRecep(k) {
   const precio = k ? PRECIO_RECEP2 : PRECIO_RECEP;
-  if (receps[k] || dinero < precio || (k && !puerta2)) return;
+  if (receps[k] || dinero < precio || (k && (!puerta2 || !receps[0]))) return;
   dinero -= precio;
   receps[k] = { nivel: 1, g: null, t0: 0, emoji: k ? "👩‍💼" : "🧑‍💼" };
   info(k ? "Contrataste a la segunda recepcionista: atiende la puerta de atrás, pero todavía es lenta. Mejórala en la tienda."
@@ -542,7 +561,7 @@ function mejorarRecep(k) {
 }
 function contratarMesero(k) {
   const precio = k ? PRECIO_MESERO2 : PRECIO_MESERO;
-  if (meseros[k] || dinero < precio || (k && !terreno2)) return;
+  if (meseros[k] || dinero < precio || (k && (!terreno2 || !meseros[0]))) return;
   dinero -= precio;
   const post = k ? MESERO_POST2 : MESERO_POST;
   const ent = nuevaEnt(k ? "🤵‍♀️" : "🤵", post[0], post[1]);
@@ -641,7 +660,7 @@ async function despedir(c, pu = 0) {
 // ----- Final -----
 async function finalizar() {
   fin = true;
-  $("tienda").hidden = true;
+  cerrarTienda();
   const record = Math.max(leerRecord(), ganado);
   try { localStorage.setItem(KEY_RECORD, String(record)); } catch (e) {}
   const puntos = Math.floor(ganado / PESOS_POR_PUNTO);
@@ -1000,6 +1019,7 @@ function dibujar() {
   recepcion.forEach((g) => { if (g && g.esperando) dibujarEspera(g); });
   if (llevando) emoji("🍽️", puntero.x, puntero.y - 26, 34); // el platillo que traes en la mano
   ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (pausado) { ctx.fillStyle = "rgba(0,0,0,.55)"; caja(CW / 2 - 70, 8, 140, 30, 10); ctx.fill(); texto("⏸️ En pausa", CW / 2, 23, 16, "#fff", "center"); }
 }
 
 // ----- Bucle -----
@@ -1008,6 +1028,10 @@ function cuadro() {
   const t = ahora();
   const dt = Math.min(0.05, (t - previo) / 1000);
   previo = t;
+  if (esperas.length) { // las esperas vencidas se resuelven en orden (con el juego en pausa «ahora()» no avanza, así que no vence ninguna)
+    const hoy = ahora(), vencidas = esperas.filter((w) => hoy >= w.fin).sort((a, b) => a.fin - b.fin);
+    if (vencidas.length) { esperas = esperas.filter((w) => hoy < w.fin); vencidas.forEach((w) => { if (w.g === gen) w.r(); }); }
+  }
   if (!fin) {
     reloj += dt * 1000;
     if (reloj < DURACION_DIA_MS) {
@@ -1158,7 +1182,7 @@ lienzo.addEventListener("wheel", (e) => { e.preventDefault(); const [x, y] = pos
 $("acercar").addEventListener("click", () => zoomEn(camara.z + PASO_ZOOM, CW / 2, CH / 2));
 $("alejar").addEventListener("click", () => zoomEn(camara.z - PASO_ZOOM, CW / 2, CH / 2));
 $("centrar").addEventListener("click", centrarCamara);
-$("cerrarTienda").addEventListener("click", () => ($("tienda").hidden = true));
+$("cerrarTienda").addEventListener("click", cerrarTienda);
 $("reiniciar").addEventListener("click", nuevaPartida);
 $("otra").addEventListener("click", nuevaPartida);
 centrarCamara();
