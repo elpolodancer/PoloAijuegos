@@ -16,6 +16,12 @@
     .acciones { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
     .fin { margin: 14px auto 0; max-width: 420px; padding: 16px; text-align: center; background: var(--tarjeta); border: 1px solid var(--acento); border-radius: 16px; }
     .fin p { margin: 8px 0 12px; color: var(--suave); }
+    .tienda { position: fixed; z-index: 100; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(92vw, 420px); padding: 14px; background: var(--tarjeta); border: 1px solid var(--acento); border-radius: 16px; box-shadow: 0 8px 30px rgba(0, 0, 0, .5); }
+    .tienda-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+    .tienda-fila { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--borde); }
+    .tienda-fila .ico { font-size: 1.8rem; }
+    .tienda-fila .txt { flex: 1; }
+    .tienda-fila small { display: block; color: var(--suave); }
   </style>
 </head>
 <body>
@@ -33,8 +39,11 @@
       <span>🏆 Récord $<b id="record">0</b></span>
     </div>
     <canvas id="lienzo" class="lienzo" width="720" height="480" aria-label="Restaurante en vista isométrica con cocina, baño, recepción y cuatro mesas; toca a los clientes que esperan para darles mesa"></canvas>
-    <p id="estado">Los clientes llegan solos: toca a la familia en la recepción para darles mesa.</p>
+    <p id="estado">Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para contratar personal.</p>
     <div class="acciones">
+      <button class="btn" id="alejar" aria-label="Alejar" title="Alejar">➖</button>
+      <button class="btn" id="acercar" aria-label="Acercar" title="Acercar">➕</button>
+      <button class="btn" id="centrar" aria-label="Centrar la vista" title="Centrar la vista">🎯</button>
       <button class="btn" id="reiniciar">Reiniciar</button>
     </div>
     <div id="fin" class="fin" hidden>
@@ -43,6 +52,14 @@
       <button class="btn" id="otra">Jugar otra vez</button>
     </div>
   </main>
+  <div id="tienda" class="tienda" role="dialog" aria-label="Tienda: personal y mejoras" hidden>
+    <div class="tienda-cab">
+      <b>🛒 Tienda</b>
+      <span>💰 $<b id="tiendaDinero">0</b></span>
+      <button class="btn" id="cerrarTienda">Cerrar</button>
+    </div>
+    <div id="tiendaLista"></div>
+  </div>
   <script type="module" src="juego.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>

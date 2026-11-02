@@ -3,6 +3,9 @@
 // Esperan frente a la recepción: TÚ tocas a la familia para darles una mesa. Si no hay mesa libre (o tardas mucho), se van enojados.
 // Ya sentados piden, la cocina prepara y TÚ llevas el platillo a mano (clic en la cocina para tomarlo, clic en la mesa para entregarlo).
 // Si tardas, se enojan y se van. Algunos van al baño (cuesta $1), comen y pagan $5 cada uno en la recepción.
+// TIENDA: tocando el mostrador de la recepción (🛒) se abre la zona de compras. Ahí se contrata (y se mejora) a la recepcionista y al mesero.
+// Empiezan lentos: cada mejora los hace más rápidos. Lo gastado sale de «dinero»; los puntos y el récord cuentan lo «ganado».
+// CIUDAD Y VISTA: el restaurante está en una calle, rodeado de manzanas con edificios, parques y carreteras. La vista se acerca/aleja (➕ ➖, rueda o pellizco) con límites cortos y se mueve arrastrando.
 const ID = "restaurantes";
 
 // ----- Ajustes -----
@@ -25,6 +28,22 @@ const T_COMER = 5000;             // ms que tardan en comer
 const PROB_BANIO = 0.5;           // probabilidad de que un cliente vaya al baño mientras come
 const KEY_RECORD = "restaurantes_record";
 
+// ----- Personal (se compra en la tienda de la recepción) -----
+const PRECIO_RECEP = 20;                                 // contratar a la recepcionista (da mesa sola)
+const PRECIO_MESERO = 20;                                // contratar al mesero (lleva solo los platillos)
+const RECEP_TIEMPOS_MS = [6500, 5000, 3800, 2800, 2000]; // por nivel: lo que tarda en dar mesa a un grupo (el nivel 1 es lento a propósito)
+const MESERO_VEL = [70, 95, 125, 160, 200];              // por nivel: velocidad al caminar (px/s; la gente normal va a VEL = 150)
+const RECEP_PRECIOS_MEJORA = [10, 20, 30, 45];           // costo de subir al nivel 2, 3, 4 y 5 de la recepcionista
+const MESERO_PRECIOS_MEJORA = [10, 20, 30, 45];          // ídem para el mesero
+const PAUSA_MESERO_MS = 400;                             // ms que se detiene a tomar el platillo
+
+// ----- Vista (zoom y desplazamiento) -----
+const ZOOM_INICIAL = 0.85;      // zoom al abrir el juego (1 = como antes de la ciudad)
+const ZOOM_MIN = 0.7;           // lo más que se puede alejar (poco, para que la gente se siga viendo)
+const ZOOM_MAX = 1.3;           // lo más que se puede acercar (poco, para no tocar cosas sin querer)
+const PASO_ZOOM = 0.15;         // lo que cambia cada vez que tocas ➕ o ➖
+const UMBRAL_ARRASTRE_PX = 10;  // si el dedo se mueve más que esto (px de pantalla) es arrastre para mover la vista, no un toque
+
 // ----- Mapa plano de la lógica (560 × 680); la vista isométrica se proyecta al dibujar -----
 const W = 560, H = 680;
 const HALL_X = 280;                         // pasillo central
@@ -32,6 +51,7 @@ const ENTRADA = [HALL_X, 570];              // inicio del pasillo, junto a la re
 const ESPERA_Y = [606, 640];                // dos lugares de espera frente a la recepción (máximo 2 grupos esperando a la vez)
 const PUERTA_COCINA = [225, 185];
 const PUERTA_BANIO = [430, 185];
+const MESERO_POST = [HALL_X + 45, 210];     // dónde espera el mesero cuando no hay platillos listos
 const MESAS_BASE = [
   { id: 1, cx: 150, cy: 290 }, { id: 2, cx: 410, cy: 290 },
   { id: 3, cx: 150, cy: 440 }, { id: 4, cx: 410, cy: 440 },
@@ -46,9 +66,10 @@ const ctx = lienzo.getContext("2d");
 // ----- Estado de la partida -----
 let gen = 0; // sube al reiniciar: lo que quedó pendiente de la partida anterior se descarta
 let ents, globos, monedas, mesas, recepcion;
-let dinero, atendidos, perdidos, fin, cocinando;
+let dinero, ganado, atendidos, perdidos, fin, cocinando; // «dinero» es lo que tienes para gastar; «ganado» es todo lo cobrado (puntos y récord)
 let reloj, proxLlegada, activos, ultimoSeg; // reloj de la jornada (ms), cuándo llega el próximo grupo, grupos en el local
 let llevando = null;                    // mesa cuyo platillo traes en la mano
+let recep = null, mesero = null;        // personal contratado (null = todavía no): { nivel, ... }
 let puntero = { x: -99, y: -99 };       // último punto tocado/señalado en el lienzo (para dibujar el platillo)
 
 const ahora = () => performance.now();
@@ -60,11 +81,12 @@ function nuevaPartida() {
   ents = []; globos = []; monedas = [];
   mesas = MESAS_BASE.map((m) => ({ ...m, ocupada: false, plato: false, barra: null, esperando: false, tomado: false, enojo: false, listoDesde: 0, res: null, clientes: [] }));
   recepcion = Array(ESPERA_Y.length).fill(null);
-  dinero = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0;
+  dinero = 0; ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; recep = null; mesero = null;
   reloj = 0; proxLlegada = PRIMERA_LLEGADA_MS; ultimoSeg = -1; fin = false;
   $("fin").hidden = true;
+  $("tienda").hidden = true;
   $("tiempo").textContent = Math.ceil(DURACION_DIA_MS / 1000);
-  info("Los clientes llegan solos: toca a la familia en la recepción para darles mesa.");
+  info("Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para contratar personal.");
   actualizar();
 }
 
@@ -73,6 +95,7 @@ function leerRecord() { try { return Number(localStorage.getItem(KEY_RECORD)) ||
 function actualizar() {
   $("dinero").textContent = dinero;
   $("record").textContent = leerRecord();
+  if (!$("tienda").hidden) pintarTienda();
 }
 
 // ----- Personas que caminan -----
@@ -143,7 +166,7 @@ function esperarAtencion(g) {
   return new Promise((res) => { g.desde = reloj; g.esperando = true; g.res = res; });
 }
 // El jugador tocó al grupo: se le asigna una mesa libre al azar (si ya no queda ninguna, se va enojado)
-function darMesa(g) {
+function darMesa(g, empleado) {
   const libres = mesas.filter((m) => !m.ocupada);
   g.esperando = false; g.enojo = false;
   g.clientes.forEach((c) => (c.enojado = false));
@@ -153,7 +176,7 @@ function darMesa(g) {
   mesa.ocupada = true;
   mesa.clientes = g.clientes;
   globo(HALL_X, g.y, "Mesa " + mesa.id + " 👍", 1500);
-  info("Les diste la mesa " + mesa.id + ".");
+  info((empleado ? "La recepcionista les dio la mesa " : "Les diste la mesa ") + mesa.id + ".");
   if (r) r(mesa);
 }
 // El grupo se va de la recepción sin entrar, enojado, y no paga
@@ -218,7 +241,7 @@ async function atender(n, clientes, mesa) {
     await esp(i * 300);
     const ida = rutaIda(mesa, i);
     await ir(c, [...ida.slice(0, -1).reverse(), espera(i)]);
-    dinero += PAGO_POR_CLIENTE;
+    dinero += PAGO_POR_CLIENTE; ganado += PAGO_POR_CLIENTE;
     atendidos++;
     monedas.push({ x: c.x, y: c.y, t0: ahora(), monto: PAGO_POR_CLIENTE });
     actualizar();
@@ -246,7 +269,7 @@ function esperarEntrega(m) {
 function entregar(m) {
   m.esperando = false; m.tomado = false; m.enojo = false;
   m.clientes.forEach((c) => (c.enojado = false));
-  llevando = null;
+  if (llevando === m) llevando = null;
   info("¡Entregado! La mesa " + m.id + " ya está comiendo.");
   const r = m.res; m.res = null;
   if (r) r(true);
@@ -268,6 +291,7 @@ function tocar(sx, sy) {
     return dentro([wx, wy], Math.min(...xs) - 28, g.y - 30, Math.max(...xs) + 28, g.y + 30);
   });
   if (grupo) { darMesa(grupo); return; }
+  if (dentro(aMundo(sx, sy, 26), 335, 560, 465, 625) || dentro(aMundo(sx, sy, 0), 335, 560, 465, 650)) { abrirTienda(); return; } // mostrador de la recepción
   const enCocina = dentro(aMundo(sx, sy, 0), 10, 10, 260, 160) || dentro(aMundo(sx, sy, 30), 10, 10, 260, 160);
   const mesaTocada = mesas.find((m) => dentro(aMundo(sx, sy, 22), m.cx - 58, m.cy - 58, m.cx + 58, m.cy + 58));
   if (llevando) {
@@ -276,7 +300,7 @@ function tocar(sx, sy) {
     else if (enCocina) { llevando.tomado = false; info("Dejaste el platillo de la mesa " + llevando.id + " en la cocina."); llevando = null; }
     return;
   }
-  const listos = mesas.filter((m) => m.esperando && !m.tomado);
+  const listos = mesas.filter((m) => m.esperando && !m.tomado && m.reservadoPor !== m.listoDesde); // sin los que el mesero ya va a buscar
   // Si tocas un platillo del mostrador, ese; si tocas otra parte de la cocina, el que lleva más tiempo esperando
   let elegido = listos.find((m) => { const [px, py] = iso(SLOT_X[m.id - 1], SLOT_Y, 40); return Math.hypot(sx - px, sy - py) < 28; });
   if (!elegido && enCocina) elegido = listos.sort((a, b) => a.listoDesde - b.listoDesde)[0];
@@ -292,26 +316,126 @@ async function banio(c, m, i) {
   const ida = rutaIda(m, i);
   const dentro = [400 + i * 22, 120];
   await ir(c, [...ida.slice(1, -1).reverse(), [HALL_X, 185], PUERTA_BANIO, dentro]);
-  dinero += COSTO_BANIO;
+  dinero += COSTO_BANIO; ganado += COSTO_BANIO;
   monedas.push({ x: c.x, y: c.y, t0: ahora(), monto: COSTO_BANIO });
   actualizar();
   await esp(1000);
   await ir(c, [PUERTA_BANIO, [HALL_X, 185], ...ida.slice(1)]);
 }
 
+// ----- Tienda y personal -----
+function abrirTienda() { pintarTienda(); $("tienda").hidden = false; }
+function filaTienda(ico, nombre, p, precio, mejoras, texto, comprar, mejorar) {
+  const fila = document.createElement("div");
+  fila.className = "tienda-fila";
+  const i = document.createElement("span");
+  i.className = "ico";
+  i.textContent = ico;
+  const t = document.createElement("div");
+  t.className = "txt";
+  const n = document.createElement("b");
+  n.textContent = nombre;
+  const d = document.createElement("small");
+  const b = document.createElement("button");
+  b.className = "btn";
+  if (!p) {
+    d.textContent = "Todavía no está contratado.";
+    b.textContent = "Contratar $" + precio;
+    b.disabled = dinero < precio;
+    b.addEventListener("click", comprar);
+  } else if (p.nivel > mejoras.length) {
+    d.textContent = texto(p.nivel);
+    b.textContent = "Máximo";
+    b.disabled = true;
+  } else {
+    const c = mejoras[p.nivel - 1];
+    d.textContent = texto(p.nivel);
+    b.textContent = "Mejorar $" + c;
+    b.disabled = dinero < c;
+    b.addEventListener("click", mejorar);
+  }
+  t.append(n, d);
+  fila.append(i, t, b);
+  return fila;
+}
+function pintarTienda() {
+  $("tiendaDinero").textContent = dinero;
+  const lista = $("tiendaLista");
+  lista.innerHTML = "";
+  lista.append(
+    filaTienda("🧑‍💼", "Recepcionista", recep, PRECIO_RECEP, RECEP_PRECIOS_MEJORA,
+      (n) => "Nivel " + n + " de " + (RECEP_PRECIOS_MEJORA.length + 1) + " · da mesa en " + (RECEP_TIEMPOS_MS[n - 1] / 1000).toFixed(1) + " s", contratarRecep, mejorarRecep),
+    filaTienda("🤵", "Mesero", mesero, PRECIO_MESERO, MESERO_PRECIOS_MEJORA,
+      (n) => "Nivel " + n + " de " + (MESERO_PRECIOS_MEJORA.length + 1) + " · lleva los platillos a su paso", contratarMesero, mejorarMesero)
+  );
+}
+function contratarRecep() {
+  if (recep || dinero < PRECIO_RECEP) return;
+  dinero -= PRECIO_RECEP;
+  recep = { nivel: 1, g: null, t0: 0 };
+  info("Contrataste a la recepcionista: da mesa sola, pero todavía es lenta. Mejórala en la tienda.");
+  actualizar();
+}
+function mejorarRecep() {
+  const c = RECEP_PRECIOS_MEJORA[recep.nivel - 1];
+  if (!recep || c === undefined || dinero < c) return;
+  dinero -= c;
+  recep.nivel++;
+  info("La recepcionista subió al nivel " + recep.nivel + ".");
+  actualizar();
+}
+function contratarMesero() {
+  if (mesero || dinero < PRECIO_MESERO) return;
+  dinero -= PRECIO_MESERO;
+  const ent = nuevaEnt("🤵", MESERO_POST[0], MESERO_POST[1]);
+  ent.vel = MESERO_VEL[0];
+  mesero = { nivel: 1, ocupado: false, ent };
+  info("Contrataste al mesero: lleva solo los platillos, pero camina despacio. Mejóralo en la tienda.");
+  actualizar();
+}
+function mejorarMesero() {
+  const c = MESERO_PRECIOS_MEJORA[mesero.nivel - 1];
+  if (!mesero || c === undefined || dinero < c) return;
+  dinero -= c;
+  mesero.nivel++;
+  mesero.ent.vel = MESERO_VEL[mesero.nivel - 1];
+  info("El mesero subió al nivel " + mesero.nivel + ".");
+  actualizar();
+}
+// El mesero va a la cocina por el platillo de la mesa m, lo lleva y vuelve a su lugar. Si la paciencia de la mesa se acaba en el camino, no entrega.
+async function servir(m) {
+  const w = mesero, t0 = m.listoDesde;
+  const vigente = () => m.esperando && m.listoDesde === t0;
+  const lado = m.cx < HALL_X ? 1 : -1;
+  w.ocupado = true;
+  m.reservadoPor = t0;
+  await ir(w.ent, [[HALL_X, 185], PUERTA_COCINA, [225, 140], [SLOT_X[m.id - 1], 90]]);
+  await esp(PAUSA_MESERO_MS);
+  if (vigente() && !m.tomado) {
+    m.tomado = true;
+    w.ent.lleva = true;
+    await ir(w.ent, [[225, 140], PUERTA_COCINA, [HALL_X, 185], [HALL_X, m.cy], [m.cx + 82 * lado, m.cy]]);
+    w.ent.lleva = false;
+    if (vigente()) entregar(m);
+  }
+  await ir(w.ent, w.ent.y < 160 ? [[225, 140], PUERTA_COCINA, MESERO_POST] : [[HALL_X, w.ent.y], MESERO_POST]);
+  w.ocupado = false;
+}
+
 // ----- Final -----
 async function finalizar() {
   fin = true;
-  const record = Math.max(leerRecord(), dinero);
+  $("tienda").hidden = true;
+  const record = Math.max(leerRecord(), ganado);
   try { localStorage.setItem(KEY_RECORD, String(record)); } catch (e) {}
-  const puntos = Math.floor(dinero / PESOS_POR_PUNTO);
+  const puntos = Math.floor(ganado / PESOS_POR_PUNTO);
   let extra = "";
   if (J && puntos > 0) {
     try { extra = (await J.sumarPuntos(ID, puntos)) ? " Se sumaron " + puntos + " puntos a tu perfil." : " Entra con Google para guardar tus puntos."; }
     catch (e) { extra = " No se pudieron guardar los puntos."; }
   }
   $("finTitulo").textContent = "Día terminado";
-  $("finTexto").textContent = "Atendiste " + atendidos + " clientes y ganaste $" + dinero + " pesos." + (perdidos ? " Se fueron " + perdidos + " enojados sin pagar." : "") + extra;
+  $("finTexto").textContent = "Atendiste " + atendidos + " clientes y ganaste $" + ganado + " pesos." + (perdidos ? " Se fueron " + perdidos + " enojados sin pagar." : "") + extra;
   $("fin").hidden = false;
   info("Terminó la jornada.");
   actualizar();
@@ -361,14 +485,96 @@ function cuarto(c, x0, y0, x1, y1, claro, oscuro, pared, puertaX, puertaW) {
 }
 
 // Todo lo que no se mueve se dibuja una sola vez en este lienzo oculto
+const FOX = 300, FOY = 250, FW = 1350, FH = 950;  // el fondo es más grande que el lienzo: cubre x de -300 a 1050 y y de -250 a 700 (coordenadas base)
+const VISTA = { x0: -250, y0: -200, x1: 1000, y1: 650 }; // hasta dónde se puede mover la vista (coordenadas base)
+const CENTRO_VISTA = [367, 290];                  // centro del restaurante en coordenadas base
 const fondo = document.createElement("canvas");
-fondo.width = CW; fondo.height = CH;
+fondo.width = FW; fondo.height = FH;
+
+// ----- Ciudad alrededor del restaurante -----
+// El restaurante es la manzana (0, 0): su acera mide ACERA y las calles CALLE. Las demás manzanas se llenan de edificios y parques.
+// Los edificios de las manzanas de enfrente tienen tope de altura según su distancia, para que nunca tapen el restaurante.
+const ACERA = 40, CALLE = 120;
+const PX = W + 2 * ACERA + CALLE, PY = H + 2 * ACERA + CALLE; // separación entre manzanas
+const COL_ASFALTO = "#555b64", COL_ACERA = "#d0d3d6";
+const EDIFICIOS = [
+  { tapa: "#d7ccc8", izq: "#bcaaa4", der: "#a1887f" },
+  { tapa: "#ffe0b2", izq: "#ffcc80", der: "#ffb74d" },
+  { tapa: "#bbdefb", izq: "#90caf9", der: "#64b5f6" },
+  { tapa: "#c8e6c9", izq: "#a5d6a7", der: "#81c784" },
+  { tapa: "#f8bbd0", izq: "#f48fb1", der: "#f06292" },
+  { tapa: "#cfd8dc", izq: "#b0bec5", der: "#90a4ae" },
+];
+const CENTROS_X = [-2, -1, 0, 1, 2].map((i) => i * PX + W + ACERA + CALLE / 2); // calles de x constante
+const CENTROS_Y = [-2, -1, 0, 1, 2].map((j) => j * PY + H + ACERA + CALLE / 2); // calles de y constante
+const ruido = (a, b, k) => { const s = Math.sin(a * 127.1 + b * 311.7 + k * 74.7) * 43758.5453; return s - Math.floor(s); }; // «azar» fijo: la ciudad sale igual siempre
+// ¿Se vería algo de este rectángulo (con altura h) dentro del fondo?
+function visible(x0, y0, x1, y1, h) {
+  const p = [iso(x0, y0), iso(x1, y0), iso(x0, y1), iso(x1, y1)];
+  const xs = p.map((q) => q[0]), ys = p.map((q) => q[1]);
+  return Math.max(...xs) > -FOX && Math.min(...xs) < FW - FOX && Math.max(...ys) > -FOY && Math.min(...ys) - h < FH - FOY;
+}
+function arbol(c, x, y, tam) {
+  const [px, py] = iso(x, y);
+  c.fillStyle = "rgba(0,0,0,.18)"; c.beginPath(); c.ellipse(px, py, tam * 0.45, tam * 0.2, 0, 0, Math.PI * 2); c.fill();
+  c.font = tam + "px serif"; c.fillStyle = "#000"; c.textAlign = "center"; c.textBaseline = "middle";
+  c.fillText("🌳", px, py - tam * 0.4);
+}
+function ventanas(c, x0, y0, x1, y1, h) {
+  const col = "rgba(227,242,253,.75)";
+  for (let z = 16; z + 14 <= h - 6; z += 26) {
+    for (let x = x0 + 14; x + 12 <= x1 - 10; x += 26) poly(c, [iso(x, y1, z), iso(x + 12, y1, z), iso(x + 12, y1, z + 14), iso(x, y1, z + 14)], col);
+    for (let y = y0 + 14; y + 12 <= y1 - 10; y += 26) poly(c, [iso(x1, y, z), iso(x1, y + 12, z), iso(x1, y + 12, z + 14), iso(x1, y, z + 14)], col);
+  }
+}
+function edificio(c, x0, y0, x1, y1, h, col) {
+  caja3d(c, x0, y0, x1, y1, h, col, "rgba(0,0,0,.25)");
+  ventanas(c, x0, y0, x1, y1, h);
+}
+function armarCiudad(c) {
+  c.fillStyle = COL_ASFALTO; c.fillRect(-FOX, -FOY, FW, FH); // todo es calle; encima van las aceras
+  // línea central amarilla de cada calle (se interrumpe en los cruces)
+  const enCruce = (v, centros) => centros.some((m) => Math.abs(v - m) < CALLE / 2 + 6);
+  for (let p = -1600; p < 2600; p += 60) for (const xc of CENTROS_X) if (!enCruce(p + 15, CENTROS_Y)) suelo(c, xc - 2, p, xc + 2, p + 30, "#e8c547");
+  for (let p = -1600; p < 2400; p += 60) for (const yc of CENTROS_Y) if (!enCruce(p + 15, CENTROS_X)) suelo(c, p, yc - 2, p + 30, yc + 2, "#e8c547");
+  for (let k = 0; k < 6; k++) suelo(c, 100 + k * 20, CENTROS_Y[2] - 52, 110 + k * 20, CENTROS_Y[2] + 52, "#f5f5f5"); // paso de cebra frente al restaurante
+  const cola = [];
+  for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) {
+    const x0 = i * PX, y0 = j * PY, x1 = x0 + W, y1 = y0 + H;
+    if (!visible(x0 - ACERA, y0 - ACERA, x1 + ACERA, y1 + ACERA, 240)) continue;
+    suelo(c, x0 - ACERA, y0 - ACERA, x1 + ACERA, y1 + ACERA, COL_ACERA); // acera de la manzana
+    if (i === 0 && j === 0) continue;                                      // el restaurante se dibuja aparte
+    if (ruido(i, j, 99) < 0.15) {                                          // parque
+      suelo(c, x0 + 10, y0 + 10, x1 - 10, y1 - 10, "#9ccc65");
+      for (let k = 0; k < 6; k++) {
+        const ax = x0 + 80 + ruido(i, j, k) * (W - 160), ay = y0 + 80 + ruido(j, i, k + 9) * (H - 160);
+        cola.push({ d: ax + ay, f: () => arbol(c, ax, ay, 34) });
+      }
+      continue;
+    }
+    for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) {
+      const ex0 = x0 + a * (W / 2) + 14, ex1 = x0 + (a + 1) * (W / 2) - 14;
+      const ey0 = y0 + b * (H / 2) + 14, ey1 = y0 + (b + 1) * (H / 2) - 14;
+      const tope = ex1 > 0 && ey1 > 0 ? 0.5 * Math.max(ex0 - W, ey0 - H) : 220; // los de enfrente: más bajos cuanto más cerca del restaurante
+      const h = Math.max(24, Math.min(40 + ruido(i * 3 + a, j * 5 + b, 1) * 160, tope, 220));
+      const col = EDIFICIOS[Math.floor(ruido(i * 3 + a, j * 5 + b, 2) * EDIFICIOS.length)];
+      cola.push({ d: (ex0 + ex1 + ey0 + ey1) / 2, f: () => edificio(c, ex0, ey0, ex1, ey1, h, col) });
+    }
+  }
+  cola.sort((p, q) => p.d - q.d).forEach((o) => o.f()); // de lo más lejano a lo más cercano
+}
+// Árboles en la acera del restaurante: los de atrás se dibujan antes del piso y los de enfrente después (así tapan lo correcto)
+function arbolesAcera(c, lado) {
+  const pts = lado === "atras"
+    ? [[-20, 90], [-20, 230], [-20, 370], [-20, 510], [-20, 640], [90, -20], [230, -20], [370, -20], [510, -20]]
+    : [[W + 20, 230], [W + 20, 370], [W + 20, 510], [W + 20, 640], [40, H + 20], [120, H + 20], [520, H + 20]];
+  pts.sort((p, q) => p[0] + p[1] - (q[0] + q[1])).forEach(([x, y]) => arbol(c, x, y, 32));
+}
 function armarFondo() {
   const c = fondo.getContext("2d");
-  c.fillStyle = "#8bbf6a"; c.fillRect(0, 0, CW, CH); // pasto
-  // grosor del terreno
-  poly(c, [iso(W, 0, 0), iso(W, H, 0), iso(W, H, -14), iso(W, 0, -14)], "#6b4f3a");
-  poly(c, [iso(0, H, 0), iso(W, H, 0), iso(W, H, -14), iso(0, H, -14)], "#7d5c44");
+  c.translate(FOX, FOY); // el fondo es más grande que el lienzo: caben la ciudad y las calles alrededor
+  armarCiudad(c);        // calles, aceras, edificios y parques
+  arbolesAcera(c, "atras");
   // piso del comedor
   for (let i = 0; i < W / 40; i++) for (let j = 0; j < H / 40; j++) suelo(c, i * 40, j * 40, i * 40 + 40, j * 40 + 40, (i + j) % 2 ? "#e4cfa9" : "#ecd9b8");
   cuarto(c, 10, 10, 260, 160, "#eceff1", "#cfd8dc", "#b0bec5", 200, 50);   // cocina
@@ -378,7 +584,10 @@ function armarFondo() {
   const [cx, cy] = iso(40, 520, 0); texto("Comedor", cx, cy, 13, "rgba(91,70,54,.75)", "center", c);
   // puerta de entrada
   caja3d(c, 250, H - 4, 310, H, 5, MADERA_OSCURA);
-  const [ex, ey] = iso(280, H, 0); texto("Entrada", ex + 4, ey + 30, 13, "#2f4f2f", "center", c);
+  arbolesAcera(c, "enfrente");
+  const [ex, ey] = iso(280, H, 0); // el letrero queda sobre la calle: letras blancas con contorno oscuro
+  c.font = "700 13px system-ui, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.lineWidth = 3; c.strokeStyle = "rgba(0,0,0,.6)"; c.strokeText("Entrada", ex + 4, ey + 30);
+  texto("Entrada", ex + 4, ey + 30, 13, "#fff", "center", c);
 }
 
 function sombra(x, y, r) {
@@ -441,9 +650,26 @@ function dibujarEspera(g) {
 function dibujarEscritorio() {
   caja3d(ctx, 340, 585, 460, 619, 26, MADERA_OSCURA, "#3e2c23");
   const [sx, sy] = iso(400, 602, 26); texto("Recepción", sx, sy, 11, "#fff", "center");
+  const [bx, by] = iso(400, 636, 0); // etiqueta que invita a abrir la tienda
+  const t = "🛒 Tienda";
+  ctx.font = "700 13px system-ui, sans-serif";
+  const w = ctx.measureText(t).width + 16;
+  ctx.fillStyle = "#fff"; caja(bx - w / 2, by - 12, w, 24, 8); ctx.fill();
+  ctx.strokeStyle = "#7c5cff"; ctx.lineWidth = 2; ctx.stroke();
+  texto(t, bx, by, 13, "#3b2a1a", "center");
+}
+// Recepcionista contratada: de pie detrás del mostrador; mientras atiende se ve su barra de avance
+function dibujarRecepcionista() {
+  persona("🧑‍💼", 400, 572, 38, 34);
+  if (!recep.g) return;
+  const f = Math.min(1, (reloj - recep.t0) / RECEP_TIEMPOS_MS[recep.nivel - 1]);
+  const [sx, sy] = iso(400, 572, 78);
+  ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(sx - 24, sy, 48, 7);
+  ctx.fillStyle = "#7c5cff"; ctx.fillRect(sx - 24, sy, 48 * f, 7);
 }
 function dibujarEnt(e) {
   persona(e.emoji, e.x, e.y, 20, 34);
+  if (e.lleva) { const [px, py] = iso(e.x, e.y, 56); emoji("🍽️", px, py, 20); } // el mesero con un platillo en la mano
   if (e.enojado) { const [sx, sy] = iso(e.x, e.y, 52); emoji("😡", sx + Math.sin(ahora() / 60) * 2, sy, 20); }
 }
 
@@ -471,7 +697,9 @@ function dibujarMonedas() {
 }
 
 function dibujar() {
-  ctx.drawImage(fondo, 0, 0);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.setTransform(camara.z, 0, 0, camara.z, -camara.vx * camara.z, -camara.vy * camara.z); // zoom y desplazamiento
+  ctx.drawImage(fondo, -FOX, -FOY);
   // Todo se ordena por profundidad (x + y): lo más lejano primero, para que lo cercano tape a lo de atrás
   const cola = [];
   for (const m of mesas) {
@@ -481,6 +709,7 @@ function dibujar() {
   cola.push({ d: 190, f: dibujarMostrador });
   cola.push({ d: 222, f: dibujarChef });
   cola.push({ d: 1002, f: dibujarEscritorio });
+  if (recep) cola.push({ d: 975, f: dibujarRecepcionista });
   [[365, 85, "🚽"], [365, 125, "🚽"], [515, 85, "🚰"]].forEach(([x, y, em]) => cola.push({ d: x + y, f: () => persona(em, x, y, 16, 30) }));
   for (const e of ents) cola.push({ d: e.x + e.y + 0.1, f: () => dibujarEnt(e) });
   cola.sort((a, b) => a.d - b.d).forEach((o) => o.f());
@@ -488,6 +717,7 @@ function dibujar() {
   dibujarMonedas();
   recepcion.forEach((g) => { if (g && g.esperando) dibujarEspera(g); });
   if (llevando) emoji("🍽️", puntero.x, puntero.y - 26, 34); // el platillo que traes en la mano
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
 // ----- Bucle -----
@@ -511,7 +741,7 @@ function cuadro() {
   for (const e of ents) {
     if (!e.ruta.length) continue;
     const [tx, ty] = e.ruta[0];
-    const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy), paso = VEL * dt;
+    const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy), paso = (e.vel || VEL) * dt;
     if (d <= paso) {
       e.x = tx; e.y = ty; e.ruta.shift();
       if (!e.ruta.length && e.fin) { const f = e.fin; e.fin = null; f(); }
@@ -542,6 +772,17 @@ function cuadro() {
     }
     if (espera >= PACIENCIA_RECEP_MS) { g.razon = "paciencia"; g.esperando = false; const r = g.res; g.res = null; if (r) r(null); }
   }
+  if (recep) { // recepcionista: da mesa sola al grupo que más lleva esperando, pero tarda
+    if (recep.g && !recep.g.esperando) recep.g = null; // lo atendiste tú o se fue
+    if (!recep.g) {
+      const g = recepcion.filter((x) => x && x.esperando).sort((a, b) => a.desde - b.desde)[0];
+      if (g && mesas.some((m) => !m.ocupada)) { recep.g = g; recep.t0 = reloj; }
+    } else if (reloj - recep.t0 >= RECEP_TIEMPOS_MS[recep.nivel - 1]) { const g = recep.g; recep.g = null; darMesa(g, true); }
+  }
+  if (mesero && !mesero.ocupado) { // mesero: va por el platillo que lleva más tiempo esperando
+    const m = mesas.filter((x) => x.esperando && !x.tomado && x.reservadoPor !== x.listoDesde).sort((a, b) => a.listoDesde - b.listoDesde)[0];
+    if (m) servir(m);
+  }
   dibujar();
   requestAnimationFrame(cuadro);
 }
@@ -570,10 +811,71 @@ else {
   });
 }
 
-lienzo.addEventListener("pointerdown", (e) => { const [x, y] = posEnLienzo(e); tocar(x, y); });
-lienzo.addEventListener("pointermove", (e) => { const [x, y] = posEnLienzo(e); puntero = { x, y }; });
+// ----- Vista: zoom (➕ ➖, rueda, pellizco) y desplazamiento (arrastrar) -----
+// La lógica y el dibujo trabajan en «coordenadas base» (las de iso()); la cámara solo cambia cómo se ven en el lienzo.
+const camara = { z: ZOOM_INICIAL, vx: 0, vy: 0 }; // vx, vy: esquina superior izquierda de lo que se ve, en coordenadas base
+ctx.imageSmoothingQuality = "high";
+const aBase = (p) => [camara.vx + p[0] / camara.z, camara.vy + p[1] / camara.z];
+function limitarCamara() {
+  const vw = CW / camara.z, vh = CH / camara.z;
+  camara.vx = Math.max(VISTA.x0, Math.min(camara.vx, VISTA.x1 - vw));
+  camara.vy = Math.max(VISTA.y0, Math.min(camara.vy, VISTA.y1 - vh));
+}
+function centrarCamara() {
+  camara.vx = CENTRO_VISTA[0] - CW / camara.z / 2;
+  camara.vy = CENTRO_VISTA[1] - CH / camara.z / 2;
+  limitarCamara();
+}
+// Cambia el zoom dejando quieto el punto (fx, fy) del lienzo
+function zoomEn(z, fx, fy) {
+  z = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+  const [bx, by] = aBase([fx, fy]);
+  camara.z = z;
+  camara.vx = bx - fx / z;
+  camara.vy = by - fy / z;
+  limitarCamara();
+}
+// Un toque (sin arrastrar) ejecuta la acción al soltar; arrastrar mueve la vista y dos dedos hacen zoom
+const dedos = new Map(); // id del puntero → posición en el lienzo
+let gesto = null;        // { inicio, movido, d0, z0 }
+const dosDedos = () => { const [a, b] = [...dedos.values()]; return Math.hypot(a[0] - b[0], a[1] - b[1]); };
+lienzo.addEventListener("pointerdown", (e) => {
+  try { lienzo.setPointerCapture(e.pointerId); } catch (err) {}
+  dedos.set(e.pointerId, posEnLienzo(e));
+  if (dedos.size === 1) gesto = { inicio: posEnLienzo(e), movido: false };
+  else if (gesto && dedos.size === 2) { gesto.movido = true; gesto.d0 = dosDedos(); gesto.z0 = camara.z; }
+});
+lienzo.addEventListener("pointermove", (e) => {
+  const p = posEnLienzo(e), b = aBase(p);
+  puntero = { x: b[0], y: b[1] };
+  const previo = dedos.get(e.pointerId);
+  if (!previo || !gesto) return;
+  dedos.set(e.pointerId, p);
+  if (dedos.size === 2) {
+    const [a, c] = [...dedos.values()];
+    if (gesto.d0 > 0) zoomEn(gesto.z0 * dosDedos() / gesto.d0, (a[0] + c[0]) / 2, (a[1] + c[1]) / 2);
+  } else if (dedos.size === 1) {
+    const umbral = (UMBRAL_ARRASTRE_PX * CW) / lienzo.getBoundingClientRect().width;
+    if (!gesto.movido && Math.hypot(p[0] - gesto.inicio[0], p[1] - gesto.inicio[1]) > umbral) gesto.movido = true;
+    if (gesto.movido) { camara.vx -= (p[0] - previo[0]) / camara.z; camara.vy -= (p[1] - previo[1]) / camara.z; limitarCamara(); }
+  }
+});
+function soltar(e) {
+  if (!dedos.delete(e.pointerId) || dedos.size) return;
+  const g = gesto;
+  gesto = null;
+  if (g && !g.movido && e.type === "pointerup") { const [x, y] = aBase(posEnLienzo(e)); tocar(x, y); }
+}
+lienzo.addEventListener("pointerup", soltar);
+lienzo.addEventListener("pointercancel", soltar);
+lienzo.addEventListener("wheel", (e) => { e.preventDefault(); const [x, y] = posEnLienzo(e); zoomEn(camara.z * (e.deltaY < 0 ? 1.1 : 1 / 1.1), x, y); }, { passive: false });
+$("acercar").addEventListener("click", () => zoomEn(camara.z + PASO_ZOOM, CW / 2, CH / 2));
+$("alejar").addEventListener("click", () => zoomEn(camara.z - PASO_ZOOM, CW / 2, CH / 2));
+$("centrar").addEventListener("click", centrarCamara);
+$("cerrarTienda").addEventListener("click", () => ($("tienda").hidden = true));
 $("reiniciar").addEventListener("click", nuevaPartida);
 $("otra").addEventListener("click", nuevaPartida);
+centrarCamara();
 armarFondo();
 nuevaPartida();
 requestAnimationFrame(cuadro);
