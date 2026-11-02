@@ -8,28 +8,40 @@
 const MUNDO = { w: 360, h: 630 };   // tamaño del mapa (se escala a la pantalla). Arriba hay una franja de pasto fija para los jardines
 const DINERO_INICIAL = 15;          // alcanza justo para comprar la primera estantería y el jardín
 const VELOCIDAD = 150;              // px/s del personaje
-const CARGA_MAX = 4;                // productos que puedes cargar a la vez
+const CARGA_INICIAL = 3;            // productos que puedes cargar a la vez al empezar (cada mejora 🧤 suma 1)
+const COSTOS_CARGA = [20, 30, 50, 60, 80, 100]; // lo que cuesta cada mejora de carga, en orden
 const ESTANTE_CAP = 5;              // productos que caben en cada estantería
+const EXT_H = 26;                   // cuánto crece hacia abajo la estantería de jitomates para los espacios extra de zanahoria
 const EXTRA_ZANAHORIA_CAP = 2;      // espacios extra para zanahorias en la estantería de jitomates, hasta que compres la de zanahorias
 const CRECE_SEG = 4;                // cada cuántos segundos sale una verdura nueva en el jardín
 const MADURA_SEG = 1.5;             // lo que tarda en madurar una verdura recién salida
 const MAX_CLIENTES = 3;             // clientes a la vez en la tienda
+const MAX_CLIENTES_ZANAHORIA = 4;   // clientes a la vez una vez que compras el jardín de zanahorias
 const ESPERA_MIN = 3;               // segundos que tarda en llegar el siguiente cliente (al azar entre MIN y MAX)
 const ESPERA_MAX = 6;
 const CANT_MIN = 1;                 // unidades de cada producto en la lista de un cliente
 const CANT_MAX = 3;
 const TOMAR_SEG = 0.7;              // lo que tarda un cliente en tomar un producto de la estantería
-const COBRO_SEG = 0.5;              // lo que tarda el cobro de cada producto en la caja
+const COBRO_SEG = 0.5;              // lo que tarda el cobro de TODA la compra de un cliente (se cobra junta, de una vez)
 const TRASPASO_SEG = 0.2;           // un producto cada tanto al recoger del jardín / colocar en la estantería
 const ALCANCE_ESTANTE = 40;         // distancia (px) a la que colocas productos
 const ALCANCE_JARDIN = 22;          // distancia (px) a la que recoges del jardín
 const ALCANCE_CAJA = 40;            // distancia (px) a la que cobras tú en la caja
 const RADIO = 12;                   // tamaño del personaje
+const PASTO_EXTRA_NIVEL = 40;          // pasto extra (px del mapa) que se añade arriba por cada nivel del edificio (0 = el pasto solo conserva su tamaño)
+const JARDIN_FILA_SEP = 8;          // separación entre una hilera de jardines y la siguiente
+const EMP_CARGA = 3;                // productos que lleva de golpe un empleado de jardín
+const EMP_VEL = 85;                 // velocidad (px/s) de los empleados de jardín
+const JARDIN_SEP = 4;               // separación (px) entre los jardines y el muro de arriba del edificio
 
 // Costos
 const COSTO_PRIMER_ESTANTE = 10;
 const COSTO_JARDIN = 5;                // jardín de jitomates
 const COSTO_JARDIN_ZANAHORIA = 20;      // jardín de zanahorias (hay que comprarlo antes de la estantería de zanahorias)
+const COSTO_JARDIN_MAIZ = 40;
+const COSTO_JARDIN_BROCOLI = 60;
+const COSTO_JARDIN_BERENJENA = 80;
+const COSTO_EMP_JARDIN = { tomate: 15, zanahoria: 25, maiz: 35, brocoli: 45, berenjena: 60 };   // empleado que lleva del jardín a la estantería (uno por jardín)
 const COSTO_EMPLEADO = 30;
 const COSTO_ESTANTE_EXTRA = (n) => 15 + 10 * n;   // n = estanterías extra que ya compraste
 // Edificio: «top» es hasta dónde llega el edificio por arriba; cada nivel deja 2 estanterías más
@@ -40,9 +52,13 @@ const EDIFICIO = [
 ];
 
 // Productos que existen (precio en dólares)
+// El orden importa: la estantería número 1 es del 1.er producto, la 2 del 2.º, etc. (y cada jardín pide haber comprado la estantería del anterior)
 const PRODUCTOS = {
-  tomate: { icono: "🍅", precio: 1 },
-  zanahoria: { icono: "🥕", precio: 2 },
+  tomate: { icono: "🍅", precio: 1, nombre: "jitomate" },
+  zanahoria: { icono: "🥕", precio: 2, nombre: "zanahoria" },
+  maiz: { icono: "🌽", precio: 3, nombre: "maíz" },
+  brocoli: { icono: "🥦", precio: 4, nombre: "brócoli" },
+  berenjena: { icono: "🍆", precio: 5, nombre: "berenjena" },
 };
 const IDS = Object.keys(PRODUCTOS);
 
@@ -54,10 +70,10 @@ function rectEstante(i) {
   const fila = Math.floor(i / 2), col = i % 2;
   return { x: col ? 210 : 30, y: EDIFICIO[fila].top + 18, w: ESTANTE_W, h: ESTANTE_H };
 }
-// Los jardines están en el pasto (arriba del edificio, a donde se sale por la abertura del pasillo central)
-const CAJA = { x: 12, y: 468, w: 58, h: 34 };
-const SLOTS_CAJA = [{ x: 100, y: 485 }, { x: 128, y: 485 }, { x: 156, y: 485 }]; // la fila de la caja
-const POS_EMPLEADO = { x: 41, y: 520 };
+// Los jardines están en el pasto, pegados al muro de arriba del edificio (a donde se sale por la abertura del pasillo central)
+const CAJA = { x: 10, y: 466, w: 72, h: 40 };     // el mostrador (con toldo, caja registradora y cajón)
+const SLOTS_CAJA = [{ x: 100, y: 485 }, { x: 128, y: 485 }, { x: 156, y: 485 }, { x: 184, y: 485 }]; // la fila de la caja (4 lugares)
+const POS_EMPLEADO = { x: 46, y: 527 };
 const MEJORAS_ZONA = { x: 10, y: 556, w: 108, h: 62 };
 const PUERTA = { x: 186, y: MUNDO.h + 14 };       // por donde entran y salen los clientes
 const PASILLO_X = 180;                            // pasillo central entre estanterías
@@ -75,6 +91,7 @@ const elClientes = document.getElementById("clientes");
 const ovl = document.getElementById("ovl");
 const ovlBtn = document.getElementById("ovlBtn");
 const panel = document.getElementById("mejoras");
+const btnCarga = document.getElementById("mejCarga");
 const btnEmpleado = document.getElementById("mejEmpleado");
 const btnEstante = document.getElementById("mejEstante");
 const btnEdificio = document.getElementById("mejEdificio");
@@ -90,6 +107,10 @@ let estantes = [];       // estanterías compradas: { slot, x, y, w, h, producto
 let extra = [];          // zanahorias colocadas en los espacios extra de la estantería de jitomates
 let empleado = false;    // ¿ya contrataste al de la caja?
 let edificio = 0;        // nivel del edificio
+let nivelCarga = 0;      // mejoras de carga compradas (0 a COSTOS_CARGA.length)
+const cargaMax = () => CARGA_INICIAL + nivelCarga;
+// El mapa crece hacia arriba (y negativas) al agrandar el edificio: el pasto no se encoge, se expande
+const despl = () => EDIFICIO[0].top - EDIFICIO[edificio].top + PASTO_EXTRA_NIVEL * edificio;
 let clientes = [];
 let cola = [];           // clientes esperando en la caja, en orden
 let espera = 2;          // segundos para que llegue el siguiente cliente
@@ -101,15 +122,27 @@ const teclas = {};
 
 // Cada jardín produce solo su producto y tiene su propio reloj (t < 0: parcela vacía; si no, segundos creciendo)
 function nuevoJardin(producto, rect, costo) {
-  const g = { producto, ...rect, costo, comprado: false, parcelas: [], reloj: CRECE_SEG };
+  const g = { producto, ...rect, costo, costoEmp: COSTO_EMP_JARDIN[producto], emp: null, comprado: false, parcelas: [], reloj: CRECE_SEG };
   for (let i = 0; i < g.cols * g.filas; i++) g.parcelas.push({ t: -1, id: null });
   return g;
 }
+// «hilera»: 0 es la más pegada al muro; las demás se apilan hacia arriba en el pasto
 const jardines = [
-  nuevoJardin("tomate", { x: 16, y: 14, w: 140, h: 80, cols: 3, filas: 2 }, COSTO_JARDIN),
-  nuevoJardin("zanahoria", { x: 204, y: 14, w: 140, h: 80, cols: 3, filas: 2 }, COSTO_JARDIN_ZANAHORIA),
+  nuevoJardin("tomate", { x: 16, y: 0, w: 140, h: 80, cols: 3, filas: 2, hilera: 0 }, COSTO_JARDIN),
+  nuevoJardin("zanahoria", { x: 204, y: 0, w: 140, h: 80, cols: 3, filas: 2, hilera: 0 }, COSTO_JARDIN_ZANAHORIA),
+  nuevoJardin("maiz", { x: 16, y: 0, w: 140, h: 80, cols: 3, filas: 2, hilera: 1 }, COSTO_JARDIN_MAIZ),
+  nuevoJardin("brocoli", { x: 204, y: 0, w: 140, h: 80, cols: 3, filas: 2, hilera: 1 }, COSTO_JARDIN_BROCOLI),
+  nuevoJardin("berenjena", { x: 16, y: 0, w: 140, h: 80, cols: 3, filas: 2, hilera: 2 }, COSTO_JARDIN_BERENJENA),
 ];
+// Los jardines siempre quedan lo más cerca posible del muro: al agrandar el edificio, suben junto con él
+function pegarJardines() {
+  for (const g of jardines) g.y = EDIFICIO[edificio].top - g.h - JARDIN_SEP - g.hilera * (g.h + JARDIN_FILA_SEP);
+}
+pegarJardines();
 const jardinDe = (id) => jardines.find((g) => g.producto === id);
+const maxClientes = () => (jardinDe("zanahoria").comprado ? MAX_CLIENTES_ZANAHORIA : MAX_CLIENTES);
+// Un jardín (menos el 1.º) se compra cuando ya tienes la estantería del producto anterior
+const puedeJardin = (g) => { const k = IDS.indexOf(g.producto) - 1; return k < 0 || estantes.some((e) => e.slot === k); };
 
 // ---------- Sonido ----------
 let ac = null;
@@ -143,7 +176,7 @@ function chocaPared(x, y) {
   if (distRect(x, y, { x: 0, y: t, w: MUNDO.w, h: 14 }) >= RADIO) return false;
   return !(x - RADIO >= ABERTURA.a && x + RADIO <= ABERTURA.b);
 }
-const choca = (x, y) => estantes.some((e) => distRect(x, y, e) < RADIO) || chocaPared(x, y); // estanterías y pared no se atraviesan
+const choca = (x, y) => estantes.some((e) => distRect(x, y, rectFull(e)) < RADIO) || chocaPared(x, y); // estanterías y pared no se atraviesan
 
 function centroParcela(g, i) {
   const c = i % g.cols, f = Math.floor(i / g.cols);
@@ -151,6 +184,11 @@ function centroParcela(g, i) {
 }
 
 const hayPrimerEstante = () => estantes.some((e) => e.slot === 0);
+// Rectángulo completo de una estantería (la de jitomates crece hacia abajo cuando se habilitan los 2 espacios de zanahoria)
+function rectFull(e) {
+  const ext = e.slot === 0 && !e.extra && extrasActivas() ? EXT_H : 0;
+  return { x: e.x, y: e.y, w: e.w, h: e.h + ext };
+}
 const centroSelector = (e) => ({ x: e.x + 12, y: e.y + e.h / 2 }); // botón ↻ de cada estantería
 
 // Productos que existen en la tienda: los que llevan alguna estantería
@@ -165,14 +203,16 @@ const extrasActivas = () => hayPrimerEstante() && jardinDe("zanahoria").comprado
 function extraEstante() {
   if (!extrasActivas()) return null;
   const s = estantes.find((e) => e.slot === 0);
-  return { x: s.x, y: s.y, w: s.w, h: s.h, producto: "zanahoria", items: extra, cap: EXTRA_ZANAHORIA_CAP, extra: true };
+  const r = rectFull(s);   // es el mismo mueble: la parte de abajo de la estantería de jitomates
+  return { x: r.x, y: r.y, w: r.w, h: r.h, producto: "zanahoria", items: extra, cap: EXTRA_ZANAHORIA_CAP, extra: true };
 }
 const capDe = (e) => e.cap || ESTANTE_CAP;
 // Zanahorias que aún puedes tomar del jardín con los espacios extra (descuenta las que ya llevas)
 const espaciosZanahoria = () => EXTRA_ZANAHORIA_CAP - extra.length - carga.filter((id) => id === "zanahoria").length;
 
 function nuevoEstante(slot, producto) {
-  estantes.push({ slot, ...rectEstante(slot), producto, items: [] });
+  // las estanterías de cada producto son fijas: su producto no se puede cambiar (así nunca falta alguno y los clientes no se van)
+  estantes.push({ slot, ...rectEstante(slot), producto, items: [], fija: slot < IDS.length });
 }
 
 function siguienteSlot() {
@@ -210,7 +250,7 @@ function mover(dt) {
   if (!dx && !dy) return;
   if (dx) jugador.cara = dx > 0 ? 1 : -1;
   const nx = Math.max(RADIO, Math.min(MUNDO.w - RADIO, jugador.x + dx * paso));
-  const ny = Math.max(RADIO, Math.min(MUNDO.h - RADIO, jugador.y + dy * paso));
+  const ny = Math.max(RADIO - despl(), Math.min(MUNDO.h - RADIO, jugador.y + dy * paso));
   if (!choca(nx, jugador.y)) jugador.x = nx;
   if (!choca(jugador.x, ny)) jugador.y = ny;
 }
@@ -230,7 +270,7 @@ function comprarCosas() {
   }
   for (const g of jardines) {
     if (g.comprado || dinero < g.costo || !cerca(g, ALCANCE_JARDIN)) continue;
-    if (g.producto === "zanahoria" && !hayPrimerEstante()) continue; // las zanahorias necesitan la primera estantería
+    if (!puedeJardin(g)) continue;                 // necesita la estantería del producto anterior
     cobrarCompra(g.costo, g.x + g.w / 2, g.y + g.h + 10);
     g.comprado = true;
     g.reloj = CRECE_SEG;
@@ -265,7 +305,7 @@ function traspasos(dt) {
   traspasoT = TRASPASO_SEG;
   const ex = productosExistentes();
   for (const g of jardines) {
-    if (!g.comprado || carga.length >= CARGA_MAX || !cerca(g, ALCANCE_JARDIN)) continue;
+    if (!g.comprado || carga.length >= cargaMax() || !cerca(g, ALCANCE_JARDIN)) continue;
     // sin estantería de zanahorias solo puedes tomar tantas como espacios extra libres haya
     if (g.producto === "zanahoria" && extrasActivas() && espaciosZanahoria() <= 0) continue;
     const p = g.parcelas.find((q) => q.t >= MADURA_SEG && ex.includes(q.id));
@@ -275,7 +315,7 @@ function traspasos(dt) {
   const xe = extraEstante();
   if (xe) destinos.push(xe);
   for (const e of destinos) {
-    if (e.items.length >= capDe(e) || !cerca(e, ALCANCE_ESTANTE)) continue;
+    if (e.items.length >= capDe(e) || !cerca(rectFull(e), ALCANCE_ESTANTE)) continue;
     const i = carga.indexOf(e.producto); // cada estantería solo recibe su producto
     if (i >= 0) { e.items.push(carga.splice(i, 1)[0]); tono(520, 0.07); break; }
   }
@@ -298,7 +338,7 @@ function nuevoCliente() {
   if (!existentes.length) return;
   // lista de compra: solo productos que existen en la tienda
   const lista = {};
-  const cuantos = Math.min(existentes.length, 1 + Math.floor(Math.random() * 2));
+  const cuantos = 1 + Math.floor(Math.random() * Math.min(3, existentes.length));
   existentes.slice().sort(() => Math.random() - 0.5).slice(0, cuantos).forEach((id) => {
     lista[id] = CANT_MIN + Math.floor(Math.random() * (CANT_MAX - CANT_MIN + 1));
   });
@@ -344,7 +384,7 @@ function estanteDe(id) {
 
 function actualizarClientes(dt) {
   // llega uno nuevo a los pocos segundos de haber espacio (nunca de inmediato)
-  if (clientes.length < MAX_CLIENTES && estantes.length) {
+  if (clientes.length < maxClientes() && estantes.length) {
     espera -= dt;
     if (espera <= 0) { nuevoCliente(); espera = azar(ESPERA_MIN, ESPERA_MAX); }
   }
@@ -360,7 +400,8 @@ function actualizarClientes(dt) {
       const e = estanteDe(falta);
       if (!e) { c.lista[falta] = 0; continue; } // ya no hay estantería de ese producto
       const x = Math.max(14, Math.min(MUNDO.w - 14, e.x + e.w / 2 + c.off));
-      if (irPorPasillo(c, { x, y: e.y + e.h + 26 }, dt)) {
+      const re = rectFull(e);
+      if (irPorPasillo(c, { x, y: re.y + re.h + 26 }, dt)) {
         c.t -= dt;
         if (c.t <= 0) {
           const i = e.items.indexOf(falta);
@@ -384,16 +425,71 @@ function actualizarClientes(dt) {
     if (i !== 0 || !llego || !hayCajero()) return;
     c.t -= dt;
     if (c.t > 0) return;
-    if (c.carrito.length) {
-      const id = c.carrito.shift();
-      dinero += PRODUCTOS[id].precio;
-      textos.push({ x: c.x, y: c.y - 30, vida: 0.9, txt: "+$" + PRODUCTOS[id].precio, col: "#7dff9a" });
-      tono(880, 0.06); setTimeout(() => tono(1175, 0.08), 60);
-      c.t = COBRO_SEG;
-    } else c.estado = "saliendo";
+    // se cobra toda la compra junta, de una sola vez
+    const total = c.carrito.reduce((suma, id) => suma + PRODUCTOS[id].precio, 0);
+    if (total > 0) {
+      dinero += total;
+      textos.push({ x: c.x, y: c.y - 30, vida: 1.1, txt: "+$" + total, col: "#7dff9a" });
+      tono(880, 0.06); setTimeout(() => tono(1175, 0.08), 60); setTimeout(() => tono(1568, 0.1), 130);
+    }
+    c.carrito = [];
+    c.estado = "saliendo";
   });
   cola = cola.filter((c) => c.estado === "cola");
   clientes = clientes.filter((c) => !c.fuera);
+}
+
+// ---------- Empleados de jardín ----------
+// Cada jardín puede tener su empleado: recoge lo maduro, lo lleva a la estantería de ese producto y la repone.
+function destinosDe(id) {
+  const m = estantes.filter((e) => e.producto === id);
+  const xe = extraEstante();
+  if (xe && xe.producto === id) m.push(xe);
+  return m;
+}
+const espacioLibre = (id) => destinosDe(id).reduce((t, e) => t + capDe(e) - e.items.length, 0);
+function puntoJardin(g) {                         // lugar junto al jardín, en el pasillo de pasto
+  const izq = g.x + g.w / 2 < PASILLO_X;
+  return { x: izq ? g.x + g.w + 14 : g.x - 14, y: g.y + g.h / 2 };
+}
+function nuevoEmpleadoJardin(g) {
+  const camisas = { tomate: "#e0463d", zanahoria: "#ff9a2e", maiz: "#e8c93a", brocoli: "#2e9d4a", berenjena: "#8f5bd0" };
+  return { x: MEJORAS_ZONA.x + MEJORAS_ZONA.w / 2, y: MEJORAS_ZONA.y - 8, vel: EMP_VEL, carga: [], cd: 0, off: azar(-22, 22), camisa: camisas[g.producto] || "#888" };
+}
+// Camina hacia d: para salir al pasto o volver a entrar pasa por la abertura del pasillo
+function irEmpleado(w, d, dt) {
+  const pared = EDIFICIO[edificio].top + 7;
+  if ((w.y > pared) !== (d.y > pared)) {
+    if (Math.abs(w.x - PASILLO_X) > 3) { ir(w, { x: PASILLO_X, y: w.y }, dt); return false; }
+    ir(w, { x: PASILLO_X, y: d.y }, dt);
+    return false;
+  }
+  return irPorPasillo(w, d, dt);
+}
+function actualizarEmpleados(dt) {
+  const ex = productosExistentes();
+  for (const g of jardines) {
+    const em = g.emp;
+    if (!em) continue;
+    em.cd -= dt;
+    const maduros = g.parcelas.filter((p) => p.t >= MADURA_SEG && ex.includes(p.id));
+    const espacio = espacioLibre(g.producto);
+    const puedeColocar = em.carga.length > 0 && espacio > 0;
+    const puedeRecoger = maduros.length > 0 && em.carga.length < EMP_CARGA && espacio - em.carga.length > 0;
+    if (puedeColocar && (em.carga.length >= EMP_CARGA || !puedeRecoger)) {
+      const e = destinosDe(g.producto).find((q) => q.items.length < capDe(q));
+      const r = rectFull(e);
+      if (distRect(em.x, em.y, r) <= ALCANCE_ESTANTE - 24) {
+        if (em.cd <= 0) { e.items.push(em.carga.shift()); em.cd = TRASPASO_SEG * 2; }
+      } else irEmpleado(em, { x: Math.max(14, Math.min(MUNDO.w - 14, e.x + e.w / 2 + em.off)), y: r.y + r.h + 14 }, dt);
+    } else if (puedeRecoger) {
+      if (distRect(em.x, em.y, g) <= ALCANCE_JARDIN) {
+        if (em.cd <= 0) { const p = maduros[0]; em.carga.push(p.id); p.t = -1; p.id = null; em.cd = TRASPASO_SEG * 2; }
+      } else irEmpleado(em, puntoJardin(g), dt);
+    } else {
+      irEmpleado(em, puntoJardin(g), dt);          // sin nada que hacer: espera junto a su jardín
+    }
+  }
 }
 
 // ---------- Mejoras ----------
@@ -404,25 +500,34 @@ function costoEstanteExtra() {
 function comprarMejora(tipo) {
   if (estado !== "jugando" || !enMejoras) return;
   const x = MEJORAS_ZONA.x + MEJORAS_ZONA.w / 2, y = MEJORAS_ZONA.y - 8;
-  if (tipo === "empleado") {
+  if (tipo === "carga") {
+    if (nivelCarga >= COSTOS_CARGA.length || dinero < COSTOS_CARGA[nivelCarga]) return;
+    cobrarCompra(COSTOS_CARGA[nivelCarga], x, y);
+    nivelCarga++;
+  } else if (tipo === "empleado") {
     if (empleado || dinero < COSTO_EMPLEADO) return;
     cobrarCompra(COSTO_EMPLEADO, x, y);
     empleado = true;
+  } else if (tipo.startsWith("emp:")) {
+    const g = jardinDe(tipo.slice(4));
+    if (!g || !g.comprado || g.emp || dinero < g.costoEmp || !destinosDe(g.producto).length) return;
+    cobrarCompra(g.costoEmp, x, y);
+    g.emp = nuevoEmpleadoJardin(g);
   } else if (tipo === "estante") {
     const slot = siguienteSlot();
     if (!hayPrimerEstante() || slot < 0 || Math.floor(slot / 2) > edificio) return;
-    const deZanahoria = estantes.length === 1; // la primera estantería extra es la de zanahorias
-    if (deZanahoria && !jardinDe("zanahoria").comprado) return;
+    const delProducto = slot < IDS.length;       // la estantería número «slot» es del producto IDS[slot]
+    if (delProducto && !jardinDe(IDS[slot]).comprado) return;
     const costo = costoEstanteExtra();
     if (dinero < costo) return;
     cobrarCompra(costo, x, y);
-    if (deZanahoria) {
-      // las zanahorias de los espacios extra pasan a la estantería nueva
-      nuevoEstante(slot, "zanahoria");
-      estantes[estantes.length - 1].items.push(...extra.splice(0));
+    if (delProducto) {
+      nuevoEstante(slot, IDS[slot]);
+      // las zanahorias de los espacios extra pasan a la estantería nueva de zanahorias
+      if (IDS[slot] === "zanahoria") estantes[estantes.length - 1].items.push(...extra.splice(0));
     } else {
-      // por defecto lleva un producto que todavía no tenga estantería (se puede cambiar con ↻)
-      nuevoEstante(slot, IDS.find((id) => !productosExistentes().includes(id)) || IDS[0]);
+      // estantería adicional: lleva el producto que quieras (se cambia con ↻)
+      nuevoEstante(slot, IDS[0]);
     }
   } else if (tipo === "edificio") {
     if (edificio >= EDIFICIO.length - 1) return;
@@ -430,8 +535,20 @@ function comprarMejora(tipo) {
     if (dinero < costo) return;
     cobrarCompra(costo, x, y);
     edificio++;
+    pegarJardines();
+    ajustar();                                   // el mapa crece hacia arriba: el pasto se expande con el edificio
   }
 }
+// botones de «empleado de jardín» (uno por jardín; solo se ven los de jardines ya comprados)
+const btnsEmp = jardines.map((g) => {
+  const b = document.createElement("button");
+  b.className = "mej"; b.type = "button"; b.hidden = true;
+  b.innerHTML = "<span></span><b></b>";
+  panel.appendChild(b);
+  b.addEventListener("click", () => comprarMejora("emp:" + g.producto));
+  return b;
+});
+btnCarga.addEventListener("click", () => comprarMejora("carga"));
 btnEmpleado.addEventListener("click", () => comprarMejora("empleado"));
 btnEstante.addEventListener("click", () => comprarMejora("estante"));
 btnEdificio.addEventListener("click", () => comprarMejora("edificio"));
@@ -446,13 +563,24 @@ function actualizarPanel() {
   enMejoras = estado === "jugando" && distRect(jugador.x, jugador.y, MEJORAS_ZONA) <= 4;
   panel.classList.toggle("oculto", !enMejoras);
   if (!enMejoras) return;
+  if (nivelCarga >= COSTOS_CARGA.length) pintarBoton(btnCarga, "🧤 Carga al máximo (" + cargaMax() + ")", "", false);
+  else pintarBoton(btnCarga, "🧤 Llevar más: " + cargaMax() + " → " + (cargaMax() + 1), "$" + COSTOS_CARGA[nivelCarga], dinero >= COSTOS_CARGA[nivelCarga]);
   pintarBoton(btnEmpleado, empleado ? "👷 Empleado de caja" : "👷 Contratar empleado de caja", empleado ? "✓" : "$" + COSTO_EMPLEADO, !empleado && dinero >= COSTO_EMPLEADO);
   const slot = siguienteSlot();
   if (!hayPrimerEstante()) pintarBoton(btnEstante, "🗄️ Primero compra la estantería", "", false);
-  else if (estantes.length === 1 && !jardinDe("zanahoria").comprado) pintarBoton(btnEstante, "🗄️ Primero compra el jardín de zanahorias 🥕", "", false);
   else if (slot < 0) pintarBoton(btnEstante, "🗄️ Estanterías al máximo", "", false);
+  else if (slot < IDS.length && !jardinDe(IDS[slot]).comprado) pintarBoton(btnEstante, "🗄️ Primero compra el jardín de " + PRODUCTOS[IDS[slot]].icono, "", false);
   else if (Math.floor(slot / 2) > edificio) pintarBoton(btnEstante, "🗄️ Agranda el edificio para más", "", false);
-  else pintarBoton(btnEstante, estantes.length === 1 ? "🗄️ Estantería de zanahorias 🥕" : "🗄️ Estantería nueva", "$" + costoEstanteExtra(), dinero >= costoEstanteExtra());
+  else pintarBoton(btnEstante, slot < IDS.length ? "🗄️ Estantería de " + PRODUCTOS[IDS[slot]].icono : "🗄️ Estantería nueva", "$" + costoEstanteExtra(), dinero >= costoEstanteExtra());
+  // un empleado por jardín comprado
+  jardines.forEach((g, i) => {
+    const b = btnsEmp[i], ic = PRODUCTOS[g.producto].icono;
+    b.hidden = !g.comprado;
+    if (!g.comprado) return;
+    if (g.emp) pintarBoton(b, "🧑‍🌾 Empleado del jardín " + ic, "✓", false);
+    else if (!destinosDe(g.producto).length) pintarBoton(b, "🧑‍🌾 Primero la estantería de " + ic, "", false);
+    else pintarBoton(b, "🧑‍🌾 Empleado del jardín " + ic, "$" + g.costoEmp, dinero >= g.costoEmp);
+  });
   if (edificio >= EDIFICIO.length - 1) pintarBoton(btnEdificio, "🏗️ Edificio al máximo", "", false);
   else pintarBoton(btnEdificio, "🏗️ Agrandar edificio (nivel " + (edificio + 1) + ")", "$" + EDIFICIO[edificio + 1].costo, dinero >= EDIFICIO[edificio + 1].costo);
 }
@@ -462,6 +590,7 @@ function actualizar(dt) {
   comprarCosas();
   crecerJardin(dt);
   traspasos(dt);
+  actualizarEmpleados(dt);
   actualizarClientes(dt);
   textos.forEach((t) => { t.y -= 28 * dt; t.vida -= dt; });
   textos = textos.filter((t) => t.vida > 0);
@@ -469,25 +598,25 @@ function actualizar(dt) {
 
 function actualizarHud() {
   elDinero.textContent = "$" + dinero;
-  elCarga.textContent = carga.length + "/" + CARGA_MAX;
+  elCarga.textContent = carga.length + "/" + cargaMax();
   const xe = extraEstante();
   elEstante.textContent = estantes.length
     ? estantes.reduce((s, e) => s + e.items.length, 0) + (xe ? extra.length : 0) + "/" + (estantes.length * ESTANTE_CAP + (xe ? EXTRA_ZANAHORIA_CAP : 0))
     : "—";
-  elClientes.textContent = clientes.length + "/" + MAX_CLIENTES;
+  elClientes.textContent = clientes.length + "/" + maxClientes();
   actualizarPanel();
 }
 
 // ---------- Entrada ----------
 function posicion(ev) {
   const r = lienzo.getBoundingClientRect();
-  return { x: ((ev.clientX - r.left) / r.width) * MUNDO.w, y: ((ev.clientY - r.top) / r.height) * MUNDO.h };
+  return { x: ((ev.clientX - r.left) / r.width) * MUNDO.w, y: ((ev.clientY - r.top) / r.height) * (MUNDO.h + despl()) - despl() };
 }
 lienzo.addEventListener("pointerdown", (ev) => {
   if (estado !== "jugando") return;
   const p = posicion(ev);
   // botón ↻ de una estantería: cambia su producto (no te mueve)
-  const e = estantes.find((q) => Math.hypot(p.x - centroSelector(q).x, p.y - centroSelector(q).y) <= 18);
+  const e = estantes.find((q) => !q.fija && Math.hypot(p.x - centroSelector(q).x, p.y - centroSelector(q).y) <= 18);
   if (e) { cambiarProducto(e); return; }
   lienzo.setPointerCapture(ev.pointerId);
   tocando = true;
@@ -514,11 +643,13 @@ ovlBtn.addEventListener("click", () => {
 function ajustar() {
   const dpr = window.devicePixelRatio || 1;
   const w = lienzo.clientWidth;
+  const d = despl();                              // pasto extra que se añadió arriba
   escala = w / MUNDO.w;
-  lienzo.style.height = MUNDO.h * escala + "px";
+  lienzo.style.height = (MUNDO.h + d) * escala + "px";
   lienzo.width = Math.round(w * dpr);
-  lienzo.height = Math.round(MUNDO.h * escala * dpr);
-  ctx.setTransform(dpr * escala, 0, 0, dpr * escala, 0, 0);
+  lienzo.height = Math.round((MUNDO.h + d) * escala * dpr);
+  ctx.setTransform(dpr * escala, 0, 0, dpr * escala, 0, d * dpr * escala);   // el mapa va de y = -d a y = MUNDO.h
+  panel.style.bottom = Math.round((MUNDO.h - MEJORAS_ZONA.y + 6) * escala) + "px";   // el panel de mejoras queda justo arriba de la zona 🛠️
 }
 window.addEventListener("resize", ajustar);
 
@@ -564,7 +695,7 @@ function dibujarSuelo() {
   const top = EDIFICIO[edificio].top;
   // afuera: pasto (ahí crece el edificio cuando lo agrandas)
   ctx.fillStyle = "#9bd27f";
-  ctx.fillRect(0, 0, MUNDO.w, MUNDO.h);
+  ctx.fillRect(0, -despl(), MUNDO.w, MUNDO.h + despl());
   ctx.fillStyle = "#efe3c8";
   ctx.fillRect(0, top, MUNDO.w, MUNDO.h - top);
   ctx.fillStyle = "rgba(0,0,0,.04)";
@@ -591,13 +722,56 @@ function dibujarMejoras() {
 
 function dibujarCaja() {
   const { x, y, w, h } = CAJA;
-  ctx.fillStyle = "#5a6577"; caja(x, y, w, h, 6); ctx.fill();
-  ctx.fillStyle = "#cfd8e6"; caja(x + 4, y + 4, w - 8, h - 8, 4); ctx.fill();
-  emoji("🧾", x + w / 2, y + h / 2 + 1, 18);
+  // ¿hay un cliente ya parado frente al mostrador y alguien que cobre? (el cajón se abre)
+  const c0 = cola[0];
+  const frente = c0 && Math.hypot(c0.x - SLOTS_CAJA[0].x, c0.y - SLOTS_CAJA[0].y) < 3;
+  const abierto = frente && hayCajero();
+  // sombra
+  ctx.fillStyle = "rgba(0,0,0,.18)"; caja(x + 2, y + 4, w, h, 8); ctx.fill();
+  // mueble de madera (frente con tablones)
+  ctx.fillStyle = "#8a5a2b"; caja(x, y, w, h, 8); ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,.18)"; ctx.lineWidth = 1;
+  for (let i = 1; i < 5; i++) { ctx.beginPath(); ctx.moveTo(x + (i * w) / 5, y + h - 10); ctx.lineTo(x + (i * w) / 5, y + h - 1); ctx.stroke(); }
+  // cubierta clara del mostrador, con un brillo arriba
+  ctx.fillStyle = "#e8c48e"; caja(x + 2, y + 2, w - 4, h - 12, 6); ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,.35)"; caja(x + 5, y + 4, w - 10, 3, 2); ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = "#6e4520"; caja(x, y, w, h, 8); ctx.stroke();
+  // caja registradora: pantalla verde con $, cuerpo oscuro y teclas
+  ctx.fillStyle = "#3b4658"; caja(x + 6, y + 11, 27, 15, 3); ctx.fill();
+  ctx.fillStyle = "#2b3140"; caja(x + 9, y + 4, 18, 10, 2); ctx.fill();
+  ctx.fillStyle = abierto ? "#b6ffcf" : "#8ff0b4"; caja(x + 10.5, y + 5.5, 15, 7, 1.5); ctx.fill();
+  ctx.font = "bold 7px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = "#1d6a3a"; ctx.fillText("$", x + 18, y + 9.3);
+  ctx.fillStyle = "#cfd8e6";
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) ctx.fillRect(x + 9 + i * 5.5, y + 16 + j * 4.5, 3.5, 3);
+  // cajón de la registradora (se abre al cobrar, con billetes)
+  ctx.fillStyle = "#2b3140"; caja(x + 7, y + h - 9, 24, 6, 2); ctx.fill();
+  if (abierto) {
+    ctx.fillStyle = "#e9eef6"; caja(x + 7, y + h - 8, 24, 9, 2); ctx.fill();
+    ctx.fillStyle = "#6fcf7a"; caja(x + 10, y + h - 6, 18, 3, 1); ctx.fill();
+    ctx.fillStyle = "#4fae5a"; caja(x + 12, y + h - 3, 14, 2, 1); ctx.fill();
+  }
+  // letrero en el frente
+  ctx.font = "bold 8px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = "#ffe9c4"; ctx.fillText("CAJA", x + 53, y + h - 5);
+  // sobre el mostrador: la compra del cliente que está pagando, o un recibo si no hay nadie
+  if (frente && c0.carrito.length) {
+    c0.carrito.slice(0, 6).forEach((id, i) => emoji(PRODUCTOS[id].icono, x + 41 + (i % 3) * 11, y + 10 + Math.floor(i / 3) * 12, 11));
+  } else {
+    emoji("🧾", x + 53, y + 14, 14);
+  }
+  // toldo de rayas rojas y blancas con festón
+  const n = Math.round(w / 8);
+  for (let i = 0; i < n; i++) {
+    ctx.fillStyle = i % 2 ? "#ffffff" : "#e0463d";
+    ctx.fillRect(x + (i * w) / n, y - 11, w / n + 0.5, 8);
+    ctx.beginPath(); ctx.arc(x + ((i + 0.5) * w) / n, y - 3.5, w / n / 2, 0, Math.PI); ctx.fill();
+  }
+  ctx.fillStyle = "rgba(0,0,0,.15)"; ctx.fillRect(x, y - 11, w, 2);
   if (empleado) {
     persona(POS_EMPLEADO.x, POS_EMPLEADO.y, "#d9534f", "#d9a066", true);
   } else if (cola.length) {
-    etiqueta("¡Cobra aquí!", x + w / 2, y - 10, "#ffd24d");
+    etiqueta("¡Cobra aquí!", x + w / 2, y - 24, "#ffd24d");
   }
 }
 
@@ -615,30 +789,39 @@ function dibujarEstantes() {
   }
   for (const e of estantes) {
     const { x, y, w, h } = e;
+    const ancho = (w - 28) / ESTANTE_CAP;
+    const conExtra = e.slot === 0 && extrasActivas();
+    // la estantería de jitomates, con los 2 espacios de zanahoria, se ensancha hacia abajo como un solo mueble
+    const tw = 24 + EXTRA_ZANAHORIA_CAP * ancho + 4;
+    if (conExtra) { ctx.fillStyle = "#9a6b3c"; caja(x, y + h - 10, tw, EXT_H + 10, 8); ctx.fill(); }
     ctx.fillStyle = "#9a6b3c"; caja(x, y, w, h, 8); ctx.fill();
     ctx.fillStyle = "#c79055"; caja(x + 24, y + 4, w - 28, h - 8, 6); ctx.fill();
-    // botón ↻ con el producto que lleva (toca para cambiarlo)
+    // panel con el producto que lleva; solo las estanterías extra tienen el botón ↻ para cambiarlo
     ctx.fillStyle = "#f3e0c2"; caja(x + 3, y + 4, 20, h - 8, 6); ctx.fill();
-    emoji(PRODUCTOS[e.producto].icono, x + 13, y + h / 2 - 5, 14);
-    etiqueta("↻", x + 13, y + h / 2 + 11, "#6a4a1a", 11);
-    const ancho = (w - 28) / ESTANTE_CAP;
+    if (e.fija) {
+      emoji(PRODUCTOS[e.producto].icono, x + 13, y + h / 2, 15);
+    } else {
+      emoji(PRODUCTOS[e.producto].icono, x + 13, y + h / 2 - 5, 14);
+      etiqueta("↻", x + 13, y + h / 2 + 11, "#6a4a1a", 11);
+    }
     for (let i = 0; i < ESTANTE_CAP; i++) {
       const cx = x + 24 + (i + 0.5) * ancho, cy = y + h / 2;
       ctx.fillStyle = "rgba(0,0,0,.12)"; caja(cx - ancho / 2 + 1.5, cy - 14, ancho - 3, 28, 5); ctx.fill();
       if (e.items[i]) emoji(PRODUCTOS[e.items[i]].icono, cx, cy + 1, 16);
       else { ctx.globalAlpha = 0.22; emoji(PRODUCTOS[e.producto].icono, cx, cy + 1, 14); ctx.globalAlpha = 1; }
     }
-  }
-  // espacios extra para zanahorias, colgados debajo de la estantería de jitomates
-  const xe = extraEstante();
-  if (xe) {
-    const bx = xe.x + 24, by = xe.y + xe.h - 2, an = 28;
-    ctx.fillStyle = "#9a6b3c"; caja(bx, by, an * EXTRA_ZANAHORIA_CAP, 28, 6); ctx.fill();
-    for (let i = 0; i < EXTRA_ZANAHORIA_CAP; i++) {
-      const cx = bx + (i + 0.5) * an, cy = by + 14;
-      ctx.fillStyle = "rgba(0,0,0,.18)"; caja(cx - an / 2 + 2, cy - 11, an - 4, 22, 5); ctx.fill();
-      if (xe.items[i]) emoji(PRODUCTOS[xe.items[i]].icono, cx, cy + 1, 16);
-      else { ctx.globalAlpha = 0.3; emoji(PRODUCTOS.zanahoria.icono, cx, cy + 1, 14); ctx.globalAlpha = 1; }
+    if (conExtra) {
+      // parte de abajo del mismo mueble: panel de 🥕 y 2 espacios para zanahorias
+      const ty = y + h;
+      ctx.fillStyle = "#f3e0c2"; caja(x + 3, ty + 1, 20, EXT_H - 4, 6); ctx.fill();
+      emoji(PRODUCTOS.zanahoria.icono, x + 13, ty + EXT_H / 2 - 1, 14);
+      ctx.fillStyle = "#c79055"; caja(x + 24, ty + 1, tw - 28, EXT_H - 4, 6); ctx.fill();
+      for (let i = 0; i < EXTRA_ZANAHORIA_CAP; i++) {
+        const cx = x + 24 + (i + 0.5) * ancho, cy = ty + EXT_H / 2 - 1;
+        ctx.fillStyle = "rgba(0,0,0,.12)"; caja(cx - ancho / 2 + 1.5, cy - 10, ancho - 3, 20, 5); ctx.fill();
+        if (extra[i]) emoji(PRODUCTOS[extra[i]].icono, cx, cy + 1, 16);
+        else { ctx.globalAlpha = 0.25; emoji(PRODUCTOS.zanahoria.icono, cx, cy + 1, 14); ctx.globalAlpha = 1; }
+      }
     }
   }
 }
@@ -650,7 +833,7 @@ function dibujarJardines() {
 function dibujarJardin(g) {
   const { x, y, w, h } = g;
   if (!g.comprado) {
-    const puede = dinero >= g.costo && (g.producto !== "zanahoria" || hayPrimerEstante());
+    const puede = dinero >= g.costo && puedeJardin(g);
     ctx.setLineDash([8, 6]); ctx.lineWidth = 3;
     ctx.strokeStyle = puede ? "#2e9d4a" : "#999";
     caja(x, y, w, h, 10); ctx.stroke(); ctx.setLineDash([]);
@@ -679,6 +862,7 @@ function dibujarJardin(g) {
 function dibujarPersonajes() {
   const todos = [{ y: jugador.y, f: () => dibujarJugador() }];
   clientes.forEach((c) => todos.push({ y: c.y, f: () => dibujarCliente(c) }));
+  jardines.forEach((g) => { if (g.emp) todos.push({ y: g.emp.y, f: () => dibujarEmpleado(g) }); });
   todos.sort((a, b) => a.y - b.y).forEach((o) => o.f());
 }
 
@@ -686,6 +870,15 @@ function dibujarJugador() {
   persona(jugador.x, jugador.y, "#2e9d4a", "#f5cfa0", true);
   // lo que cargas, encima de la cabeza
   carga.forEach((id, i) => emoji(PRODUCTOS[id].icono, jugador.x + (i - (carga.length - 1) / 2) * 15, jugador.y - 30, 15));
+}
+
+function dibujarEmpleado(g) {
+  const em = g.emp;
+  persona(em.x, em.y, em.camisa, "#d9a066", true);
+  ctx.fillStyle = "#e8c26b";                      // sombrero de paja
+  ctx.beginPath(); ctx.ellipse(em.x, em.y - 17, 12, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(em.x, em.y - 18, 6.5, Math.PI, 0); ctx.fill();
+  em.carga.forEach((id, i) => emoji(PRODUCTOS[id].icono, em.x + (i - (em.carga.length - 1) / 2) * 14, em.y - 32, 14));
 }
 
 function dibujarCliente(c) {
