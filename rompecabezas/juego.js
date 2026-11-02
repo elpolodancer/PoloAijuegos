@@ -21,7 +21,7 @@ const TABLERO_MAX = 0.72;       // el tablero nunca ocupa más de este % del otr
 const BOTON_PX = 64;            // zona (px) de la esquina superior derecha que tapa el botón de pausa: ahí no se reparten piezas
 const GUIA_TENUE = 0;           // transparencia de la imagen sobre el tablero (0 = vacío, como el original)
 const TAP_PX = 8;               // movimiento máximo (px) para que un toque cuente como «girar pieza» (solo con rotación activada)
-const SPRITE_MAX_PX = 16e6;     // al arrastrar, el grupo se congela como imagen si no pasa de esta área (px); si no, se dibuja pieza por pieza
+const SPRITE_MAX_PX = 16e6;     // al arrastrar, el grupo viaja como imagen flotante; si su área (px) pasa de esto, se ve con menos resolución SOLO mientras lo mueves
 const PIEZAS_POR_PUNTO = 8;     // al perfil: 1 punto por cada 8 piezas
 const GUARDADAS_MAX = 60;       // cuántas imágenes se recuerdan en «Mis imágenes» (las más viejas se olvidan de la lista, no de imgbb)
 const CLAVE_GALERIA = "rompecabezas:imagenes";
@@ -52,7 +52,13 @@ let cam = { x: 0, y: 0, s: 1 };   // la vista es FIJA: no hay zoom ni desplazami
 let modoHor = true;             // true = pantalla horizontal (PC): tablero a lo alto y piezas a los lados; false = vertical (celular)
 let guia = false, t0 = 0, acum = 0, terminado = false, iniciado = false, pausado = false;
 let sucio = false, temporizadorMsg = null, rafPrev = 0;
-let capa = null;                // lienzo auxiliar: todo el tablero SIN el grupo que se arrastra (se pinta una sola vez por arrastre)
+// Capa flotante: mientras arrastras, el grupo vive en este lienzo pequeño y se mueve solo con CSS (transform, lo hace la GPU).
+// El lienzo grande del tablero se pinta UNA vez al agarrar la pieza y no se toca hasta soltarla.
+const flota = document.createElement("canvas");
+flota.hidden = true;
+flota.style.cssText = "position:absolute;left:0;top:0;z-index:1;display:block;pointer-events:none;will-change:transform;transform-origin:0 0;";
+$("juego").appendChild(flota);
+let rafId = 0;
 let rectL = null;               // posición del lienzo en pantalla (se guarda para no recalcular el layout en cada evento)
 
 const fmt = (s) => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
@@ -117,7 +123,7 @@ const PANTALLAS = ["menu", "cat", "cfg", "juego"];
 function pantalla(nombre) {
   for (const p of PANTALLAS) $(p).hidden = p !== nombre;
   document.body.classList.toggle("en-juego", nombre === "juego");
-  if (nombre !== "juego") scrollTo(0, 0);
+  if (nombre !== "juego") { scrollTo(0, 0); ocultarFlota(); }
 }
 
 function carta(marco, nombre, alAbrir) {
@@ -307,7 +313,7 @@ addEventListener("resize", () => { if (!$("cfg").hidden) dibujarPrev(); });
 function tamano() {
   dpr = Math.min(devicePixelRatio || 1, 2);
   rectL = null;
-  if (arr) arr.cache = null;
+  if (arr) arr.fl = null;                         // el tamaño cambió: la capa flotante se rehace en el siguiente cuadro
   const r = lienzo.getBoundingClientRect();
   if (!r.width || !r.height) return;
   lienzo.width = Math.max(1, Math.round(r.width * dpr));
@@ -320,17 +326,38 @@ new ResizeObserver(tamano).observe(lienzo);
 function pedir() {
   if (sucio) return;
   sucio = true;
-  requestAnimationFrame(dibujar);
+  rafId = requestAnimationFrame(dibujar);
+}
+
+// Versión de la pieza a la resolución real de la pantalla: dibujar un bitmap pequeño 1:1 es muchísimo más rápido
+// que reducir en cada cuadro la imagen original (que es mucho más grande que lo que se ve).
+function mapa(p) {
+  const f = kS * cam.s * dpr;                    // píxeles de pantalla por píxel de la imagen original
+  if (f >= 0.9) return p.cv;                     // la pieza ya es más pequeña o igual que lo que se ve
+  if (p.sc && p.scK <= f * 1.25 && p.scK >= f * 0.8) return p.sc;
+  const w = Math.max(1, Math.round(p.cv.width * f)), h = Math.max(1, Math.round(p.cv.height * f));
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const x = c.getContext("2d");
+  x.imageSmoothingEnabled = true;
+  x.imageSmoothingQuality = "high";
+  x.drawImage(p.cv, 0, 0, w, h);
+  p.sc = c; p.scK = w / p.cv.width;
+  return c;
 }
 
 // Dibuja una pieza en el contexto x. v = rectángulo visible del mundo (para saltarse las que no se ven) o null
 function dp(x, p, v) {
-  const cx = p.x + pw / 2, cy = p.y + ph / 2;
-  if (v && (cx + v.m < v.x0 || cx - v.m > v.x1 || cy + v.m < v.y0 || cy - v.m > v.y1)) return;
+  if (v) {
+    const cx = p.x + pw / 2, cy = p.y + ph / 2;
+    if (cx + v.m < v.x0 || cx - v.m > v.x1 || cy + v.m < v.y0 || cy - v.m > v.y1) return;
+  }
+  const img = mapa(p), w = p.cv.width * kS, h = p.cv.height * kS;
+  if (!p.rot) { x.drawImage(img, p.x - padW, p.y - padW, w, h); return; }   // sin giro: sin save/restore (lo más común)
   x.save();
-  x.translate(cx, cy);
-  if (p.rot) x.rotate((p.rot * Math.PI) / 2);
-  x.drawImage(p.cv, -pw / 2 - padW, -ph / 2 - padW, p.cv.width * kS, p.cv.height * kS);
+  x.translate(p.x + pw / 2, p.y + ph / 2);
+  x.rotate((p.rot * Math.PI) / 2);
+  x.drawImage(img, -pw / 2 - padW, -ph / 2 - padW, w, h);
   x.restore();
 }
 
@@ -339,19 +366,20 @@ function vista(W, H) {
   return { x0: cam.x, y0: cam.y, x1: cam.x + W / s, y1: cam.y + H / s, m: Math.max(pw, ph) * 0.9 + padW };  // m: cabe una pieza girada
 }
 
-// Pinta todo el tablero en el contexto x (el del lienzo o uno auxiliar), sin el grupo «excluir»
+// Pinta todo el tablero en el contexto x, sin el grupo «excluir»
 function pintarEscena(x, W, H, excluir) {
   const s = cam.s * dpr;
   x.setTransform(1, 0, 0, 1, 0, 0);
   x.clearRect(0, 0, W, H);                       // el fondo de lino es CSS (queda quieto detrás)
   x.setTransform(s, 0, 0, s, -cam.x * s, -cam.y * s);
   x.imageSmoothingEnabled = true;
-  x.imageSmoothingQuality = "high";
   if (guia || GUIA_TENUE > 0) {
+    x.imageSmoothingQuality = "high";
     x.globalAlpha = guia ? 0.6 : GUIA_TENUE;
     x.drawImage(fuente, 0, 0, BW, BH);
     x.globalAlpha = 1;
   }
+  x.imageSmoothingQuality = "medium";
   x.strokeStyle = "rgba(255,255,255,.95)";
   x.lineWidth = 2.5 / cam.s;
   x.strokeRect(0, 0, BW, BH);
@@ -360,13 +388,27 @@ function pintarEscena(x, W, H, excluir) {
   for (const gr of sueltas) if (gr !== excluir) for (const p of gr.m) dp(x, p, v);
 }
 
-// Al empezar a arrastrar: el resto del tablero se pinta UNA vez en «capa» y el grupo se congela como imagen.
-// Después, cada cuadro solo copia esas dos imágenes (en vez de redibujar todas las piezas).
-function congelar(gr, W, H) {
+// Pinta solo unas piezas encima de lo que ya hay en el lienzo (al soltar un grupo: queda siempre arriba de todo)
+function pintarSobre(ms) {
   const s = cam.s * dpr;
-  if (!capa) capa = document.createElement("canvas");
-  if (capa.width !== W || capa.height !== H) { capa.width = W; capa.height = H; }
-  pintarEscena(capa.getContext("2d"), W, H, gr);
+  g.setTransform(s, 0, 0, s, -cam.x * s, -cam.y * s);
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = "medium";
+  const v = vista(lienzo.width, lienzo.height);
+  for (const p of ms) dp(g, p, v);
+}
+
+function ocultarFlota() {
+  flota.hidden = true;
+  flota.style.transform = "";
+  flota.width = flota.height = 1;                // libera la memoria del bitmap
+}
+
+// Al empezar a arrastrar (una sola vez por arrastre): el tablero SIN el grupo se pinta en el lienzo grande
+// y el grupo se dibuja en la capa flotante. A partir de ahí, mover = cambiar un transform CSS.
+function empezarArrastre(W, H) {
+  const gr = arr.g, s = cam.s * dpr;
+  pintarEscena(g, W, H, gr);
   const mitad = Math.max(pw, ph) / 2 + padW;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const p of gr.m) {
@@ -374,39 +416,35 @@ function congelar(gr, W, H) {
     x0 = Math.min(x0, cx - mitad); y0 = Math.min(y0, cy - mitad);
     x1 = Math.max(x1, cx + mitad); y1 = Math.max(y1, cy + mitad);
   }
-  const w = Math.ceil((x1 - x0) * s), h = Math.ceil((y1 - y0) * s);
-  let sprite = null;
-  if (w * h <= SPRITE_MAX_PX && w <= 4096 && h <= 4096) {
-    sprite = document.createElement("canvas");
-    sprite.width = w; sprite.height = h;
-    const x = sprite.getContext("2d");
-    x.setTransform(s, 0, 0, s, -x0 * s, -y0 * s);
-    x.imageSmoothingEnabled = true;
-    x.imageSmoothingQuality = "high";
-    for (const p of gr.m) dp(x, p, null);
-  }
-  return { sprite, x0, y0, ax: 0, ay: 0 };       // ax, ay: cuánto se ha movido el grupo desde que se congeló
+  const aw = (x1 - x0) * s, ah = (y1 - y0) * s;
+  const k = Math.min(1, Math.sqrt(SPRITE_MAX_PX / (aw * ah)), 4096 / aw, 4096 / ah);   // grupos enormes: menos resolución mientras se mueven
+  flota.width = Math.max(1, Math.round(aw * k));
+  flota.height = Math.max(1, Math.round(ah * k));
+  flota.style.width = (x1 - x0) * cam.s + "px";
+  flota.style.height = (y1 - y0) * cam.s + "px";
+  const x = flota.getContext("2d");
+  x.setTransform(s * k, 0, 0, s * k, -x0 * s * k, -y0 * s * k);
+  x.imageSmoothingEnabled = true;
+  x.imageSmoothingQuality = "medium";
+  for (const p of gr.m) dp(x, p, null);
+  arr.fl = { x0, y0, ax: 0, ay: 0 };             // ax, ay: cuánto se ha movido el grupo desde que se creó la capa
+}
+
+function moverFlota() {
+  const f = arr.fl;
+  const px = Math.round((f.x0 + f.ax - cam.x) * cam.s * dpr) / dpr;   // en píxeles de pantalla enteros: se ve nítido
+  const py = Math.round((f.y0 + f.ay - cam.y) * cam.s * dpr) / dpr;
+  flota.style.transform = "translate3d(" + px + "px," + py + "px,0)";
+  flota.hidden = false;
 }
 
 function dibujar() {
   sucio = false;
   const W = lienzo.width, H = lienzo.height;
-  if (!fuente || !piezas.length) { g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H); return; }
-  if (arr && arr.mov) {                          // arrastrando: camino rápido
-    if (!arr.cache) arr.cache = congelar(arr.g, W, H);
-    const c = arr.cache, s = cam.s * dpr;
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    g.clearRect(0, 0, W, H);
-    g.drawImage(capa, 0, 0);
-    if (c.sprite) {
-      g.drawImage(c.sprite, Math.round((c.x0 + c.ax - cam.x) * s), Math.round((c.y0 + c.ay - cam.y) * s));
-    } else {                                     // grupo enorme: se dibuja pieza por pieza, pero solo ese grupo
-      g.setTransform(s, 0, 0, s, -cam.x * s, -cam.y * s);
-      g.imageSmoothingEnabled = true;
-      g.imageSmoothingQuality = "high";
-      const v = vista(W, H);
-      for (const p of arr.g.m) dp(g, p, v);
-    }
+  if (!fuente || !piezas.length) { g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H); ocultarFlota(); return; }
+  if (arr && arr.mov) {                          // arrastrando: no se redibuja nada, solo se mueve la capa flotante
+    if (!arr.fl) empezarArrastre(W, H);
+    moverFlota();
     return;
   }
   pintarEscena(g, W, H, null);
@@ -442,6 +480,7 @@ function hacerPieza(r, c, w, h, t, pad, s) {
 
 function iniciar() {
   if (!fuente) return;
+  ocultarFlota();
   acum = 0; t0 = 0; terminado = false; iniciado = false; pausado = false; colocadas = 0; guia = false;
   const pwS = fuente.width / cols, phS = fuente.height / rows;   // tamaño de pieza en px de la imagen
   kS = PIEZA_W / pwS;
@@ -597,7 +636,7 @@ function continuar() {
 }
 $("pausa").addEventListener("click", pausar);
 $("pContinuar").addEventListener("click", continuar);
-$("pGuia").addEventListener("click", () => { guia = !guia; if (arr) arr.cache = null; pedir(); continuar(); });
+$("pGuia").addEventListener("click", () => { guia = !guia; if (arr) arr.fl = null; pedir(); continuar(); });
 $("pMezclar").addEventListener("click", () => {
   if (colocadas > 0 && !confirm("Se mezclarán de nuevo las piezas. ¿Continuar?")) return;
   $("pausaMenu").hidden = true;
@@ -711,18 +750,26 @@ function fijar(gr) {
   return false;
 }
 
-function asentar(gr) {                            // se llama al soltar un grupo (o al girarlo)
+// Se llama al soltar un grupo (o al girarlo). Aquí (y solo aquí) se buscan uniones y el lugar del tablero.
+// incremental = true: el lienzo ya tiene todo menos este grupo, así que basta con pintarlo encima (sin redibujar el tablero)
+function asentar(gr, incremental) {
   let unido = false;
   while (unirUno(gr)) unido = true;               // puede pegarse con varios vecinos a la vez
   const fijo = fijar(gr);
   if ((unido || fijo) && navigator.vibrate) navigator.vibrate(fijo ? 25 : 12);
-  pedir();
+  if (!incremental || fijo) pedir();              // si quedó fijo en el tablero cambia el orden de capas: se redibuja todo
+  return { unido, fijo };
 }
 
 function soltar() {
-  const gr = arr.g;
+  const gr = arr.g, listo = !!arr.fl, mios = gr.m.slice();
   arr = null;
-  asentar(gr);
+  ocultarFlota();
+  const r = asentar(gr, listo);
+  if (listo && !r.fijo) {
+    if (sucio) { cancelAnimationFrame(rafId); sucio = false; }   // hay un redibujado pendiente que ya no hace falta
+    pintarSobre(mios);
+  }
 }
 
 lienzo.addEventListener("pointerdown", (e) => {
@@ -736,11 +783,10 @@ lienzo.addEventListener("pointerdown", (e) => {
   const w = aMundo(p.x, p.y);
   const hit = buscar(w.x, w.y);
   if (hit) {
-    arr = { g: hit.g, pz: hit.pz, lx: w.x, ly: w.y, sx: p.x, sy: p.y, tx: 0, ty: 0, mov: false, cache: null };
+    arr = { g: hit.g, pz: hit.pz, lx: w.x, ly: w.y, sx: p.x, sy: p.y, tx: 0, ty: 0, mov: false, fl: null };
     sueltas.splice(sueltas.indexOf(hit.g), 1);
     sueltas.push(hit.g);                          // el grupo queda encima
-    iniciarReloj();
-    pedir();
+    iniciarReloj();                               // (no se redibuja nada al tocar: no se ve ningún cambio todavía)
   }
 });
 
@@ -753,10 +799,10 @@ lienzo.addEventListener("pointermove", (e) => {
   arr.lx = w.x; arr.ly = w.y;
   moverGrupo(arr.g, dx, dy);                      // todo el grupo se mueve junto
   arr.tx += dx; arr.ty += dy;                     // total movido (para deshacerlo si resulta ser un toque)
-  if (arr.cache) { arr.cache.ax += dx; arr.cache.ay += dy; }
+  if (arr.fl) { arr.fl.ax += dx; arr.fl.ay += dy; }
   // Con rotación activada, un movimiento corto sigue contando como «toque»; sin rotación, cualquier movimiento es arrastre
   if (!arr.mov && Math.hypot(p.x - arr.sx, p.y - arr.sy) > (rotacion ? TAP_PX : 0)) arr.mov = true;
-  pedir();
+  if (arr.mov) pedir();
 });
 
 function fin(e) {
