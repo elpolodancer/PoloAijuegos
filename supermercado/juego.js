@@ -30,7 +30,6 @@ const ALCANCE_CAJA = 40;            // distancia (px) a la que cobras tú en la 
 const RADIO = 12;                   // tamaño del personaje
 const EXT_ANCHO = 300;              // ancho (px del mapa) que añade cada ampliación del edificio, a la izquierda o a la derecha
 const CAMARA_SUAVE = 8;             // qué tan rápido te sigue la cámara (más alto = más pegada al personaje)
-const JARDIN_FILA_SEP = 8;          // separación entre una hilera de jardines y la siguiente
 const EMP_CARGA = 3;                // productos que lleva de golpe un empleado de jardín
 const EMP_VEL = 85;                 // velocidad (px/s) de los empleados de jardín
 const JARDIN_SEP = 4;               // separación (px) entre los jardines y el muro de arriba del edificio
@@ -48,7 +47,8 @@ const COSTO_ESTANTE_EXTRA = (n) => 15 + 10 * n;   // n = estanterías extra que 
 // Edificio: arriba queda siempre el pasto con los jardines. Cada ampliación lo ensancha hacia el lado que elijas
 // (izquierda o derecha) y deja 2 estanterías más. Como queda más ancho que la pantalla, la cámara sigue al personaje.
 const TOP = 324;                    // dónde empieza el edificio por arriba (fijo)
-const COSTOS_EDIFICIO = [40, 80];   // lo que cuesta cada ampliación, en orden
+const COSTOS_EDIFICIO = [40, 80];   // lo que cuesta cada ampliación del EDIFICIO, en orden
+const COSTOS_PATIO = [30, 60];      // lo que cuesta cada ampliación del PATIO (zona de pasto con los jardines), en orden; es aparte del edificio
 
 
 // Productos que existen (precio en dólares)
@@ -98,6 +98,10 @@ const btnEmpleado = document.getElementById("mejEmpleado");
 const btnEstante = document.getElementById("mejEstante");
 const btnEdIzq = document.getElementById("mejEdIzq");
 const btnEdDer = document.getElementById("mejEdDer");
+const btnPatIzq = document.getElementById("mejPatIzq");
+const btnPatDer = document.getElementById("mejPatDer");
+const titEd = document.getElementById("titEdificio"), botsEd = document.getElementById("botsEdificio");
+const titPat = document.getElementById("titPatio"), botsPat = document.getElementById("botsPatio");
 
 // ---------- Estado ----------
 let estado = "inicio";   // inicio | jugando
@@ -111,7 +115,11 @@ let extra = [];          // zanahorias colocadas en los espacios extra de la est
 let empleado = false;    // ¿ya contrataste al de la caja?
 let edificio = 0;        // cuántas ampliaciones tiene el edificio (0 a COSTOS_EDIFICIO.length)
 let ampliaciones = [];   // cada una: { lado: -1 (izquierda) o 1 (derecha), x0: dónde empieza en el mapa }
-let xMin = 0, xMax = MUNDO.w;   // límites del mundo en x: crecen al ampliar el edificio
+let xMin = 0, xMax = MUNDO.w;   // límites del EDIFICIO en x: crecen al ampliar el edificio
+let patios = [];         // ampliaciones del PATIO (zona de pasto con los jardines), aparte del edificio: { lado, x0 }
+let nivelPatio = 0;      // cuántas ampliaciones tiene el patio (0 a COSTOS_PATIO.length)
+let pMin = 0, pMax = MUNDO.w;   // límites del PATIO en x: crecen al ampliar el patio
+let wMin = 0, wMax = MUNDO.w;   // el mundo entero: lo más ancho entre edificio y patio (hasta ahí llega la cámara)
 let camX = 0;            // cámara: x del mapa que se ve en el borde izquierdo de la pantalla
 let ptr = null;          // último punto tocado (para seguir el dedo mientras la cámara se mueve)
 let dpr = 1;
@@ -137,19 +145,28 @@ function nuevoJardin(producto, rect, costo) {
   for (let i = 0; i < g.cols * g.filas; i++) g.parcelas.push({ t: -1, id: null });
   return g;
 }
-// «hilera»: 0 es la más pegada al muro; las demás se apilan hacia arriba en el pasto
 const jardines = [
-  nuevoJardin("tomate", { x: 16, y: 0, w: 140, h: 80, cols: 3, filas: 2, hilera: 0 }, COSTO_JARDIN),
-  nuevoJardin("zanahoria", { x: 204, y: 0, w: 140, h: 80, cols: 3, filas: 2, hilera: 0 }, COSTO_JARDIN_ZANAHORIA),
-  nuevoJardin("maiz", { x: 16, y: 0, w: 140, h: 80, cols: 3, filas: 2, hilera: 1 }, COSTO_JARDIN_MAIZ),
-  nuevoJardin("brocoli", { x: 204, y: 0, w: 140, h: 80, cols: 3, filas: 2, hilera: 1 }, COSTO_JARDIN_BROCOLI),
-  nuevoJardin("berenjena", { x: 16, y: 0, w: 140, h: 80, cols: 3, filas: 2, hilera: 2 }, COSTO_JARDIN_BERENJENA),
+  nuevoJardin("tomate", { w: 140, h: 80, cols: 3, filas: 2 }, COSTO_JARDIN),
+  nuevoJardin("zanahoria", { w: 140, h: 80, cols: 3, filas: 2 }, COSTO_JARDIN_ZANAHORIA),
+  nuevoJardin("maiz", { w: 140, h: 80, cols: 3, filas: 2 }, COSTO_JARDIN_MAIZ),
+  nuevoJardin("brocoli", { w: 140, h: 80, cols: 3, filas: 2 }, COSTO_JARDIN_BROCOLI),
+  nuevoJardin("berenjena", { w: 140, h: 80, cols: 3, filas: 2 }, COSTO_JARDIN_BERENJENA),
 ];
-// Los jardines quedan pegados al muro de arriba del edificio (que ya no se mueve)
-function pegarJardines() {
-  for (const g of jardines) g.y = TOP - g.h - JARDIN_SEP - g.hilera * (g.h + JARDIN_FILA_SEP);
+// El patio es la franja de pasto de arriba. Cada tramo (el patio inicial y cada ampliación) tiene 2 sitios para jardines,
+// pegados al muro. El jardín número «i» va en el tramo i/2: si ese tramo aún no existe, hay que ampliar el patio.
+function colocarJardines() {
+  jardines.forEach((g, i) => {
+    const tramo = Math.floor(i / 2), col = i % 2;
+    const a = tramo > 0 ? patios[tramo - 1] : null;
+    g.disponible = tramo === 0 || !!a;
+    if (!g.disponible) return;
+    g.x = tramo === 0 ? (col ? 204 : 16) : a.x0 + (col ? 156 : 4);
+    g.y = TOP - g.h - JARDIN_SEP;
+  });
 }
-pegarJardines();
+colocarJardines();
+// Solo se muestra (y se puede comprar) el siguiente jardín: el primero que aún no has comprado
+const siguienteJardin = () => jardines.find((g) => !g.comprado) || null;
 const jardinDe = (id) => jardines.find((g) => g.producto === id);
 const maxClientes = () => (jardinDe("zanahoria").comprado ? MAX_CLIENTES_ZANAHORIA : MAX_CLIENTES);
 // Un jardín (menos el 1.º) se compra cuando ya tienes la estantería del producto anterior
@@ -186,7 +203,13 @@ function chocaPared(x, y) {
   if (distRect(x, y, { x: xMin, y: TOP, w: xMax - xMin, h: 14 }) >= RADIO) return false;
   return !(x - RADIO >= ABERTURA.a && x + RADIO <= ABERTURA.b);
 }
-const choca = (x, y) => estantes.some((e) => distRect(x, y, rectFull(e)) < RADIO) || chocaPared(x, y); // estanterías y pared no se atraviesan
+// Bajo la línea del edificio, lo que queda fuera de sus muros (cuando el patio es más ancho) no se puede pisar
+function fueraEdificio(x, y) {
+  if (xMin > wMin && distRect(x, y, { x: wMin - 100, y: TOP, w: xMin - wMin + 100, h: MUNDO.h }) < RADIO - 0.01) return true;
+  if (xMax < wMax && distRect(x, y, { x: xMax, y: TOP, w: wMax - xMax + 100, h: MUNDO.h }) < RADIO - 0.01) return true;
+  return false;
+}
+const choca = (x, y) => estantes.some((e) => distRect(x, y, rectFull(e)) < RADIO) || chocaPared(x, y) || fueraEdificio(x, y); // estanterías, pared y muros no se atraviesan
 
 function centroParcela(g, i) {
   const c = i % g.cols, f = Math.floor(i / g.cols);
@@ -263,7 +286,7 @@ function mover(dt) {
   }
   if (!dx && !dy) return;
   if (dx) jugador.cara = dx > 0 ? 1 : -1;
-  const nx = Math.max(xMin + RADIO, Math.min(xMax - RADIO, jugador.x + dx * paso));
+  const nx = Math.max(wMin + RADIO, Math.min(wMax - RADIO, jugador.x + dx * paso));
   const ny = Math.max(RADIO, Math.min(MUNDO.h - RADIO, jugador.y + dy * paso));
   if (!choca(nx, jugador.y)) jugador.x = nx;
   if (!choca(jugador.x, ny)) jugador.y = ny;
@@ -283,7 +306,7 @@ function comprarCosas() {
     nuevoEstante(0, "tomate");
   }
   for (const g of jardines) {
-    if (g.comprado || !alcanza(g.costo) || !cerca(g, ALCANCE_JARDIN)) continue;
+    if (g.comprado || g !== siguienteJardin() || !g.disponible || !alcanza(g.costo) || !cerca(g, ALCANCE_JARDIN)) continue;
     if (!puedeJardin(g)) continue;                 // necesita la estantería del producto anterior
     cobrarCompra(g.costo, g.x + g.w / 2, g.y + g.h + 10);
     g.comprado = true;
@@ -516,13 +539,31 @@ function ampliar(lado) {
   const n = ampliaciones.filter((a) => a.lado === lado).length;   // cuántas hay ya de ese lado
   ampliaciones.push({ lado, x0: lado < 0 ? -(n + 1) * EXT_ANCHO : MUNDO.w + n * EXT_ANCHO });
   edificio = ampliaciones.length;
-  xMin = -EXT_ANCHO * ampliaciones.filter((a) => a.lado < 0).length;
+  xMin = 0 - EXT_ANCHO * ampliaciones.filter((a) => a.lado < 0).length;
   xMax = MUNDO.w + EXT_ANCHO * ampliaciones.filter((a) => a.lado > 0).length;
+  recalcMundo();
+}
+
+// Ensancha el PATIO (la zona de los jardines) hacia un lado, sin tocar el edificio: da sitio para 2 jardines más
+function ampliarPatio(lado) {
+  const n = patios.filter((a) => a.lado === lado).length;
+  patios.push({ lado, x0: lado < 0 ? -(n + 1) * EXT_ANCHO : MUNDO.w + n * EXT_ANCHO });
+  nivelPatio = patios.length;
+  pMin = 0 - EXT_ANCHO * patios.filter((a) => a.lado < 0).length;
+  pMax = MUNDO.w + EXT_ANCHO * patios.filter((a) => a.lado > 0).length;
+  recalcMundo();
+  colocarJardines();
+}
+
+function recalcMundo() {
+  wMin = Math.min(xMin, pMin);
+  wMax = Math.max(xMax, pMax);
 }
 
 // Admin: deja todo comprado (edificio con una ampliación a cada lado, estanterías, jardines, empleados y carga)
 function desbloquearTodo() {
-  while (edificio < COSTOS_EDIFICIO.length) ampliar(edificio % 2 === 0 ? -1 : 1);
+  while (edificio < COSTOS_EDIFICIO.length) ampliar(edificio % 2 === 0 ? -1 : 1);   // edificio: una ampliación a cada lado
+  while (nivelPatio < COSTOS_PATIO.length) ampliarPatio(nivelPatio % 2 === 0 ? 1 : -1);   // patio: igual, por separado
   for (let sl = 0; sl < MAX_ESTANTES; sl++) {
     if (!estantes.some((e) => e.slot === sl)) nuevoEstante(sl, sl < IDS.length ? IDS[sl] : IDS[0]);
   }
@@ -576,6 +617,14 @@ function comprarMejora(tipo) {
     const lado = tipo === "edificio-izq" ? -1 : 1;
     ampliar(lado);
     textos.push({ x: jugador.x, y: jugador.y - 34, vida: 1.6, txt: lado < 0 ? "◀ ¡Edificio ampliado!" : "¡Edificio ampliado! ▶", col: "#ffd24d" });
+  } else if (tipo === "patio-izq" || tipo === "patio-der") {
+    if (nivelPatio >= COSTOS_PATIO.length) return;
+    const costo = COSTOS_PATIO[nivelPatio];
+    if (!alcanza(costo)) return;
+    cobrarCompra(costo, x, y);
+    const lado = tipo === "patio-izq" ? -1 : 1;
+    ampliarPatio(lado);
+    textos.push({ x: jugador.x, y: jugador.y - 34, vida: 1.6, txt: lado < 0 ? "◀ ¡Patio ampliado!" : "¡Patio ampliado! ▶", col: "#9dffb0" });
   }
 }
 // botones de «empleado de jardín» (uno por jardín; solo se ven los de jardines ya comprados)
@@ -592,6 +641,8 @@ btnEmpleado.addEventListener("click", () => comprarMejora("empleado"));
 btnEstante.addEventListener("click", () => comprarMejora("estante"));
 btnEdIzq.addEventListener("click", () => comprarMejora("edificio-izq"));
 btnEdDer.addEventListener("click", () => comprarMejora("edificio-der"));
+btnPatIzq.addEventListener("click", () => comprarMejora("patio-izq"));
+btnPatDer.addEventListener("click", () => comprarMejora("patio-der"));
 
 function pintarBoton(b, texto, precio, activo) {
   b.querySelector("span").textContent = texto;
@@ -621,13 +672,25 @@ function actualizarPanel() {
     else if (!destinosDe(g.producto).length) pintarBoton(b, "🧑‍🌾 Primero la estantería de " + ic, "", false);
     else pintarBoton(b, "🧑‍🌾 Empleado del jardín " + ic, "$" + g.costoEmp, alcanza(g.costoEmp));
   });
+  // edificio y patio se mejoran por separado: cada uno con su lado a elegir
   const maxEd = edificio >= COSTOS_EDIFICIO.length;
-  btnEdDer.hidden = maxEd;
-  if (maxEd) pintarBoton(btnEdIzq, "🏗️ Edificio al máximo", "", false);
-  else {
+  titEd.textContent = maxEd ? "🏗️ Edificio al máximo" : "🏗️ Ampliar edificio (+2 estanterías)";
+  botsEd.hidden = maxEd;
+  if (!maxEd) {
     const c = COSTOS_EDIFICIO[edificio];
-    pintarBoton(btnEdIzq, "⬅️ Ampliar a la izquierda (" + (edificio + 1) + ")", "$" + c, alcanza(c));
-    pintarBoton(btnEdDer, "Ampliar a la derecha (" + (edificio + 1) + ") ➡️", "$" + c, alcanza(c));
+    pintarBoton(btnEdIzq, "◀ Izquierda", "$" + c, alcanza(c));
+    pintarBoton(btnEdDer, "Derecha ▶", "$" + c, alcanza(c));
+  }
+  const maxPat = nivelPatio >= COSTOS_PATIO.length;
+  const sig = siguienteJardin();
+  titPat.textContent = maxPat ? "🌱 Patio al máximo"
+    : sig && !sig.disponible ? "🌱 Patio lleno: amplíalo para el jardín de " + PRODUCTOS[sig.producto].icono
+    : "🌱 Ampliar patio (+2 jardines)";
+  botsPat.hidden = maxPat;
+  if (!maxPat) {
+    const c = COSTOS_PATIO[nivelPatio];
+    pintarBoton(btnPatIzq, "◀ Izquierda", "$" + c, alcanza(c));
+    pintarBoton(btnPatDer, "Derecha ▶", "$" + c, alcanza(c));
   }
 }
 
@@ -749,7 +812,16 @@ function persona(x, y, camisa, piel, delantal) {
 function dibujarSuelo() {
   // afuera: pasto (por todo el ancho del mundo)
   ctx.fillStyle = "#9bd27f";
-  ctx.fillRect(xMin - 2, 0, xMax - xMin + 4, MUNDO.h);
+  ctx.fillRect(wMin - 2, 0, wMax - wMin + 4, MUNDO.h);
+  // patio (zona de los jardines): un poco más claro y con su cerca; es una zona aparte del edificio
+  ctx.fillStyle = "rgba(255,255,255,.12)";
+  ctx.fillRect(pMin, 0, pMax - pMin, TOP);
+  ctx.strokeStyle = "#8a5a2b"; ctx.lineWidth = 4; ctx.setLineDash([10, 5]);
+  ctx.beginPath(); ctx.moveTo(pMin + 2, TOP); ctx.lineTo(pMin + 2, 3); ctx.lineTo(pMax - 2, 3); ctx.lineTo(pMax - 2, TOP); ctx.stroke();
+  ctx.setLineDash([]);
+  for (const cx of [MUNDO.w / 2, ...patios.map((a) => a.x0 + EXT_ANCHO / 2)]) etiqueta("🌱 Patio", cx, 20, "#fff", 12);
+  const sig = siguienteJardin();
+  if (sig && !sig.disponible) etiqueta("🌱 Amplía el patio para el siguiente jardín", MUNDO.w / 2, TOP - 100, "#ffd24d");
   // adentro: piso del edificio, con sus ampliaciones
   ctx.fillStyle = "#efe3c8";
   ctx.fillRect(xMin, TOP, xMax - xMin, MUNDO.h - TOP);
@@ -892,6 +964,7 @@ function dibujarJardines() {
 function dibujarJardin(g) {
   const { x, y, w, h } = g;
   if (!g.comprado) {
+    if (!g.disponible || g !== siguienteJardin()) return;   // solo se muestra el siguiente jardín
     const puede = alcanza(g.costo) && puedeJardin(g);
     ctx.setLineDash([8, 6]); ctx.lineWidth = 3;
     ctx.strokeStyle = puede ? "#2e9d4a" : "#999";
@@ -982,15 +1055,15 @@ function dibujar() {
   }
   // flechas en los bordes: hay más edificio fuera de la pantalla
   ctx.globalAlpha = 0.55;
-  if (camX > xMin + 1) etiqueta("◀", camX + 12, MUNDO.h / 2, "#fff", 18);
-  if (camX < xMax - MUNDO.w - 1) etiqueta("▶", camX + MUNDO.w - 12, MUNDO.h / 2, "#fff", 18);
+  if (camX > wMin + 1) etiqueta("◀", camX + 12, MUNDO.h / 2, "#fff", 18);
+  if (camX < wMax - MUNDO.w - 1) etiqueta("▶", camX + MUNDO.w - 12, MUNDO.h / 2, "#fff", 18);
   ctx.globalAlpha = 1;
 }
 
 // ---------- Bucle ----------
 // La cámara sigue al personaje en horizontal, sin salirse del edificio
 function actualizarCamara(dt) {
-  const meta = Math.max(xMin, Math.min(xMax - MUNDO.w, jugador.x - MUNDO.w / 2));
+  const meta = Math.max(wMin, Math.min(wMax - MUNDO.w, jugador.x - MUNDO.w / 2));
   camX += (meta - camX) * Math.min(1, dt * CAMARA_SUAVE);
   if (Math.abs(meta - camX) < 0.05) camX = meta;
 }

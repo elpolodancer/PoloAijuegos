@@ -20,6 +20,9 @@
     .mejoras h3 { margin: 0 0 2px; font-size: 15px; }
     .mej { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid #fff4; background: #2b3a55; color: #fff; font-size: 14px; text-align: left; }
     .mej b { white-space: nowrap; }
+    .grupo-t { margin-top: 4px; font-size: 13px; opacity: .85; }
+    .grupo-b { display: flex; gap: 6px; }
+    .grupo-b .mej { flex: 1; }
     .mej:disabled { opacity: .45; }
     .ovl h2 { margin: 0; font-size: 30px; }
     .ovl p { margin: 0; max-width: 34ch; line-height: 1.4; }
@@ -54,8 +57,16 @@
           <button class="mej" id="mejCarga" type="button"><span></span><b></b></button>
           <button class="mej" id="mejEmpleado" type="button"><span></span><b></b></button>
           <button class="mej" id="mejEstante" type="button"><span></span><b></b></button>
-          <button class="mej" id="mejEdIzq" type="button"><span></span><b></b></button>
-          <button class="mej" id="mejEdDer" type="button"><span></span><b></b></button>
+          <div class="grupo-t" id="titEdificio">🏗️ Edificio</div>
+          <div class="grupo-b" id="botsEdificio">
+            <button class="mej" id="mejEdIzq" type="button"><span></span><b></b></button>
+            <button class="mej" id="mejEdDer" type="button"><span></span><b></b></button>
+          </div>
+          <div class="grupo-t" id="titPatio">🌱 Patio</div>
+          <div class="grupo-b" id="botsPatio">
+            <button class="mej" id="mejPatIzq" type="button"><span></span><b></b></button>
+            <button class="mej" id="mejPatDer" type="button"><span></span><b></b></button>
+          </div>
         </div>
         <div class="adm oculto" id="adm">
           <h3>⚙️ Admin (para pruebas)</h3>
@@ -69,7 +80,7 @@
         <div class="ovl" id="ovl">
           <h2>Supermercado</h2>
           <p>Tu tienda está vacía. Camina hasta la estantería y el jardín para comprarlos. Lo que crece en el jardín lo recoges solo al acercarte (al empezar llevas hasta 3; cada mejora 🧤 te deja llevar una más). Cada jardín comprado puede tener su empleado 🧑‍🌾, que lleva lo maduro a la estantería por ti, y hay más verduras 🌽🥦🍆 con su jardín y su estantería y se coloca solo en la estantería (caben 5). Los clientes toman sus productos y van a la caja: cobra parándote junto a ella o contrata a un empleado en la zona de mejoras 🛠️. Las estanterías de jitomates y de zanahorias son fijas; en las estanterías extra, toca el botón ↻ para elegir qué producto llevan.</p>
-          <p>En la zona de mejoras 🛠️ también puedes ampliar el edificio hacia la izquierda o hacia la derecha (tú eliges): la pantalla no cambia de tamaño, la cámara te sigue.</p>
+          <p>En la zona de mejoras 🛠️ también puedes ampliar por separado el edificio (más estanterías) y el patio (más jardines), cada uno hacia la izquierda o la derecha, como elijas. Solo ves el siguiente jardín por comprar; si el patio se llena, ampliarlo es lo que te deja seguir. La pantalla no cambia de tamaño: la cámara te sigue.</p>
           <p>Toca o arrastra para moverte (o usa las flechas / WASD).</p>
           <button class="btn" id="ovlBtn">Jugar</button>
         </div>
