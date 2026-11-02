@@ -30,7 +30,7 @@ const RADIO = 12;                   // tamaño del personaje
 const EXT_ANCHO = 300;              // ancho (px del mapa) que añade cada ampliación del edificio, a la izquierda o a la derecha
 const CAMARA_SUAVE = 8;             // qué tan rápido te sigue la cámara (más alto = más pegada al personaje)
 const EMP_CARGA = 3;                // productos que lleva de golpe un empleado de jardín
-const EMP_VEL = 85 * 0.25;          // velocidad (px/s) de los empleados de jardín: 25% de la original (−75%). Pon 85 para la de antes
+const EMP_VEL = 85 * 0.5;           // velocidad (px/s) de los empleados de jardín: 50% de la original (85). Pon 85 para la velocidad de antes
 const JARDIN_SEP = 4;               // separación (px) entre los jardines y el muro de arriba del edificio
 
 // Costos
@@ -151,6 +151,7 @@ const puertas = [{ x: PUERTA.x }];   // entradas/salidas de la tienda (la 1.ª e
 let colocando = null;    // {tipo: "caja" | "puerta"} mientras eliges dónde poner lo que compraste
 let pregunta = null;     // jardín por el que se pregunta «¿comprar?»
 let rechazado = null;    // jardín al que dijiste «Ahora no»: no se vuelve a preguntar hasta que te alejes
+let avisado = null;      // jardín del que ya se dijo por qué todavía no puedes comprarlo (una vez por visita)
 let edificio = 0;        // cuántas ampliaciones tiene el edificio (0 a COSTOS_EDIFICIO.length)
 let ampliaciones = [];   // cada una: { lado: -1 (izquierda) o 1 (derecha), x0: dónde empieza en el mapa }
 let xMin = 0, xMax = MUNDO.w;   // límites del EDIFICIO en x: crecen al ampliar el edificio
@@ -347,7 +348,16 @@ function comprarCosas() {
   const g = siguienteJardin();
   const puedes = g && g.disponible && puedeJardin(g) && alcanza(g.costo) && cerca(g, ALCANCE_JARDIN);
   if (rechazado && !cerca(rechazado, ALCANCE_JARDIN + 14)) rechazado = null;   // ya te alejaste: puede volver a preguntar
-  if (puedes) {
+  // Si estás sobre el jardín pero aún no se puede comprar, un texto flotante dice por qué (una vez por visita)
+  const encima = g && g.disponible && cerca(g, ALCANCE_JARDIN);
+  if (avisado && !cerca(avisado, ALCANCE_JARDIN + 14)) avisado = null;
+  if (encima && !puedes && avisado !== g) {
+    avisado = g;
+    const ic = PRODUCTOS[g.producto].icono;
+    const txt = !puedeJardin(g) ? "Primero compra la estantería de " + PRODUCTOS[IDS[IDS.indexOf(g.producto) - 1]].icono : "Faltan $" + Math.max(1, Math.ceil(g.costo - dinero)) + " para el jardín " + ic;
+    textos.push({ x: g.x + g.w / 2, y: g.y + g.h / 2, vida: 2.4, txt, col: "#ffd24d" });
+  }
+  if (puedes && !colocando) {
     if (!pregunta && rechazado !== g) {
       pregunta = g;
       objetivo = null; tocando = false;                 // te quedas quieto mientras decides
@@ -355,6 +365,7 @@ function comprarCosas() {
       elConf.classList.remove("oculto");
     }
   } else if (pregunta) cerrarPregunta();
+  if (pregunta && colocando) cerrarPregunta();
 }
 function cerrarPregunta() {
   pregunta = null;
