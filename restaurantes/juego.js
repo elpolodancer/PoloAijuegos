@@ -9,6 +9,9 @@
 // (entrada por atrás, con su propia fila de espera y su mostrador). La SEGUNDA RECEPCIONISTA solo se puede contratar cuando ya existe la segunda puerta.
 // Empiezan lentos: cada mejora los hace más rápidos. Lo gastado sale de «dinero»; los puntos y el récord cuentan lo «ganado».
 // CIUDAD Y VISTA: el restaurante está en una calle, rodeado de manzanas con edificios, parques y carreteras. La vista se acerca/aleja (➕ ➖, rueda o pellizco) con límites cortos y se mueve arrastrando.
+// ESTACIONAMIENTO: alrededor de toda la cuadra hay 24 lugares posibles (adelante, a los lados y atrás), pero al empezar solo se ven y se usan 2.
+// Los demás se compran en la tienda (precio creciente: ver ESTAC_PRECIOS). Los autos llegan por la calle de enfrente; cada auto trae SIEMPRE 4 personas.
+// Si hay lugar, estaciona y las 4 personas van a la recepción como un grupo más; al terminar regresan al auto y se van. Si no hay lugar, el auto pasa de largo y no vuelve.
 const ID = "restaurantes";
 
 // ----- Ajustes -----
@@ -47,6 +50,25 @@ const PRECIO_PUERTA2 = 40;   // segunda puerta de entrada (necesita el terreno a
 const PRECIO_MESERO2 = 40;   // segundo mesero (necesita el terreno ampliado)
 const PRECIO_RECEP2 = 40;    // segunda recepcionista (necesita la segunda puerta)
 
+// ----- Estacionamiento -----
+const ESTAC_INICIALES = 2;       // lugares visibles y disponibles al empezar
+// Precio de cada lugar nuevo, en orden (el 1.º cuesta 20, el 2.º 50, ...). Después del último se sigue con ESTAC_FACTOR (ver precioEstac)
+const ESTAC_PRECIOS = [20, 50, 80, 100, 130, 180, 250, 320, 400, 500, 620, 750, 900, 1500];
+const ESTAC_FACTOR = 1.25;       // pasado el último precio de la lista, cada lugar cuesta 25 % más que el anterior
+const PERSONAS_AUTO = 4;         // cada auto trae siempre 4 personas
+const AUTO_MIN_MS = 9000;        // los autos llegan al azar: entre uno y el siguiente pasan entre estos dos tiempos
+const AUTO_MAX_MS = 16000;
+const PRIMER_AUTO_MS = 6000;     // cuándo pasa el primer auto
+const AUTO_VEL = 230;            // velocidad de los autos (px por segundo)
+const COCHES = [ // colores de carrocería (tapa, cara izquierda, cara derecha)
+  { tapa: "#ef9a9a", izq: "#e53935", der: "#b71c1c" },
+  { tapa: "#90caf9", izq: "#1e88e5", der: "#0d47a1" },
+  { tapa: "#fff59d", izq: "#fdd835", der: "#f9a825" },
+  { tapa: "#eceff1", izq: "#b0bec5", der: "#78909c" },
+  { tapa: "#a5d6a7", izq: "#43a047", der: "#1b5e20" },
+];
+const VIDRIO = { tapa: "#cfe8f7", izq: "#90b4cc", der: "#7aa0b8" };
+
 // ----- Vista (zoom y desplazamiento) -----
 const ZOOM_INICIAL = 0.85;      // zoom al abrir el juego (1 = como antes de la ciudad)
 const ZOOM_MIN = 0.7;           // lo más que se puede alejar (poco, para que la gente se siga viendo)
@@ -75,6 +97,46 @@ const MESAS_BASE = [
 const ORDEN_SILLAS = ["cerca", "arriba", "abajo", "lejos"]; // 4 sillas por mesa; se ocupan en este orden
 const CARAS = ["🧑", "👩", "👨", "🧓", "👧", "👦", "🧔", "👱"];
 
+// ----- Lugares de estacionamiento (en el mapa plano; se alinean con la acera que rodea la cuadra) -----
+// lado: f = enfrente, d = derecha, i = izquierda, a = atrás. Los autos entran de frente al lugar (eje = hacia dónde apunta el auto).
+// «acera» es donde bajan/suben las personas; «carril» es el punto de la calle desde donde el auto entra o sale.
+// Orden de compra: primero los 4 de enfrente (los 2 primeros flanquean la puerta), luego la derecha, la izquierda y al final atrás.
+const CAJON_ANCHO = 46, CAJON_FONDO = 60;
+const ENT_AUTO = [-330, 804], SAL_AUTO = [900, 804];                                         // por dónde entran y salen los autos (calle de enfrente)
+const ESQ_AUTO = { C0: [-124, 804], C1: [684, 804], C2: [684, -124], C3: [-124, -124] };     // esquinas del carril que rodea la cuadra
+const ACERA_Y = 702;                                                                         // acera de enfrente (donde caminan hacia la puerta)
+function crearCajones() {
+  const out = [], ys = [640, 568, 496, 424, 352, 280, 208, 136];
+  [208, 352, 424, 496].forEach((x) => out.push({ lado: "f", x, y: 750, eje: "y", acera: [x, ACERA_Y], carril: [x, 804] }));
+  ys.forEach((y) => out.push({ lado: "d", x: 630, y, eje: "x", acera: [582, y], carril: [684, y] }));
+  ys.forEach((y) => out.push({ lado: "i", x: -70, y, eje: "x", acera: [-22, y], carril: [-124, y] }));
+  [192, 120, 48, 520].forEach((x) => out.push({ lado: "a", x, y: -70, eje: "y", acera: [x, -22], carril: [x, -124] }));
+  return out.map((c) => ({ ...c, usado: false, coche: null, pendientes: 0 }));
+}
+const CAJONES = crearCajones();
+// Precio del siguiente lugar. k = cuántos lugares has comprado ya (0 = el primero). Pasada la lista: el último precio × ESTAC_FACTOR por cada lugar más
+function precioEstac(k) {
+  if (k < ESTAC_PRECIOS.length) return ESTAC_PRECIOS[k];
+  return Math.round((ESTAC_PRECIOS[ESTAC_PRECIOS.length - 1] * Math.pow(ESTAC_FACTOR, k - ESTAC_PRECIOS.length + 1)) / 10) * 10;
+}
+// Camino del auto desde la entrada de la calle hasta el lugar (o, con saliendo = true, desde el lugar hasta la salida), por el lado más corto
+function rutaCoche(k, saliendo) {
+  const via = k.lado === "f" ? [] : k.lado === "d" ? [ESQ_AUTO.C1] : k.lado === "i" ? [ESQ_AUTO.C0]
+    : k.x < HALL_X ? [ESQ_AUTO.C0, ESQ_AUTO.C3] : [ESQ_AUTO.C1, ESQ_AUTO.C2];
+  if (!saliendo) return [ENT_AUTO, ...via, k.carril, [k.x, k.y]];
+  return [k.carril, ...via.slice().reverse(), SAL_AUTO];
+}
+// Camino a pie desde la acera del lugar hasta la puerta (pu = 0: la de enfrente; pu = 1: la de atrás, solo desde los lugares de atrás)
+function caminoAcera(k, pu) {
+  if (pu === 1) return [k.acera];
+  const r = [k.acera];
+  if (k.lado === "d") r.push([582, ACERA_Y]);
+  if (k.lado === "i") r.push([-22, ACERA_Y]);
+  if (k.lado === "a") r.push(k.x < HALL_X ? [-22, -22] : [582, -22], k.x < HALL_X ? [-22, ACERA_Y] : [582, ACERA_Y]);
+  r.push([HALL_X, ACERA_Y]);
+  return r;
+}
+
 const $ = (id) => document.getElementById(id);
 const lienzo = $("lienzo");
 const ctx = lienzo.getContext("2d");
@@ -87,6 +149,7 @@ let reloj, proxLlegada, activos, ultimoSeg; // reloj de la jornada (ms), cuándo
 let llevando = null;                    // mesa cuyo platillo traes en la mano
 let receps = [null, null], meseros = [null, null]; // personal contratado (null = todavía no): { nivel, ... }; [0] el de siempre, [1] el de la ampliación
 let terreno2 = false, puerta2 = false;             // ampliación comprada / segunda puerta comprada
+let nEstac = ESTAC_INICIALES, proxAuto = 0, autosPerdidos = 0; // lugares de estacionamiento disponibles, cuándo pasa el próximo auto, autos que no hallaron lugar
 let puntero = { x: -99, y: -99 };       // último punto tocado/señalado en el lienzo (para dibujar el platillo)
 
 const ahora = () => performance.now();
@@ -99,8 +162,10 @@ function nuevaPartida() {
   mesas = MESAS_BASE.map((m) => ({ ...m, ocupada: false, plato: false, barra: null, esperando: false, tomado: false, enojo: false, listoDesde: 0, res: null, clientes: [] }));
   recepcion = Array(SLOTS.length).fill(null);
   dinero = 0; ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
-  const habiaTerreno = terreno2; terreno2 = false; puerta2 = false;
-  if (habiaTerreno) armarFondo(); // quita la plaza de la partida anterior
+  const habiaCambios = terreno2 || nEstac > ESTAC_INICIALES; terreno2 = false; puerta2 = false;
+  nEstac = ESTAC_INICIALES; autosPerdidos = 0; proxAuto = PRIMER_AUTO_MS;
+  CAJONES.forEach((k) => { k.usado = false; k.coche = null; k.pendientes = 0; });
+  if (habiaCambios) armarFondo(); // quita la plaza y los lugares de estacionamiento de la partida anterior
   reloj = 0; proxLlegada = PRIMERA_LLEGADA_MS; ultimoSeg = -1; fin = false;
   $("fin").hidden = true;
   $("tienda").hidden = true;
@@ -155,26 +220,32 @@ const azar = (a, b) => a + Math.random() * (b - a);
 const posEspera = (n, i, y) => [HALL_X + (i - (n - 1) / 2) * 34, y];
 
 // Un grupo llega a la recepción. Hay que tocarlo para darle mesa; si no hay mesa o tardas, se va enojado
-async function llegar(n) {
-  activos++;
+async function llegar(n, cajon = null) { // cajon: lugar de estacionamiento si vienen en auto (esos ya se contaron en activos al reservar el lugar)
+  if (!cajon) activos++;
   // Puerta por la que llegan: al azar entre las abiertas que tengan lugar de espera (la de atrás solo existe si la compraste)
   const abiertas = puerta2 ? [0, 1] : [0];
   const conLugar = abiertas.filter((p) => SLOTS.some((s, k) => s.p === p && !recepcion[k]));
   const opciones = conLugar.length ? conLugar : abiertas;
-  const pu = opciones[Math.floor(Math.random() * opciones.length)], P = PUERTAS[pu];
-  const clientes = Array.from({ length: n }, () => nuevaEnt(CARAS[Math.floor(Math.random() * CARAS.length)], P.spawn[0], P.spawn[1]));
+  const pu = cajon ? (cajon.lado === "a" && puerta2 ? 1 : 0) : opciones[Math.floor(Math.random() * opciones.length)], P = PUERTAS[pu];
+  const camino = cajon ? caminoAcera(cajon, pu) : [];      // a pie desde el auto hasta la puerta
+  const origen = cajon ? cajon.acera : P.spawn;
+  const clientes = Array.from({ length: n }, () => {
+    const c = nuevaEnt(CARAS[Math.floor(Math.random() * CARAS.length)], origen[0], origen[1]);
+    if (cajon) c.cajon = cajon;
+    return c;
+  });
   const slot = SLOTS.findIndex((s, k) => s.p === pu && !recepcion[k]);
 
   if (slot < 0) { // los dos lugares de espera de esa puerta están ocupados: ni siquiera pasan de la puerta
     const g = { clientes, n, y: P.llenoY, pu };
-    await Promise.all(clientes.map(async (c, i) => { await esp(i * 300); await ir(c, [posEspera(n, i, g.y)]); }));
+    await Promise.all(clientes.map(async (c, i) => { await esp(i * 300); await ir(c, [...camino, posEspera(n, i, g.y)]); }));
     await irseEnojados(g, "¡Todo está lleno!");
     return;
   }
 
   const g = { clientes, n, slot, pu, y: SLOTS[slot].y, esperando: false, enojo: false, desde: 0, res: null, razon: "", sinMesa: false, enojoMs: ENOJO_RECEP_MS, pacienciaMs: PACIENCIA_RECEP_MS };
   recepcion[slot] = g;
-  await Promise.all(clientes.map(async (c, i) => { await esp(i * 300); await ir(c, [posEspera(n, i, g.y)]); }));
+  await Promise.all(clientes.map(async (c, i) => { await esp(i * 300); await ir(c, [...camino, posEspera(n, i, g.y)]); }));
 
   // Si todas las mesas están ocupadas NO se van de inmediato: esperan 8 s (a los 5 s se enojan) por si se libera una
   if (!mesas.some((m) => !m.ocupada)) { g.sinMesa = true; g.enojoMs = ENOJO_SIN_MESA_MS; g.pacienciaMs = PACIENCIA_SIN_MESA_MS; }
@@ -216,7 +287,7 @@ async function irseEnojados(g, motivo) {
   await Promise.all(g.clientes.map(async (c, i) => {
     await esp(i * 200);
     await ir(c, PUERTAS[g.pu].irse(c));
-    quitar(c);
+    await despedir(c, g.pu);
   }));
   activos--;
   comprobarFin();
@@ -248,7 +319,7 @@ async function atender(n, clientes, mesa, pu = 0) {
     await Promise.all(clientes.map(async (c, i) => {
       await esp(i * 250);
       await ir(c, [...rutaIda(mesa, i, P).slice(0, -1).reverse(), ...P.salida]);
-      quitar(c);
+      await despedir(c, pu);
     }));
     cerrarGrupo(mesa);
     return;
@@ -280,7 +351,7 @@ async function atender(n, clientes, mesa, pu = 0) {
     actualizar();
     await esp(500);
     await ir(c, P.salida);
-    quitar(c);
+    await despedir(c, pu);
   }));
   activos--; // la mesa ya estaba libre: solo se descuenta el grupo cuando el último sale del restaurante
   comprobarFin();
@@ -432,7 +503,8 @@ function pintarTienda() {
       puerta2 ? "Los clientes también llegan por la puerta de atrás, con su propia fila y mostrador." : terreno2 ? "Una entrada nueva en el terreno de atrás: doble de lugares de espera." : "Se desbloquea al ampliar el terreno.",
       puerta2 ? "Comprada" : terreno2 ? "Comprar $" + PRECIO_PUERTA2 : "🔒 Bloqueado", puerta2 || !terreno2 || dinero < PRECIO_PUERTA2, comprarPuerta2),
     filaTienda("👩‍💼", "Segunda recepcionista", receps[1], PRECIO_RECEP2, RECEP_PRECIOS_MEJORA, txtRecep, () => contratarRecep(1), () => mejorarRecep(1),
-      puerta2 ? "" : "Se desbloquea con la segunda puerta en el nuevo terreno.")
+      puerta2 ? "" : "Se desbloquea con la segunda puerta en el nuevo terreno."),
+    filaEstac()
   );
 }
 function comprarTerreno() {
@@ -508,6 +580,64 @@ async function servir(m, w) {
   w.ocupado = false;
 }
 
+// ----- Estacionamiento: tienda, llegada y salida de autos -----
+function filaEstac() {
+  const total = CAJONES.length;
+  if (nEstac >= total) return filaSimple("🅿️", "Estacionamiento", "Ya tienes los " + total + " lugares alrededor de la cuadra.", "Completo", true, () => {});
+  const precio = precioEstac(nEstac - ESTAC_INICIALES);
+  return filaSimple("🅿️", "Lugar de estacionamiento",
+    "Tienes " + nEstac + " de " + total + ". Cada auto trae " + PERSONAS_AUTO + " personas; si no hay lugar, pasa de largo y no vuelve.",
+    "Comprar $" + precio, dinero < precio, comprarEstac);
+}
+function comprarEstac() {
+  if (nEstac >= CAJONES.length) return;
+  const precio = precioEstac(nEstac - ESTAC_INICIALES);
+  if (dinero < precio) return;
+  dinero -= precio;
+  nEstac++;
+  armarFondo(); // dibuja el lugar nuevo
+  info("¡Nuevo lugar de estacionamiento! Ahora tienes " + nEstac + ".");
+  actualizar();
+}
+// Pasa un auto por la calle de enfrente: si hay lugar libre estaciona (y sus 4 personas van a la recepción); si no, pasa de largo y se va para siempre
+async function llegarAuto() {
+  const k = CAJONES.slice(0, nEstac).find((x) => !x.usado);
+  const a = nuevaEnt("", ENT_AUTO[0], ENT_AUTO[1]);
+  a.coche = true; a.vel = AUTO_VEL; a.eje = "x";
+  a.col = COCHES[Math.floor(Math.random() * COCHES.length)];
+  if (!k) {
+    autosPerdidos++;
+    info("🚗 Un auto con " + PERSONAS_AUTO + " personas no encontró lugar y se fue para siempre.");
+    await ir(a, [SAL_AUTO]);
+    quitar(a);
+    return;
+  }
+  k.usado = true; k.coche = a; k.pendientes = PERSONAS_AUTO;
+  activos++; // el grupo cuenta como «en el local» desde que se reserva el lugar
+  await ir(a, rutaCoche(k, false));
+  await esp(500);
+  llegar(PERSONAS_AUTO, k);
+}
+// El auto se va cuando suben sus 4 personas; el lugar queda libre en cuanto sale a la calle
+async function irseAuto(k) {
+  const a = k.coche;
+  if (!a) return;
+  const ruta = rutaCoche(k, true);
+  await ir(a, [ruta[0]]);
+  k.usado = false; k.coche = null;
+  await ir(a, ruta.slice(1));
+  quitar(a);
+}
+// Al terminar su camino de salida: quien vino a pie desaparece; quien vino en auto regresa a él y, cuando suben todos, el auto se va
+async function despedir(c, pu = 0) {
+  const k = c.cajon;
+  if (!k || !k.coche) { quitar(c); return; }
+  await ir(c, [...caminoAcera(k, pu)].reverse());
+  quitar(c);
+  k.pendientes--;
+  if (k.pendientes <= 0) irseAuto(k);
+}
+
 // ----- Final -----
 async function finalizar() {
   fin = true;
@@ -521,7 +651,7 @@ async function finalizar() {
     catch (e) { extra = " No se pudieron guardar los puntos."; }
   }
   $("finTitulo").textContent = "Día terminado";
-  $("finTexto").textContent = "Atendiste " + atendidos + " clientes y ganaste $" + ganado + " pesos." + (perdidos ? " Se fueron " + perdidos + " enojados sin pagar." : "") + extra;
+  $("finTexto").textContent = "Atendiste " + atendidos + " clientes y ganaste $" + ganado + " pesos." + (perdidos ? " Se fueron " + perdidos + " enojados sin pagar." : "") + (autosPerdidos ? " Pasaron " + autosPerdidos + " autos sin encontrar lugar." : "") + extra;
   $("fin").hidden = false;
   info("Terminó la jornada.");
   actualizar();
@@ -627,7 +757,7 @@ function armarCiudad(c) {
   const enCruce = (v, centros) => centros.some((m) => Math.abs(v - m) < CALLE / 2 + 6);
   for (let p = -2400; p < 2600; p += 60) for (const xc of CENTROS_X) if (!enCruce(p + 15, CENTROS_Y)) suelo(c, xc - 2, p, xc + 2, p + 30, "#e8c547");
   for (let p = -2400; p < 2600; p += 60) for (const yc of CENTROS_Y) if (!enCruce(p + 15, CENTROS_X)) suelo(c, p, yc - 2, p + 30, yc + 2, "#e8c547");
-  for (let k = 0; k < 6; k++) suelo(c, 100 + k * 20, CENTROS_Y[3] - 52, 110 + k * 20, CENTROS_Y[3] + 52, "#f5f5f5"); // paso de cebra frente al restaurante
+  for (let k = 0; k < 6; k++) suelo(c, 70 + k * 20, CENTROS_Y[3] - 52, 80 + k * 20, CENTROS_Y[3] + 52, "#f5f5f5"); // paso de cebra frente al restaurante
   const cola = [];
   const hayPasto = (i, j) => PASTO.some((q) => q[0] === i && q[1] === j);
   const esZona = (i, j) => (i === 0 && j === 0) || hayPasto(i, j);
@@ -688,6 +818,17 @@ function puertaAtras(c) {
   c.font = "700 13px system-ui, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.lineWidth = 3; c.strokeStyle = "rgba(0,0,0,.6)"; c.strokeText("Entrada 2", ex, ey);
   texto("Entrada 2", ex, ey, 13, "#fff", "center", c);
 }
+// Lugares de estacionamiento comprados: casilla oscura con borde blanco y una «P». Si hay alguno atrás, se pinta también la calle de atrás
+function estacionamiento(c) {
+  const visibles = CAJONES.slice(0, nEstac);
+  if (visibles.some((k) => k.lado === "a")) suelo(c, -150, -148, 700, -100, COL_ASFALTO);
+  for (const k of visibles) {
+    const ax = k.eje === "x" ? CAJON_FONDO : CAJON_ANCHO, ay = k.eje === "x" ? CAJON_ANCHO : CAJON_FONDO;
+    suelo(c, k.x - ax / 2, k.y - ay / 2, k.x + ax / 2, k.y + ay / 2, "#454b53", 0, "#f5f5f5");
+    const [px, py] = iso(k.x, k.y);
+    texto("P", px, py, 13, "rgba(255,255,255,.55)", "center", c);
+  }
+}
 function armarFondo() {
   fondo.width = FW; fondo.height = FH; // limpia el fondo (se vuelve a armar al ampliar el terreno)
   const c = fondo.getContext("2d");
@@ -695,6 +836,7 @@ function armarFondo() {
   armarCiudad(c);        // calles, aceras, edificios y parques
   arbolesAcera(c, "atras");
   if (terreno2) plazaAtras(c);
+  estacionamiento(c);
   // piso del comedor
   for (let i = 0; i < W / 40; i++) for (let j = 0; j < H / 40; j++) suelo(c, i * 40, j * 40, i * 40 + 40, j * 40 + 40, (i + j) % 2 ? "#e4cfa9" : "#ecd9b8");
   cuarto(c, 10, 10, 260, 160, "#eceff1", "#cfd8dc", "#b0bec5", 200, 50);   // cocina
@@ -793,7 +935,20 @@ function dibujarEscritorio2() {
   caja3d(ctx, 340, -70, 460, -36, 26, MADERA_OSCURA, "#3e2c23");
   const [sx, sy] = iso(400, -53, 26); texto("Recepción 2", sx, sy, 11, "#fff", "center");
 }
+// Caja que va de la altura z0 a z1 (para apilar la cabina sobre la carrocería)
+function cajaAlta(c, x0, y0, x1, y1, z0, z1, col, borde) {
+  poly(c, [iso(x1, y0, z0), iso(x1, y1, z0), iso(x1, y1, z1), iso(x1, y0, z1)], col.der, borde);
+  poly(c, [iso(x0, y1, z0), iso(x1, y1, z0), iso(x1, y1, z1), iso(x0, y1, z1)], col.izq, borde);
+  poly(c, [iso(x0, y0, z1), iso(x1, y0, z1), iso(x1, y1, z1), iso(x0, y1, z1)], col.tapa, borde);
+}
+function dibujarCoche(e) {
+  const horiz = e.eje === "x", a = horiz ? 26 : 12, b = horiz ? 12 : 26, ca = horiz ? 12 : 10, cb = horiz ? 10 : 12;
+  sombra(e.x, e.y, 26);
+  cajaAlta(ctx, e.x - a, e.y - b, e.x + a, e.y + b, 2, 12, e.col, "rgba(0,0,0,.35)");      // carrocería
+  cajaAlta(ctx, e.x - ca, e.y - cb, e.x + ca, e.y + cb, 12, 21, VIDRIO, "rgba(0,0,0,.3)");  // cabina
+}
 function dibujarEnt(e) {
+  if (e.coche) { dibujarCoche(e); return; }
   persona(e.emoji, e.x, e.y, 20, 34);
   if (e.lleva) { const [px, py] = iso(e.x, e.y, 56); emoji("🍽️", px, py, 20); } // el mesero con un platillo en la mano
   if (e.enojado) { const [sx, sy] = iso(e.x, e.y, 52); emoji("😡", sx + Math.sin(ahora() / 60) * 2, sy, 20); }
@@ -857,6 +1012,7 @@ function cuadro() {
     reloj += dt * 1000;
     if (reloj < DURACION_DIA_MS) {
       if (reloj >= proxLlegada) { llegar(OPCIONES[Math.floor(Math.random() * OPCIONES.length)]); proxLlegada = reloj + azar(LLEGADA_MIN_MS, LLEGADA_MAX_MS); }
+      if (reloj >= proxAuto) { llegarAuto(); proxAuto = reloj + azar(AUTO_MIN_MS, AUTO_MAX_MS); }
     } else comprobarFin();
     const seg = Math.max(0, Math.ceil((DURACION_DIA_MS - reloj) / 1000));
     if (seg !== ultimoSeg) {
@@ -869,6 +1025,7 @@ function cuadro() {
     if (!e.ruta.length) continue;
     const [tx, ty] = e.ruta[0];
     const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy), paso = (e.vel || VEL) * dt;
+    if (e.coche && d > 0) e.eje = Math.abs(dx) >= Math.abs(dy) ? "x" : "y"; // el auto apunta hacia donde avanza
     if (d <= paso) {
       e.x = tx; e.y = ty; e.ruta.shift();
       if (!e.ruta.length && e.fin) { const f = e.fin; e.fin = null; f(); }
