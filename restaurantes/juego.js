@@ -15,8 +15,9 @@
 // Los demás se compran en la tienda (precio creciente: ver ESTAC_PRECIOS). Los autos llegan por la calle de enfrente; cada auto trae SIEMPRE 4 personas.
 // Si hay lugar, estaciona y las 4 personas van a la recepción como un grupo más; al terminar regresan al auto y se van. Si no hay lugar, el auto pasa de largo y no vuelve.
 // TERRENOS: el restaurante ocupa la esquina inferior derecha de una cuadrícula de 3 × 3 manzanas; las otras 8 son pasto (sin carreteras entre ellas), a la izquierda y detrás.
-// Los terrenos se compran en la tienda («Ampliar terreno», 1000 pesos). Solo se puede comprar UNO de los dos que tocan el edificio (izquierda o atrás); los demás no quedan pegados
-// al restaurante y no se pueden comprar. Los datos de los lotes comprables están en LOTES; las manzanas de pasto, en PASTO.
+// Los terrenos se compran en la tienda («Ampliar terreno»): las 8 manzanas de pasto son los terrenos 2.º a 9.º y se compran de uno en uno, solo los que tocan tu terreno actual (el restaurante o uno ya comprado).
+// El precio sube con cada terreno (ver TERRENO_PRECIOS: $10,000 el 2.º ... $500,000 el 9.º). Las manzanas de pasto están en PASTO.
+// COCINA Y BAÑO: con el botón «🛠️ Mover» se pueden cambiar de lugar a lo largo de la pared del fondo (ver errorHab: no pueden tapar el pasillo del centro ni empalmarse entre sí).
 const ID = "restaurantes";
 
 // ----- ESCALA: tamaño de los objetos respecto a la cuadra -----
@@ -80,7 +81,8 @@ const MEJORAS_MESA = [
   { id: "servilletas", ico: "🧻", nombre: "Servilletas", precios: PRECIOS_MEJORA },
 ];
 // Ampliación (segundo terreno): cada cosa se desbloquea con la anterior
-const PRECIO_TERRENO = 1000; // «Ampliar terreno» (a elegir: izquierda, atrás o derecha): desbloquea la segunda puerta
+// Precio de cada terreno nuevo, en el orden en que se compran (el restaurante es el 1.º): 2.º, 3.º, 4.º ... 9.º. El primero que compres desbloquea la segunda puerta.
+const TERRENO_PRECIOS = [10000, 20000, 40000, 70000, 100000, 150000, 300000, 500000];
 const PRECIO_PUERTA2 = 40;   // segunda puerta de entrada (necesita el terreno ampliado)
 const PRECIO_MESERO2 = 500;  // segundo mesero (solo necesita tener contratado al primero; no hace falta ampliar el terreno)
 const PRECIO_RECEP2 = 40;    // segunda recepcionista (necesita la segunda puerta)
@@ -127,10 +129,27 @@ const PUERTAS = [
   { entrada: ENTRADA, spawn: [HALL_X, H + 30], pagoY: 585 + DY, llenoY: 664 + DY, salida: [[HALL_X, 640 + DY], [HALL_X, H + 40]], irse: (c) => [[HALL_X, Math.max(c.y, 640 + DY)], [HALL_X, H + 40]] },
   { entrada: [HALL_X, 14], spawn: [HALL_X, -190], pagoY: -24, llenoY: -130, salida: [[HALL_X, -90], [HALL_X, -200]], irse: (c) => [[HALL_X, Math.min(c.y, -90)], [HALL_X, -200]] },
 ];
-const PUERTA_COCINA = [225 + DX, 185];
-const COCINA_DENTRO = [225 + DX, 140];       // dentro de la cocina, frente a la puerta
-const RECT_COCINA = [10 + DX, 10, 260 + DX, 160];
-const PUERTA_BANIO = [430 + DX, 185];
+// La cocina y el baño se pueden mover a lo largo de la pared del fondo (botón «🛠️ Mover»). KX y BX son cuánto se corrió cada uno respecto a su lugar de siempre.
+const COC_X0 = 10 + DX, COC_ANCHO = 250;     // cocina: x de su esquina izquierda y ancho (lugar de siempre)
+const BAN_X0 = 330 + DX, BAN_ANCHO = 220;    // baño: ídem
+const HAB_Y0 = 10, HAB_Y1 = 160;             // de dónde a dónde (en y) van los dos cuartos
+let KX = 0, BX = 0;
+let PUERTA_COCINA, COCINA_DENTRO, RECT_COCINA, PUERTA_BANIO;
+function recalcHab() {
+  PUERTA_COCINA = [225 + DX + KX, 185];
+  COCINA_DENTRO = [225 + DX + KX, 140];      // dentro de la cocina, frente a la puerta
+  RECT_COCINA = [10 + DX + KX, HAB_Y0, 260 + DX + KX, HAB_Y1];
+  PUERTA_BANIO = [430 + DX + BX, 185];
+}
+recalcHab();
+// ¿Se puede poner la cocina (cual = "cocina") o el baño ("banio") con su esquina izquierda en x0, estando el otro cuarto con la suya en otroX0? Devuelve el motivo si no, o "" si sí.
+function errorHab(cual, x0, otroX0) {
+  const w = cual === "cocina" ? COC_ANCHO : BAN_ANCHO, wo = cual === "cocina" ? BAN_ANCHO : COC_ANCHO, x1 = x0 + w;
+  if (x0 < 10 || x1 > W - 10) return "No cabe ahí: se saldría del restaurante.";
+  if (x0 < HALL_X + 50 && x1 > HALL_X - 20) return "Ahí estorbaría el pasillo del centro, por donde entran los clientes.";
+  if (x0 < otroX0 + wo + 10 && x1 + 10 > otroX0) return "Ahí se empalmaría con " + (cual === "cocina" ? "el baño" : "la cocina") + ".";
+  return "";
+}
 const MESERO_POST = [HALL_X + 45, 210];     // dónde espera el mesero cuando no hay platillos listos
 const MESERO_POST2 = [HALL_X - 45, 232];    // ídem para el segundo mesero
 const MESAS_BASE = [
@@ -152,10 +171,24 @@ const CARAS = ["🧑", "👩", "👨", "🧓", "👧", "👦", "🧔", "👱"];
 
 // ----- Terrenos que se pueden comprar (en el mapa plano) -----
 // rect: zona que se pavimenta como plaza al comprarlo [x0, y0, x1, y1]; centro: donde se pone el cartel «En venta». Flechas = hacia dónde queda en pantalla.
-const LOTES = {
-  izq:   { etiqueta: "Izquierda", de: "de la izquierda", flecha: "⬉", rect: [-200, 0, 0, H],   centro: [-(W + 2 * ACERA + CALLE) + W / 2, H / 2] },
-  atras: { etiqueta: "Atrás",     de: "de atrás",        flecha: "⬈", rect: [0, -200, W, 0],   centro: [HALL_X, -(H + 2 * ACERA + CALLE) + H / 2] },
+// Cada manzana de pasto (PASTO) es un terreno; se identifica con su clave «i,j» (su lugar respecto a la del restaurante, que es 0,0).
+// Pasos hacia ⬉ en pantalla = -i; pasos hacia ⬈ = -j. El nombre y la flecha salen de esos dos números.
+const NOMBRES_LOTE = { // clave «-i,-j» → [flecha, nombre]
+  "1,0": ["⬉", "Izquierda"], "0,1": ["⬈", "Atrás"], "1,1": ["⬆", "Fondo"],
+  "2,0": ["⬉", "Izquierda lejana"], "0,2": ["⬈", "Atrás lejano"],
+  "2,1": ["⬉", "Fondo izquierda"], "1,2": ["⬈", "Fondo derecha"], "2,2": ["⬆", "Esquina del fondo"],
 };
+const claveLote = (i, j) => i + "," + j;
+const datosLote = (k) => { const [i, j] = k.split(",").map(Number), n = NOMBRES_LOTE[(-i) + "," + (-j)] || ["🌱", "Terreno"]; return { i, j, flecha: n[0], etiqueta: n[1] }; };
+const ordenLote = (k) => { const [i, j] = k.split(",").map(Number); return (-i - j) * 10 - i; };
+const precioTerreno = () => TERRENO_PRECIOS[lotes.length]; // undefined = ya compraste todos
+// Terrenos que se pueden comprar con los terrenos «propios»: el pasto que toca el restaurante o uno ya comprado
+function lotesDisponibles(propios = lotes) {
+  const mio = (i, j) => (i === 0 && j === 0) || propios.includes(claveLote(i, j));
+  return PASTO.filter(([i, j]) => !propios.includes(claveLote(i, j)) && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => mio(i + a, j + b)))
+    .map(([i, j]) => claveLote(i, j))
+    .sort((p, q) => ordenLote(p) - ordenLote(q));
+}
 
 // ----- Lugares de estacionamiento (en el mapa plano; se alinean con la acera que rodea la cuadra) -----
 // lado: f = enfrente, d = derecha, i = izquierda, a = atrás. Los autos entran de frente al lugar (eje = hacia dónde apunta el auto).
@@ -200,7 +233,7 @@ function caminoAcera(k, pu) {
 
 const $ = (id) => document.getElementById(id);
 // ----- Pesos mexicanos: se pueden dividir en monedas de 50 centavos (5, 5.50, 6, ...). Los múltiplos de 0.5 son exactos, no hay errores de redondeo -----
-const fmt = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2)); // 5 → «5», 5.5 → «5.50»
+const fmt = (n) => (Number.isInteger(n) ? n.toLocaleString("en-US") : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })); // 5 → «5», 5.5 → «5.50», 10000 → «10,000»
 const pesos = (n) => "$" + fmt(n);                                    // 5.5 → «$5.50»
 const lienzo = $("lienzo");
 const ctx = lienzo.getContext("2d");
@@ -213,7 +246,8 @@ let reloj, proxLlegada, activos, ultimoSeg; // tiempo jugado (ms), cuándo llega
 let llevando = null;                    // mesa cuyo platillo traes en la mano
 let receps = [null, null], meseros = [null, null]; // personal contratado (null = todavía no): { nivel, ... }; [0] el de siempre, [1] el de la ampliación
 let terreno2 = false, puerta2 = false;             // ampliación comprada / segunda puerta comprada
-let lote = null; // terreno comprado: null (ninguno), "izq" o "atras"
+let lotes = []; // terrenos comprados (claves «i,j» de PASTO), en el orden en que se compraron
+let modoMover = false, habSel = null, btnMover = null; // modo «🛠️ Mover» (cocina y baño): activo / cuarto elegido ("cocina" o "banio") / el botón
 let puntosEnviados = 0, umbralPuntos = PUNTOS_LOTE, enviando = false; // puntos ya mandados al perfil, cuántos hacen falta para el siguiente envío, envío en curso
 let ranura = null; // partida activa (0, 1 o 2); null = estás en el menú y no se guarda nada
 let cocinero = 1, cocinero2 = 0, nMesas = MESAS_BASE.length; // nivel del cocinero (1 a 10), del segundo cocinero (0 = sin contratar) y mesas que hay en el comedor
@@ -247,7 +281,7 @@ function nuevaPartida(datos = null) { // datos: partida guardada que se carga (n
   mesas = MESAS_BASE.map(crearMesa);
   recepcion = Array(SLOTS.length).fill(null);
   dinero = 0; ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
-  const habiaCambios = terreno2 || nEstac > ESTAC_INICIALES; terreno2 = false; lote = null; puerta2 = false;
+  const habiaCambios = terreno2 || nEstac > ESTAC_INICIALES || KX !== 0 || BX !== 0; terreno2 = false; lotes = []; puerta2 = false; KX = 0; BX = 0; recalcHab(); salirMover();
   nEstac = ESTAC_INICIALES; autosPerdidos = 0; proxAuto = PRIMER_AUTO_MS;
   CAJONES.forEach((k) => { k.usado = false; k.coche = null; k.pendientes = 0; });
   reloj = 0; proxLlegada = PRIMERA_LLEGADA_MS; ultimoSeg = -1; puntosEnviados = 0; umbralPuntos = PUNTOS_LOTE;
@@ -296,7 +330,7 @@ function instantanea() {
     mesas: mesas.map((m) => ({ id: m.id, mejoras: { ...m.mejoras } })),
     receps: receps.map((r) => (r ? r.nivel : 0)),
     meseros: meseros.map((w) => (w ? w.nivel : 0)),
-    terreno2, lote, puerta2, nEstac, cocinero, cocinero2, nMesas,
+    terreno2, lotes: lotes.slice(), kx: KX, bx: BX, puerta2, nEstac, cocinero, cocinero2, nMesas,
     fecha: Date.now(),
   };
 }
@@ -322,9 +356,22 @@ function aplicarGuardado(d) {
     const m = s && mesas.find((x) => x.id === s.id);
     if (m && s.mejoras) MEJORAS_MESA.forEach((c) => (m.mejoras[c.id] = Math.max(0, Math.min(c.precios.length, Math.floor(num(s.mejoras[c.id]))))));
   });
-  lote = LOTES[d.lote] ? d.lote : null;
-  terreno2 = !!lote;
+  // Terrenos: solo manzanas de pasto, sin repetir y pegadas a lo que ya es tuyo (un dato raro no deja terrenos «flotando»). Las partidas viejas guardaban un solo «lote».
+  const pedidos = Array.isArray(d.lotes) ? d.lotes.filter((k) => typeof k === "string") : [];
+  if (d.lote === "izq") pedidos.push("-1,0"); else if (d.lote === "atras") pedidos.push("0,-1");
+  lotes = [];
+  for (let hay = true; hay && lotes.length < TERRENO_PRECIOS.length;) {
+    const disp = lotesDisponibles(lotes), k = pedidos.find((q) => disp.includes(q));
+    hay = !!k;
+    if (k) lotes.push(k);
+  }
+  terreno2 = lotes.length > 0;
   puerta2 = terreno2 && !!d.puerta2;
+  { // cocina y baño movidos: solo si el lugar guardado es válido
+    const kx = Math.round(num(d.kx) / 10) * 10, bx = Math.round(num(d.bx) / 10) * 10;
+    if ((kx || bx) && !errorHab("cocina", COC_X0 + kx, BAN_X0 + bx) && !errorHab("banio", BAN_X0 + bx, COC_X0 + kx)) { KX = kx; BX = bx; }
+    recalcHab();
+  }
   nEstac = Math.max(ESTAC_INICIALES, Math.min(CAJONES.length, Math.floor(num(d.nEstac)) || ESTAC_INICIALES));
   const rs = Array.isArray(d.receps) ? d.receps : [], ms = Array.isArray(d.meseros) ? d.meseros : [];
   [0, 1].forEach((k) => {
@@ -554,7 +601,7 @@ function entregar(m) {
 }
 // Posición del platillo de cada mesa sobre el mostrador de la cocina
 // Lugares del mostrador: 6 por fila, 2 filas (caben los platillos de hasta 12 mesas). Cada platillo listo toma el primer lugar libre.
-const slotXY = (i) => [36 + DX + (i % 6) * 34, 50 + Math.floor(i / 6) * 14];
+const slotXY = (i) => [36 + DX + KX + (i % 6) * 34, 50 + Math.floor(i / 6) * 14];
 function asignarSlot(m) {
   const usados = new Set(mesas.filter((x) => x !== m && x.esperando && x.slot >= 0).map((x) => x.slot));
   let i = 0; while (usados.has(i)) i++;
@@ -569,6 +616,7 @@ function aMundo(sx, sy, z) { const u = (sx - OX) / ISO, v = ((sy + z * ESCALA - 
 function tocar(sx, sy) {
   if (pausado) return; // con la tienda abierta el juego está en pausa
   puntero = { x: sx, y: sy };
+  if (modoMover) { tocarMover(sx, sy); return; } // en «🛠️ Mover» los toques sirven para elegir y poner la cocina o el baño
   const [wx, wy] = aMundo(sx, sy, 20);
   const grupo = recepcion.find((g) => {
     if (!g || !g.esperando) return false;
@@ -599,7 +647,7 @@ function posEnLienzo(e) { const r = lienzo.getBoundingClientRect(); return [((e.
 
 // Al levantarse de la mesa, el cliente va al baño y sale hacia la recepción (ahí paga todo, baño incluido). «ida» es el camino de la entrada a su silla
 async function banio(c, ida, i, P = PUERTAS[0]) {
-  const dentro = [400 + DX + i * 22, 120];
+  const dentro = [400 + DX + BX + i * 22, 120];
   await ir(c, [...ida.slice(1, -1).reverse(), [HALL_X, 185], PUERTA_BANIO, dentro]);
   await esp(1000);
   await ir(c, [PUERTA_BANIO, [HALL_X, 185], P.entrada]);
@@ -787,7 +835,7 @@ function comprarMesa() {
   info("¡Compraste la mesa " + nMesas + "! Ya pueden sentarse ahí. Tócala para mejorarla.");
   actualizar();
 }
-// Fila de la tienda con tres botones: hay que elegir cuál terreno comprar (solo uno)
+// Fila de la tienda para ampliar el terreno: un botón por cada terreno que se puede comprar ahora (los que tocan tu terreno actual)
 function filaTerreno() {
   const fila = document.createElement("div");
   fila.className = "tienda-fila";
@@ -801,20 +849,21 @@ function filaTerreno() {
   const d = document.createElement("small");
   const col = document.createElement("div");
   col.style.cssText = "display:flex;flex-direction:column;gap:4px";
-  if (lote) {
-    d.textContent = "Compraste el terreno " + LOTES[lote].de + ". Ya puedes comprar la segunda puerta.";
+  const precio = precioTerreno(), total = TERRENO_PRECIOS.length + 1;
+  if (precio === undefined) {
+    d.textContent = "¡Ya tienes los " + total + " terrenos! Todo el pasto de alrededor es tuyo.";
     const b = document.createElement("button");
     b.className = "btn";
-    b.textContent = "Comprado";
+    b.textContent = "Completo";
     b.disabled = true;
     col.appendChild(b);
   } else {
-    d.textContent = "Elige UNO de los dos terrenos de pasto que tocan el restaurante (izquierda o atrás); los demás no quedan pegados al edificio y no se pueden comprar. Desbloquea la segunda puerta.";
-    for (const k of Object.keys(LOTES)) {
-      const b = document.createElement("button");
+    d.textContent = "Terrenos: " + (lotes.length + 1) + " de " + total + ". El siguiente cuesta " + pesos(precio) + " y cada uno sale más caro. Solo puedes comprar los que tocan tu terreno actual." + (terreno2 ? "" : " El primero desbloquea la segunda puerta.");
+    for (const k of lotesDisponibles()) {
+      const L = datosLote(k), b = document.createElement("button");
       b.className = "btn";
-      b.textContent = LOTES[k].flecha + " " + LOTES[k].etiqueta + " " + pesos(PRECIO_TERRENO);
-      b.disabled = dinero < PRECIO_TERRENO;
+      b.textContent = L.flecha + " " + L.etiqueta + " " + pesos(precio);
+      b.disabled = dinero < precio;
       b.addEventListener("click", () => comprarTerreno(k));
       col.appendChild(b);
     }
@@ -824,12 +873,13 @@ function filaTerreno() {
   return fila;
 }
 function comprarTerreno(k) {
-  if (lote || !LOTES[k] || dinero < PRECIO_TERRENO) return;
-  dinero -= PRECIO_TERRENO;
+  const precio = precioTerreno();
+  if (precio === undefined || !lotesDisponibles().includes(k) || dinero < precio) return;
+  dinero -= precio;
+  lotes.push(k);
   terreno2 = true;
-  lote = k;
-  armarFondo(); // dibuja la plaza en el terreno elegido y quita los carteles
-  info("¡Compraste el terreno " + LOTES[k].de + "! Ya puedes comprar la segunda puerta.");
+  armarFondo(); // dibuja la plaza en el terreno comprado y actualiza los carteles
+  info("¡Compraste el terreno " + (lotes.length + 1) + " de " + (TERRENO_PRECIOS.length + 1) + " (" + datosLote(k).etiqueta.toLowerCase() + ")!" + (lotes.length === 1 ? " Ya puedes comprar la segunda puerta." : ""));
   actualizar();
 }
 function comprarPuerta2() {
@@ -1154,24 +1204,35 @@ function arbolesAcera(c, lado) {
     : [[W + 20, r(230)], [W + 20, r(370)], [W + 20, r(510)], [W + 20, r(640)], [r(40), H + 20], [r(120), H + 20], [r(520), H + 20]];
   pts.filter(([x, y]) => !enPlaza(x, y)).sort((p, q) => p[0] + p[1] - (q[0] + q[1])).forEach(([x, y]) => arbol(c, x, y, 32)); // donde se pavimentó la plaza no hay árboles
 }
-// Plaza del terreno ampliado (detrás del restaurante: x de 0 a W, y de -200 a 0) y puerta de atrás
-// ¿Cae este punto dentro de la plaza del terreno comprado?
+// Plaza de los terrenos comprados. Se pavimentan: cada manzana comprada, la calle que la une con otra manzana tuya (o con el restaurante) y el cruce cuando las 4 de alrededor son tuyas.
+function rectsPlaza() {
+  const pos = [[0, 0], ...lotes.map((k) => k.split(",").map(Number))];
+  const mio = (i, j) => pos.some((q) => q[0] === i && q[1] === j);
+  const r = pos.slice(1).map(([i, j]) => [i * PX, j * PY, i * PX + W, j * PY + H]);
+  for (const [i, j] of pos) {
+    if (mio(i + 1, j)) r.push([i * PX + W, j * PY, (i + 1) * PX, j * PY + H]);
+    if (mio(i, j + 1)) r.push([i * PX, j * PY + H, i * PX + W, (j + 1) * PY]);
+    if (mio(i + 1, j) && mio(i, j + 1) && mio(i + 1, j + 1)) r.push([i * PX + W, j * PY + H, (i + 1) * PX, (j + 1) * PY]);
+  }
+  return r;
+}
+// ¿Cae este punto dentro de la plaza de los terrenos comprados?
 function enPlaza(x, y) {
-  if (!lote) return false;
-  const r = LOTES[lote].rect;
-  return x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3];
+  return rectsPlaza().some((r) => x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3]);
 }
-// Plaza del terreno comprado (izquierda o atrás del restaurante)
-function plazaLote(c) {
-  const [x0, y0, x1, y1] = LOTES[lote].rect;
-  for (let x = x0; x < x1; x += 40) for (let y = y0; y < y1; y += 40) suelo(c, x, y, x + 40, y + 40, ((x - x0) / 40 + (y - y0) / 40) % 2 ? "#d8cfbd" : "#e4dccb");
-  suelo(c, x0, y0, x1, y1, null, 0, "#a1887f");
+function plazaLotes(c) {
+  for (const [x0, y0, x1, y1] of rectsPlaza()) {
+    for (let x = x0; x < x1; x += 40) for (let y = y0; y < y1; y += 40) suelo(c, x, y, Math.min(x + 40, x1), Math.min(y + 40, y1), ((x - x0) / 40 + (y - y0) / 40) % 2 ? "#d8cfbd" : "#e4dccb");
+    suelo(c, x0, y0, x1, y1, null, 0, "#a1887f");
+  }
 }
-// Carteles «En venta» sobre los tres terrenos que se pueden comprar (desaparecen al comprar uno)
+// Carteles «En venta» sobre los terrenos que se pueden comprar ahora (con el precio del siguiente)
 function carteles(c) {
-  for (const k of Object.keys(LOTES)) {
-    const [sx, sy] = iso(LOTES[k].centro[0], LOTES[k].centro[1]);
-    const t = "🏷️ Terreno " + LOTES[k].etiqueta.toLowerCase() + " · " + pesos(PRECIO_TERRENO);
+  const precio = precioTerreno();
+  if (precio === undefined) return;
+  for (const k of lotesDisponibles()) {
+    const L = datosLote(k), [sx, sy] = iso(L.i * PX + W / 2, L.j * PY + H / 2);
+    const t = "🏷️ Terreno " + L.etiqueta.toLowerCase() + " · " + pesos(precio);
     c.font = "700 15px system-ui, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.lineWidth = 4; c.strokeStyle = "rgba(0,0,0,.55)"; c.strokeText(t, sx, sy);
     texto(t, sx, sy, 15, "#fff", "center", c);
   }
@@ -1201,14 +1262,15 @@ function armarFondo() {
   c.translate(FOX, FOY); // el fondo es más grande que el lienzo: caben la ciudad y las calles alrededor
   armarCiudad(c);        // calles, aceras, edificios y parques
   arbolesAcera(c, "atras");
-  if (lote) plazaLote(c); else carteles(c);
+  plazaLotes(c); // plaza en los terrenos comprados
+  carteles(c);   // carteles «En venta» en los que se pueden comprar
   estacionamiento(c);
   // piso del comedor
   for (let i = 0; i < W / 40; i++) for (let j = 0; j < H / 40; j++) suelo(c, i * 40, j * 40, i * 40 + 40, j * 40 + 40, (i + j) % 2 ? "#e4cfa9" : "#ecd9b8");
-  cuarto(c, 10 + DX, 10, 260 + DX, 160, "#eceff1", "#cfd8dc", "#b0bec5", 200 + DX, 50);   // cocina
-  cuarto(c, 330 + DX, 10, 550 + DX, 160, "#e1f5fa", "#b6e0ea", "#80c4d3", 400 + DX, 60);   // baño
-  const [kx, ky] = iso(135 + DX, 10, 70); texto("Cocina", kx, ky, 14, "#37474f", "center", c);
-  const [bx, by] = iso(440 + DX, 10, 70); texto("Baño", bx, by, 14, "#1f5d70", "center", c);
+  cuarto(c, 10 + DX + KX, HAB_Y0, 260 + DX + KX, HAB_Y1, "#eceff1", "#cfd8dc", "#b0bec5", 200 + DX + KX, 50);   // cocina
+  cuarto(c, 330 + DX + BX, HAB_Y0, 550 + DX + BX, HAB_Y1, "#e1f5fa", "#b6e0ea", "#80c4d3", 400 + DX + BX, 60);   // baño
+  const [kx, ky] = iso(135 + DX + KX, 10, 70); texto("Cocina", kx, ky, 14, "#37474f", "center", c);
+  const [bx, by] = iso(440 + DX + BX, 10, 70); texto("Baño", bx, by, 14, "#1f5d70", "center", c);
   const [cx, cy] = iso(40, 520, 0); texto("Comedor", cx, cy, 13, "rgba(91,70,54,.75)", "center", c);
   // puerta de entrada
   caja3d(c, HALL_X - 30, H - 4, HALL_X + 30, H, 5, MADERA_OSCURA);
@@ -1257,8 +1319,8 @@ function dibujarSilla(s, m) {
   if (cojin) caja3d(ctx, s.x - 8, s.y - 8, s.x + 8, s.y + 8, 10 + k, cojin, "#5b4636"); // cada nivel la hace un poco más alta
 }
 function dibujarMostrador() {
-  caja3d(ctx, 20 + DX, 40, 250 + DX, 70, 26, ACERO, "#546e7a");
-  const [dx, dy] = iso(32 + DX, 55, 40); emoji("🍳", dx, dy, 26 * ESCALA);
+  caja3d(ctx, 20 + DX + KX, 40, 250 + DX + KX, 70, 26, ACERO, "#546e7a");
+  const [dx, dy] = iso(32 + DX + KX, 55, 40); emoji("🍳", dx, dy, 26 * ESCALA);
   for (const m of mesas) { // platillos listos esperando que los tomes
     if (!m.esperando || m.tomado) continue;
     const [sx, sy] = iso(...slotXY(m.slot), 26);
@@ -1270,9 +1332,9 @@ function dibujarMostrador() {
   }
 }
 function dibujarChef() {
-  persona("🧑‍🍳", 110 + DX, 112, 20 + (cocinando > 0 ? Math.abs(Math.sin(ahora() / 120)) * 5 : 0), 34);
-  if (cocinero2) persona("👩‍🍳", 190 + DX, 112, 20 + (cocinando > 0 ? Math.abs(Math.sin(ahora() / 120 + 1.5)) * 5 : 0), 34); // segundo cocinero, a la derecha del primero
-  if (cocinando > 0) { const [sx, sy] = iso(150 + DX, 100, 44); emoji("♨️", sx, sy, 20 * ESCALA); }
+  persona("🧑‍🍳", 110 + DX + KX, 112, 20 + (cocinando > 0 ? Math.abs(Math.sin(ahora() / 120)) * 5 : 0), 34);
+  if (cocinero2) persona("👩‍🍳", 190 + DX + KX, 112, 20 + (cocinando > 0 ? Math.abs(Math.sin(ahora() / 120 + 1.5)) * 5 : 0), 34); // segundo cocinero, a la derecha del primero
+  if (cocinando > 0) { const [sx, sy] = iso(150 + DX + KX, 100, 44); emoji("♨️", sx, sy, 20 * ESCALA); }
 }
 // Aviso sobre el grupo que espera en la recepción: «toca para dar mesa» y su barra de paciencia (roja cuando ya están enojados)
 function dibujarEspera(g) {
@@ -1360,18 +1422,19 @@ function dibujar() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.setTransform(camara.z, 0, 0, camara.z, -camara.vx * camara.z, -camara.vy * camara.z); // zoom y desplazamiento
   ctx.drawImage(fondo, -FOX, -FOY);
+  if (modoMover) dibujarMover();
   // Todo se ordena por profundidad (x + y): lo más lejano primero, para que lo cercano tape a lo de atrás
   const cola = [];
   for (const m of mesas) {
     cola.push({ d: m.cx + m.cy, f: () => dibujarMesa(m) });
     for (const t of ORDEN_SILLAS) { const s = silla(m, t); cola.push({ d: s.x + s.y - 0.5, f: () => dibujarSilla(s, m) }); }
   }
-  cola.push({ d: 190 + DX, f: dibujarMostrador });
-  cola.push({ d: 222 + DX, f: dibujarChef });
+  cola.push({ d: 190 + DX + KX, f: dibujarMostrador });
+  cola.push({ d: 222 + DX + KX, f: dibujarChef });
   cola.push({ d: 1002 + DX + DY, f: dibujarEscritorio });
   if (puerta2) cola.push({ d: 347 + DX, f: dibujarEscritorio2 });
   receps.forEach((r, k) => { if (r) cola.push({ d: (k ? 318 : 975 + DY) + DX, f: () => dibujarRecepcionista(r, 400 + DX, k ? -84 : 572 + DY) }); });
-  [[365, 85, "🚽"], [365, 125, "🚽"], [515, 85, "🚰"]].forEach(([x0, y, em]) => { const x = x0 + DX; cola.push({ d: x + y, f: () => persona(em, x, y, 16, 30) }); });
+  [[365, 85, "🚽"], [365, 125, "🚽"], [515, 85, "🚰"]].forEach(([x0, y, em]) => { const x = x0 + DX + BX; cola.push({ d: x + y, f: () => persona(em, x, y, 16, 30) }); });
   for (const e of ents) cola.push({ d: e.x + e.y + 0.1, f: () => dibujarEnt(e) });
   cola.sort((a, b) => a.d - b.d).forEach((o) => o.f());
   dibujarGlobos();
@@ -1380,6 +1443,67 @@ function dibujar() {
   if (llevando) emoji("🍽️", puntero.x, puntero.y - 26 * ESC_UI, 34 * ESC_UI); // el platillo que traes en la mano
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (pausado) { ctx.fillStyle = "rgba(0,0,0,.55)"; caja(CW / 2 - 70, 8, 140, 30, 10); ctx.fill(); texto("⏸️ En pausa", CW / 2, 23, 16, "#fff", "center"); }
+}
+
+// ----- Mover la cocina y el baño (botón «🛠️ Mover») -----
+// Se mueven a lo largo de la pared del fondo. Con un cuarto elegido, tocas dónde quieres ponerlo (se centra ahí). Todo lo demás (mostrador, cocineros, escusados, rutas) se corre con él.
+const HABS = {
+  cocina: { nombre: "la cocina", ancho: COC_ANCHO, x0: () => COC_X0 + KX },
+  banio: { nombre: "el baño", ancho: BAN_ANCHO, x0: () => BAN_X0 + BX },
+};
+const x0Otro = (cual) => (cual === "cocina" ? BAN_X0 + BX : COC_X0 + KX);
+const x0Deseado = (cual, wx) => Math.round((wx - HABS[cual].ancho / 2) / 10) * 10; // centrado en wx y en múltiplos de 10
+function salirMover() {
+  modoMover = false; habSel = null;
+  if (btnMover) btnMover.textContent = "🛠️ Mover";
+}
+function tocarMover(sx, sy) {
+  const sobre = (cual) => {
+    const x0 = HABS[cual].x0(), r = [x0, HAB_Y0, x0 + HABS[cual].ancho, HAB_Y1];
+    return dentro(aMundo(sx, sy, 0), ...r) || dentro(aMundo(sx, sy, 30), ...r);
+  };
+  const tocado = sobre("cocina") ? "cocina" : sobre("banio") ? "banio" : null;
+  if (tocado) { // tocar un cuarto lo elige (o le quita la elección si ya estaba elegido)
+    habSel = habSel === tocado ? null : tocado;
+    info(habSel ? "🛠️ Elegiste " + HABS[tocado].nombre + ": toca el lugar donde quieres ponerlo (verde = se puede, rojo = no)." : "🛠️ Toca la cocina o el baño para elegirlo.");
+    return;
+  }
+  if (!habSel) { info("🛠️ Primero toca la cocina o el baño para elegirlo."); return; }
+  moverHab(habSel, x0Deseado(habSel, aMundo(sx, sy, 0)[0]));
+}
+function moverHab(cual, x0) {
+  const act = HABS[cual].x0();
+  if (x0 === act) { info("🛠️ " + HABS[cual].nombre.replace(/^./, (m) => m.toUpperCase()) + " ya está ahí."); return; }
+  const err = errorHab(cual, x0, x0Otro(cual));
+  if (err) { info("🛠️ " + err); return; }
+  const dx = x0 - act;
+  desplazarEntes([act, HAB_Y0, act + HABS[cual].ancho, HAB_Y1], dx); // quien estaba dentro (o iba para allá) se corre con el cuarto
+  if (cual === "cocina") KX += dx; else BX += dx;
+  recalcHab();
+  armarFondo();
+  info("🛠️ Listo, moviste " + HABS[cual].nombre + ". Toca otro lugar para moverlo de nuevo, o «✅ Listo» arriba para terminar.");
+  actualizar(); // guarda la partida
+}
+// Las personas que están dentro del cuarto r (o van hacia él) se mueven dx junto con él; quien solo pasa por enfrente no se toca
+function desplazarEntes(r, dx) {
+  const en = (x, y, ymax) => x >= r[0] && x <= r[2] && y >= r[1] && y <= ymax;
+  for (const e of ents) {
+    if (e.coche) continue;
+    const dentroAhora = en(e.x, e.y, r[3] + 5);
+    if (!dentroAhora && !e.ruta.some((p) => en(p[0], p[1], r[3] + 5))) continue;
+    if (dentroAhora) e.x += dx;
+    e.ruta.forEach((p) => { if (en(p[0], p[1], 200)) p[0] += dx; }); // incluye la puerta (y = 185)
+  }
+}
+function dibujarMover() {
+  for (const cual of ["cocina", "banio"]) {
+    const x0 = HABS[cual].x0(), sel = cual === habSel;
+    suelo(ctx, x0, HAB_Y0, x0 + HABS[cual].ancho, HAB_Y1, sel ? "rgba(255,213,74,.35)" : "rgba(124,92,255,.18)", 0, sel ? "#ffd54a" : "#7c5cff");
+  }
+  if (habSel && (puntero.x !== -99 || puntero.y !== -99)) { // vista previa de dónde quedaría
+    const gx0 = x0Deseado(habSel, aMundo(puntero.x, puntero.y, 0)[0]), mal = errorHab(habSel, gx0, x0Otro(habSel));
+    suelo(ctx, gx0, HAB_Y0, gx0 + HABS[habSel].ancho, HAB_Y1, mal ? "rgba(231,76,60,.4)" : "rgba(46,158,91,.4)", 0, mal ? "#e74c3c" : "#2e9e5b");
+  }
 }
 
 // ----- Bucle -----
@@ -1555,6 +1679,24 @@ if (!btnEmpleados) { // si index.html es una versión vieja sin el botón, se cr
   else abrirTienda(null, true);
   });
 }
+btnMover = $("btnMover"); // si index.html no lo trae, se crea aquí junto al botón Reiniciar
+if (!btnMover) {
+  btnMover = document.createElement("button");
+  btnMover.id = "btnMover";
+  btnMover.className = "btn";
+  btnMover.textContent = "🛠️ Mover";
+  btnMover.title = "Mover la cocina y el baño";
+  const rei = $("reiniciar");
+  if (rei && rei.parentNode) rei.parentNode.insertBefore(btnMover, rei); else document.body.appendChild(btnMover);
+}
+btnMover.addEventListener("click", () => {
+  if ($("menu").hidden === false) return; // con el menú abierto no se usa
+  if (modoMover) { salirMover(); info("Listo: la cocina y el baño quedaron donde los pusiste."); return; }
+  cerrarTienda();
+  modoMover = true; habSel = null;
+  btnMover.textContent = "✅ Listo";
+  info("🛠️ Modo mover: toca la cocina o el baño para elegirlo y luego toca dónde quieres ponerlo. Se mueven a lo largo de la pared del fondo, sin tapar el pasillo del centro.");
+});
 $("reiniciar").addEventListener("click", () => {
   if (!confirm("¿Empezar de cero esta partida?" + (ranura !== null ? " Se perderá lo que tienes guardado en la Partida " + (ranura + 1) + "." : ""))) return;
   enviarPuntos(true); // antes de empezar de cero, manda los puntos que falten
@@ -1608,12 +1750,13 @@ function pintarPartidas() {
       const mejoras = mes.reduce((tot, m) => tot + MEJORAS_MESA.reduce((s2, c) => s2 + Math.max(0, Math.min(5, Math.floor(num(m.mejoras && m.mejoras[c.id])))), 0), 0);
       const rec = (Array.isArray(d.receps) ? d.receps : []).filter((n) => num(n) > 0).length;
       const mer = (Array.isArray(d.meseros) ? d.meseros : []).filter((n) => num(n) > 0).length;
+      const nLotes = Array.isArray(d.lotes) ? d.lotes.length : d.lote ? 1 : 0;
       const lineas = [
         "💰 $" + fmt(Math.max(0, Math.round(num(d.dinero) * 2) / 2)) + " pesos",
         "🪑 " + (Math.floor(num(d.nMesas)) || mes.length || MESAS_BASE.length) + " mesas · ✨ " + mejoras + " mejoras de mesa",
         "👨‍🍳 Cocinero nivel " + (Math.floor(num(d.cocinero)) || 1) + (num(d.cocinero2) > 0 ? " · 👩‍🍳 2.º nivel " + Math.floor(num(d.cocinero2)) : ""),
         "🧑‍💼 " + rec + " recepcionista(s) · 🤵 " + mer + " mesero(s)",
-        "🅿️ " + (Math.floor(num(d.nEstac)) || ESTAC_INICIALES) + " lugares" + (LOTES[d.lote] ? " · 🌱 terreno ampliado" : "") + (d.puerta2 ? " · 🚪 segunda puerta" : ""),
+        "🅿️ " + (Math.floor(num(d.nEstac)) || ESTAC_INICIALES) + " lugares" + (nLotes ? " · 🌱 " + (nLotes + 1) + " de " + (TERRENO_PRECIOS.length + 1) + " terrenos" : "") + (d.puerta2 ? " · 🚪 segunda puerta" : ""),
         "⏱️ " + fmtTiempo(Math.floor(num(d.reloj) / 1000)) + (d.fecha ? " · " + new Date(num(d.fecha)).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : ""),
       ];
       lineas.forEach((l) => caja.appendChild(minimo("small", "", l)));
