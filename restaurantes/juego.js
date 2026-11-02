@@ -6,7 +6,7 @@
 // los demás van directo a la recepción. Cada uno paga 5 pesos al salir (más lo que sumen las mejoras de SU mesa, que se tocan en la mesa; quien usó el baño paga además 1 peso).
 // TIENDA: tocando el mostrador de la recepción (🛒) se abre la zona de compras. Ahí se contrata (y se mejora) a la recepcionista y al mesero.
 // SEGUNDO COCINERO: se contrata en la tienda ($1500, sin otro requisito) y cocina junto con el primero: sus velocidades se suman (cada uno según su nivel).
-// COCINERO Y MESAS: en la tienda se mejora al cocinero (10 niveles: cada nivel cocina más rápido) y se compran mesas nuevas para el comedor (hasta 12 en total, precio creciente).
+// COCINERO Y MESAS: en la tienda se mejora al cocinero (10 niveles: cada nivel cocina más rápido) y se compran mesas nuevas para el comedor (hasta 24 en total, precio creciente).
 // AMPLIACIÓN: en la tienda se compra «Ampliar terreno» (una plaza detrás del restaurante, sobre el pasto). Solo entonces se desbloquea la SEGUNDA PUERTA (el SEGUNDO MESERO ya no la necesita: se compra desde el principio, con el primer mesero contratado, por $500)
 // (entrada por atrás, con su propia fila de espera y su mostrador). La SEGUNDA RECEPCIONISTA solo se puede contratar cuando ya existe la segunda puerta.
 // Empiezan lentos: cada mejora los hace más rápidos. Lo gastado sale de «dinero»; los puntos y el récord cuentan lo «ganado».
@@ -62,9 +62,9 @@ const MESERO_VEL = [70, 95, 125, 160, 200, 230, 260, 295, 330, 370]; // por nive
 // Cocinero: siempre existe (nivel 1); cada mejora lo hace más rápido. COCINA_FACTOR multiplica el tiempo de cocina de cada pedido (nivel 1 = 1 = como antes).
 const COCINA_FACTOR = [1, 0.85, 0.72, 0.61, 0.52, 0.44, 0.38, 0.33, 0.29, 0.25];   // por nivel (10 niveles)
 const COCINERO_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230];            // costo de subir al nivel 2, 3, 4 ... 10
-// Mesas nuevas: se compran en la tienda en este orden (la 5.ª, la 6.ª...). Después de las 4 iniciales caben 8 más.
+// Mesas nuevas: se compran en la tienda en este orden (la 5.ª, la 6.ª...). Después de las 4 iniciales caben 20 más (hasta 24 en total).
 const PRECIO_COCINERO2 = 1500; // segundo cocinero (usa los mismos 10 niveles y precios de mejora que el primero)
-const MESA_PRECIOS = [30, 60, 100, 160, 240, 350, 500, 700];
+const MESA_PRECIOS = [30, 60, 100, 160, 240, 350, 500, 700, 900, 1150, 1450, 1800, 2200, 2700, 3300, 4000, 4800, 5700, 6800, 8000]; // una por cada mesa nueva (20)
 const RECEP_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230]; // costo de subir al nivel 2, 3, 4 ... 10 de la recepcionista
 const MESERO_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230]; // ídem para el mesero
 const PAUSA_MESERO_MS = 400;                             // ms que se detiene a tomar el platillo
@@ -141,7 +141,12 @@ const MESAS_BASE = [
 const MESAS_EXTRA = [590, 740, 890, 1040].flatMap((cy, f) => [
   { id: 5 + f * 2, cx: 150 + DX, cy }, { id: 6 + f * 2, cx: 410 + DX, cy },
 ]);
-const MESAS_TODAS = [...MESAS_BASE, ...MESAS_EXTRA];
+// Columnas de afuera (la 13.ª a la 24.ª): una a la izquierda de las mesas de la izquierda y otra a la derecha de las de la derecha, a 150 de las de adentro. «ext» = su camino
+// pasa por los pasillos horizontales entre filas (y = fila - 70 y fila + 75), porque no pueden cruzar las mesas de adentro.
+const MESAS_EXT = [290, 440, 590, 740, 890, 1040].flatMap((cy, f) => [
+  { id: 13 + f * 2, cx: 0 + DX, cy, ext: true }, { id: 14 + f * 2, cx: 560 + DX, cy, ext: true },
+]);
+const MESAS_TODAS = [...MESAS_BASE, ...MESAS_EXTRA, ...MESAS_EXT];
 const ORDEN_SILLAS = ["cerca", "arriba", "abajo", "lejos"]; // 4 sillas por mesa; se ocupan en este orden
 const CARAS = ["🧑", "👩", "👨", "🧓", "👧", "👦", "🧔", "👱"];
 
@@ -370,6 +375,10 @@ function silla(m, tipo) {
 // Camino desde la recepción hasta la silla i de la mesa m (siempre sale del pasillo, sin cruzar mesas)
 function rutaIda(m, i, P = PUERTAS[0]) {
   const tipo = ORDEN_SILLAS[i], s = silla(m, tipo), E = P.entrada;
+  if (m.ext) { // mesas de las columnas de afuera: por el pasillo de arriba (o el de abajo para la silla de abajo)
+    const y = tipo === "abajo" ? m.cy + 75 : m.cy - 70;
+    return [E, [HALL_X, y], [s.x, y], [s.x, s.y]];
+  }
   if (tipo === "cerca") return [E, [HALL_X, m.cy], [s.x, s.y]];
   if (tipo === "lejos") return [E, [HALL_X, m.cy - 70], [s.x, m.cy - 70], [s.x, s.y]];
   return [E, [HALL_X, s.y], [s.x, s.y]];
@@ -880,11 +889,12 @@ async function servir(m, w) {
   if (vigente() && !m.tomado) {
     m.tomado = true;
     w.ent.lleva = true;
-    await ir(w.ent, [COCINA_DENTRO, PUERTA_COCINA, [HALL_X, 185], [HALL_X, m.cy], [m.cx + 82 * lado, m.cy]]);
+    const entrega = [m.cx + 82 * lado, m.cy];
+    await ir(w.ent, [COCINA_DENTRO, PUERTA_COCINA, [HALL_X, 185], ...(m.ext ? [[HALL_X, m.cy - 70], [entrega[0], m.cy - 70]] : [[HALL_X, m.cy]]), entrega]);
     w.ent.lleva = false;
     if (vigente()) entregar(m);
   }
-  await ir(w.ent, w.ent.y < 160 ? [COCINA_DENTRO, PUERTA_COCINA, w.post] : [[HALL_X, w.ent.y], w.post]);
+  await ir(w.ent, w.ent.y < 160 ? [COCINA_DENTRO, PUERTA_COCINA, w.post] : m.ext ? [[w.ent.x, m.cy - 70], [HALL_X, m.cy - 70], w.post] : [[HALL_X, w.ent.y], w.post]);
   w.ocupado = false;
 }
 
