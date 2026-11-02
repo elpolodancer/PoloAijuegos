@@ -12,6 +12,9 @@
 // ESTACIONAMIENTO: alrededor de toda la cuadra hay 24 lugares posibles (adelante, a los lados y atrás), pero al empezar solo se ven y se usan 2.
 // Los demás se compran en la tienda (precio creciente: ver ESTAC_PRECIOS). Los autos llegan por la calle de enfrente; cada auto trae SIEMPRE 4 personas.
 // Si hay lugar, estaciona y las 4 personas van a la recepción como un grupo más; al terminar regresan al auto y se van. Si no hay lugar, el auto pasa de largo y no vuelve.
+// TERRENOS: el restaurante ocupa la esquina inferior derecha de una cuadrícula de 3 × 3 manzanas; las otras 8 son pasto (sin carreteras entre ellas), a la izquierda y detrás.
+// Los terrenos se compran en la tienda («Ampliar terreno», $1000). Solo se puede comprar UNO de los dos que tocan el edificio (izquierda o atrás); los demás no quedan pegados
+// al restaurante y no se pueden comprar. Los datos de los lotes comprables están en LOTES; las manzanas de pasto, en PASTO.
 const ID = "restaurantes";
 
 // ----- Ajustes -----
@@ -45,7 +48,7 @@ const RECEP_PRECIOS_MEJORA = [10, 20, 30, 45];           // costo de subir al ni
 const MESERO_PRECIOS_MEJORA = [10, 20, 30, 45];          // ídem para el mesero
 const PAUSA_MESERO_MS = 400;                             // ms que se detiene a tomar el platillo
 // Ampliación (segundo terreno): cada cosa se desbloquea con la anterior
-const PRECIO_TERRENO = 60;   // «Ampliar terreno»: desbloquea el segundo mesero y la segunda puerta
+const PRECIO_TERRENO = 1000; // «Ampliar terreno» (a elegir: izquierda, atrás o derecha): desbloquea el segundo mesero y la segunda puerta
 const PRECIO_PUERTA2 = 40;   // segunda puerta de entrada (necesita el terreno ampliado)
 const PRECIO_MESERO2 = 40;   // segundo mesero (necesita el terreno ampliado)
 const PRECIO_RECEP2 = 40;    // segunda recepcionista (necesita la segunda puerta)
@@ -96,6 +99,13 @@ const MESAS_BASE = [
 ];
 const ORDEN_SILLAS = ["cerca", "arriba", "abajo", "lejos"]; // 4 sillas por mesa; se ocupan en este orden
 const CARAS = ["🧑", "👩", "👨", "🧓", "👧", "👦", "🧔", "👱"];
+
+// ----- Terrenos que se pueden comprar (en el mapa plano) -----
+// rect: zona que se pavimenta como plaza al comprarlo [x0, y0, x1, y1]; centro: donde se pone el cartel «En venta». Flechas = hacia dónde queda en pantalla.
+const LOTES = {
+  izq:   { etiqueta: "Izquierda", de: "de la izquierda", flecha: "⬉", rect: [-200, 0, 0, H],   centro: [-480, 340] },
+  atras: { etiqueta: "Atrás",     de: "de atrás",        flecha: "⬈", rect: [0, -200, W, 0],   centro: [280, -540] },
+};
 
 // ----- Lugares de estacionamiento (en el mapa plano; se alinean con la acera que rodea la cuadra) -----
 // lado: f = enfrente, d = derecha, i = izquierda, a = atrás. Los autos entran de frente al lugar (eje = hacia dónde apunta el auto).
@@ -149,6 +159,7 @@ let reloj, proxLlegada, activos, ultimoSeg; // reloj de la jornada (ms), cuándo
 let llevando = null;                    // mesa cuyo platillo traes en la mano
 let receps = [null, null], meseros = [null, null]; // personal contratado (null = todavía no): { nivel, ... }; [0] el de siempre, [1] el de la ampliación
 let terreno2 = false, puerta2 = false;             // ampliación comprada / segunda puerta comprada
+let lote = null; // terreno comprado: null (ninguno), "izq" o "atras"
 let nEstac = ESTAC_INICIALES, proxAuto = 0, autosPerdidos = 0; // lugares de estacionamiento disponibles, cuándo pasa el próximo auto, autos que no hallaron lugar
 let puntero = { x: -99, y: -99 };       // último punto tocado/señalado en el lienzo (para dibujar el platillo)
 
@@ -170,7 +181,7 @@ function nuevaPartida() {
   mesas = MESAS_BASE.map((m) => ({ ...m, ocupada: false, plato: false, barra: null, esperando: false, tomado: false, enojo: false, listoDesde: 0, res: null, clientes: [] }));
   recepcion = Array(SLOTS.length).fill(null);
   dinero = 0; ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
-  const habiaCambios = terreno2 || nEstac > ESTAC_INICIALES; terreno2 = false; puerta2 = false;
+  const habiaCambios = terreno2 || nEstac > ESTAC_INICIALES; terreno2 = false; lote = null; puerta2 = false;
   nEstac = ESTAC_INICIALES; autosPerdidos = 0; proxAuto = PRIMER_AUTO_MS;
   CAJONES.forEach((k) => { k.usado = false; k.coche = null; k.pendientes = 0; });
   if (habiaCambios) armarFondo(); // quita la plaza y los lugares de estacionamiento de la partida anterior
@@ -513,9 +524,7 @@ function pintarTienda() {
   lista.append(
     filaTienda("🧑‍💼", "Recepcionista", receps[0], PRECIO_RECEP, RECEP_PRECIOS_MEJORA, txtRecep, () => contratarRecep(0), () => mejorarRecep(0)),
     filaTienda("🤵", "Mesero", meseros[0], PRECIO_MESERO, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(0), () => mejorarMesero(0)),
-    filaSimple("🌱", "Ampliar terreno",
-      terreno2 ? "Ya tienes la plaza detrás del restaurante." : "Compra un terreno nuevo detrás del restaurante. Desbloquea el segundo mesero y la segunda puerta.",
-      terreno2 ? "Comprado" : "Comprar $" + PRECIO_TERRENO, terreno2 || dinero < PRECIO_TERRENO, comprarTerreno),
+    filaTerreno(),
     filaTienda("🤵‍♀️", "Segundo mesero", meseros[1], PRECIO_MESERO2, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(1), () => mejorarMesero(1),
       !meseros[0] ? "Primero contrata al mesero." : terreno2 ? "" : "Se desbloquea al ampliar el terreno."),
     filaSimple("🚪", "Segunda puerta",
@@ -526,12 +535,49 @@ function pintarTienda() {
     filaEstac()
   );
 }
-function comprarTerreno() {
-  if (terreno2 || dinero < PRECIO_TERRENO) return;
+// Fila de la tienda con tres botones: hay que elegir cuál terreno comprar (solo uno)
+function filaTerreno() {
+  const fila = document.createElement("div");
+  fila.className = "tienda-fila";
+  const i = document.createElement("span");
+  i.className = "ico";
+  i.textContent = "🌱";
+  const t = document.createElement("div");
+  t.className = "txt";
+  const n = document.createElement("b");
+  n.textContent = "Ampliar terreno";
+  const d = document.createElement("small");
+  const col = document.createElement("div");
+  col.style.cssText = "display:flex;flex-direction:column;gap:4px";
+  if (lote) {
+    d.textContent = "Compraste el terreno " + LOTES[lote].de + ". Ya puedes comprar el segundo mesero y la segunda puerta.";
+    const b = document.createElement("button");
+    b.className = "btn";
+    b.textContent = "Comprado";
+    b.disabled = true;
+    col.appendChild(b);
+  } else {
+    d.textContent = "Elige UNO de los dos terrenos de pasto que tocan el restaurante (izquierda o atrás); los demás no quedan pegados al edificio y no se pueden comprar. Desbloquea el segundo mesero y la segunda puerta.";
+    for (const k of Object.keys(LOTES)) {
+      const b = document.createElement("button");
+      b.className = "btn";
+      b.textContent = LOTES[k].flecha + " " + LOTES[k].etiqueta + " $" + PRECIO_TERRENO;
+      b.disabled = dinero < PRECIO_TERRENO;
+      b.addEventListener("click", () => comprarTerreno(k));
+      col.appendChild(b);
+    }
+  }
+  t.append(n, d);
+  fila.append(i, t, col);
+  return fila;
+}
+function comprarTerreno(k) {
+  if (lote || !LOTES[k] || dinero < PRECIO_TERRENO) return;
   dinero -= PRECIO_TERRENO;
   terreno2 = true;
-  armarFondo(); // dibuja la plaza nueva detrás del restaurante
-  info("¡Ampliaste el terreno! Detrás del restaurante hay una plaza nueva: ya puedes comprar la segunda puerta y un segundo mesero.");
+  lote = k;
+  armarFondo(); // dibuja la plaza en el terreno elegido y quita los carteles
+  info("¡Compraste el terreno " + LOTES[k].de + "! Ya puedes comprar la segunda puerta y un segundo mesero.");
   actualizar();
 }
 function comprarPuerta2() {
@@ -720,8 +766,8 @@ function cuarto(c, x0, y0, x1, y1, claro, oscuro, pared, puertaX, puertaW) {
 }
 
 // Todo lo que no se mueve se dibuja una sola vez en este lienzo oculto
-const FOX = 300, FOY = 450, FW = 2050, FH = 1150; // el fondo es más grande que el lienzo: cubre x de -300 a 1750 y y de -450 a 700 (coordenadas base; ampliado para la zona de pasto)
-const VISTA = { x0: -250, y0: -430, x1: 1700, y1: 650 }; // hasta dónde se puede mover la vista (coordenadas base)
+const FOX = 900, FOY = 850, FW = 2650, FH = 1550; // el fondo es más grande que el lienzo: cubre x de -900 a 1750 y y de -850 a 700 (coordenadas base; ampliado para la zona de pasto)
+const VISTA = { x0: -860, y0: -830, x1: 1700, y1: 650 }; // hasta dónde se puede mover la vista (coordenadas base)
 const CENTRO_VISTA = [367, 290];                  // centro del restaurante en coordenadas base
 const fondo = document.createElement("canvas");
 fondo.width = FW; fondo.height = FH;
@@ -735,7 +781,7 @@ const COL_ASFALTO = "#555b64", COL_ACERA = "#d0d3d6", COL_PASTO = "#9ccc65";
 // ZONA DE PASTO (terreno para ampliar el restaurante): manzanas que se ven como un solo pasto junto con la del restaurante, sin calles entre ellas.
 // Cada una es [i, j] respecto a la del restaurante [0, 0]. En pantalla: [-1,-1] = arriba, [0,-1] = arriba a la derecha, [1,-1] = a la derecha.
 // (más: [-1,0] = arriba a la izquierda, [1,0] = abajo a la derecha, [0,1] = abajo a la izquierda, [1,1] = abajo, [-1,1] = a la izquierda)
-const PASTO = [[-1, -1], [0, -1], [1, -1]];
+const PASTO = [[-2, -2], [-1, -2], [0, -2], [-2, -1], [-1, -1], [0, -1], [-2, 0], [-1, 0]]; // cuadrícula 3 × 3 con el restaurante [0,0] en la esquina inferior derecha: las otras 8 manzanas son pasto, sin carreteras entre ellas
 const EDIFICIOS = [
   { tapa: "#d7ccc8", izq: "#bcaaa4", der: "#a1887f" },
   { tapa: "#ffe0b2", izq: "#ffcc80", der: "#ffb74d" },
@@ -817,6 +863,19 @@ function armarCiudad(c) {
     }
   };
   for (const [i, j] of [[0, 0], ...PASTO]) { unir(i, j, true); unir(i, j, false); }
+  // Donde se juntan 4 manzanas de la zona queda un cuadro de calle: se rellena de pasto (sin pisar la acera del restaurante)
+  const cruce = (i, j) => {
+    const cuatro = [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]];
+    if (!cuatro.every(([a, b]) => esZona(a, b))) return;
+    const gx0 = i * PX + W - 10, gy0 = j * PY + H - 10, gx1 = (i + 1) * PX + 10, gy1 = (j + 1) * PY + 10;
+    suelo(c, gx0, gy0, gx1, gy1, COL_PASTO);
+    for (const [a, b] of cuatro) {
+      if (hayPasto(a, b)) continue;
+      const rx0 = Math.max(gx0, a * PX - ACERA), ry0 = Math.max(gy0, b * PY - ACERA), rx1 = Math.min(gx1, a * PX + W + ACERA), ry1 = Math.min(gy1, b * PY + H + ACERA);
+      if (rx1 > rx0 && ry1 > ry0) suelo(c, rx0, ry0, rx1, ry1, COL_ACERA);
+    }
+  };
+  for (let i = -3; i < 3; i++) for (let j = -3; j < 3; j++) cruce(i, j);
   cola.sort((p, q) => p.d - q.d).forEach((o) => o.f()); // de lo más lejano a lo más cercano
 }
 // Árboles en la acera del restaurante: los de atrás se dibujan antes del piso y los de enfrente después (así tapan lo correcto)
@@ -824,12 +883,29 @@ function arbolesAcera(c, lado) {
   const pts = lado === "atras"
     ? [[-20, 90], [-20, 230], [-20, 370], [-20, 510], [-20, 640], [90, -20], [230, -20], [370, -20], [510, -20]]
     : [[W + 20, 230], [W + 20, 370], [W + 20, 510], [W + 20, 640], [40, H + 20], [120, H + 20], [520, H + 20]];
-  pts.filter(([x, y]) => !(terreno2 && y < 0)).sort((p, q) => p[0] + p[1] - (q[0] + q[1])).forEach(([x, y]) => arbol(c, x, y, 32)); // con la plaza no hay árboles detrás
+  pts.filter(([x, y]) => !enPlaza(x, y)).sort((p, q) => p[0] + p[1] - (q[0] + q[1])).forEach(([x, y]) => arbol(c, x, y, 32)); // donde se pavimentó la plaza no hay árboles
 }
 // Plaza del terreno ampliado (detrás del restaurante: x de 0 a W, y de -200 a 0) y puerta de atrás
-function plazaAtras(c) {
-  for (let i = 0; i < W / 40; i++) for (let j = 0; j < 5; j++) suelo(c, i * 40, -200 + j * 40, i * 40 + 40, -160 + j * 40, (i + j) % 2 ? "#d8cfbd" : "#e4dccb");
-  suelo(c, 0, -200, W, 0, null, 0, "#a1887f");
+// ¿Cae este punto dentro de la plaza del terreno comprado?
+function enPlaza(x, y) {
+  if (!lote) return false;
+  const r = LOTES[lote].rect;
+  return x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3];
+}
+// Plaza del terreno comprado (izquierda o atrás del restaurante)
+function plazaLote(c) {
+  const [x0, y0, x1, y1] = LOTES[lote].rect;
+  for (let x = x0; x < x1; x += 40) for (let y = y0; y < y1; y += 40) suelo(c, x, y, x + 40, y + 40, ((x - x0) / 40 + (y - y0) / 40) % 2 ? "#d8cfbd" : "#e4dccb");
+  suelo(c, x0, y0, x1, y1, null, 0, "#a1887f");
+}
+// Carteles «En venta» sobre los tres terrenos que se pueden comprar (desaparecen al comprar uno)
+function carteles(c) {
+  for (const k of Object.keys(LOTES)) {
+    const [sx, sy] = iso(LOTES[k].centro[0], LOTES[k].centro[1]);
+    const t = "🏷️ Terreno " + LOTES[k].etiqueta.toLowerCase() + " · $" + PRECIO_TERRENO;
+    c.font = "700 15px system-ui, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.lineWidth = 4; c.strokeStyle = "rgba(0,0,0,.55)"; c.strokeText(t, sx, sy);
+    texto(t, sx, sy, 15, "#fff", "center", c);
+  }
 }
 function puertaAtras(c) {
   caja3d(c, 250, -4, 310, 0, 5, MADERA_OSCURA);
@@ -841,6 +917,8 @@ function puertaAtras(c) {
 function estacionamiento(c) {
   const visibles = CAJONES.slice(0, nEstac);
   if (visibles.some((k) => k.lado === "a")) suelo(c, -150, -148, 700, -100, COL_ASFALTO);
+  if (visibles.some((k) => k.lado === "i")) suelo(c, -148, -148, -100, 830, COL_ASFALTO); // a los lados ya no hay carretera: el carril se pinta al comprar lugares
+  if (visibles.some((k) => k.lado === "d")) suelo(c, 660, -148, 708, 830, COL_ASFALTO);
   for (const k of visibles) {
     const ax = k.eje === "x" ? CAJON_FONDO : CAJON_ANCHO, ay = k.eje === "x" ? CAJON_ANCHO : CAJON_FONDO;
     suelo(c, k.x - ax / 2, k.y - ay / 2, k.x + ax / 2, k.y + ay / 2, "#454b53", 0, "#f5f5f5");
@@ -854,7 +932,7 @@ function armarFondo() {
   c.translate(FOX, FOY); // el fondo es más grande que el lienzo: caben la ciudad y las calles alrededor
   armarCiudad(c);        // calles, aceras, edificios y parques
   arbolesAcera(c, "atras");
-  if (terreno2) plazaAtras(c);
+  if (lote) plazaLote(c); else carteles(c);
   estacionamiento(c);
   // piso del comedor
   for (let i = 0; i < W / 40; i++) for (let j = 0; j < H / 40; j++) suelo(c, i * 40, j * 40, i * 40 + 40, j * 40 + 40, (i + j) % 2 ? "#e4cfa9" : "#ecd9b8");
