@@ -6,7 +6,7 @@
 // los demás van directo a la recepción. Cada uno paga 5 pesos al salir (más lo que sumen las mejoras de SU mesa, que se tocan en la mesa; quien usó el baño paga además 1 peso).
 // TIENDA: tocando el mostrador de la recepción (🛒) se abre la zona de compras. Ahí se contrata (y se mejora) a la recepcionista y al mesero.
 // COCINERO Y MESAS: en la tienda se mejora al cocinero (10 niveles: cada nivel cocina más rápido) y se compran mesas nuevas para el comedor (hasta 12 en total, precio creciente).
-// AMPLIACIÓN: en la tienda se compra «Ampliar terreno» (una plaza detrás del restaurante, sobre el pasto). Solo entonces se desbloquean el SEGUNDO MESERO y la SEGUNDA PUERTA
+// AMPLIACIÓN: en la tienda se compra «Ampliar terreno» (una plaza detrás del restaurante, sobre el pasto). Solo entonces se desbloquea la SEGUNDA PUERTA (el SEGUNDO MESERO ya no la necesita: se compra desde el principio, con el primer mesero contratado, por $500)
 // (entrada por atrás, con su propia fila de espera y su mostrador). La SEGUNDA RECEPCIONISTA solo se puede contratar cuando ya existe la segunda puerta.
 // Empiezan lentos: cada mejora los hace más rápidos. Lo gastado sale de «dinero»; los puntos y el récord cuentan lo «ganado».
 // CIUDAD Y VISTA: el restaurante está en una calle, rodeado de manzanas con edificios, parques y carreteras. La vista se acerca/aleja (➕ ➖, rueda o pellizco) con límites cortos y se mueve arrastrando.
@@ -78,9 +78,9 @@ const MEJORAS_MESA = [
   { id: "servilletas", ico: "🧻", nombre: "Servilletas", precios: PRECIOS_MEJORA },
 ];
 // Ampliación (segundo terreno): cada cosa se desbloquea con la anterior
-const PRECIO_TERRENO = 1000; // «Ampliar terreno» (a elegir: izquierda, atrás o derecha): desbloquea el segundo mesero y la segunda puerta
+const PRECIO_TERRENO = 1000; // «Ampliar terreno» (a elegir: izquierda, atrás o derecha): desbloquea la segunda puerta
 const PRECIO_PUERTA2 = 40;   // segunda puerta de entrada (necesita el terreno ampliado)
-const PRECIO_MESERO2 = 40;   // segundo mesero (necesita el terreno ampliado)
+const PRECIO_MESERO2 = 500;  // segundo mesero (solo necesita tener contratado al primero; no hace falta ampliar el terreno)
 const PRECIO_RECEP2 = 40;    // segunda recepcionista (necesita la segunda puerta)
 
 // ----- Estacionamiento -----
@@ -322,7 +322,7 @@ function aplicarGuardado(d) {
     const nr = Math.min(RECEP_TIEMPOS_MS.length, Math.floor(num(rs[k])));
     if (nr > 0 && (k === 0 || (puerta2 && receps[0]))) receps[k] = { nivel: nr, g: null, t0: 0, emoji: k ? "👩‍💼" : "🧑‍💼" };
     const nm = Math.min(MESERO_VEL.length, Math.floor(num(ms[k])));
-    if (nm > 0 && (k === 0 || (terreno2 && meseros[0]))) {
+    if (nm > 0 && (k === 0 || meseros[0])) {
       const post = k ? MESERO_POST2 : MESERO_POST;
       const ent = nuevaEnt(k ? "🤵‍♀️" : "🤵", post[0], post[1]);
       ent.vel = MESERO_VEL[nm - 1];
@@ -706,7 +706,7 @@ function pintarTienda() {
     filaTienda("🤵", "Mesero", meseros[0], PRECIO_MESERO, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(0), () => mejorarMesero(0)),
     filaTerreno(),
     filaTienda("🤵‍♀️", "Segundo mesero", meseros[1], PRECIO_MESERO2, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(1), () => mejorarMesero(1),
-      !meseros[0] ? "Primero contrata al mesero." : terreno2 ? "" : "Se desbloquea al ampliar el terreno."),
+      !meseros[0] ? "Primero contrata al mesero." : ""),
     filaSimple("🚪", "Segunda puerta",
       puerta2 ? "Los clientes también llegan por la puerta de atrás, con su propia fila y mostrador." : terreno2 ? "Una entrada nueva en el terreno de atrás: doble de lugares de espera." : "Se desbloquea al ampliar el terreno.",
       puerta2 ? "Comprada" : terreno2 ? "Comprar " + pesos(PRECIO_PUERTA2) : "🔒 Bloqueado", puerta2 || !terreno2 || dinero < PRECIO_PUERTA2, comprarPuerta2),
@@ -755,14 +755,14 @@ function filaTerreno() {
   const col = document.createElement("div");
   col.style.cssText = "display:flex;flex-direction:column;gap:4px";
   if (lote) {
-    d.textContent = "Compraste el terreno " + LOTES[lote].de + ". Ya puedes comprar el segundo mesero y la segunda puerta.";
+    d.textContent = "Compraste el terreno " + LOTES[lote].de + ". Ya puedes comprar la segunda puerta.";
     const b = document.createElement("button");
     b.className = "btn";
     b.textContent = "Comprado";
     b.disabled = true;
     col.appendChild(b);
   } else {
-    d.textContent = "Elige UNO de los dos terrenos de pasto que tocan el restaurante (izquierda o atrás); los demás no quedan pegados al edificio y no se pueden comprar. Desbloquea el segundo mesero y la segunda puerta.";
+    d.textContent = "Elige UNO de los dos terrenos de pasto que tocan el restaurante (izquierda o atrás); los demás no quedan pegados al edificio y no se pueden comprar. Desbloquea la segunda puerta.";
     for (const k of Object.keys(LOTES)) {
       const b = document.createElement("button");
       b.className = "btn";
@@ -782,7 +782,7 @@ function comprarTerreno(k) {
   terreno2 = true;
   lote = k;
   armarFondo(); // dibuja la plaza en el terreno elegido y quita los carteles
-  info("¡Compraste el terreno " + LOTES[k].de + "! Ya puedes comprar la segunda puerta y un segundo mesero.");
+  info("¡Compraste el terreno " + LOTES[k].de + "! Ya puedes comprar la segunda puerta.");
   actualizar();
 }
 function comprarPuerta2() {
@@ -812,7 +812,7 @@ function mejorarRecep(k) {
 }
 function contratarMesero(k) {
   const precio = k ? PRECIO_MESERO2 : PRECIO_MESERO;
-  if (meseros[k] || dinero < precio || (k && (!terreno2 || !meseros[0]))) return;
+  if (meseros[k] || dinero < precio || (k && !meseros[0])) return;
   dinero -= precio;
   const post = k ? MESERO_POST2 : MESERO_POST;
   const ent = nuevaEnt(k ? "🤵‍♀️" : "🤵", post[0], post[1]);
