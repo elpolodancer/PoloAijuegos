@@ -41,14 +41,28 @@ const COSTO_JARDIN_ZANAHORIA = 20;      // jardín de zanahorias (hay que compra
 const COSTO_JARDIN_MAIZ = 40;
 const COSTO_JARDIN_BROCOLI = 60;
 const COSTO_JARDIN_BERENJENA = 80;
-const COSTO_EMP_JARDIN = { tomate: 15, zanahoria: 25, maiz: 35, brocoli: 45, berenjena: 60 };   // empleado que lleva del jardín a la estantería (uno por jardín)
+// Lo que cuesta el jardín de cada producto (el orden de compra es el de PRODUCTOS)
+const COSTO_JARDIN_DE = {
+  tomate: COSTO_JARDIN, zanahoria: COSTO_JARDIN_ZANAHORIA, maiz: COSTO_JARDIN_MAIZ, brocoli: COSTO_JARDIN_BROCOLI, berenjena: COSTO_JARDIN_BERENJENA,
+  pepino: 100, chile: 125, papa: 150, cebolla: 180, fresa: 210, limon: 250, sandia: 300, aguacate: 350, mango: 420, pina: 500,
+};
+// empleado que lleva del jardín a la estantería (uno por jardín)
+const COSTO_EMP_JARDIN = {
+  tomate: 15, zanahoria: 25, maiz: 35, brocoli: 45, berenjena: 60,
+  pepino: 75, chile: 90, papa: 105, cebolla: 120, fresa: 140, limon: 160, sandia: 180, aguacate: 200, mango: 230, pina: 260,
+};
 const COSTO_EMPLEADO = 30;
 const COSTO_ESTANTE_EXTRA = (n) => 15 + 10 * n;   // n = estanterías extra que ya compraste
 // Edificio: arriba queda siempre el pasto con los jardines. Cada ampliación lo ensancha hacia el lado que elijas
 // (izquierda o derecha) y deja 2 estanterías más. Como queda más ancho que la pantalla, la cámara sigue al personaje.
 const TOP = 324;                    // dónde empieza el edificio por arriba (fijo)
-const COSTOS_EDIFICIO = [40, 80];   // lo que cuesta cada ampliación del EDIFICIO, en orden
+const COSTOS_EDIFICIO = [40, 80, 150, 250];   // lo que cuesta cada ampliación del EDIFICIO, en orden (cada una da 4 estanterías: 2 filas de 2)
 const COSTOS_PATIO = [30, 60];      // lo que cuesta cada ampliación del PATIO (zona de pasto con los jardines), en orden; es aparte del edificio
+const JARDIN_FILAS = 3;             // filas de jardines en cada tramo del patio (2 columnas × 3 filas = 6 jardines)
+const JARDINES_POR_TRAMO = 2 * JARDIN_FILAS;   // jardines que caben en el patio inicial y en cada ampliación del patio
+const JARDIN_HUECO = 8;             // separación (px) entre filas de jardines
+const ESTANTES_POR_AMP = 4;         // estanterías que da cada ampliación del edificio
+const FILA_BAJA_Y = 470;            // y de la 2.ª fila de estanterías de las ampliaciones (entre las dos filas queda un pasillo)
 
 
 // Productos que existen (precio en dólares)
@@ -59,17 +73,30 @@ const PRODUCTOS = {
   maiz: { icono: "🌽", precio: 3, nombre: "maíz" },
   brocoli: { icono: "🥦", precio: 4, nombre: "brócoli" },
   berenjena: { icono: "🍆", precio: 5, nombre: "berenjena" },
+  pepino: { icono: "🥒", precio: 6, nombre: "pepino" },
+  chile: { icono: "🌶️", precio: 7, nombre: "chile" },
+  papa: { icono: "🥔", precio: 8, nombre: "papa" },
+  cebolla: { icono: "🧅", precio: 9, nombre: "cebolla" },
+  fresa: { icono: "🍓", precio: 10, nombre: "fresa" },
+  limon: { icono: "🍋", precio: 11, nombre: "limón" },
+  sandia: { icono: "🍉", precio: 12, nombre: "sandía" },
+  aguacate: { icono: "🥑", precio: 13, nombre: "aguacate" },
+  mango: { icono: "🥭", precio: 14, nombre: "mango" },
+  pina: { icono: "🍍", precio: 15, nombre: "piña" },
 };
 const IDS = Object.keys(PRODUCTOS);
 
 // Lugares del mapa (x, y, w, h en unidades del mapa)
 const ESTANTE_W = 120, ESTANTE_H = 44;
-const MAX_ESTANTES = (COSTOS_EDIFICIO.length + 1) * 2;
-// La estantería número «i»: 0 y 1 en el edificio inicial; 2 y 3 en la 1.ª ampliación; 4 y 5 en la 2.ª
+const MAX_ESTANTES = 2 + ESTANTES_POR_AMP * COSTOS_EDIFICIO.length;
+// Cuántas ampliaciones del edificio hacen falta para tener la estantería número «i»
+const ampDe = (i) => (i < 2 ? 0 : 1 + Math.floor((i - 2) / ESTANTES_POR_AMP));
+// La estantería número «i»: 0 y 1 en el edificio inicial; después, cada ampliación trae 4 (2 arriba y 2 abajo, con un pasillo en medio)
 function rectEstante(i) {
   if (i < 2) return { x: i ? 210 : 30, y: TOP + 18, w: ESTANTE_W, h: ESTANTE_H };
-  const a = ampliaciones[Math.floor(i / 2) - 1];   // la ampliación que le toca (se compra antes que sus estanterías)
-  return { x: (a ? a.x0 : 0) + (i % 2 ? 160 : 20), y: TOP + 18, w: ESTANTE_W, h: ESTANTE_H };
+  const k = i - 2, dentro = k % ESTANTES_POR_AMP;
+  const a = ampliaciones[Math.floor(k / ESTANTES_POR_AMP)];   // la ampliación que le toca (se compra antes que sus estanterías)
+  return { x: (a ? a.x0 : 0) + (dentro % 2 ? 165 : 15), y: dentro < 2 ? TOP + 18 : FILA_BAJA_Y, w: ESTANTE_W, h: ESTANTE_H };
 }
 // Los jardines están en el pasto, pegados al muro de arriba del edificio (a donde se sale por la abertura del pasillo central)
 const CAJA = { x: 10, y: 466, w: 72, h: 40 };     // el mostrador (con toldo, caja registradora y cajón)
@@ -145,23 +172,18 @@ function nuevoJardin(producto, rect, costo) {
   for (let i = 0; i < g.cols * g.filas; i++) g.parcelas.push({ t: -1, id: null });
   return g;
 }
-const jardines = [
-  nuevoJardin("tomate", { w: 140, h: 80, cols: 3, filas: 2 }, COSTO_JARDIN),
-  nuevoJardin("zanahoria", { w: 140, h: 80, cols: 3, filas: 2 }, COSTO_JARDIN_ZANAHORIA),
-  nuevoJardin("maiz", { w: 140, h: 80, cols: 3, filas: 2 }, COSTO_JARDIN_MAIZ),
-  nuevoJardin("brocoli", { w: 140, h: 80, cols: 3, filas: 2 }, COSTO_JARDIN_BROCOLI),
-  nuevoJardin("berenjena", { w: 140, h: 80, cols: 3, filas: 2 }, COSTO_JARDIN_BERENJENA),
-];
-// El patio es la franja de pasto de arriba. Cada tramo (el patio inicial y cada ampliación) tiene 2 sitios para jardines,
-// pegados al muro. El jardín número «i» va en el tramo i/2: si ese tramo aún no existe, hay que ampliar el patio.
+const jardines = IDS.map((id) => nuevoJardin(id, { w: 140, h: 80, cols: 3, filas: 2 }, COSTO_JARDIN_DE[id]));
+// El patio es la franja de pasto de arriba. Cada tramo (el patio inicial y cada ampliación) tiene 6 sitios para jardines:
+// 2 columnas × 3 filas, la primera fila pegada al muro. El jardín número «i» va en el tramo i/6: si ese tramo aún no existe, hay que ampliar el patio.
 function colocarJardines() {
   jardines.forEach((g, i) => {
-    const tramo = Math.floor(i / 2), col = i % 2;
+    const tramo = Math.floor(i / JARDINES_POR_TRAMO), pos = i % JARDINES_POR_TRAMO;
+    const col = pos % 2, fila = Math.floor(pos / 2);   // fila 0, 1 o 2 (de abajo hacia arriba)
     const a = tramo > 0 ? patios[tramo - 1] : null;
     g.disponible = tramo === 0 || !!a;
     if (!g.disponible) return;
     g.x = tramo === 0 ? (col ? 204 : 16) : a.x0 + (col ? 156 : 4);
-    g.y = TOP - g.h - JARDIN_SEP;
+    g.y = TOP - g.h - JARDIN_SEP - fila * (g.h + JARDIN_HUECO);
   });
 }
 colocarJardines();
@@ -261,6 +283,11 @@ function metaEfectiva() {
   if (Math.abs(jugador.x - PASILLO_X) > 3) {
     // desde dentro, primero baja al pasillo libre (así no choca con las estanterías de las ampliaciones)
     if (jugador.y > pared && jugador.y < CORREDOR_Y - 3) return { x: jugador.x, y: CORREDOR_Y, paso: true };
+    // debajo de la fila de abajo de las ampliaciones: primero sube por el hueco entre estanterías
+    if (jugador.y > CORREDOR_Y + 26 && (jugador.x < 0 || jugador.x > MUNDO.w)) {
+      const gx = hueco(jugador.x);
+      return Math.abs(jugador.x - gx) > 3 ? { x: gx, y: jugador.y, paso: true } : { x: gx, y: CORREDOR_Y, paso: true };
+    }
     return { x: PASILLO_X, y: jugador.y, paso: true };
   }
   return { x: PASILLO_X, y: objetivo.y, paso: true };
@@ -409,6 +436,26 @@ function irPorPasillo(c, d, dt) {
   return ir(c, d, dt);
 }
 
+// ¿Es de la fila de abajo de una ampliación? Esas se atienden desde el pasillo de en medio (por arriba)
+const esFilaBaja = (e) => e.y > TOP + 100;
+// Dónde se para alguien (a «m» px) para atender una estantería
+function standY(e, m) {
+  const r = rectFull(e);
+  return esFilaBaja(e) ? r.y - m : r.y + r.h + m;
+}
+// Centro del hueco entre estanterías más cercano (en las ampliaciones los huecos están cada 150 px)
+const hueco = (x) => (x < 0 ? Math.round(x / 150) * 150 : MUNDO.w + Math.round((x - MUNDO.w) / 150) * 150);
+// Camina por la tienda: en el edificio inicial va por el pasillo central; si el viaje toca una ampliación,
+// sale al corredor horizontal (CORREDOR_Y), lo recorre y entra de frente a su destino
+function irTienda(c, d, dt) {
+  const fuera = (x) => x < 0 || x > MUNDO.w;
+  if (!fuera(c.x) && !fuera(d.x)) return irPorPasillo(c, d, dt);
+  if (Math.abs(c.x - d.x) <= 4) return ir(c, d, dt);
+  if (Math.abs(c.y - CORREDOR_Y) > 3) { ir(c, { x: c.x, y: CORREDOR_Y }, dt); return false; }
+  ir(c, { x: d.x, y: CORREDOR_Y }, dt);
+  return false;
+}
+
 const faltante = (c) => Object.keys(c.lista).find((id) => c.lista[id] > 0) || null;
 
 // Estantería de ese producto: la que tenga existencias; si no, la primera que lo lleve
@@ -437,8 +484,7 @@ function actualizarClientes(dt) {
       const e = estanteDe(falta);
       if (!e) { c.lista[falta] = 0; continue; } // ya no hay estantería de ese producto
       const x = Math.max(xMin + 14, Math.min(xMax - 14, e.x + e.w / 2 + c.off));
-      const re = rectFull(e);
-      if (irPorPasillo(c, { x, y: re.y + re.h + 26 }, dt)) {
+      if (irTienda(c, { x, y: standY(e, 26) }, dt)) {
         c.t -= dt;
         if (c.t <= 0) {
           const i = e.items.indexOf(falta);
@@ -452,13 +498,13 @@ function actualizarClientes(dt) {
         }
       } else c.t = TOMAR_SEG;
     } else if (c.estado === "saliendo") {
-      if (irPorPasillo(c, PUERTA, dt)) c.fuera = true;
+      if (irTienda(c, PUERTA, dt)) c.fuera = true;
     }
   }
   // la fila de la caja: solo cobra el primero, y solo si hay quien cobre (tú junto a la caja o el empleado)
   cola = cola.filter((c) => c.estado === "cola");
   cola.forEach((c, i) => {
-    const llego = irPorPasillo(c, SLOTS_CAJA[i], dt);
+    const llego = irTienda(c, SLOTS_CAJA[i], dt);
     if (i !== 0 || !llego || !hayCajero()) return;
     c.t -= dt;
     if (c.t > 0) return;
@@ -490,18 +536,29 @@ function puntoJardin(g) {                         // lugar junto al jardín, en 
   return { x: izq ? g.x + g.w + 14 : g.x - 14, y: g.y + g.h / 2 };
 }
 function nuevoEmpleadoJardin(g) {
-  const camisas = { tomate: "#e0463d", zanahoria: "#ff9a2e", maiz: "#e8c93a", brocoli: "#2e9d4a", berenjena: "#8f5bd0" };
+  const camisas = {
+    tomate: "#e0463d", zanahoria: "#ff9a2e", maiz: "#e8c93a", brocoli: "#2e9d4a", berenjena: "#8f5bd0",
+    pepino: "#3fae5a", chile: "#c9302c", papa: "#b08a5a", cebolla: "#c68ad6", fresa: "#ff5c7a",
+    limon: "#f2dc3a", sandia: "#3e9a52", aguacate: "#6b8f2a", mango: "#ffb02e", pina: "#e6a817",
+  };
   return { x: MEJORAS_ZONA.x + MEJORAS_ZONA.w / 2, y: MEJORAS_ZONA.y - 8, vel: EMP_VEL, carga: [], cd: 0, off: azar(-22, 22), camisa: camisas[g.producto] || "#888" };
 }
 // Camina hacia d: para salir al pasto o volver a entrar pasa por la abertura del pasillo
 function irEmpleado(w, d, dt) {
   const pared = TOP + 7;
-  if ((w.y > pared) !== (d.y > pared)) {
-    if (Math.abs(w.x - PASILLO_X) > 3) { ir(w, { x: PASILLO_X, y: w.y }, dt); return false; }
+  const dentroW = w.y > pared, dentroD = d.y > pared;
+  if (dentroW !== dentroD) {
+    if (Math.abs(w.x - PASILLO_X) > 3) {
+      // desde una ampliación va primero por el corredor; en el pasto y en el edificio inicial camina directo al pasillo
+      if (dentroW) irTienda(w, { x: PASILLO_X, y: CORREDOR_Y }, dt);
+      else ir(w, { x: PASILLO_X, y: w.y }, dt);
+      return false;
+    }
     ir(w, { x: PASILLO_X, y: d.y }, dt);
     return false;
   }
-  return irPorPasillo(w, d, dt);
+  if (!dentroW) return ir(w, d, dt);   // afuera, en el pasto: directo
+  return irTienda(w, d, dt);
 }
 function actualizarEmpleados(dt) {
   const ex = productosExistentes();
@@ -518,7 +575,7 @@ function actualizarEmpleados(dt) {
       const r = rectFull(e);
       if (distRect(em.x, em.y, r) <= ALCANCE_ESTANTE - 24) {
         if (em.cd <= 0) { e.items.push(em.carga.shift()); em.cd = TRASPASO_SEG * 2; }
-      } else irEmpleado(em, { x: Math.max(xMin + 14, Math.min(xMax - 14, e.x + e.w / 2 + em.off)), y: r.y + r.h + 14 }, dt);
+      } else irEmpleado(em, { x: Math.max(xMin + 14, Math.min(xMax - 14, e.x + e.w / 2 + em.off)), y: standY(e, 14) }, dt);
     } else if (puedeRecoger) {
       if (distRect(em.x, em.y, g) <= ALCANCE_JARDIN) {
         if (em.cd <= 0) { const p = maduros[0]; em.carga.push(p.id); p.t = -1; p.id = null; em.cd = TRASPASO_SEG * 2; }
@@ -544,7 +601,7 @@ function ampliar(lado) {
   recalcMundo();
 }
 
-// Ensancha el PATIO (la zona de los jardines) hacia un lado, sin tocar el edificio: da sitio para 2 jardines más
+// Ensancha el PATIO (la zona de los jardines) hacia un lado, sin tocar el edificio: da sitio para 6 jardines más
 function ampliarPatio(lado) {
   const n = patios.filter((a) => a.lado === lado).length;
   patios.push({ lado, x0: lado < 0 ? -(n + 1) * EXT_ANCHO : MUNDO.w + n * EXT_ANCHO });
@@ -595,7 +652,7 @@ function comprarMejora(tipo) {
     g.emp = nuevoEmpleadoJardin(g);
   } else if (tipo === "estante") {
     const slot = siguienteSlot();
-    if (!hayPrimerEstante() || slot < 0 || Math.floor(slot / 2) > edificio) return;
+    if (!hayPrimerEstante() || slot < 0 || ampDe(slot) > edificio) return;
     const delProducto = slot < IDS.length;       // la estantería número «slot» es del producto IDS[slot]
     if (delProducto && !jardinDe(IDS[slot]).comprado) return;
     const costo = costoEstanteExtra();
@@ -661,7 +718,7 @@ function actualizarPanel() {
   if (!hayPrimerEstante()) pintarBoton(btnEstante, "🗄️ Primero compra la estantería", "", false);
   else if (slot < 0) pintarBoton(btnEstante, "🗄️ Estanterías al máximo", "", false);
   else if (slot < IDS.length && !jardinDe(IDS[slot]).comprado) pintarBoton(btnEstante, "🗄️ Primero compra el jardín de " + PRODUCTOS[IDS[slot]].icono, "", false);
-  else if (Math.floor(slot / 2) > edificio) pintarBoton(btnEstante, "🗄️ Agranda el edificio para más", "", false);
+  else if (ampDe(slot) > edificio) pintarBoton(btnEstante, "🗄️ Agranda el edificio para más", "", false);
   else pintarBoton(btnEstante, slot < IDS.length ? "🗄️ Estantería de " + PRODUCTOS[IDS[slot]].icono : "🗄️ Estantería nueva", "$" + costoEstanteExtra(), alcanza(costoEstanteExtra()));
   // un empleado por jardín comprado
   jardines.forEach((g, i) => {
@@ -674,7 +731,7 @@ function actualizarPanel() {
   });
   // edificio y patio se mejoran por separado: cada uno con su lado a elegir
   const maxEd = edificio >= COSTOS_EDIFICIO.length;
-  titEd.textContent = maxEd ? "🏗️ Edificio al máximo" : "🏗️ Ampliar edificio (+2 estanterías)";
+  titEd.textContent = maxEd ? "🏗️ Edificio al máximo" : "🏗️ Ampliar edificio (+4 estanterías)";
   botsEd.hidden = maxEd;
   if (!maxEd) {
     const c = COSTOS_EDIFICIO[edificio];
@@ -685,7 +742,7 @@ function actualizarPanel() {
   const sig = siguienteJardin();
   titPat.textContent = maxPat ? "🌱 Patio al máximo"
     : sig && !sig.disponible ? "🌱 Patio lleno: amplíalo para el jardín de " + PRODUCTOS[sig.producto].icono
-    : "🌱 Ampliar patio (+2 jardines)";
+    : "🌱 Ampliar patio (+6 jardines)";
   botsPat.hidden = maxPat;
   if (!maxPat) {
     const c = COSTOS_PATIO[nivelPatio];
@@ -821,7 +878,7 @@ function dibujarSuelo() {
   ctx.setLineDash([]);
   for (const cx of [MUNDO.w / 2, ...patios.map((a) => a.x0 + EXT_ANCHO / 2)]) etiqueta("🌱 Patio", cx, 20, "#fff", 12);
   const sig = siguienteJardin();
-  if (sig && !sig.disponible) etiqueta("🌱 Amplía el patio para el siguiente jardín", MUNDO.w / 2, TOP - 100, "#ffd24d");
+  if (sig && !sig.disponible) etiqueta("🌱 Amplía el patio para el siguiente jardín", MUNDO.w / 2, 40, "#ffd24d");
   // adentro: piso del edificio, con sus ampliaciones
   ctx.fillStyle = "#efe3c8";
   ctx.fillRect(xMin, TOP, xMax - xMin, MUNDO.h - TOP);
