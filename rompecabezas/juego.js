@@ -15,7 +15,9 @@ const LADO_MAX = 2000;          // la imagen se reduce a este lado máximo (px) 
 const IMAGEN_MAX_MB = 15;       // tamaño máximo del archivo elegido
 const PIEZA_W = 80;             // ancho de pieza en unidades del «mundo» (no son píxeles)
 const IMAN = 0.35;              // qué tan cerca (fracción de pieza) para que encaje sola
-const ZOOM_MIN = 0.03, ZOOM_MAX = 8;
+const ZOOM_MAX = 8;
+const ZOOM_MIN_REL = 0.6;       // lo más que se puede alejar: este % del zoom con el que empieza el juego (0.6 = 60 %)
+const ZONA_PIEZAS = 0.4;        // tamaño de la zona donde se reparten las piezas (0.4 = 60 % más chica; 1 = como antes)
 const TABLERO_ANCHO = 0.84;     // al empezar, el tablero ocupa este % del ancho de la pantalla
 const DENSIDAD = 0.6;           // cuánto se pueden amontonar las piezas fuera del tablero (menos = más espacio)
 const GUIA_TENUE = 0;           // transparencia de la imagen sobre el tablero (0 = vacío, como el original)
@@ -52,11 +54,12 @@ let cols = 0, rows = 0, rotacion = false;
 let pw = PIEZA_W, ph = PIEZA_W, BW = 0, BH = 0, padW = 0, kS = 1;
 let piezas = [], sueltas = [], colocadas = 0;
 let mundo = { x0: 0, y0: 0, x1: 0, y1: 0 };
+let zoomMin = 0.1;              // se calcula al repartir las piezas (ZOOM_MIN_REL × zoom inicial)
 let cam = { x: 0, y: 0, s: 1 };
 let guia = false, t0 = 0, acum = 0, terminado = false, iniciado = false, pausado = false;
 let sucio = false, temporizadorMsg = null, rafPrev = 0;
 
-const clamp = (s) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, s));
+const clamp = (s) => Math.min(ZOOM_MAX, Math.max(zoomMin, s));
 const fmt = (s) => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 const tiempoActual = () => Math.floor(acum + (t0 ? (Date.now() - t0) / 1000 : 0));
 
@@ -525,7 +528,8 @@ function iniciar() {
 // Tablero al centro y las piezas amontonadas en las franjas de arriba y de abajo (como el original)
 function repartir() {
   const W = lienzo.width / dpr, H = lienzo.height / dpr;
-  const s = clamp(Math.min((W * TABLERO_ANCHO) / BW, (H * 0.5) / BH));
+  const s = Math.min(ZOOM_MAX, (W * TABLERO_ANCHO) / BW, (H * 0.5) / BH);
+  zoomMin = s * ZOOM_MIN_REL;                     // no se puede alejar más que esto (evita lag y alejarse sin querer)
   cam.s = s;
   cam.x = BW / 2 - W / (2 * s);
   cam.y = BH / 2 - H / (2 * s);
@@ -542,6 +546,9 @@ function repartir() {
     if (aY1 < aY0 + ph) aY1 = aY0 + ph;
     if (bY1 < bY0 + ph) bY1 = bY0 + ph;
   }
+  // Zona más chica: las franjas se acortan hacia el tablero (el lado pegado al tablero no se mueve)
+  aY0 = aY1 - Math.max(ph, (aY1 - aY0) * ZONA_PIEZAS);
+  bY1 = bY0 + Math.max(ph, (bY1 - bY0) * ZONA_PIEZAS);
   const hA = Math.max(1, aY1 - aY0), hB = Math.max(1, bY1 - bY0);
   for (const p of piezas) {
     p.x = vx0 - pw * 0.25 + Math.random() * (ancho - pw * 0.5);
