@@ -37,7 +37,7 @@
       <span>🏆 Récord $<b id="record">0</b> pesos</span>
     </div>
     <canvas id="lienzo" class="lienzo" width="720" height="480" aria-label="Restaurante en vista isométrica con cocina, baño, recepción y cuatro mesas; toca a los clientes que esperan para darles mesa"></canvas>
-    <p id="estado">Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para contratar personal.</p>
+    <p id="estado">Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para contratar personal y una mesa para mejorarla.</p>
     <div class="acciones">
       <button class="btn" id="alejar" aria-label="Alejar" title="Alejar">➖</button>
       <button class="btn" id="acercar" aria-label="Acercar" title="Acercar">➕</button>
@@ -45,9 +45,9 @@
       <button class="btn" id="reiniciar">Reiniciar</button>
     </div>
   </main>
-  <div id="tienda" class="tienda" role="dialog" aria-label="Tienda: personal, mesas, sillas y mejoras" hidden>
+  <div id="tienda" class="tienda" role="dialog" aria-label="Tienda y mejoras de mesa" hidden>
     <div class="tienda-cab">
-      <b>🛒 Tienda</b>
+      <b id="tiendaTitulo">🛒 Tienda</b>
       <span>💰 $<b id="tiendaDinero">0</b> pesos</span>
       <button class="btn" id="cerrarTienda">Cerrar</button>
     </div>

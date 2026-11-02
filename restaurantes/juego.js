@@ -3,7 +3,7 @@
 // Esperan frente a la recepción: TÚ tocas a la familia para darles una mesa. Si no hay mesa libre esperan 8 s (a los 5 s se enojan 😡) y luego se van; si tardas mucho en atenderlos, también se van enojados.
 // Ya sentados piden, la cocina prepara y TÚ llevas el platillo a mano (clic en la cocina para tomarlo, clic en la mesa para entregarlo).
 // Si tardas, se enojan y se van. Al terminar de comer se levantan TODOS y la mesa queda libre; algunos van al baño (cuesta 1 peso) y
-// los demás van directo a la recepción. Cada uno paga 5 pesos al salir (más 50 centavos por cada nivel de las mesas y de las sillas; quien usó el baño paga además 1 peso).
+// los demás van directo a la recepción. Cada uno paga 5 pesos al salir (más lo que sumen las mejoras de SU mesa, que se tocan en la mesa; quien usó el baño paga además 1 peso).
 // TIENDA: tocando el mostrador de la recepción (🛒) se abre la zona de compras. Ahí se contrata (y se mejora) a la recepcionista y al mesero.
 // AMPLIACIÓN: en la tienda se compra «Ampliar terreno» (una plaza detrás del restaurante, sobre el pasto). Solo entonces se desbloquean el SEGUNDO MESERO y la SEGUNDA PUERTA
 // (entrada por atrás, con su propia fila de espera y su mostrador). La SEGUNDA RECEPCIONISTA solo se puede contratar cuando ya existe la segunda puerta.
@@ -49,10 +49,17 @@ const MESERO_VEL = [70, 95, 125, 160, 200];              // por nivel: velocidad
 const RECEP_PRECIOS_MEJORA = [10, 20, 30, 45];           // costo de subir al nivel 2, 3, 4 y 5 de la recepcionista
 const MESERO_PRECIOS_MEJORA = [10, 20, 30, 45];          // ídem para el mesero
 const PAUSA_MESERO_MS = 400;                             // ms que se detiene a tomar el platillo
-// Mesas y sillas: se mejoran en la tienda. Cada nivel que subas (de las mesas o de las sillas) suma 50 centavos a lo que paga cada cliente.
-const BONO_NIVEL = 0.5;                                  // pesos extra por cliente por cada nivel de mesas y por cada nivel de sillas (0.5 = 50 centavos)
-const MESAS_PRECIOS_MEJORA = [20, 40, 70, 110];          // costo de subir las mesas al nivel 2, 3, 4 y 5
-const SILLAS_PRECIOS_MEJORA = [20, 40, 70, 110];         // ídem para las sillas
+// Mejoras de cada mesa: se tocan en la mesa misma (no en la tienda) y cada mesa se mejora POR SEPARADO.
+// Cada cosa se puede mejorar 5 veces; cada mejora suma a lo que paga cada cliente que use ESA mesa: 50 centavos las dos primeras, 1 peso la 3.ª y la 4.ª, y 1.50 pesos la 5.ª.
+const BONO_MEJORAS = [0.5, 0.5, 1, 1, 1.5];   // lo que suma la 1.ª, 2.ª, 3.ª, 4.ª y 5.ª mejora de cada cosa (por cliente)
+const PRECIOS_MEJORA = [10, 15, 25, 40, 60];  // lo que cuesta cada una de esas 5 mejoras
+const MEJORAS_MESA = [
+  { id: "mesa", ico: "🪑", nombre: "Mesa", precios: PRECIOS_MEJORA },
+  { id: "sillas", ico: "💺", nombre: "Sillas", precios: PRECIOS_MEJORA },
+  { id: "cubiertos", ico: "🍴", nombre: "Cubiertos", precios: PRECIOS_MEJORA },
+  { id: "bebidas", ico: "🥤", nombre: "Bebidas", precios: PRECIOS_MEJORA },
+  { id: "servilletas", ico: "🧻", nombre: "Servilletas", precios: PRECIOS_MEJORA },
+];
 // Ampliación (segundo terreno): cada cosa se desbloquea con la anterior
 const PRECIO_TERRENO = 1000; // «Ampliar terreno» (a elegir: izquierda, atrás o derecha): desbloquea el segundo mesero y la segunda puerta
 const PRECIO_PUERTA2 = 40;   // segunda puerta de entrada (necesita el terreno ampliado)
@@ -170,8 +177,12 @@ let receps = [null, null], meseros = [null, null]; // personal contratado (null 
 let terreno2 = false, puerta2 = false;             // ampliación comprada / segunda puerta comprada
 let lote = null; // terreno comprado: null (ninguno), "izq" o "atras"
 let puntosEnviados = 0, umbralPuntos = PUNTOS_LOTE, enviando = false; // puntos ya mandados al perfil, cuántos hacen falta para el siguiente envío, envío en curso
-let nivelMesas = 1, nivelSillas = 1; // nivel de las mesas y de las sillas (1 = el de siempre; sube en la tienda)
-const pagoPorCliente = () => PAGO_POR_CLIENTE + (nivelMesas - 1) * BONO_NIVEL + (nivelSillas - 1) * BONO_NIVEL; // lo que paga cada cliente ahora
+let mesaMejora = null; // mesa cuyo panel de mejoras está abierto (null = la tienda de la recepción)
+const nuevasMejoras = () => Object.fromEntries(MEJORAS_MESA.map((c) => [c.id, 0])); // cuántas mejoras tiene cada cosa de una mesa (0 a 5)
+const bonoAcum = (k) => BONO_MEJORAS.slice(0, k).reduce((t, b) => t + b, 0);        // lo que suman en total las primeras k mejoras
+const bonoMesa = (m) => MEJORAS_MESA.reduce((t, c) => t + bonoAcum(m.mejoras[c.id]), 0); // extra por cliente de esa mesa
+const pagoPorCliente = (m) => PAGO_POR_CLIENTE + bonoMesa(m);                        // lo que paga cada cliente que usa la mesa m
+const totalMejoras = (m) => MEJORAS_MESA.reduce((t, c) => t + m.mejoras[c.id], 0);   // mejoras compradas en esa mesa (de 25 posibles)
 let nEstac = ESTAC_INICIALES, proxAuto = 0, autosPerdidos = 0; // lugares de estacionamiento disponibles, cuándo pasa el próximo auto, autos que no hallaron lugar
 let puntero = { x: -99, y: -99 };       // último punto tocado/señalado en el lienzo (para dibujar el platillo)
 
@@ -190,17 +201,17 @@ const esp = (ms) => { const g = gen; return new Promise((r) => esperas.push({ fi
 function nuevaPartida() {
   gen++; esperas = [];
   ents = []; globos = []; monedas = [];
-  mesas = MESAS_BASE.map((m) => ({ ...m, ocupada: false, plato: false, barra: null, esperando: false, tomado: false, enojo: false, listoDesde: 0, res: null, clientes: [] }));
+  mesas = MESAS_BASE.map((m) => ({ ...m, ocupada: false, plato: false, barra: null, esperando: false, tomado: false, enojo: false, listoDesde: 0, res: null, clientes: [], mejoras: nuevasMejoras() }));
   recepcion = Array(SLOTS.length).fill(null);
   dinero = leerDinero(); ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
   const habiaCambios = terreno2 || nEstac > ESTAC_INICIALES; terreno2 = false; lote = null; puerta2 = false;
-  nEstac = ESTAC_INICIALES; autosPerdidos = 0; proxAuto = PRIMER_AUTO_MS; nivelMesas = 1; nivelSillas = 1;
+  nEstac = ESTAC_INICIALES; autosPerdidos = 0; proxAuto = PRIMER_AUTO_MS;
   CAJONES.forEach((k) => { k.usado = false; k.coche = null; k.pendientes = 0; });
   if (habiaCambios) armarFondo(); // quita la plaza y los lugares de estacionamiento de la partida anterior
   reloj = 0; proxLlegada = PRIMERA_LLEGADA_MS; ultimoSeg = -1; puntosEnviados = 0; umbralPuntos = PUNTOS_LOTE;
   cerrarTienda();
   $("tiempo").textContent = fmtTiempo(0);
-  info("Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para contratar personal.");
+  info("Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para contratar personal y una mesa para mejorarla.");
   actualizar();
 }
 
@@ -372,6 +383,7 @@ async function atender(n, clientes, mesa, pu = 0) {
   mesa.barra = null;
   mesa.plato = false;
   globo(mesa.cx, mesa.cy, "🧾 La cuenta", 1200);
+  const tarifa = pagoPorCliente(mesa); // lo que paga cada uno por haber usado ESTA mesa tal como está ahora
   // Terminaron de comer: se levantan todos y la mesa queda libre desde este momento (ya no se toca «mesa» para este grupo)
   mesa.ocupada = false;
   mesa.clientes = [];
@@ -380,7 +392,7 @@ async function atender(n, clientes, mesa, pu = 0) {
   await Promise.all(clientes.map(async (c, i) => {
     await esp(i * 300);
     const ida = rutaIda(mesa, i, P);
-    let monto = pagoPorCliente();
+    let monto = tarifa;
     if (Math.random() < PROB_BANIO) {
       await banio(c, ida, i, P);
       monto += COSTO_BANIO;
@@ -450,6 +462,7 @@ function tocar(sx, sy) {
   let elegido = listos.find((m) => { const [px, py] = iso(SLOT_X[m.id - 1], SLOT_Y, 40); return Math.hypot(sx - px, sy - py) < 28; });
   if (!elegido && enCocina) elegido = listos.sort((a, b) => a.listoDesde - b.listoDesde)[0];
   if (elegido) { elegido.tomado = true; llevando = elegido; info("Llevas el platillo de la mesa " + elegido.id + ": toca esa mesa para entregarlo."); }
+  else if (mesaTocada) abrirMejorasMesa(mesaTocada); // tocar una mesa (sin platillo en la mano) abre sus mejoras
   else if (enCocina) info("Todavía no hay platillos listos.");
 }
 function posEnLienzo(e) { const r = lienzo.getBoundingClientRect(); return [((e.clientX - r.left) * CW) / r.width, ((e.clientY - r.top) * CH) / r.height]; }
@@ -463,14 +476,17 @@ async function banio(c, ida, i, P = PUERTAS[0]) {
 }
 
 // ----- Tienda y personal -----
-function abrirTienda() {
+function abrirTienda(mesa = null) { // sin mesa: la tienda de la recepción; con mesa: el panel de mejoras de esa mesa
+  mesaMejora = mesa;
   pintarTienda();
   $("tienda").hidden = false;
   ponerPausa(true);
-  info("⏸️ Juego en pausa mientras estás en la tienda.");
+  info(mesa ? "⏸️ Juego en pausa mientras mejoras la mesa " + mesa.id + "." : "⏸️ Juego en pausa mientras estás en la tienda.");
 }
+function abrirMejorasMesa(m) { abrirTienda(m); }
 function cerrarTienda() {
   const estabaEnPausa = pausado;
+  mesaMejora = null;
   $("tienda").hidden = true;
   ponerPausa(false);
   if (estabaEnPausa) info("▶️ Juego reanudado.");
@@ -534,20 +550,42 @@ function filaSimple(ico, nombre, texto, boton, deshabilitado, accion) {
   fila.append(i, t, b);
   return fila;
 }
+function pintarMejorasMesa(m, lista) {
+  $("tiendaTitulo").textContent = "🪑 Mesa " + m.id;
+  const res = document.createElement("small");
+  res.style.cssText = "display:block;margin:2px 0 6px;color:var(--suave)";
+  res.textContent = "Cada cliente de esta mesa paga " + pesos(pagoPorCliente(m)) + (bonoMesa(m) ? " (" + pesos(PAGO_POR_CLIENTE) + " + " + pesos(bonoMesa(m)) + " de mejoras)" : " (sin mejoras todavía)") + ". Las mejoras son solo de esta mesa.";
+  lista.appendChild(res);
+  const maxB = BONO_MEJORAS.length;
+  for (const c of MEJORAS_MESA) {
+    const k = m.mejoras[c.id];
+    const txt = (nivel) => {
+      const hechas = nivel - 1;
+      return "Mejoras " + hechas + " de " + maxB + (hechas ? " · ya suma " + pesos(bonoAcum(hechas)) + " por cliente" : "") + (hechas < maxB ? " · la siguiente suma " + pesos(BONO_MEJORAS[hechas]) : " · al máximo");
+    };
+    lista.appendChild(filaTienda(c.ico, c.nombre, { nivel: k + 1 }, 0, c.precios, txt, null, () => mejorarCosaMesa(m, c.id)));
+  }
+}
+function mejorarCosaMesa(m, id) {
+  const c = MEJORAS_MESA.find((x) => x.id === id), k = m.mejoras[id], precio = c && c.precios[k];
+  if (!c || precio === undefined || dinero < precio) return;
+  dinero -= precio;
+  m.mejoras[id]++;
+  info("Mesa " + m.id + ": mejoraste " + c.nombre.toLowerCase() + " (" + m.mejoras[id] + " de " + BONO_MEJORAS.length + "). Ahora cada cliente de esa mesa paga " + pesos(pagoPorCliente(m)) + ".");
+  actualizar();
+}
 function pintarTienda() {
   $("tiendaDinero").textContent = fmt(dinero);
   const lista = $("tiendaLista");
   lista.style.cssText = "max-height:52vh;overflow-y:auto"; // con tantas filas, la lista se desplaza
   lista.innerHTML = "";
+  if (mesaMejora) { pintarMejorasMesa(mesaMejora, lista); return; }
+  $("tiendaTitulo").textContent = "🛒 Tienda";
   const txtRecep = (n) => "Nivel " + n + " de " + (RECEP_PRECIOS_MEJORA.length + 1) + " · da mesa en " + (RECEP_TIEMPOS_MS[n - 1] / 1000).toFixed(1) + " s";
   const txtMesero = (n) => "Nivel " + n + " de " + (MESERO_PRECIOS_MEJORA.length + 1) + " · lleva los platillos a su paso";
-  const txtMesas = (n) => "Nivel " + n + " de " + (MESAS_PRECIOS_MEJORA.length + 1) + " · cada cliente paga " + (n > 1 ? "$" + fmt((n - 1) * BONO_NIVEL) + " más" : "lo normal") + " · sube el nivel y se pagan 50 centavos más por cliente";
-  const txtSillas = (n) => "Nivel " + n + " de " + (SILLAS_PRECIOS_MEJORA.length + 1) + " · cada cliente paga " + (n > 1 ? "$" + fmt((n - 1) * BONO_NIVEL) + " más" : "lo normal") + " · sube el nivel y se pagan 50 centavos más por cliente";
   lista.append(
     filaTienda("🧑‍💼", "Recepcionista", receps[0], PRECIO_RECEP, RECEP_PRECIOS_MEJORA, txtRecep, () => contratarRecep(0), () => mejorarRecep(0)),
     filaTienda("🤵", "Mesero", meseros[0], PRECIO_MESERO, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(0), () => mejorarMesero(0)),
-    filaTienda("🪑", "Mesas", { nivel: nivelMesas }, 0, MESAS_PRECIOS_MEJORA, txtMesas, null, mejorarMesas),
-    filaTienda("💺", "Sillas", { nivel: nivelSillas }, 0, SILLAS_PRECIOS_MEJORA, txtSillas, null, mejorarSillas),
     filaTerreno(),
     filaTienda("🤵‍♀️", "Segundo mesero", meseros[1], PRECIO_MESERO2, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(1), () => mejorarMesero(1),
       !meseros[0] ? "Primero contrata al mesero." : terreno2 ? "" : "Se desbloquea al ampliar el terreno."),
@@ -647,23 +685,6 @@ function mejorarMesero(k) {
   w.nivel++;
   w.ent.vel = MESERO_VEL[w.nivel - 1];
   info((k ? "El segundo mesero" : "El mesero") + " subió al nivel " + w.nivel + ".");
-  actualizar();
-}
-// Mejorar mesas y sillas: cada nivel suma 50 centavos (BONO_NIVEL) a lo que paga cada cliente
-function mejorarMesas() {
-  const c = MESAS_PRECIOS_MEJORA[nivelMesas - 1];
-  if (c === undefined || dinero < c) return;
-  dinero -= c;
-  nivelMesas++;
-  info("¡Mesas de nivel " + nivelMesas + "! Cada cliente paga 50 centavos más: ahora " + pesos(pagoPorCliente()) + " por persona.");
-  actualizar();
-}
-function mejorarSillas() {
-  const c = SILLAS_PRECIOS_MEJORA[nivelSillas - 1];
-  if (c === undefined || dinero < c) return;
-  dinero -= c;
-  nivelSillas++;
-  info("¡Sillas de nivel " + nivelSillas + "! Cada cliente paga 50 centavos más: ahora " + pesos(pagoPorCliente()) + " por persona.");
   actualizar();
 }
 // El mesero w va a la cocina por el platillo de la mesa m, lo lleva y vuelve a su lugar. Si la paciencia de la mesa se acaba en el camino, no entrega.
@@ -789,12 +810,13 @@ const MADERA = { tapa: "#c58b4e", izq: "#a06a35", der: "#85542a" };
 const MADERA_OSCURA = { tapa: "#8d6e63", izq: "#6d4c41", der: "#5a3d33" };
 const ACERO = { tapa: "#cfd8dc", izq: "#90a4ae", der: "#78909c" };
 const SILLA = { tapa: "#bc9a8c", izq: "#8d6e63", der: "#6d4c41" };
-// Aspecto por nivel (1 a 5): las mesas pasan de madera a mesa con mantel, talavera azul y dorada; las sillas ganan un cojín de color
+// Aspecto según las mejoras de «Mesa» y de «Sillas» (0 a 5): las mesas pasan de madera a mesa con mantel, talavera azul y dorada; las sillas ganan un cojín de color
 const MESA_ESTILOS = [
   MADERA,
   { tapa: "#d9a066", izq: "#b97a3d", der: "#9a6130" }, // madera barnizada
   { tapa: "#f4ecd8", izq: "#c9b99a", der: "#a8977a" }, // mantel crema
   { tapa: "#4f8fd6", izq: "#2f6db3", der: "#1f5590" }, // talavera azul
+  { tapa: "#e0e0e0", izq: "#b0b0b0", der: "#8f8f8f" }, // mármol
   { tapa: "#f2c14e", izq: "#d19a1f", der: "#a87710" }, // dorada
 ];
 const SILLA_COJINES = [
@@ -802,6 +824,7 @@ const SILLA_COJINES = [
   { tapa: "#d7b98e", izq: "#b8946a", der: "#9a7a52" }, // cojín arena
   { tapa: "#ef9a9a", izq: "#e53935", der: "#b71c1c" }, // cojín rojo
   { tapa: "#80cbc4", izq: "#26a69a", der: "#00796b" }, // cojín verde
+  { tapa: "#90caf9", izq: "#1e88e5", der: "#0d47a1" }, // cojín azul
   { tapa: "#f2c14e", izq: "#d19a1f", der: "#a87710" }, // cojín dorado
 ];
 
@@ -1011,11 +1034,17 @@ function sombra(x, y, r) {
 function persona(e, x, y, z, tam) { sombra(x, y, 13); const [sx, sy] = iso(x, y, z); emoji(e, sx, sy, tam); }
 
 function dibujarMesa(m) {
-  caja3d(ctx, m.cx - 32, m.cy - 32, m.cx + 32, m.cy + 32, 22, MESA_ESTILOS[nivelMesas - 1], "#5b4636");
+  caja3d(ctx, m.cx - 32, m.cy - 32, m.cx + 32, m.cy + 32, 22, MESA_ESTILOS[m.mejoras.mesa], "#5b4636");
   if (m.ocupada) suelo(ctx, m.cx - 32, m.cy - 32, m.cx + 32, m.cy + 32, null, 22, "#7c5cff");
   if (llevando === m) { suelo(ctx, m.cx - 32, m.cy - 32, m.cx + 32, m.cy + 32, null, 22, "#ffd54a"); suelo(ctx, m.cx - 34, m.cy - 34, m.cx + 34, m.cy + 34, null, 22, "#ffd54a"); }
   const [sx, sy] = iso(m.cx, m.cy, 22);
-  texto("Mesa " + m.id, sx, sy + 9, 10, "#fff", "center");
+  const nm = totalMejoras(m);
+  texto("Mesa " + m.id + (nm ? " ★" + nm : ""), sx, sy + 9, 10, nm ? "#ffe082" : "#fff", "center"); // ★ = mejoras compradas en esa mesa
+  // Lo que ya mejoraste se ve sobre la mesa: cubiertos, bebidas y servilletas (más grandes mientras más mejoras)
+  [["cubiertos", "🍴", -20, 14], ["bebidas", "🥤", 14, -20], ["servilletas", "🧻", 20, 18]].forEach(([id, em, dx, dy]) => {
+    const k = m.mejoras[id];
+    if (k) { const [ex, ey] = iso(m.cx + dx, m.cy + dy, 24); emoji(em, ex, ey, 10 + k * 1.6); }
+  });
   if (m.plato) emoji("🍽️", sx, sy - 4, 22);
   if (m.esperando) { // paciencia: verde, y roja desde que se enojan
     const resta = Math.max(0, 1 - (ahora() - m.listoDesde) / PACIENCIA_MS);
@@ -1029,10 +1058,10 @@ function dibujarMesa(m) {
     ctx.fillStyle = m.barra.color; ctx.fillRect(sx - 24, sy - 38, 48 * f, 7);
   }
 }
-function dibujarSilla(s) {
+function dibujarSilla(s, m) {
   caja3d(ctx, s.x - 10, s.y - 10, s.x + 10, s.y + 10, 10, SILLA, "#5b4636");
-  const cojin = SILLA_COJINES[nivelSillas - 1];
-  if (cojin) caja3d(ctx, s.x - 8, s.y - 8, s.x + 8, s.y + 8, 10 + nivelSillas, cojin, "#5b4636"); // cada nivel la hace un poco más alta
+  const k = m.mejoras.sillas, cojin = SILLA_COJINES[k];
+  if (cojin) caja3d(ctx, s.x - 8, s.y - 8, s.x + 8, s.y + 8, 10 + k, cojin, "#5b4636"); // cada nivel la hace un poco más alta
 }
 function dibujarMostrador() {
   caja3d(ctx, 20, 40, 250, 70, 26, ACERO, "#546e7a");
@@ -1140,7 +1169,7 @@ function dibujar() {
   const cola = [];
   for (const m of mesas) {
     cola.push({ d: m.cx + m.cy, f: () => dibujarMesa(m) });
-    for (const t of ORDEN_SILLAS) { const s = silla(m, t); cola.push({ d: s.x + s.y - 0.5, f: () => dibujarSilla(s) }); }
+    for (const t of ORDEN_SILLAS) { const s = silla(m, t); cola.push({ d: s.x + s.y - 0.5, f: () => dibujarSilla(s, m) }); }
   }
   cola.push({ d: 190, f: dibujarMostrador });
   cola.push({ d: 222, f: dibujarChef });
