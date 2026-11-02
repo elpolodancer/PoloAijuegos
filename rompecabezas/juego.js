@@ -1,6 +1,6 @@
 // Ruta: rompecabezas/juego.js
 // Rompecabezas con 4 pantallas (menú → categoría → ajustes → juego), piezas con lengüetas,
-// número de piezas con deslizador, rotación opcional, pausa, zoom y subida segura a imgbb
+// número de piezas con deslizador, rotación opcional, pausa, vista fija (sin zoom) y subida segura a imgbb
 // mediante un Apps Script (la API key NUNCA va aquí).
 
 import { URL_SUBIDA_IMAGENES } from "../compartido/configs.js";
@@ -16,11 +16,9 @@ const IMAGEN_MAX_MB = 15;       // tamaño máximo del archivo elegido
 const PIEZA_W = 80;             // ancho de pieza en unidades del «mundo» (no son píxeles)
 const IMAN = 0.35;              // qué tan cerca (fracción de pieza) para que un grupo se fije en su lugar del tablero
 const UNION = 0.35;             // qué tan cerca (fracción de pieza) para que dos piezas vecinas se peguen entre sí (en cualquier parte)
-const ZOOM_MAX = 8;
-const ZOOM_MIN_REL = 0.6;       // lo más que se puede alejar: este % del zoom con el que empieza el juego (0.6 = 60 %)
-const ZONA_PIEZAS = 0.4;        // tamaño de la zona donde se reparten las piezas (0.4 = 60 % más chica; 1 = como antes)
-const TABLERO_ANCHO = 0.84;     // al empezar, el tablero ocupa este % del ancho de la pantalla
-const DENSIDAD = 0.6;           // cuánto se pueden amontonar las piezas fuera del tablero (menos = más espacio)
+const MARGEN_PX = 3;            // aire (px) entre el tablero y el borde de la pantalla, para que se vea su contorno
+const TABLERO_MAX = 0.72;       // el tablero nunca ocupa más de este % del otro lado de la pantalla (así siempre queda sitio para las piezas)
+const BOTON_PX = 64;            // zona (px) de la esquina superior derecha que tapa el botón de pausa: ahí no se reparten piezas
 const GUIA_TENUE = 0;           // transparencia de la imagen sobre el tablero (0 = vacío, como el original)
 const TAP_PX = 8;               // movimiento máximo (px) para que un toque cuente como «girar pieza» (solo con rotación activada)
 const SPRITE_MAX_PX = 16e6;     // al arrastrar, el grupo se congela como imagen si no pasa de esta área (px); si no, se dibuja pieza por pieza
@@ -50,15 +48,13 @@ let opciones = [], idx = 0, bordes = null;
 let cols = 0, rows = 0, rotacion = false;
 let pw = PIEZA_W, ph = PIEZA_W, BW = 0, BH = 0, padW = 0, kS = 1;
 let piezas = [], sueltas = [], colocadas = 0;   // «sueltas» ahora es la lista de GRUPOS sin fijar (el último está arriba)
-let mundo = { x0: 0, y0: 0, x1: 0, y1: 0 };
-let zoomMin = 0.1;              // se calcula al repartir las piezas (ZOOM_MIN_REL × zoom inicial)
-let cam = { x: 0, y: 0, s: 1 };
+let cam = { x: 0, y: 0, s: 1 };   // la vista es FIJA: no hay zoom ni desplazamiento; solo se recalcula al girar/cambiar el tamaño de la pantalla
+let modoHor = true;             // true = pantalla horizontal (PC): tablero a lo alto y piezas a los lados; false = vertical (celular)
 let guia = false, t0 = 0, acum = 0, terminado = false, iniciado = false, pausado = false;
 let sucio = false, temporizadorMsg = null, rafPrev = 0;
 let capa = null;                // lienzo auxiliar: todo el tablero SIN el grupo que se arrastra (se pinta una sola vez por arrastre)
 let rectL = null;               // posición del lienzo en pantalla (se guarda para no recalcular el layout en cada evento)
 
-const clamp = (s) => Math.min(ZOOM_MAX, Math.max(zoomMin, s));
 const fmt = (s) => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 const tiempoActual = () => Math.floor(acum + (t0 ? (Date.now() - t0) / 1000 : 0));
 
@@ -316,6 +312,7 @@ function tamano() {
   if (!r.width || !r.height) return;
   lienzo.width = Math.max(1, Math.round(r.width * dpr));
   lienzo.height = Math.max(1, Math.round(r.height * dpr));
+  reajustar();
   pedir();
 }
 new ResizeObserver(tamano).observe(lienzo);
@@ -467,50 +464,99 @@ function iniciar() {
   repartir();
 }
 
-// Tablero al centro y las piezas amontonadas en las franjas de arriba y de abajo (como el original)
-function repartir() {
+// ---------- VISTA FIJA Y REPARTO ----------
+// Pantalla horizontal (PC): el tablero ocupa TODO el alto y las piezas van en las franjas sobrantes de la izquierda y la derecha.
+// Pantalla vertical (celular): el tablero ocupa TODO el ancho y las piezas van en las franjas sobrantes de arriba y de abajo.
+// No hay zoom ni desplazamiento: todo lo que existe está siempre a la vista (las piezas pueden quedar muy juntas).
+function ajustarCamara() {
   const W = lienzo.width / dpr, H = lienzo.height / dpr;
-  const s = Math.min(ZOOM_MAX, (W * TABLERO_ANCHO) / BW, (H * 0.5) / BH);
-  zoomMin = s * ZOOM_MIN_REL;                     // no se puede alejar más que esto (evita lag y alejarse sin querer)
+  if (!(W > 0 && H > 0 && BW > 0 && BH > 0)) return null;
+  const hor = W >= H;
+  let s = hor ? (H - 2 * MARGEN_PX) / BH : (W - 2 * MARGEN_PX) / BW;
+  s = Math.min(s, hor ? (W * TABLERO_MAX) / BW : (H * TABLERO_MAX) / BH);   // imágenes muy anchas/altas: se reserva sitio para las piezas
   cam.s = s;
   cam.x = BW / 2 - W / (2 * s);
   cam.y = BH / 2 - H / (2 * s);
+  modoHor = hor;
+  return { hor, W, H };
+}
 
-  const vx0 = cam.x, vx1 = cam.x + W / s, vy0 = cam.y, vy1 = cam.y + H / s;
-  let aY0 = vy0 - ph * 0.2, aY1 = -ph * 1.05;     // franja de arriba (posiciones y de la esquina de la pieza)
-  let bY0 = BH + ph * 0.05, bY1 = vy1 - ph * 0.8; // franja de abajo
-  const ancho = vx1 - vx0;
-  const altoDisp = Math.max(0, aY1 - aY0) + Math.max(0, bY1 - bY0);
-  const altoNec = (piezas.length * pw * ph * DENSIDAD) / ancho;
-  if (altoDisp < altoNec) {                       // muchas piezas: las franjas crecen hacia afuera (se baja/sube con el dedo)
-    const extra = (altoNec - altoDisp) / 2;
-    aY0 -= extra; bY1 += extra;
-    if (aY1 < aY0 + ph) aY1 = aY0 + ph;
-    if (bY1 < bY0 + ph) bY1 = bY0 + ph;
+// Rectángulos (en unidades del mundo) donde cabe el CENTRO de una pieza sin salirse de la pantalla ni caer sobre el tablero
+function zonasLibres() {
+  const W = lienzo.width / dpr, H = lienzo.height / dpr;
+  const vx0 = cam.x, vx1 = cam.x + W / cam.s, vy0 = cam.y, vy1 = cam.y + H / cam.s;
+  const m = Math.max(pw, ph) / 2;
+  const z = modoHor
+    ? [{ x0: vx0 + m, x1: Math.max(vx0 + m, -m), y0: vy0 + m, y1: vy1 - m },
+       { x0: Math.min(vx1 - m, BW + m), x1: vx1 - m, y0: vy0 + m, y1: vy1 - m }]
+    : [{ x0: vx0 + m, x1: vx1 - m, y0: vy0 + m, y1: Math.max(vy0 + m, -m) },
+       { x0: vx0 + m, x1: vx1 - m, y0: Math.min(vy1 - m, BH + m), y1: vy1 - m }];
+  for (const a of z) { a.x1 = Math.max(a.x0, a.x1); a.y1 = Math.max(a.y0, a.y1); a.w = Math.max(1, (a.x1 - a.x0) * (a.y1 - a.y0)); }
+  return { z, vx1, vy0, m };
+}
+
+function puntoLibre(zl) {                         // punto al azar en alguna zona (más probable en la más grande); esquiva el botón de pausa
+  const R = BOTON_PX / cam.s;
+  let x = 0, y = 0;
+  for (let i = 0; i < 8; i++) {
+    const tot = zl.z[0].w + zl.z[1].w;
+    const a = Math.random() * tot < zl.z[0].w ? zl.z[0] : zl.z[1];
+    x = a.x0 + Math.random() * (a.x1 - a.x0);
+    y = a.y0 + Math.random() * (a.y1 - a.y0);
+    if (!(x > zl.vx1 - R && y < zl.vy0 + R)) break;
   }
-  // Zona más chica: las franjas se acortan hacia el tablero (el lado pegado al tablero no se mueve)
-  aY0 = aY1 - Math.max(ph, (aY1 - aY0) * ZONA_PIEZAS);
-  bY1 = bY0 + Math.max(ph, (bY1 - bY0) * ZONA_PIEZAS);
-  const hA = Math.max(1, aY1 - aY0), hB = Math.max(1, bY1 - bY0);
+  return { x, y };
+}
+
+function centroGrupo(gr) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of gr.m) {
+    const cx = p.x + pw / 2, cy = p.y + ph / 2;
+    x0 = Math.min(x0, cx); y0 = Math.min(y0, cy); x1 = Math.max(x1, cx); y1 = Math.max(y1, cy);
+  }
+  return { x0, y0, x1, y1, x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
+}
+
+function dispersar(grupos) {                      // coloca cada grupo suelto en un punto al azar de las franjas libres
+  const zl = zonasLibres();
+  for (const gr of grupos) {
+    const c = centroGrupo(gr), t = puntoLibre(zl);
+    moverGrupo(gr, t.x - c.x, t.y - c.y);
+  }
+}
+
+function acomodarSueltas() {                      // si cambió el tamaño de la pantalla, mantiene todos los grupos a la vista
+  const W = lienzo.width / dpr, H = lienzo.height / dpr;
+  const m = Math.max(pw, ph) / 2;
+  const vx0 = cam.x + m, vx1 = cam.x + W / cam.s - m, vy0 = cam.y + m, vy1 = cam.y + H / cam.s - m;
+  for (const gr of sueltas) {
+    const c = centroGrupo(gr);
+    let dx = 0, dy = 0;
+    if (c.x0 < vx0) dx = vx0 - c.x0; else if (c.x1 > vx1) dx = vx1 - c.x1;
+    if (c.y0 < vy0) dy = vy0 - c.y0; else if (c.y1 > vy1) dy = vy1 - c.y1;
+    if (dx || dy) moverGrupo(gr, dx, dy);
+  }
+}
+
+function reajustar() {                            // al girar el celular o cambiar el tamaño de la ventana
+  if (!piezas.length || !sueltas) return;
+  const antes = modoHor;
+  if (!ajustarCamara()) return;
+  if (modoHor !== antes) dispersar(sueltas);      // cambió de horizontal a vertical (o al revés): se reparten de nuevo en las franjas nuevas
+  acomodarSueltas();
+}
+
+// Tablero ocupando todo el alto (PC) o todo el ancho (celular) y las piezas amontonadas en las franjas sobrantes
+function repartir() {
+  if (!ajustarCamara()) return;
   for (const p of piezas) {
-    p.x = vx0 - pw * 0.25 + Math.random() * (ancho - pw * 0.5);
-    p.y = Math.random() < hA / (hA + hB) ? aY0 + Math.random() * hA : bY0 + Math.random() * hB;
+    p.x = 0; p.y = 0;
     p.rot = rotacion ? Math.floor(Math.random() * 4) : 0;
     p.ok = false;
     p.g = { m: [p], ok: false };                  // grupo de una sola pieza
   }
-  mundo = { x0: Math.min(vx0, 0) - pw, y0: aY0 - ph * 0.2, x1: Math.max(vx1, BW) + pw, y1: bY1 + ph * 1.2 };
   sueltas = piezas.map((p) => p.g).sort(() => Math.random() - 0.5);
-  pedir();
-}
-
-function verTodo() {
-  if (arr) arr.cache = null;
-  const W = lienzo.width / dpr, H = lienzo.height / dpr;
-  const ww = mundo.x1 - mundo.x0, hh = mundo.y1 - mundo.y0;
-  cam.s = clamp(Math.min(W / ww, H / hh));
-  cam.x = mundo.x0 - (W / cam.s - ww) / 2;
-  cam.y = mundo.y0 - (H / cam.s - hh) / 2;
+  dispersar(sueltas);
   pedir();
 }
 
@@ -552,7 +598,6 @@ function continuar() {
 $("pausa").addEventListener("click", pausar);
 $("pContinuar").addEventListener("click", continuar);
 $("pGuia").addEventListener("click", () => { guia = !guia; if (arr) arr.cache = null; pedir(); continuar(); });
-$("pTodo").addEventListener("click", () => { verTodo(); continuar(); });
 $("pMezclar").addEventListener("click", () => {
   if (colocadas > 0 && !confirm("Se mezclarán de nuevo las piezas. ¿Continuar?")) return;
   $("pausaMenu").hidden = true;
@@ -584,20 +629,15 @@ async function ganar() {
   } catch (e) {}
 }
 
-// ---------- ZOOM, ARRASTRE Y GIRO ----------
+// ---------- ARRASTRE Y GIRO (sin zoom ni desplazamiento de la vista) ----------
 const punt = new Map();
-let arr = null, pan = false, pinch = null;
-const pos = (e) => { const r = rectL || (rectL = lienzo.getBoundingClientRect()); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+let arr = null;
+// La posición se limita al lienzo: así una pieza nunca puede quedar arrastrada fuera de la pantalla
+const pos = (e) => {
+  const r = rectL || (rectL = lienzo.getBoundingClientRect());
+  return { x: Math.min(r.width, Math.max(0, e.clientX - r.left)), y: Math.min(r.height, Math.max(0, e.clientY - r.top)) };
+};
 const aMundo = (px, py) => ({ x: cam.x + px / cam.s, y: cam.y + py / cam.s });
-
-function zoom(f, px, py) {
-  if (arr) arr.cache = null;
-  const wx = cam.x + px / cam.s, wy = cam.y + py / cam.s;
-  cam.s = clamp(cam.s * f);
-  cam.x = wx - px / cam.s;
-  cam.y = wy - py / cam.s;
-  pedir();
-}
 
 function buscar(wx, wy) {                        // devuelve { g: grupo, pz: pieza tocada } o null
   const hx = pw * 0.6, hy = ph * 0.6;
@@ -687,57 +727,36 @@ function soltar() {
 
 lienzo.addEventListener("pointerdown", (e) => {
   if (!fuente || !piezas.length || pausado || terminado) return;
+  e.preventDefault();
+  if (punt.size) return;                          // un solo dedo a la vez: el pellizco no hace nada (no hay zoom)
   lienzo.setPointerCapture(e.pointerId);
-  if (!punt.size) rectL = null;                   // al empezar un gesto se recalcula la posición del lienzo una vez
+  rectL = null;                                   // al empezar un gesto se recalcula la posición del lienzo una vez
   const p = pos(e);
   punt.set(e.pointerId, p);
-  if (punt.size === 1) {
-    const w = aMundo(p.x, p.y);
-    const hit = buscar(w.x, w.y);
-    if (hit) {
-      arr = { g: hit.g, pz: hit.pz, lx: w.x, ly: w.y, sx: p.x, sy: p.y, tx: 0, ty: 0, mov: false, cache: null };
-      sueltas.splice(sueltas.indexOf(hit.g), 1);
-      sueltas.push(hit.g);                        // el grupo queda encima
-      iniciarReloj();
-      pedir();
-    } else pan = true;
-  } else if (punt.size === 2) {
-    if (arr) soltar();
-    pan = false;
-    const [a, b] = [...punt.values()];
-    pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+  const w = aMundo(p.x, p.y);
+  const hit = buscar(w.x, w.y);
+  if (hit) {
+    arr = { g: hit.g, pz: hit.pz, lx: w.x, ly: w.y, sx: p.x, sy: p.y, tx: 0, ty: 0, mov: false, cache: null };
+    sueltas.splice(sueltas.indexOf(hit.g), 1);
+    sueltas.push(hit.g);                          // el grupo queda encima
+    iniciarReloj();
+    pedir();
   }
-  e.preventDefault();
 });
 
 lienzo.addEventListener("pointermove", (e) => {
-  if (!punt.has(e.pointerId)) return;
-  const p = pos(e), ant = punt.get(e.pointerId);
+  if (!punt.has(e.pointerId) || !arr) return;
+  const p = pos(e);
   punt.set(e.pointerId, p);
-  if (punt.size === 1) {
-    if (arr) {                                    // la pieza sigue al dedo desde el primer píxel (sin zona muerta)
-      const w = aMundo(p.x, p.y);
-      const dx = w.x - arr.lx, dy = w.y - arr.ly;
-      arr.lx = w.x; arr.ly = w.y;
-      moverGrupo(arr.g, dx, dy);                  // todo el grupo se mueve junto
-      arr.tx += dx; arr.ty += dy;                 // total movido (para deshacerlo si resulta ser un toque)
-      if (arr.cache) { arr.cache.ax += dx; arr.cache.ay += dy; }
-      // Con rotación activada, un movimiento corto sigue contando como «toque»; sin rotación, cualquier movimiento es arrastre
-      if (!arr.mov && Math.hypot(p.x - arr.sx, p.y - arr.sy) > (rotacion ? TAP_PX : 0)) arr.mov = true;
-      pedir();
-    } else if (pan) {
-      cam.x -= (p.x - ant.x) / cam.s; cam.y -= (p.y - ant.y) / cam.s;
-      pedir();
-    }
-  } else if (punt.size === 2 && pinch) {
-    const [a, b] = [...punt.values()];
-    const d = Math.hypot(a.x - b.x, a.y - b.y) || 1, cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
-    const wx = cam.x + pinch.cx / cam.s, wy = cam.y + pinch.cy / cam.s;
-    cam.s = clamp((cam.s * d) / pinch.d);
-    cam.x = wx - cx / cam.s; cam.y = wy - cy / cam.s;
-    pinch.d = d; pinch.cx = cx; pinch.cy = cy;
-    pedir();
-  }
+  const w = aMundo(p.x, p.y);                     // la pieza sigue al dedo desde el primer píxel (sin zona muerta)
+  const dx = w.x - arr.lx, dy = w.y - arr.ly;
+  arr.lx = w.x; arr.ly = w.y;
+  moverGrupo(arr.g, dx, dy);                      // todo el grupo se mueve junto
+  arr.tx += dx; arr.ty += dy;                     // total movido (para deshacerlo si resulta ser un toque)
+  if (arr.cache) { arr.cache.ax += dx; arr.cache.ay += dy; }
+  // Con rotación activada, un movimiento corto sigue contando como «toque»; sin rotación, cualquier movimiento es arrastre
+  if (!arr.mov && Math.hypot(p.x - arr.sx, p.y - arr.sy) > (rotacion ? TAP_PX : 0)) arr.mov = true;
+  pedir();
 });
 
 function fin(e) {
@@ -752,18 +771,16 @@ function fin(e) {
       asentar(gr);
     } else soltar();
   }
-  pinch = null;
-  pan = punt.size === 1;                          // si queda un dedo, sigue moviendo la vista
 }
 lienzo.addEventListener("pointerup", fin);
 lienzo.addEventListener("pointercancel", fin);
 lienzo.addEventListener("contextmenu", (e) => e.preventDefault());
 
-lienzo.addEventListener("wheel", (e) => {
-  e.preventDefault();
-  const p = pos(e);
-  zoom(Math.exp(-e.deltaY * 0.0015), p.x, p.y);
-}, { passive: false });
+// Sin zoom: la rueda del ratón (y Ctrl + rueda) no hace nada sobre el juego; en iPhone se bloquea también el pellizco
+lienzo.addEventListener("wheel", (e) => e.preventDefault(), { passive: false });
+for (const ev of ["gesturestart", "gesturechange", "gestureend"]) {
+  document.addEventListener(ev, (e) => { if (!$("juego").hidden) e.preventDefault(); }, { passive: false });
+}
 
 addEventListener("keydown", (e) => {
   if ($("juego").hidden) return;
