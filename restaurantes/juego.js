@@ -5,6 +5,7 @@
 // Si tardas, se enojan y se van. Al terminar de comer se levantan TODOS y la mesa queda libre; algunos van al baño (cuesta 1 peso) y
 // los demás van directo a la recepción. Cada uno paga 5 pesos al salir (más lo que sumen las mejoras de SU mesa, que se tocan en la mesa; quien usó el baño paga además 1 peso).
 // TIENDA: tocando el mostrador de la recepción (🛒) se abre la zona de compras. Ahí se contrata (y se mejora) a la recepcionista y al mesero.
+// SEGUNDO COCINERO: se contrata en la tienda ($1500, sin otro requisito) y cocina junto con el primero: sus velocidades se suman (cada uno según su nivel).
 // COCINERO Y MESAS: en la tienda se mejora al cocinero (10 niveles: cada nivel cocina más rápido) y se compran mesas nuevas para el comedor (hasta 12 en total, precio creciente).
 // AMPLIACIÓN: en la tienda se compra «Ampliar terreno» (una plaza detrás del restaurante, sobre el pasto). Solo entonces se desbloquea la SEGUNDA PUERTA (el SEGUNDO MESERO ya no la necesita: se compra desde el principio, con el primer mesero contratado, por $500)
 // (entrada por atrás, con su propia fila de espera y su mostrador). La SEGUNDA RECEPCIONISTA solo se puede contratar cuando ya existe la segunda puerta.
@@ -62,6 +63,7 @@ const MESERO_VEL = [70, 95, 125, 160, 200, 230, 260, 295, 330, 370]; // por nive
 const COCINA_FACTOR = [1, 0.85, 0.72, 0.61, 0.52, 0.44, 0.38, 0.33, 0.29, 0.25];   // por nivel (10 niveles)
 const COCINERO_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230];            // costo de subir al nivel 2, 3, 4 ... 10
 // Mesas nuevas: se compran en la tienda en este orden (la 5.ª, la 6.ª...). Después de las 4 iniciales caben 8 más.
+const PRECIO_COCINERO2 = 1500; // segundo cocinero (usa los mismos 10 niveles y precios de mejora que el primero)
 const MESA_PRECIOS = [30, 60, 100, 160, 240, 350, 500, 700];
 const RECEP_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230]; // costo de subir al nivel 2, 3, 4 ... 10 de la recepcionista
 const MESERO_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230]; // ídem para el mesero
@@ -209,7 +211,7 @@ let terreno2 = false, puerta2 = false;             // ampliación comprada / seg
 let lote = null; // terreno comprado: null (ninguno), "izq" o "atras"
 let puntosEnviados = 0, umbralPuntos = PUNTOS_LOTE, enviando = false; // puntos ya mandados al perfil, cuántos hacen falta para el siguiente envío, envío en curso
 let ranura = null; // partida activa (0, 1 o 2); null = estás en el menú y no se guarda nada
-let cocinero = 1, nMesas = MESAS_BASE.length; // nivel del cocinero (1 a 10) y mesas que hay en el comedor
+let cocinero = 1, cocinero2 = 0, nMesas = MESAS_BASE.length; // nivel del cocinero (1 a 10), del segundo cocinero (0 = sin contratar) y mesas que hay en el comedor
 let mesaMejora = null; // mesa cuyo panel de mejoras está abierto (null = la tienda de la recepción)
 const nuevasMejoras = () => Object.fromEntries(MEJORAS_MESA.map((c) => [c.id, 0])); // cuántas mejoras tiene cada cosa de una mesa (0 a 5)
 const bonoAcum = (k) => BONO_MEJORAS.slice(0, k).reduce((t, b) => t + b, 0);        // lo que suman en total las primeras k mejoras
@@ -235,7 +237,7 @@ const crearMesa = (m) => ({ ...m, ocupada: false, plato: false, barra: null, esp
 function nuevaPartida(datos = null) { // datos: partida guardada que se carga (null = partida nueva)
   gen++; esperas = [];
   ents = []; globos = []; monedas = [];
-  cocinero = 1; nMesas = MESAS_BASE.length;
+  cocinero = 1; cocinero2 = 0; nMesas = MESAS_BASE.length;
   mesas = MESAS_BASE.map(crearMesa);
   recepcion = Array(SLOTS.length).fill(null);
   dinero = 0; ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
@@ -288,7 +290,7 @@ function instantanea() {
     mesas: mesas.map((m) => ({ id: m.id, mejoras: { ...m.mejoras } })),
     receps: receps.map((r) => (r ? r.nivel : 0)),
     meseros: meseros.map((w) => (w ? w.nivel : 0)),
-    terreno2, lote, puerta2, nEstac, cocinero, nMesas,
+    terreno2, lote, puerta2, nEstac, cocinero, cocinero2, nMesas,
     fecha: Date.now(),
   };
 }
@@ -307,6 +309,7 @@ function aplicarGuardado(d) {
   reloj = Math.max(0, num(d.reloj)); proxLlegada = reloj + PRIMERA_LLEGADA_MS; proxAuto = reloj + PRIMER_AUTO_MS;
   puntosEnviados = Math.max(0, Math.min(Math.floor(num(d.puntosEnviados)), Math.floor(ganado / PESOS_POR_PUNTO))); // así no se mandan dos veces los mismos puntos al perfil
   cocinero = Math.max(1, Math.min(COCINA_FACTOR.length, Math.floor(num(d.cocinero)) || 1));
+  cocinero2 = Math.max(0, Math.min(COCINA_FACTOR.length, Math.floor(num(d.cocinero2)) || 0));
   nMesas = Math.max(MESAS_BASE.length, Math.min(MESAS_TODAS.length, Math.floor(num(d.nMesas)) || MESAS_BASE.length));
   for (let i = MESAS_BASE.length; i < nMesas; i++) mesas.push(crearMesa(MESAS_TODAS[i]));
   (Array.isArray(d.mesas) ? d.mesas : []).forEach((s) => {
@@ -449,7 +452,9 @@ async function irseEnojados(g, motivo) {
 }
 
 // ms que tarda la cocina en preparar un pedido de n personas con el cocinero actual
-const tiempoCocina = (n) => (T_COCINA_BASE + T_COCINA_POR_CLIENTE * n) * COCINA_FACTOR[cocinero - 1];
+// Los dos cocineros trabajan juntos: sus velocidades (1 / factor) se suman. Con uno solo queda igual que antes; con dos del mismo nivel el pedido tarda la mitad.
+const velCocina = () => 1 / COCINA_FACTOR[cocinero - 1] + (cocinero2 ? 1 / COCINA_FACTOR[cocinero2 - 1] : 0);
+const tiempoCocina = (n) => (T_COCINA_BASE + T_COCINA_POR_CLIENTE * n) / velCocina();
 
 // ----- Un grupo ya sentado, de principio a fin -----
 async function atender(n, clientes, mesa, pu = 0) {
@@ -697,11 +702,12 @@ function pintarTienda() {
   if (mesaMejora) { pintarMejorasMesa(mesaMejora, lista); return; }
   $("tiendaTitulo").textContent = "🛒 Tienda";
   const txtRecep = (n) => "Nivel " + n + " de " + (RECEP_PRECIOS_MEJORA.length + 1) + " · da mesa en " + (RECEP_TIEMPOS_MS[n - 1] / 1000).toFixed(1) + " s";
-  const txtCocinero = (n) => "Nivel " + n + " de " + (COCINERO_PRECIOS_MEJORA.length + 1) + " · un pedido para 4 personas tarda " + (tiempoCocina(4) / 1000).toFixed(1) + " s";
+  const txtCocinero = (n) => "Nivel " + n + " de " + (COCINERO_PRECIOS_MEJORA.length + 1) + " · un pedido para 4 personas tarda " + (tiempoCocina(4) / 1000).toFixed(1) + " s (con todos los cocineros)";
   const txtMesero = (n) => "Nivel " + n + " de " + (MESERO_PRECIOS_MEJORA.length + 1) + " · lleva los platillos a su paso";
   lista.append(
     filaTienda("🧑‍💼", "Recepcionista", receps[0], PRECIO_RECEP, RECEP_PRECIOS_MEJORA, txtRecep, () => contratarRecep(0), () => mejorarRecep(0)),
     filaTienda("👨‍🍳", "Cocinero", { nivel: cocinero }, 0, COCINERO_PRECIOS_MEJORA, txtCocinero, null, mejorarCocinero),
+    filaTienda("👩‍🍳", "Segundo cocinero", cocinero2 ? { nivel: cocinero2 } : null, PRECIO_COCINERO2, COCINERO_PRECIOS_MEJORA, txtCocinero, contratarCocinero2, mejorarCocinero2),
     filaMesaNueva(),
     filaTienda("🤵", "Mesero", meseros[0], PRECIO_MESERO, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(0), () => mejorarMesero(0)),
     filaTerreno(),
@@ -714,6 +720,21 @@ function pintarTienda() {
       !receps[0] ? "Primero contrata a la recepcionista." : puerta2 ? "" : "Se desbloquea con la segunda puerta en el nuevo terreno."),
     filaEstac()
   );
+}
+function contratarCocinero2() {
+  if (cocinero2 || dinero < PRECIO_COCINERO2) return;
+  dinero -= PRECIO_COCINERO2;
+  cocinero2 = 1;
+  info("Contrataste al segundo cocinero: cocina junto con el primero y ahora un pedido para 4 personas tarda " + (tiempoCocina(4) / 1000).toFixed(1) + " s. Mejóralo en la tienda.");
+  actualizar();
+}
+function mejorarCocinero2() {
+  const precio = COCINERO_PRECIOS_MEJORA[cocinero2 - 1];
+  if (!cocinero2 || precio === undefined || dinero < precio) return;
+  dinero -= precio;
+  cocinero2++;
+  info("Mejoraste al segundo cocinero (nivel " + cocinero2 + "): ahora un pedido para 4 personas tarda " + (tiempoCocina(4) / 1000).toFixed(1) + " s.");
+  actualizar();
 }
 function mejorarCocinero() {
   const precio = COCINERO_PRECIOS_MEJORA[cocinero - 1];
@@ -1223,6 +1244,7 @@ function dibujarMostrador() {
 }
 function dibujarChef() {
   persona("🧑‍🍳", 110 + DX, 112, 20 + (cocinando > 0 ? Math.abs(Math.sin(ahora() / 120)) * 5 : 0), 34);
+  if (cocinero2) persona("👩‍🍳", 190 + DX, 112, 20 + (cocinando > 0 ? Math.abs(Math.sin(ahora() / 120 + 1.5)) * 5 : 0), 34); // segundo cocinero, a la derecha del primero
   if (cocinando > 0) { const [sx, sy] = iso(150 + DX, 100, 44); emoji("♨️", sx, sy, 20 * ESCALA); }
 }
 // Aviso sobre el grupo que espera en la recepción: «toca para dar mesa» y su barra de paciencia (roja cuando ya están enojados)
@@ -1543,7 +1565,7 @@ function pintarPartidas() {
       const lineas = [
         "💰 $" + fmt(Math.max(0, Math.round(num(d.dinero) * 2) / 2)) + " pesos",
         "🪑 " + (Math.floor(num(d.nMesas)) || mes.length || MESAS_BASE.length) + " mesas · ✨ " + mejoras + " mejoras de mesa",
-        "👨‍🍳 Cocinero nivel " + (Math.floor(num(d.cocinero)) || 1),
+        "👨‍🍳 Cocinero nivel " + (Math.floor(num(d.cocinero)) || 1) + (num(d.cocinero2) > 0 ? " · 👩‍🍳 2.º nivel " + Math.floor(num(d.cocinero2)) : ""),
         "🧑‍💼 " + rec + " recepcionista(s) · 🤵 " + mer + " mesero(s)",
         "🅿️ " + (Math.floor(num(d.nEstac)) || ESTAC_INICIALES) + " lugares" + (LOTES[d.lote] ? " · 🌱 terreno ampliado" : "") + (d.puerta2 ? " · 🚪 segunda puerta" : ""),
         "⏱️ " + fmtTiempo(Math.floor(num(d.reloj) / 1000)) + (d.fecha ? " · " + new Date(num(d.fecha)).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : ""),
