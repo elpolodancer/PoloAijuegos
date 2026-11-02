@@ -29,13 +29,12 @@
   <main>
     <div class="marcador">
       <span>💰 $<b id="dinero">0</b></span>
-      <span>🎲 Tiradas <b id="tiradas">0</b>/3</span>
+      <span>⏱️ Tiempo <b id="tiempo">0</b> s</span>
       <span>🏆 Récord $<b id="record">0</b></span>
     </div>
-    <canvas id="lienzo" class="lienzo" width="720" height="480" aria-label="Restaurante en vista isométrica con cocina, baño, recepción y cuatro mesas"></canvas>
-    <p id="estado">Tira el dado: llegarán 1, 2 o 4 clientes.</p>
+    <canvas id="lienzo" class="lienzo" width="720" height="480" aria-label="Restaurante en vista isométrica con cocina, baño, recepción y cuatro mesas; toca a los clientes que esperan para darles mesa"></canvas>
+    <p id="estado">Los clientes llegan solos: toca a la familia en la recepción para darles mesa.</p>
     <div class="acciones">
-      <button class="btn" id="dado">🎲 Tirar el dado</button>
       <button class="btn" id="reiniciar">Reiniciar</button>
     </div>
     <div id="fin" class="fin" hidden>

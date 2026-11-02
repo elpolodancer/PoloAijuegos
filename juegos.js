@@ -20,5 +20,5 @@ export const JUEGOS = [
   { id: "pradera", nombre: "Pradera", icono: "🦊", descripcion: "Corre y salta por la pradera, aplasta bichos, rompe ladrillos y llega al castillo antes de que se acabe el tiempo (estilo Mario).", carpeta: "pradera" },
   { id: "rompecabezas", nombre: "Rompecabezas", icono: "🧩", descripcion: "Arma un rompecabezas con tu propia imagen: de 32 a 512 piezas, con zoom y guía; si entras con Google puedes guardar tus imágenes.", carpeta: "rompecabezas" },
   { id: "buscaminas", nombre: "Buscaminas", icono: "💣", descripcion: "Despeja el tablero sin pisar ninguna mina: toca para abrir, mantén pulsado para poner bandera. Tres niveles y tu mejor tiempo.", carpeta: "buscaminas" },
-  { id: "restaurantes", nombre: "Restaurantes", icono: "🍽️", descripcion: "Tira el dado: llegan 1, 2 o 4 clientes y la recepcionista les da mesa. Lleva tú mismo cada platillo de la cocina a su mesa antes de que se enojen y se vayan: cada cliente paga $5 y el baño cuesta $1.", carpeta: "restaurantes" },
+  { id: "restaurantes", nombre: "Restaurantes", icono: "🍽️", descripcion: "Los clientes llegan solos: toca a cada familia en la recepción para darle mesa (si no hay, se van enojados). Lleva tú mismo cada platillo de la cocina a su mesa antes de que se enojen y se vayan: cada cliente paga $5 y el baño cuesta $1.", carpeta: "restaurantes" },
 ];
