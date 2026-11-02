@@ -1,14 +1,18 @@
 // Ruta: restaurantes/juego.js
 // «Restaurantes» (vista isométrica estilo Clash of Clans): tiras el dado y llegan 1, 2 o 4 clientes. La recepcionista les da una mesa, piden,
-// la cocina prepara, el mesero sirve, algunos van al baño, comen y pagan 25 pesos cada uno en la recepción.
+// la cocina prepara y TÚ llevas el platillo a mano (clic en la cocina para tomarlo, clic en la mesa para entregarlo).
+// Si tardas, se enojan y se van. Algunos van al baño (cuesta $1), comen y pagan $5 cada uno en la recepción.
 // Solo hay 3 tiradas por partida y 4 mesas con 4 sillas cada una.
 const ID = "restaurantes";
 
 // ----- Ajustes -----
 const MAX_TIRADAS = 3;            // tiradas por partida
 const OPCIONES = [1, 2, 4];       // clientes que pueden llegar en una tirada
-const PAGO_POR_CLIENTE = 25;      // pesos que paga cada cliente
-const PESOS_POR_PUNTO = 5;        // al perfil se envía 1 punto por cada 5 pesos ganados
+const PAGO_POR_CLIENTE = 5;       // pesos que paga cada cliente
+const COSTO_BANIO = 1;            // pesos que cuesta usar el baño
+const ENOJO_MS = 8000;            // desde estos ms de espera (con el platillo ya listo) los clientes se ven enojados
+const PACIENCIA_MS = 15000;       // a estos ms sin recibir el platillo, los clientes se van sin pagar
+const PESOS_POR_PUNTO = 1;        // al perfil se envía 1 punto por cada peso ganado
 const VEL = 150;                  // velocidad de la gente (px por segundo)
 const T_COCINA_BASE = 3000;       // ms de cocina por pedido...
 const T_COCINA_POR_CLIENTE = 500; // ...más estos ms por cada cliente de la mesa
@@ -38,7 +42,9 @@ const ctx = lienzo.getContext("2d");
 // ----- Estado de la partida -----
 let gen = 0; // sube al reiniciar: lo que quedó pendiente de la partida anterior se descarta
 let ents, globos, monedas, mesas;
-let tiradas, dinero, atendidos, terminados, llegando, fin, cocinando;
+let tiradas, dinero, atendidos, perdidos, terminados, llegando, fin, cocinando;
+let llevando = null;                    // mesa cuyo platillo traes en la mano
+let puntero = { x: -99, y: -99 };       // último punto tocado/señalado en el lienzo (para dibujar el platillo)
 
 const ahora = () => performance.now();
 // Espera que no continúa si se reinició la partida mientras tanto
@@ -47,8 +53,8 @@ const esp = (ms) => { const g = gen; return new Promise((r) => setTimeout(() => 
 function nuevaPartida() {
   gen++;
   ents = []; globos = []; monedas = [];
-  mesas = MESAS_BASE.map((m) => ({ ...m, ocupada: false, plato: false, barra: null }));
-  tiradas = 0; dinero = 0; atendidos = 0; terminados = 0; cocinando = 0;
+  mesas = MESAS_BASE.map((m) => ({ ...m, ocupada: false, plato: false, barra: null, esperando: false, tomado: false, enojo: false, listoDesde: 0, res: null, clientes: [] }));
+  tiradas = 0; dinero = 0; atendidos = 0; perdidos = 0; terminados = 0; cocinando = 0; llevando = null;
   llegando = false; fin = false;
   $("fin").hidden = true;
   info("Tira el dado: llegarán 1, 2 o 4 clientes.");
@@ -111,6 +117,7 @@ async function atender(n) {
   const libres = mesas.filter((m) => !m.ocupada);
   const mesa = libres[Math.floor(Math.random() * libres.length)];
   mesa.ocupada = true;
+  mesa.clientes = clientes;
   globo(RECEP.x, RECEP.y, "Mesa " + mesa.id + " para " + n + " 👍", 1800);
   info("La recepcionista les da la mesa " + mesa.id + ".");
   await esp(1800);
@@ -129,8 +136,23 @@ async function atender(n) {
   cocinando--;
   mesa.barra = null;
 
-  // 4) El mesero sirve; comen (y algunos van al baño)
-  await servir(mesa);
+  // 4) Platillo listo: hay que llevarlo a mano. Si tardas demasiado, se van
+  info("¡Platillo listo para la mesa " + mesa.id + "! Tómalo en la cocina y llévalo.");
+  const entregado = await esperarEntrega(mesa);
+  if (!entregado) {
+    perdidos += n;
+    globo(mesa.cx, mesa.cy, "😡 ¡Nos vamos!", 1800);
+    info("Los clientes de la mesa " + mesa.id + " se fueron sin su comida.");
+    await Promise.all(clientes.map(async (c, i) => {
+      await esp(i * 250);
+      await ir(c, [...rutaIda(mesa, i).slice(0, -1).reverse(), [HALL_X, 640], [HALL_X, H + 40]]);
+      quitar(c);
+    }));
+    cerrarGrupo(mesa);
+    return;
+  }
+  mesa.plato = true;
+  globo(mesa.cx, mesa.cy, "😋", 1200);
   mesa.barra = { t0: ahora(), dur: T_COMER, color: "#6fcf97" };
   await Promise.all([esp(T_COMER), ...clientes.map((c, i) => banio(c, mesa, i))]);
   mesa.barra = null;
@@ -145,30 +167,61 @@ async function atender(n) {
     await ir(c, [...ida.slice(0, -1).reverse(), espera(i)]);
     dinero += PAGO_POR_CLIENTE;
     atendidos++;
-    monedas.push({ x: c.x, y: c.y, t0: ahora() });
+    monedas.push({ x: c.x, y: c.y, t0: ahora(), monto: PAGO_POR_CLIENTE });
     actualizar();
     await esp(500);
     await ir(c, [[HALL_X, 640], [HALL_X, H + 40]]);
     quitar(c);
   }));
+  cerrarGrupo(mesa);
+}
+
+function cerrarGrupo(mesa) {
   mesa.ocupada = false;
+  mesa.clientes = [];
   terminados++;
   if (tiradas >= MAX_TIRADAS && terminados >= MAX_TIRADAS) finalizar();
 }
 
-// El mesero lleva el plato de la cocina a la mesa y vuelve
-async function servir(m) {
-  const w = nuevaEnt("🤵", 225, 120);
-  w.lleva = true;
-  const lado = m.cx < HALL_X ? 1 : -1;
-  const ida = [PUERTA_COCINA, [HALL_X, 185], [HALL_X, m.cy], [m.cx + 80 * lado, m.cy]];
-  await ir(w, ida);
-  w.lleva = false;
-  m.plato = true;
-  await esp(300);
-  await ir(w, [[HALL_X, m.cy], [HALL_X, 185], PUERTA_COCINA, [225, 120]]);
-  quitar(w);
+// ----- Entrega manual (todavía no hay mesero) -----
+// Se resuelve con true si entregas el platillo a tiempo, o con false si se acaba la paciencia (se revisa en cuadro())
+function esperarEntrega(m) {
+  return new Promise((res) => { m.listoDesde = ahora(); m.esperando = true; m.tomado = false; m.res = res; });
 }
+function entregar(m) {
+  m.esperando = false; m.tomado = false; m.enojo = false;
+  m.clientes.forEach((c) => (c.enojado = false));
+  llevando = null;
+  info("¡Entregado! La mesa " + m.id + " ya está comiendo.");
+  const r = m.res; m.res = null;
+  if (r) r(true);
+}
+// Posición del platillo de cada mesa sobre el mostrador de la cocina
+const SLOT_X = [60, 110, 160, 210];
+const SLOT_Y = 55;
+const dentro = (p, x0, y0, x1, y1) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1;
+// Del punto de pantalla al mapa plano, suponiendo que está a la altura z
+function aMundo(sx, sy, z) { const u = (sx - OX) / ISO, v = ((sy + z - OY) * 2) / ISO; return [(u + v) / 2, (v - u) / 2]; }
+
+function tocar(sx, sy) {
+  if (fin) return;
+  puntero = { x: sx, y: sy };
+  const enCocina = dentro(aMundo(sx, sy, 0), 10, 10, 260, 160) || dentro(aMundo(sx, sy, 30), 10, 10, 260, 160);
+  const mesaTocada = mesas.find((m) => dentro(aMundo(sx, sy, 22), m.cx - 58, m.cy - 58, m.cx + 58, m.cy + 58));
+  if (llevando) {
+    if (mesaTocada === llevando) entregar(llevando);
+    else if (mesaTocada) info("Ese platillo es para la mesa " + llevando.id + ", no para la " + mesaTocada.id + ".");
+    else if (enCocina) { llevando.tomado = false; info("Dejaste el platillo de la mesa " + llevando.id + " en la cocina."); llevando = null; }
+    return;
+  }
+  const listos = mesas.filter((m) => m.esperando && !m.tomado);
+  // Si tocas un platillo del mostrador, ese; si tocas otra parte de la cocina, el que lleva más tiempo esperando
+  let elegido = listos.find((m) => { const [px, py] = iso(SLOT_X[m.id - 1], SLOT_Y, 40); return Math.hypot(sx - px, sy - py) < 28; });
+  if (!elegido && enCocina) elegido = listos.sort((a, b) => a.listoDesde - b.listoDesde)[0];
+  if (elegido) { elegido.tomado = true; llevando = elegido; info("Llevas el platillo de la mesa " + elegido.id + ": toca esa mesa para entregarlo."); }
+  else if (enCocina) info("Todavía no hay platillos listos.");
+}
+function posEnLienzo(e) { const r = lienzo.getBoundingClientRect(); return [((e.clientX - r.left) * CW) / r.width, ((e.clientY - r.top) * CH) / r.height]; }
 
 // Mientras comen, algunos clientes van al baño y regresan
 async function banio(c, m, i) {
@@ -177,6 +230,9 @@ async function banio(c, m, i) {
   const ida = rutaIda(m, i);
   const dentro = [400 + i * 22, 120];
   await ir(c, [...ida.slice(1, -1).reverse(), [HALL_X, 185], PUERTA_BANIO, dentro]);
+  dinero += COSTO_BANIO;
+  monedas.push({ x: c.x, y: c.y, t0: ahora(), monto: COSTO_BANIO });
+  actualizar();
   await esp(1000);
   await ir(c, [PUERTA_BANIO, [HALL_X, 185], ...ida.slice(1)]);
 }
@@ -205,7 +261,7 @@ async function finalizar() {
     catch (e) { extra = " No se pudieron guardar los puntos."; }
   }
   $("finTitulo").textContent = "Día terminado";
-  $("finTexto").textContent = "Atendiste " + atendidos + " clientes y ganaste $" + dinero + " pesos." + extra;
+  $("finTexto").textContent = "Atendiste " + atendidos + " clientes y ganaste $" + dinero + " pesos." + (perdidos ? " Se fueron " + perdidos + " sin comida." : "") + extra;
   $("fin").hidden = false;
   info("Se acabaron las 3 tiradas.");
   actualizar();
@@ -284,9 +340,16 @@ function persona(e, x, y, z, tam) { sombra(x, y, 13); const [sx, sy] = iso(x, y,
 function dibujarMesa(m) {
   caja3d(ctx, m.cx - 32, m.cy - 32, m.cx + 32, m.cy + 32, 22, MADERA, "#5b4636");
   if (m.ocupada) suelo(ctx, m.cx - 32, m.cy - 32, m.cx + 32, m.cy + 32, null, 22, "#7c5cff");
+  if (llevando === m) { suelo(ctx, m.cx - 32, m.cy - 32, m.cx + 32, m.cy + 32, null, 22, "#ffd54a"); suelo(ctx, m.cx - 34, m.cy - 34, m.cx + 34, m.cy + 34, null, 22, "#ffd54a"); }
   const [sx, sy] = iso(m.cx, m.cy, 22);
   texto("Mesa " + m.id, sx, sy + 9, 10, "#fff", "center");
   if (m.plato) emoji("🍽️", sx, sy - 4, 22);
+  if (m.esperando) { // paciencia: verde, y roja desde que se enojan
+    const resta = Math.max(0, 1 - (ahora() - m.listoDesde) / PACIENCIA_MS);
+    ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(sx - 24, sy - 38, 48, 7);
+    ctx.fillStyle = m.enojo ? "#e74c3c" : "#6fcf97"; ctx.fillRect(sx - 24, sy - 38, 48 * resta, 7);
+    emoji(m.enojo ? "😡" : "⏳", sx, sy - 52, 20);
+  }
   if (m.barra) {
     const f = Math.min(1, (ahora() - m.barra.t0) / m.barra.dur);
     ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(sx - 24, sy - 38, 48, 7);
@@ -296,7 +359,16 @@ function dibujarMesa(m) {
 function dibujarSilla(s) { caja3d(ctx, s.x - 10, s.y - 10, s.x + 10, s.y + 10, 10, SILLA, "#5b4636"); }
 function dibujarMostrador() {
   caja3d(ctx, 20, 40, 250, 70, 26, ACERO, "#546e7a");
-  [[50, "🍳"], [120, "🥘"], [190, "🥗"]].forEach(([x, e]) => { const [sx, sy] = iso(x, 55, 40); emoji(e, sx, sy, 26); });
+  const [dx, dy] = iso(32, 55, 40); emoji("🍳", dx, dy, 26);
+  for (const m of mesas) { // platillos listos esperando que los tomes
+    if (!m.esperando || m.tomado) continue;
+    const [sx, sy] = iso(SLOT_X[m.id - 1], SLOT_Y, 26);
+    const resta = Math.max(0, 1 - (ahora() - m.listoDesde) / PACIENCIA_MS);
+    emoji("🍽️", sx, sy - 14, 30 * (1 + Math.sin(ahora() / 180) * 0.08));
+    texto("Mesa " + m.id, sx, sy + 4, 10, "#263238", "center");
+    ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fillRect(sx - 16, sy + 11, 32, 5);
+    ctx.fillStyle = m.enojo ? "#e74c3c" : "#2e9e5b"; ctx.fillRect(sx - 16, sy + 11, 32 * resta, 5);
+  }
 }
 function dibujarChef() {
   persona("🧑‍🍳", 110, 112, 20 + (cocinando > 0 ? Math.abs(Math.sin(ahora() / 120)) * 5 : 0), 34);
@@ -309,7 +381,7 @@ function dibujarEscritorio() {
 }
 function dibujarEnt(e) {
   persona(e.emoji, e.x, e.y, 20, 34);
-  if (e.lleva) { const [sx, sy] = iso(e.x, e.y, 50); emoji("🍽️", sx, sy, 20); }
+  if (e.enojado) { const [sx, sy] = iso(e.x, e.y, 52); emoji("😡", sx + Math.sin(ahora() / 60) * 2, sy, 20); }
 }
 
 function dibujarGlobos() {
@@ -330,7 +402,7 @@ function dibujarMonedas() {
   for (const c of monedas) {
     const a = (t - c.t0) / 1000, [sx, sy] = iso(c.x, c.y, 50);
     ctx.globalAlpha = 1 - a;
-    texto("+$" + PAGO_POR_CLIENTE, sx, sy - a * 40, 17, "#b8860b", "center");
+    texto("+$" + c.monto, sx, sy - a * 40, 17, "#b8860b", "center");
     ctx.globalAlpha = 1;
   }
 }
@@ -352,6 +424,7 @@ function dibujar() {
   cola.sort((a, b) => a.d - b.d).forEach((o) => o.f());
   dibujarGlobos();
   dibujarMonedas();
+  if (llevando) emoji("🍽️", puntero.x, puntero.y - 26, 34); // el platillo que traes en la mano
 }
 
 // ----- Bucle -----
@@ -368,6 +441,21 @@ function cuadro() {
       e.x = tx; e.y = ty; e.ruta.shift();
       if (!e.ruta.length && e.fin) { const f = e.fin; e.fin = null; f(); }
     } else { e.x += (dx / d) * paso; e.y += (dy / d) * paso; }
+  }
+  for (const m of mesas) {
+    if (!m.esperando) continue;
+    const espera = t - m.listoDesde;
+    if (espera >= ENOJO_MS && !m.enojo) {
+      m.enojo = true;
+      m.clientes.forEach((c) => (c.enojado = true));
+      globo(m.cx, m.cy, "😡 ¡Y mi comida!", 2000);
+    }
+    if (espera >= PACIENCIA_MS) { // se acabó la paciencia: se van
+      m.esperando = false; m.enojo = false; m.tomado = false;
+      if (llevando === m) llevando = null;
+      const r = m.res; m.res = null;
+      if (r) r(false);
+    }
   }
   dibujar();
   requestAnimationFrame(cuadro);
@@ -398,6 +486,8 @@ else {
 }
 
 $("dado").addEventListener("click", tirar);
+lienzo.addEventListener("pointerdown", (e) => { const [x, y] = posEnLienzo(e); tocar(x, y); });
+lienzo.addEventListener("pointermove", (e) => { const [x, y] = posEnLienzo(e); puntero = { x, y }; });
 $("reiniciar").addEventListener("click", nuevaPartida);
 $("otra").addEventListener("click", nuevaPartida);
 armarFondo();
