@@ -273,7 +273,14 @@ function leerTodo() {
   if (!(t.ultima >= 0 && t.ultima < NUM_PARTIDAS)) t.ultima = 0;
   return t;
 }
-function escribirTodo(t) { try { localStorage.setItem(KEY_PARTIDAS, JSON.stringify(t)); } catch (e) {} }
+let avisoGuardado = false;
+function escribirTodo(t) {
+  try { localStorage.setItem(KEY_PARTIDAS, JSON.stringify(t)); avisoGuardado = false; return true; }
+  catch (e) {
+    if (!avisoGuardado) { avisoGuardado = true; info("⚠️ No se pudo guardar la partida: el navegador bloquea el almacenamiento (modo privado, sin espacio o permisos). Tu avance no se conservará."); }
+    return false;
+  }
+}
 // Foto de lo que se guarda de la partida actual
 function instantanea() {
   return {
@@ -446,7 +453,7 @@ const tiempoCocina = (n) => (T_COCINA_BASE + T_COCINA_POR_CLIENTE * n) * COCINA_
 
 // ----- Un grupo ya sentado, de principio a fin -----
 async function atender(n, clientes, mesa, pu = 0) {
-  const P = PUERTAS[pu];
+  const P = PUERTAS[pu], miGen = gen; // miGen: si cambias de partida, lo que quedó pendiente de esta ya no cobra ni guarda nada
   const espera = (i) => [HALL_X + (i - (n - 1) / 2) * 34, P.pagoY]; // donde pagan, junto al escritorio de la recepción de su puerta
 
   // 3) Piden y la cocina prepara
@@ -497,6 +504,7 @@ async function atender(n, clientes, mesa, pu = 0) {
       monto += COSTO_BANIO;
       await ir(c, [espera(i)]);
     } else await ir(c, [...ida.slice(0, -1).reverse(), espera(i)]);
+    if (miGen !== gen) return; // la partida cambió mientras caminaba: este cobro no es de la partida actual
     dinero += monto; ganado += monto;
     if (ganado > leerRecord()) { try { localStorage.setItem(KEY_RECORD, String(ganado)); } catch (e) {} } // sin final: el récord se guarda en cuanto lo superas
     atendidos++;
@@ -1508,14 +1516,16 @@ function empezar(i) {
   menu.hidden = true;
   ponerPausa(false);
   centrarCamara();
+  info("💾 Jugando en la Partida " + (i + 1) + ": se guarda sola.");
 }
 const minimo = (...p) => { const e = document.createElement(p[0]); if (p[1]) e.className = p[1]; if (p[2] !== undefined) e.textContent = p[2]; return e; };
 function pintarPartidas() {
   const t = leerTodo(), cont = $("listaPartidas"), esNueva = modoPartidas === "nueva";
-  $("tituloPartidas").textContent = esNueva ? "🆕 Nueva partida" : "💾 Partidas guardadas";
-  $("avisoRanuras").textContent = esNueva
+  const poner = (id, txt) => { const e = $(id); if (e) e.textContent = txt; }; // si index.html es una versión vieja sin estos elementos, no se rompe
+  poner("tituloPartidas", esNueva ? "🆕 Nueva partida" : "💾 Partidas guardadas");
+  poner("avisoRanuras", esNueva
     ? "Elige un recuadro para crear tu partida: ahí se guardarán tus mejoras, mesas, terrenos y compras."
-    : "Elige una partida para continuar, o un recuadro vacío para crear una nueva.";
+    : "Elige una partida para continuar, o un recuadro vacío para crear una nueva.");
   cont.innerHTML = "";
   t.ranuras.forEach((d, i) => {
     const caja = minimo("div", "ranura" + (d ? " llena" : " vacia"));
@@ -1563,6 +1573,7 @@ function crearEn(i) {
   menu.hidden = true;
   ponerPausa(false);
   centrarCamara();
+  info("💾 Partida " + (i + 1) + " creada: se guarda sola.");
 }
 $("jugar").addEventListener("click", () => mostrarMenu("jugar"));
 $("btnNueva").addEventListener("click", () => mostrarMenu("partidas", "nueva"));
