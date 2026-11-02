@@ -24,12 +24,20 @@
     .ovl h2 { margin: 0; font-size: 30px; }
     .ovl p { margin: 0; max-width: 34ch; line-height: 1.4; }
     .ovl .btn { font-size: 18px; padding: 10px 26px; }
+    .ovl { overflow-y: auto; justify-content: safe center; }
+    .btn.chico { padding: 4px 10px; font-size: 13px; }
+    .adm { position: absolute; top: 8px; left: 8px; right: 8px; z-index: 3; display: flex; flex-direction: column; gap: 6px; max-height: 85%; overflow-y: auto; padding: 10px; border-radius: 14px; background: #1b2330f2; color: #fff; font-size: 14px; }
+    .adm.oculto { display: none; }
+    .adm h3 { margin: 0 0 2px; font-size: 15px; }
+    .adm label { display: flex; align-items: center; gap: 8px; }
+    .adm input[type=checkbox] { width: 18px; height: 18px; }
   </style>
 </head>
 <body>
   <header class="barra">
     <a class="volver" href="../index.html">‹ Juegos</a>
     <h1>🛒 Supermercado</h1>
+    <button class="btn chico" id="admBtn" type="button" hidden>⚙️ Admin</button>
   </header>
   <main>
     <div class="caja">
@@ -46,11 +54,22 @@
           <button class="mej" id="mejCarga" type="button"><span></span><b></b></button>
           <button class="mej" id="mejEmpleado" type="button"><span></span><b></b></button>
           <button class="mej" id="mejEstante" type="button"><span></span><b></b></button>
-          <button class="mej" id="mejEdificio" type="button"><span></span><b></b></button>
+          <button class="mej" id="mejEdIzq" type="button"><span></span><b></b></button>
+          <button class="mej" id="mejEdDer" type="button"><span></span><b></b></button>
+        </div>
+        <div class="adm oculto" id="adm">
+          <h3>⚙️ Admin (para pruebas)</h3>
+          <label><input type="checkbox" id="admDinero" /> 💰 Dinero infinito</label>
+          <label><input type="checkbox" id="admRapido" /> ⚡ Producción instantánea</label>
+          <label><input type="checkbox" id="admAuto" /> 🔓 Empezar con todo desbloqueado</label>
+          <button class="mej" id="admMas" type="button"><span>➕ Sumar dinero</span><b>+$1000</b></button>
+          <button class="mej" id="admTodo" type="button"><span>🔓 Desbloquear todo ahora</span><b></b></button>
+          <button class="mej" id="admReiniciar" type="button"><span>🔄 Reiniciar partida</span><b></b></button>
         </div>
         <div class="ovl" id="ovl">
           <h2>Supermercado</h2>
           <p>Tu tienda está vacía. Camina hasta la estantería y el jardín para comprarlos. Lo que crece en el jardín lo recoges solo al acercarte (al empezar llevas hasta 3; cada mejora 🧤 te deja llevar una más). Cada jardín comprado puede tener su empleado 🧑‍🌾, que lleva lo maduro a la estantería por ti, y hay más verduras 🌽🥦🍆 con su jardín y su estantería y se coloca solo en la estantería (caben 5). Los clientes toman sus productos y van a la caja: cobra parándote junto a ella o contrata a un empleado en la zona de mejoras 🛠️. Las estanterías de jitomates y de zanahorias son fijas; en las estanterías extra, toca el botón ↻ para elegir qué producto llevan.</p>
+          <p>En la zona de mejoras 🛠️ también puedes ampliar el edificio hacia la izquierda o hacia la derecha (tú eliges): la pantalla no cambia de tamaño, la cámara te sigue.</p>
           <p>Toca o arrastra para moverte (o usa las flechas / WASD).</p>
           <button class="btn" id="ovlBtn">Jugar</button>
         </div>
