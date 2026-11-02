@@ -1,6 +1,6 @@
 // Ruta: restaurantes/juego.js
 // «Restaurantes» (vista isométrica estilo Clash of Clans): los grupos de clientes (1, 2 o 4) llegan SOLOS y al azar durante la jornada.
-// Esperan frente a la recepción: TÚ tocas a la familia para darles una mesa. Si no hay mesa libre (o tardas mucho), se van enojados.
+// Esperan frente a la recepción: TÚ tocas a la familia para darles una mesa. Si no hay mesa libre esperan 8 s (a los 5 s se enojan 😡) y luego se van; si tardas mucho en atenderlos, también se van enojados.
 // Ya sentados piden, la cocina prepara y TÚ llevas el platillo a mano (clic en la cocina para tomarlo, clic en la mesa para entregarlo).
 // Si tardas, se enojan y se van. Al terminar de comer se levantan TODOS y la mesa queda libre; algunos van al baño (cuesta $1) y
 // los demás van directo a la recepción. Cada uno paga $5 al salir (quien usó el baño paga además el $1).
@@ -17,6 +17,8 @@ const LLEGADA_MAX_MS = 9000;
 const OPCIONES = [1, 2, 4];       // clientes que pueden llegar en cada grupo
 const ENOJO_RECEP_MS = 7000;      // un grupo esperando en la recepción sin que lo atiendas se ve enojado desde aquí...
 const PACIENCIA_RECEP_MS = 12000; // ...y a estos ms se va sin entrar
+const ENOJO_SIN_MESA_MS = 5000;      // si llegan y todas las mesas están ocupadas: a estos ms de espera aparece el 😡 sobre sus cabezas...
+const PACIENCIA_SIN_MESA_MS = 8000;  // ...y a estos ms (8 s en total) se van sin entrar
 const PAGO_POR_CLIENTE = 5;       // pesos que paga cada cliente
 const COSTO_BANIO = 1;            // pesos que cuesta usar el baño
 const ENOJO_MS = 8000;            // desde estos ms de espera (con el platillo ya listo) los clientes se ven enojados
@@ -149,13 +151,14 @@ async function llegar(n) {
     return;
   }
 
-  const g = { clientes, n, slot, y: ESPERA_Y[slot], esperando: false, enojo: false, desde: 0, res: null, razon: "" };
+  const g = { clientes, n, slot, y: ESPERA_Y[slot], esperando: false, enojo: false, desde: 0, res: null, razon: "", sinMesa: false, enojoMs: ENOJO_RECEP_MS, pacienciaMs: PACIENCIA_RECEP_MS };
   recepcion[slot] = g;
   await Promise.all(clientes.map(async (c, i) => { await esp(i * 300); await ir(c, [posEspera(n, i, g.y)]); }));
 
-  if (!mesas.some((m) => !m.ocupada)) { await irseEnojados(g, "¡No hay mesa!"); return; } // sin mesa libre: se van enojados
+  // Si todas las mesas están ocupadas NO se van de inmediato: esperan 8 s (a los 5 s se enojan) por si se libera una
+  if (!mesas.some((m) => !m.ocupada)) { g.sinMesa = true; g.enojoMs = ENOJO_SIN_MESA_MS; g.pacienciaMs = PACIENCIA_SIN_MESA_MS; }
   const mesa = await esperarAtencion(g);                                                 // espera a que el jugador los toque
-  if (!mesa) { await irseEnojados(g, g.razon === "sinMesa" ? "¡No hay mesa!" : "¡Mucha espera!"); return; }
+  if (!mesa) { await irseEnojados(g, g.sinMesa ? "¡No hay mesa!" : "¡Mucha espera!"); return; }
 
   recepcion[slot] = null;
   await Promise.all(clientes.map(async (c, i) => { await esp(i * 350); await ir(c, rutaIda(mesa, i)); }));
@@ -166,13 +169,13 @@ async function llegar(n) {
 function esperarAtencion(g) {
   return new Promise((res) => { g.desde = reloj; g.esperando = true; g.res = res; });
 }
-// El jugador tocó al grupo: se le asigna una mesa libre al azar (si ya no queda ninguna, se va enojado)
+// El jugador tocó al grupo: se le asigna una mesa libre al azar (si no hay ninguna, el grupo sigue esperando hasta que se acabe su paciencia)
 function darMesa(g, empleado) {
   const libres = mesas.filter((m) => !m.ocupada);
+  if (!libres.length) { if (!empleado) info("No hay mesa libre todavía: están esperando."); return; }
   g.esperando = false; g.enojo = false;
   g.clientes.forEach((c) => (c.enojado = false));
   const r = g.res; g.res = null;
-  if (!libres.length) { g.razon = "sinMesa"; if (r) r(null); return; }
   const mesa = libres[Math.floor(Math.random() * libres.length)];
   mesa.ocupada = true;
   mesa.clientes = g.clientes;
@@ -640,13 +643,13 @@ function dibujarChef() {
 function dibujarEspera(g) {
   const [sx, sy0] = iso(HALL_X, g.y, g.slot === 0 ? 112 : 78);
   const sy = sy0 + Math.sin(ahora() / 200) * 3;
-  const t = "👆 Toca para dar mesa";
+  const t = mesas.some((m) => !m.ocupada) ? "👆 Toca para dar mesa" : "⏳ Esperando mesa";
   ctx.font = "700 13px system-ui, sans-serif";
   const w = ctx.measureText(t).width + 16;
   ctx.fillStyle = "#fff"; caja(sx - w / 2, sy - 12, w, 24, 8); ctx.fill();
   ctx.strokeStyle = g.enojo ? "#e74c3c" : "#7c5cff"; ctx.lineWidth = 2; ctx.stroke();
   texto(t, sx, sy, 13, "#3b2a1a", "center");
-  const resta = Math.max(0, 1 - (reloj - g.desde) / PACIENCIA_RECEP_MS);
+  const resta = Math.max(0, 1 - (reloj - g.desde) / g.pacienciaMs);
   ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(sx - 30, sy + 16, 60, 6);
   ctx.fillStyle = g.enojo ? "#e74c3c" : "#6fcf97"; ctx.fillRect(sx - 30, sy + 16, 60 * resta, 6);
 }
@@ -768,12 +771,12 @@ function cuadro() {
   for (const g of recepcion) { // paciencia de quienes esperan que los atiendas en la recepción
     if (!g || !g.esperando) continue;
     const espera = reloj - g.desde;
-    if (espera >= ENOJO_RECEP_MS && !g.enojo) {
+    if (espera >= g.enojoMs && !g.enojo) {
       g.enojo = true;
       g.clientes.forEach((c) => (c.enojado = true));
-      globo(HALL_X, g.y, "😡 ¡Atiéndannos!", 1800);
+      globo(HALL_X, g.y, g.sinMesa ? "😡 ¡Una mesa!" : "😡 ¡Atiéndannos!", 1800);
     }
-    if (espera >= PACIENCIA_RECEP_MS) { g.razon = "paciencia"; g.esperando = false; const r = g.res; g.res = null; if (r) r(null); }
+    if (espera >= g.pacienciaMs) { g.razon = g.sinMesa ? "sinMesa" : "paciencia"; g.esperando = false; const r = g.res; g.res = null; if (r) r(null); }
   }
   if (recep) { // recepcionista: da mesa sola al grupo que más lleva esperando, pero tarda
     if (recep.g && !recep.g.esperando) recep.g = null; // lo atendiste tú o se fue
