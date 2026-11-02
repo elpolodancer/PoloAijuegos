@@ -2,8 +2,8 @@
 // «Restaurantes» (vista isométrica estilo Clash of Clans): los grupos de clientes (1, 2 o 4) llegan SOLOS y al azar durante la jornada.
 // Esperan frente a la recepción: TÚ tocas a la familia para darles una mesa. Si no hay mesa libre esperan 8 s (a los 5 s se enojan 😡) y luego se van; si tardas mucho en atenderlos, también se van enojados.
 // Ya sentados piden, la cocina prepara y TÚ llevas el platillo a mano (clic en la cocina para tomarlo, clic en la mesa para entregarlo).
-// Si tardas, se enojan y se van. Al terminar de comer se levantan TODOS y la mesa queda libre; algunos van al baño (cuesta $1) y
-// los demás van directo a la recepción. Cada uno paga $5 al salir (quien usó el baño paga además el $1).
+// Si tardas, se enojan y se van. Al terminar de comer se levantan TODOS y la mesa queda libre; algunos van al baño (cuesta 1 peso) y
+// los demás van directo a la recepción. Cada uno paga 5 pesos al salir (más 50 centavos por cada nivel de las mesas y de las sillas; quien usó el baño paga además 1 peso).
 // TIENDA: tocando el mostrador de la recepción (🛒) se abre la zona de compras. Ahí se contrata (y se mejora) a la recepcionista y al mesero.
 // AMPLIACIÓN: en la tienda se compra «Ampliar terreno» (una plaza detrás del restaurante, sobre el pasto). Solo entonces se desbloquean el SEGUNDO MESERO y la SEGUNDA PUERTA
 // (entrada por atrás, con su propia fila de espera y su mostrador). La SEGUNDA RECEPCIONISTA solo se puede contratar cuando ya existe la segunda puerta.
@@ -13,12 +13,12 @@
 // Los demás se compran en la tienda (precio creciente: ver ESTAC_PRECIOS). Los autos llegan por la calle de enfrente; cada auto trae SIEMPRE 4 personas.
 // Si hay lugar, estaciona y las 4 personas van a la recepción como un grupo más; al terminar regresan al auto y se van. Si no hay lugar, el auto pasa de largo y no vuelve.
 // TERRENOS: el restaurante ocupa la esquina inferior derecha de una cuadrícula de 3 × 3 manzanas; las otras 8 son pasto (sin carreteras entre ellas), a la izquierda y detrás.
-// Los terrenos se compran en la tienda («Ampliar terreno», $1000). Solo se puede comprar UNO de los dos que tocan el edificio (izquierda o atrás); los demás no quedan pegados
+// Los terrenos se compran en la tienda («Ampliar terreno», 1000 pesos). Solo se puede comprar UNO de los dos que tocan el edificio (izquierda o atrás); los demás no quedan pegados
 // al restaurante y no se pueden comprar. Los datos de los lotes comprables están en LOTES; las manzanas de pasto, en PASTO.
 const ID = "restaurantes";
 
 // ----- Ajustes -----
-const DURACION_DIA_MS = 480000;   // duración de la jornada (8 min; antes 120000): pasado este tiempo ya no llegan más clientes
+// El juego NO tiene fin: los clientes llegan sin parar y se puede jugar el tiempo que quieras (el reloj solo cuenta cuánto llevas jugando).
 const PRIMERA_LLEGADA_MS = 1500;  // cuándo llega el primer grupo
 const LLEGADA_MIN_MS = 4000;      // los grupos llegan al azar: entre un grupo y el siguiente pasan entre estos dos tiempos
 const LLEGADA_MAX_MS = 9000;
@@ -27,11 +27,12 @@ const ENOJO_RECEP_MS = 7000;      // un grupo esperando en la recepción sin que
 const PACIENCIA_RECEP_MS = 12000; // ...y a estos ms se va sin entrar
 const ENOJO_SIN_MESA_MS = 5000;      // si llegan y todas las mesas están ocupadas: a estos ms de espera aparece el 😡 sobre sus cabezas...
 const PACIENCIA_SIN_MESA_MS = 8000;  // ...y a estos ms (8 s en total) se van sin entrar
-const PAGO_POR_CLIENTE = 5;       // pesos que paga cada cliente
+const PAGO_POR_CLIENTE = 5;       // pesos que paga cada cliente (con mesas y sillas de nivel 1)
 const COSTO_BANIO = 1;            // pesos que cuesta usar el baño
 const ENOJO_MS = 8000;            // desde estos ms de espera (con el platillo ya listo) los clientes se ven enojados
 const PACIENCIA_MS = 15000;       // a estos ms sin recibir el platillo, los clientes se van sin pagar
 const PESOS_POR_PUNTO = 1;        // al perfil se envía 1 punto por cada peso ganado
+const PUNTOS_LOTE = 25;           // como no hay final, los puntos se mandan al perfil de 25 en 25 mientras juegas (y al reiniciar o salir de la página)
 const VEL = 150;                  // velocidad de la gente (px por segundo)
 const T_COCINA_BASE = 3000;       // ms de cocina por pedido...
 const T_COCINA_POR_CLIENTE = 500; // ...más estos ms por cada cliente de la mesa
@@ -47,6 +48,10 @@ const MESERO_VEL = [70, 95, 125, 160, 200];              // por nivel: velocidad
 const RECEP_PRECIOS_MEJORA = [10, 20, 30, 45];           // costo de subir al nivel 2, 3, 4 y 5 de la recepcionista
 const MESERO_PRECIOS_MEJORA = [10, 20, 30, 45];          // ídem para el mesero
 const PAUSA_MESERO_MS = 400;                             // ms que se detiene a tomar el platillo
+// Mesas y sillas: se mejoran en la tienda. Cada nivel que subas (de las mesas o de las sillas) suma 50 centavos a lo que paga cada cliente.
+const BONO_NIVEL = 0.5;                                  // pesos extra por cliente por cada nivel de mesas y por cada nivel de sillas (0.5 = 50 centavos)
+const MESAS_PRECIOS_MEJORA = [20, 40, 70, 110];          // costo de subir las mesas al nivel 2, 3, 4 y 5
+const SILLAS_PRECIOS_MEJORA = [20, 40, 70, 110];         // ídem para las sillas
 // Ampliación (segundo terreno): cada cosa se desbloquea con la anterior
 const PRECIO_TERRENO = 1000; // «Ampliar terreno» (a elegir: izquierda, atrás o derecha): desbloquea el segundo mesero y la segunda puerta
 const PRECIO_PUERTA2 = 40;   // segunda puerta de entrada (necesita el terreno ampliado)
@@ -148,18 +153,24 @@ function caminoAcera(k, pu) {
 }
 
 const $ = (id) => document.getElementById(id);
+// ----- Pesos mexicanos: se pueden dividir en monedas de 50 centavos (5, 5.50, 6, ...). Los múltiplos de 0.5 son exactos, no hay errores de redondeo -----
+const fmt = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2)); // 5 → «5», 5.5 → «5.50»
+const pesos = (n) => "$" + fmt(n);                                    // 5.5 → «$5.50»
 const lienzo = $("lienzo");
 const ctx = lienzo.getContext("2d");
 
 // ----- Estado de la partida -----
 let gen = 0; // sube al reiniciar: lo que quedó pendiente de la partida anterior se descarta
 let ents, globos, monedas, mesas, recepcion;
-let dinero, ganado, atendidos, perdidos, fin, cocinando; // «dinero» es lo que tienes para gastar; «ganado» es todo lo cobrado (puntos y récord)
-let reloj, proxLlegada, activos, ultimoSeg; // reloj de la jornada (ms), cuándo llega el próximo grupo, grupos en el local
+let dinero, ganado, atendidos, perdidos, cocinando; // «dinero» es lo que tienes para gastar; «ganado» es todo lo cobrado (puntos y récord)
+let reloj, proxLlegada, activos, ultimoSeg; // tiempo jugado (ms), cuándo llega el próximo grupo, grupos en el local
 let llevando = null;                    // mesa cuyo platillo traes en la mano
 let receps = [null, null], meseros = [null, null]; // personal contratado (null = todavía no): { nivel, ... }; [0] el de siempre, [1] el de la ampliación
 let terreno2 = false, puerta2 = false;             // ampliación comprada / segunda puerta comprada
 let lote = null; // terreno comprado: null (ninguno), "izq" o "atras"
+let puntosEnviados = 0, umbralPuntos = PUNTOS_LOTE, enviando = false; // puntos ya mandados al perfil, cuántos hacen falta para el siguiente envío, envío en curso
+let nivelMesas = 1, nivelSillas = 1; // nivel de las mesas y de las sillas (1 = el de siempre; sube en la tienda)
+const pagoPorCliente = () => PAGO_POR_CLIENTE + (nivelMesas - 1) * BONO_NIVEL + (nivelSillas - 1) * BONO_NIVEL; // lo que paga cada cliente ahora
 let nEstac = ESTAC_INICIALES, proxAuto = 0, autosPerdidos = 0; // lugares de estacionamiento disponibles, cuándo pasa el próximo auto, autos que no hallaron lugar
 let puntero = { x: -99, y: -99 };       // último punto tocado/señalado en el lienzo (para dibujar el platillo)
 
@@ -182,22 +193,26 @@ function nuevaPartida() {
   recepcion = Array(SLOTS.length).fill(null);
   dinero = 0; ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
   const habiaCambios = terreno2 || nEstac > ESTAC_INICIALES; terreno2 = false; lote = null; puerta2 = false;
-  nEstac = ESTAC_INICIALES; autosPerdidos = 0; proxAuto = PRIMER_AUTO_MS;
+  nEstac = ESTAC_INICIALES; autosPerdidos = 0; proxAuto = PRIMER_AUTO_MS; nivelMesas = 1; nivelSillas = 1;
   CAJONES.forEach((k) => { k.usado = false; k.coche = null; k.pendientes = 0; });
   if (habiaCambios) armarFondo(); // quita la plaza y los lugares de estacionamiento de la partida anterior
-  reloj = 0; proxLlegada = PRIMERA_LLEGADA_MS; ultimoSeg = -1; fin = false;
-  $("fin").hidden = true;
+  reloj = 0; proxLlegada = PRIMERA_LLEGADA_MS; ultimoSeg = -1; puntosEnviados = 0; umbralPuntos = PUNTOS_LOTE;
   cerrarTienda();
-  $("tiempo").textContent = Math.ceil(DURACION_DIA_MS / 1000);
+  $("tiempo").textContent = fmtTiempo(0);
   info("Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para contratar personal.");
   actualizar();
 }
 
+// Tiempo jugado: 0:00, 12:34 o 1:05:09
+function fmtTiempo(seg) {
+  const h = Math.floor(seg / 3600), m = Math.floor((seg % 3600) / 60), s = seg % 60, dos = (n) => String(n).padStart(2, "0");
+  return (h ? h + ":" + dos(m) : m) + ":" + dos(s);
+}
 function info(t) { $("estado").textContent = t; }
 function leerRecord() { try { return Number(localStorage.getItem(KEY_RECORD)) || 0; } catch (e) { return 0; } }
 function actualizar() {
-  $("dinero").textContent = dinero;
-  $("record").textContent = leerRecord();
+  $("dinero").textContent = fmt(dinero);
+  $("record").textContent = fmt(leerRecord());
   if (!$("tienda").hidden) pintarTienda();
 }
 
@@ -309,7 +324,6 @@ async function irseEnojados(g, motivo) {
     await despedir(c, g.pu);
   }));
   activos--;
-  comprobarFin();
 }
 
 // ----- Un grupo ya sentado, de principio a fin -----
@@ -358,32 +372,30 @@ async function atender(n, clientes, mesa, pu = 0) {
   await Promise.all(clientes.map(async (c, i) => {
     await esp(i * 300);
     const ida = rutaIda(mesa, i, P);
-    let monto = PAGO_POR_CLIENTE;
+    let monto = pagoPorCliente();
     if (Math.random() < PROB_BANIO) {
       await banio(c, ida, i, P);
       monto += COSTO_BANIO;
       await ir(c, [espera(i)]);
     } else await ir(c, [...ida.slice(0, -1).reverse(), espera(i)]);
     dinero += monto; ganado += monto;
+    if (ganado > leerRecord()) { try { localStorage.setItem(KEY_RECORD, String(ganado)); } catch (e) {} } // sin final: el récord se guarda en cuanto lo superas
     atendidos++;
     monedas.push({ x: c.x, y: c.y, t0: ahora(), monto });
     actualizar();
+    enviarPuntos(false);
     await esp(500);
     await ir(c, P.salida);
     await despedir(c, pu);
   }));
   activos--; // la mesa ya estaba libre: solo se descuenta el grupo cuando el último sale del restaurante
-  comprobarFin();
 }
 
 function cerrarGrupo(mesa) {
   mesa.ocupada = false;
   mesa.clientes = [];
   activos--;
-  comprobarFin();
 }
-// La jornada termina cuando se acabó el tiempo y ya no queda nadie en el restaurante
-function comprobarFin() { if (!fin && reloj >= DURACION_DIA_MS && activos <= 0) finalizar(); }
 
 // ----- Entrega manual (todavía no hay mesero) -----
 // Se resuelve con true si entregas el platillo a tiempo, o con false si se acaba la paciencia (se revisa en cuadro())
@@ -406,7 +418,7 @@ const dentro = (p, x0, y0, x1, y1) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && 
 function aMundo(sx, sy, z) { const u = (sx - OX) / ISO, v = ((sy + z - OY) * 2) / ISO; return [(u + v) / 2, (v - u) / 2]; }
 
 function tocar(sx, sy) {
-  if (fin || pausado) return; // con la tienda abierta el juego está en pausa
+  if (pausado) return; // con la tienda abierta el juego está en pausa
   puntero = { x: sx, y: sy };
   const [wx, wy] = aMundo(sx, sy, 20);
   const grupo = recepcion.find((g) => {
@@ -453,7 +465,7 @@ function cerrarTienda() {
   const estabaEnPausa = pausado;
   $("tienda").hidden = true;
   ponerPausa(false);
-  if (estabaEnPausa && !fin) info("▶️ Juego reanudado.");
+  if (estabaEnPausa) info("▶️ Juego reanudado.");
 }
 function filaTienda(ico, nombre, p, precio, mejoras, texto, comprar, mejorar, bloqueo) {
   const fila = document.createElement("div");
@@ -474,7 +486,7 @@ function filaTienda(ico, nombre, p, precio, mejoras, texto, comprar, mejorar, bl
     b.disabled = true;
   } else if (!p) {
     d.textContent = "Todavía no está contratado.";
-    b.textContent = "Contratar $" + precio;
+    b.textContent = "Contratar " + pesos(precio);
     b.disabled = dinero < precio;
     b.addEventListener("click", comprar);
   } else if (p.nivel > mejoras.length) {
@@ -484,7 +496,7 @@ function filaTienda(ico, nombre, p, precio, mejoras, texto, comprar, mejorar, bl
   } else {
     const c = mejoras[p.nivel - 1];
     d.textContent = texto(p.nivel);
-    b.textContent = "Mejorar $" + c;
+    b.textContent = "Mejorar " + pesos(c);
     b.disabled = dinero < c;
     b.addEventListener("click", mejorar);
   }
@@ -515,21 +527,25 @@ function filaSimple(ico, nombre, texto, boton, deshabilitado, accion) {
   return fila;
 }
 function pintarTienda() {
-  $("tiendaDinero").textContent = dinero;
+  $("tiendaDinero").textContent = fmt(dinero);
   const lista = $("tiendaLista");
   lista.style.cssText = "max-height:52vh;overflow-y:auto"; // con tantas filas, la lista se desplaza
   lista.innerHTML = "";
   const txtRecep = (n) => "Nivel " + n + " de " + (RECEP_PRECIOS_MEJORA.length + 1) + " · da mesa en " + (RECEP_TIEMPOS_MS[n - 1] / 1000).toFixed(1) + " s";
   const txtMesero = (n) => "Nivel " + n + " de " + (MESERO_PRECIOS_MEJORA.length + 1) + " · lleva los platillos a su paso";
+  const txtMesas = (n) => "Nivel " + n + " de " + (MESAS_PRECIOS_MEJORA.length + 1) + " · cada cliente paga " + (n > 1 ? "$" + fmt((n - 1) * BONO_NIVEL) + " más" : "lo normal") + " · sube el nivel y se pagan 50 centavos más por cliente";
+  const txtSillas = (n) => "Nivel " + n + " de " + (SILLAS_PRECIOS_MEJORA.length + 1) + " · cada cliente paga " + (n > 1 ? "$" + fmt((n - 1) * BONO_NIVEL) + " más" : "lo normal") + " · sube el nivel y se pagan 50 centavos más por cliente";
   lista.append(
     filaTienda("🧑‍💼", "Recepcionista", receps[0], PRECIO_RECEP, RECEP_PRECIOS_MEJORA, txtRecep, () => contratarRecep(0), () => mejorarRecep(0)),
     filaTienda("🤵", "Mesero", meseros[0], PRECIO_MESERO, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(0), () => mejorarMesero(0)),
+    filaTienda("🪑", "Mesas", { nivel: nivelMesas }, 0, MESAS_PRECIOS_MEJORA, txtMesas, null, mejorarMesas),
+    filaTienda("💺", "Sillas", { nivel: nivelSillas }, 0, SILLAS_PRECIOS_MEJORA, txtSillas, null, mejorarSillas),
     filaTerreno(),
     filaTienda("🤵‍♀️", "Segundo mesero", meseros[1], PRECIO_MESERO2, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(1), () => mejorarMesero(1),
       !meseros[0] ? "Primero contrata al mesero." : terreno2 ? "" : "Se desbloquea al ampliar el terreno."),
     filaSimple("🚪", "Segunda puerta",
       puerta2 ? "Los clientes también llegan por la puerta de atrás, con su propia fila y mostrador." : terreno2 ? "Una entrada nueva en el terreno de atrás: doble de lugares de espera." : "Se desbloquea al ampliar el terreno.",
-      puerta2 ? "Comprada" : terreno2 ? "Comprar $" + PRECIO_PUERTA2 : "🔒 Bloqueado", puerta2 || !terreno2 || dinero < PRECIO_PUERTA2, comprarPuerta2),
+      puerta2 ? "Comprada" : terreno2 ? "Comprar " + pesos(PRECIO_PUERTA2) : "🔒 Bloqueado", puerta2 || !terreno2 || dinero < PRECIO_PUERTA2, comprarPuerta2),
     filaTienda("👩‍💼", "Segunda recepcionista", receps[1], PRECIO_RECEP2, RECEP_PRECIOS_MEJORA, txtRecep, () => contratarRecep(1), () => mejorarRecep(1),
       !receps[0] ? "Primero contrata a la recepcionista." : puerta2 ? "" : "Se desbloquea con la segunda puerta en el nuevo terreno."),
     filaEstac()
@@ -561,7 +577,7 @@ function filaTerreno() {
     for (const k of Object.keys(LOTES)) {
       const b = document.createElement("button");
       b.className = "btn";
-      b.textContent = LOTES[k].flecha + " " + LOTES[k].etiqueta + " $" + PRECIO_TERRENO;
+      b.textContent = LOTES[k].flecha + " " + LOTES[k].etiqueta + " " + pesos(PRECIO_TERRENO);
       b.disabled = dinero < PRECIO_TERRENO;
       b.addEventListener("click", () => comprarTerreno(k));
       col.appendChild(b);
@@ -625,6 +641,23 @@ function mejorarMesero(k) {
   info((k ? "El segundo mesero" : "El mesero") + " subió al nivel " + w.nivel + ".");
   actualizar();
 }
+// Mejorar mesas y sillas: cada nivel suma 50 centavos (BONO_NIVEL) a lo que paga cada cliente
+function mejorarMesas() {
+  const c = MESAS_PRECIOS_MEJORA[nivelMesas - 1];
+  if (c === undefined || dinero < c) return;
+  dinero -= c;
+  nivelMesas++;
+  info("¡Mesas de nivel " + nivelMesas + "! Cada cliente paga 50 centavos más: ahora " + pesos(pagoPorCliente()) + " por persona.");
+  actualizar();
+}
+function mejorarSillas() {
+  const c = SILLAS_PRECIOS_MEJORA[nivelSillas - 1];
+  if (c === undefined || dinero < c) return;
+  dinero -= c;
+  nivelSillas++;
+  info("¡Sillas de nivel " + nivelSillas + "! Cada cliente paga 50 centavos más: ahora " + pesos(pagoPorCliente()) + " por persona.");
+  actualizar();
+}
 // El mesero w va a la cocina por el platillo de la mesa m, lo lleva y vuelve a su lugar. Si la paciencia de la mesa se acaba en el camino, no entrega.
 async function servir(m, w) {
   const t0 = m.listoDesde;
@@ -652,7 +685,7 @@ function filaEstac() {
   const precio = precioEstac(nEstac - ESTAC_INICIALES);
   return filaSimple("🅿️", "Lugar de estacionamiento",
     "Tienes " + nEstac + " de " + total + ". Cada auto trae " + PERSONAS_AUTO + " personas; si no hay lugar, pasa de largo y no vuelve.",
-    "Comprar $" + precio, dinero < precio, comprarEstac);
+    "Comprar " + pesos(precio), dinero < precio, comprarEstac);
 }
 function comprarEstac() {
   if (nEstac >= CAJONES.length) return;
@@ -703,24 +736,22 @@ async function despedir(c, pu = 0) {
   if (k.pendientes <= 0) irseAuto(k);
 }
 
-// ----- Final -----
-async function finalizar() {
-  fin = true;
-  cerrarTienda();
-  const record = Math.max(leerRecord(), ganado);
-  try { localStorage.setItem(KEY_RECORD, String(record)); } catch (e) {}
-  const puntos = Math.floor(ganado / PESOS_POR_PUNTO);
-  let extra = "";
-  if (J && puntos > 0) {
-    try { extra = (await J.sumarPuntos(ID, puntos)) ? " Se sumaron " + puntos + " puntos a tu perfil." : " Entra con Google para guardar tus puntos."; }
-    catch (e) { extra = " No se pudieron guardar los puntos."; }
-  }
-  $("finTitulo").textContent = "Día terminado";
-  $("finTexto").textContent = "Atendiste " + atendidos + " clientes y ganaste $" + ganado + " pesos." + (perdidos ? " Se fueron " + perdidos + " enojados sin pagar." : "") + (autosPerdidos ? " Pasaron " + autosPerdidos + " autos sin encontrar lugar." : "") + extra;
-  $("fin").hidden = false;
-  info("Terminó la jornada.");
-  actualizar();
+// ----- Puntos al perfil (el juego no tiene final) -----
+// Se mandan por lotes de PUNTOS_LOTE mientras juegas; «todo» manda lo que falte (al reiniciar o al salir de la página).
+async function enviarPuntos(todo) {
+  if (!J || (enviando && !todo)) return;
+  const g = gen, total = Math.floor(ganado / PESOS_POR_PUNTO), n = total - puntosEnviados;
+  if (n <= 0 || (!todo && n < umbralPuntos)) return;
+  puntosEnviados = total; enviando = true;
+  let ok = false;
+  try { ok = await J.sumarPuntos(ID, n); } catch (e) {}
+  enviando = false;
+  if (g !== gen) return; // se reinició la partida mientras tanto
+  if (ok) umbralPuntos = PUNTOS_LOTE;
+  else { puntosEnviados -= n; umbralPuntos = n + PUNTOS_LOTE; } // sin sesión o con error: se reintenta más adelante
 }
+document.addEventListener("visibilitychange", () => { if (document.hidden) enviarPuntos(true); });
+addEventListener("pagehide", () => enviarPuntos(true));
 
 // ----- Dibujo (vista isométrica 2:1, estilo Clash of Clans) -----
 // La lógica sigue usando el mapa plano (W × H) de arriba; aquí solo se proyecta cada punto a la pantalla.
@@ -750,6 +781,21 @@ const MADERA = { tapa: "#c58b4e", izq: "#a06a35", der: "#85542a" };
 const MADERA_OSCURA = { tapa: "#8d6e63", izq: "#6d4c41", der: "#5a3d33" };
 const ACERO = { tapa: "#cfd8dc", izq: "#90a4ae", der: "#78909c" };
 const SILLA = { tapa: "#bc9a8c", izq: "#8d6e63", der: "#6d4c41" };
+// Aspecto por nivel (1 a 5): las mesas pasan de madera a mesa con mantel, talavera azul y dorada; las sillas ganan un cojín de color
+const MESA_ESTILOS = [
+  MADERA,
+  { tapa: "#d9a066", izq: "#b97a3d", der: "#9a6130" }, // madera barnizada
+  { tapa: "#f4ecd8", izq: "#c9b99a", der: "#a8977a" }, // mantel crema
+  { tapa: "#4f8fd6", izq: "#2f6db3", der: "#1f5590" }, // talavera azul
+  { tapa: "#f2c14e", izq: "#d19a1f", der: "#a87710" }, // dorada
+];
+const SILLA_COJINES = [
+  null,
+  { tapa: "#d7b98e", izq: "#b8946a", der: "#9a7a52" }, // cojín arena
+  { tapa: "#ef9a9a", izq: "#e53935", der: "#b71c1c" }, // cojín rojo
+  { tapa: "#80cbc4", izq: "#26a69a", der: "#00796b" }, // cojín verde
+  { tapa: "#f2c14e", izq: "#d19a1f", der: "#a87710" }, // cojín dorado
+];
 
 // Cuarto con piso de azulejos, paredes altas al fondo y paredes bajas al frente (con hueco para la puerta)
 function cuarto(c, x0, y0, x1, y1, claro, oscuro, pared, puertaX, puertaW) {
@@ -902,7 +948,7 @@ function plazaLote(c) {
 function carteles(c) {
   for (const k of Object.keys(LOTES)) {
     const [sx, sy] = iso(LOTES[k].centro[0], LOTES[k].centro[1]);
-    const t = "🏷️ Terreno " + LOTES[k].etiqueta.toLowerCase() + " · $" + PRECIO_TERRENO;
+    const t = "🏷️ Terreno " + LOTES[k].etiqueta.toLowerCase() + " · " + pesos(PRECIO_TERRENO);
     c.font = "700 15px system-ui, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.lineWidth = 4; c.strokeStyle = "rgba(0,0,0,.55)"; c.strokeText(t, sx, sy);
     texto(t, sx, sy, 15, "#fff", "center", c);
   }
@@ -957,7 +1003,7 @@ function sombra(x, y, r) {
 function persona(e, x, y, z, tam) { sombra(x, y, 13); const [sx, sy] = iso(x, y, z); emoji(e, sx, sy, tam); }
 
 function dibujarMesa(m) {
-  caja3d(ctx, m.cx - 32, m.cy - 32, m.cx + 32, m.cy + 32, 22, MADERA, "#5b4636");
+  caja3d(ctx, m.cx - 32, m.cy - 32, m.cx + 32, m.cy + 32, 22, MESA_ESTILOS[nivelMesas - 1], "#5b4636");
   if (m.ocupada) suelo(ctx, m.cx - 32, m.cy - 32, m.cx + 32, m.cy + 32, null, 22, "#7c5cff");
   if (llevando === m) { suelo(ctx, m.cx - 32, m.cy - 32, m.cx + 32, m.cy + 32, null, 22, "#ffd54a"); suelo(ctx, m.cx - 34, m.cy - 34, m.cx + 34, m.cy + 34, null, 22, "#ffd54a"); }
   const [sx, sy] = iso(m.cx, m.cy, 22);
@@ -975,7 +1021,11 @@ function dibujarMesa(m) {
     ctx.fillStyle = m.barra.color; ctx.fillRect(sx - 24, sy - 38, 48 * f, 7);
   }
 }
-function dibujarSilla(s) { caja3d(ctx, s.x - 10, s.y - 10, s.x + 10, s.y + 10, 10, SILLA, "#5b4636"); }
+function dibujarSilla(s) {
+  caja3d(ctx, s.x - 10, s.y - 10, s.x + 10, s.y + 10, 10, SILLA, "#5b4636");
+  const cojin = SILLA_COJINES[nivelSillas - 1];
+  if (cojin) caja3d(ctx, s.x - 8, s.y - 8, s.x + 8, s.y + 8, 10 + nivelSillas, cojin, "#5b4636"); // cada nivel la hace un poco más alta
+}
 function dibujarMostrador() {
   caja3d(ctx, 20, 40, 250, 70, 26, ACERO, "#546e7a");
   const [dx, dy] = iso(32, 55, 40); emoji("🍳", dx, dy, 26);
@@ -1069,7 +1119,7 @@ function dibujarMonedas() {
   for (const c of monedas) {
     const a = (t - c.t0) / 1000, [sx, sy] = iso(c.x, c.y, 50);
     ctx.globalAlpha = 1 - a;
-    texto("+$" + c.monto, sx, sy - a * 40, 17, "#b8860b", "center");
+    texto("+" + pesos(c.monto), sx, sy - a * 40, 17, "#b8860b", "center");
     ctx.globalAlpha = 1;
   }
 }
@@ -1110,19 +1160,11 @@ function cuadro() {
     const hoy = ahora(), vencidas = esperas.filter((w) => hoy >= w.fin).sort((a, b) => a.fin - b.fin);
     if (vencidas.length) { esperas = esperas.filter((w) => hoy < w.fin); vencidas.forEach((w) => { if (w.g === gen) w.r(); }); }
   }
-  if (!fin) {
-    reloj += dt * 1000;
-    if (reloj < DURACION_DIA_MS) {
-      if (reloj >= proxLlegada) { llegar(OPCIONES[Math.floor(Math.random() * OPCIONES.length)]); proxLlegada = reloj + azar(LLEGADA_MIN_MS, LLEGADA_MAX_MS); }
-      if (reloj >= proxAuto) { llegarAuto(); proxAuto = reloj + azar(AUTO_MIN_MS, AUTO_MAX_MS); }
-    } else comprobarFin();
-    const seg = Math.max(0, Math.ceil((DURACION_DIA_MS - reloj) / 1000));
-    if (seg !== ultimoSeg) {
-      ultimoSeg = seg;
-      $("tiempo").textContent = seg;
-      if (seg === 0) info("Se acabó la jornada: termina de atender a quienes quedan.");
-    }
-  }
+  reloj += dt * 1000; // (con la tienda abierta «dt» es 0: el reloj también se pausa)
+  if (reloj >= proxLlegada) { llegar(OPCIONES[Math.floor(Math.random() * OPCIONES.length)]); proxLlegada = reloj + azar(LLEGADA_MIN_MS, LLEGADA_MAX_MS); }
+  if (reloj >= proxAuto) { llegarAuto(); proxAuto = reloj + azar(AUTO_MIN_MS, AUTO_MAX_MS); }
+  const seg = Math.floor(reloj / 1000);
+  if (seg !== ultimoSeg) { ultimoSeg = seg; $("tiempo").textContent = fmtTiempo(seg); }
   for (const e of ents) {
     if (!e.ruta.length) continue;
     const [tx, ty] = e.ruta[0];
@@ -1261,8 +1303,7 @@ $("acercar").addEventListener("click", () => zoomEn(camara.z + PASO_ZOOM, CW / 2
 $("alejar").addEventListener("click", () => zoomEn(camara.z - PASO_ZOOM, CW / 2, CH / 2));
 $("centrar").addEventListener("click", centrarCamara);
 $("cerrarTienda").addEventListener("click", cerrarTienda);
-$("reiniciar").addEventListener("click", nuevaPartida);
-$("otra").addEventListener("click", nuevaPartida);
+$("reiniciar").addEventListener("click", () => { enviarPuntos(true); nuevaPartida(); }); // antes de empezar de cero, manda los puntos que falten
 centrarCamara();
 armarFondo();
 nuevaPartida();
