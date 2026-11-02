@@ -33,13 +33,15 @@ Cada archivo trae en su **primera línea** su ruta dentro del repo (`Ruta: ...`)
 | `pequenos-puzles/index.html`, `pequenos-puzles/juego.js`, `pequenos-puzles/logica.js`, `pequenos-puzles/niveles.js` | Juego «Pequeños puzles»: arrastra piezas de formas raras (sin girarlas) para llenar la cuadrícula; 70 niveles previstos, menú de niveles con candado y progreso en `localStorage`. `niveles.js` guarda cada nivel como dibujo de texto (`X` = celda) y su `limite` en segundos si lo tiene (nivel 7: 10 s; el tiempo corre desde el primer toque); `logica.js` son solo reglas y un solucionador para comprobar que cada nivel tiene solución (sin pantalla). Los ajustes están al inicio de `juego.js`. Al perfil se envía 1 punto por cada 25 del juego (`PUNTOS_POR_PERFIL`), solo la primera vez que se pasa cada nivel |
 | `rompecabezas/index.html`, `rompecabezas/juego.js` | Juego «Rompecabezas»: piezas con lengüetas, 32/64/128/256/512 piezas (la cuadrícula se elige según la proporción de la imagen), zoom con pellizco/rueda/botones, imagen guía (👁) y galería de imágenes guardadas en `localStorage`. La imagen se elige de un archivo, se reduce a 2000 px, se convierte a WebP (JPEG si el navegador no puede) y se sube a imgbb con el Apps Script (`apps-script/subir-imagen.gs`, que guarda la key de imgbb y exige sesión de Google); solo se cargan imágenes de `ibb.co` (también con `?img=`). Los ajustes están al inicio de `juego.js`. Al perfil se envía 1 punto por cada 8 piezas (`PIEZAS_POR_PUNTO`) |
 | `pixelart/index.html`, `pixelart/juego.js` | Juego «Pixelart por números»: se sube una imagen (se reduce a 2000 px y se sube a imgbb con el mismo Apps Script que Rompecabezas; la galería de URLs `ibb.co` vive en `localStorage`), se elige 1000, 2500, 5000 o 10000 celdas en el lado largo (10000 usa 120 colores, ver `COLORES_POR_TAMANO`; necesita ~115 MB de memoria y puede fallar en celulares modestos) (la otra se ajusta a la proporción) y se divide en hasta 60 colores numerados (corte por mediana + k-means, tabla de 5 bits por canal). Herramientas: pincel (solo pinta celdas del color elegido), relleno por zonas y mover; zoom con pellizco/rueda; los números se ven al acercar. El avance (bits pintados) se guarda en IndexedDB por imagen y tamaño. Al perfil se envían puntos proporcionales al avance (`PUNTOS_IMAGEN`: 40/100/200/400 al completar), sin repetir al reiniciar. Ajustes al inicio de `juego.js` |
+| `jardin/index.html`, `jardin/juego.js`, `jardin/niveles.js` | Juego «Jardín contra zombis» (estilo Plants vs. Zombies, **meta: parecerse lo más posible al original**, ver sección «Jardín contra zombis» más abajo): cartas de plantas, soles, zombis, cortadoras, oleadas con bandera 🚩 y niveles desbloqueables. `juego.js` tiene los ajustes y los bloques `PLANTAS` y `ZOMBIS`; `niveles.js` tiene la lista `NIVELES` (filas activas, plantas disponibles, soles iniciales y oleadas). El progreso y el récord por nivel se guardan en `localStorage`; al perfil se envía 1 punto por cada 25 del juego (`PUNTOS_POR_PERFIL`) |
+| `restaurantes/index.html`, `restaurantes/juego.js` | Juego «Restaurantes»: tiras el dado (llegan 1, 2 o 4 clientes), la recepcionista les asigna una de las 4 mesas (4 sillas cada una), piden, la cocina prepara, el mesero sirve, algunos van al baño, comen y pagan 25 pesos cada uno en la recepción. Solo 3 tiradas por partida. Los ajustes (tiradas, opciones del dado, pago, tiempos, probabilidad de baño) están al inicio de `juego.js`. Al perfil se envía 1 punto por cada 5 pesos (`PESOS_POR_PUNTO`); el récord se guarda en el navegador |
 | `firestore.rules` | Reglas de seguridad; se pegan en la consola de Firebase |
 
 **Regla de las carpetas:** cada juego vive en su carpeta (`nombre-del-juego/index.html` + sus archivos) y llama a lo común con `../compartido/...`. Esa ruta relativa en los `import` y en el `<link>` también indica dónde está cada archivo.
 
 ## Seguir el trabajo en otra sesión con Claude
 
-1. Pasa **todos** los archivos que se van a tocar, y siempre este `README.md`.
+1. Pasa **todos** los archivos que se van a tocar, y siempre este `README.md`. Para el Jardín: `jardin/index.html`, `jardin/juego.js` y `jardin/niveles.js`.
 2. Si los archivos llegan sin carpetas, avisa: «los archivos están sin carpetas; sigue el mapa del README». Si hay dos con el mismo nombre (`index.html`), se distinguen por la línea `Ruta:`.
 3. Al terminar cada sesión, actualiza el **Estado** de abajo (o pídeselo a Claude) para que la siguiente sesión sepa dónde quedaste.
 
@@ -65,11 +67,72 @@ Cada archivo trae en su **primera línea** su ruta dentro del repo (`Ruta: ...`)
 - Pixelart por números: primera versión hecha (sin probar en navegador). Falta: probar subida a imgbb (necesita `auth` exportado en `compartido/firebase.js` y `URL_SUBIDA_IMAGENES` en `compartido/configs.js`), probar 5000×5000 en celular y subir la carpeta `pixelart/`. Pendiente: limpiar celdas sueltas (moda), pistas, compartir avance
 - Hoja de Google Sheets «Polo Ai Juegos» (enlace en `compartido/configs.js`, `HOJA_JUEGOS`): creada por El Polo y disponible para usarse si hace falta (registro de subidas, ligas, etc.). Aún no la usa ningún juego; si se usa, anotar aquí qué pestañas/columnas se crearon
 - Juegos: `ejemplo` (plantilla, escondida tras el botón «Juego de prueba» del portal), `doodle`, `piano`, `corredor`, `solitario`, `dulces`, `gominolas`, `rompeladrillos`, `burbujas`, `globos`, `pequenos-puzles`, `pixelart`. Pendientes: ajedrez (con puntos y ligas)
+- Restaurantes: primera versión hecha (sin probar en navegador): dado de 1/2/4 clientes, 3 tiradas, recepcionista, cocina, baño y 4 mesas de 4 sillas, 25 pesos por cliente. Falta probarlo a mano en el celular (tamaño del lienzo, tiempos, equilibrio). Pendiente: más tiradas/niveles, propinas, mejoras del restaurante
 - Juegos en repo propio (con `url` en `juegos.js`): ninguno por ahora
 
 - Revisión de `compartido/` (31 oct 2026): `firestore.rules` ahora valida campos y topes de puntos (`MAX_ENVIO` = 1000, igual que `MAX_PUNTOS_POR_ENVIO` en `jugador.js`); `sumarPuntos` redondea y limita; `sw.js` en VERSION 3 (agregados `pantalla-completa.js` y `rompecabezas`, errores de caché controlados); `estilos.css` con `[hidden]` y foco visible; descripción del manifest corregida. **Falta pegar las nuevas reglas en la consola de Firebase** y subir los archivos al repo. Si un juego deja de guardar puntos tras pegar las reglas, revisar que no escriba campos distintos a `nombre/foto/actualizado/total/mejor`
 - Pendiente (seguridad): restringir la `apiKey` de Firebase por dominio en Google Cloud Console (ver «Seguridad»); valorar Firebase App Check más adelante
+- Jardín contra zombis: hecho con 4 plantas (girasol, lanzaguisantes, nuez, petardo), 2 zombis (normal, cono) y **25 niveles provisionales** en `niveles.js`. Los niveles 1-1 a 1-5 son «Día»; los llamados «Día 2-x» y «Día 3-x» son **relleno temporal** hecho con lo que ya existía (no son el Noche ni la Piscina reales): hay que reubicarlos o rehacerlos cuando existan esas mecánicas (ver plan por fases). Falta probarlo a mano en el celular. **Pendiente: agregar `jardin` a `juegos.js` y a `JUEGOS` de `sw.js` (subir `VERSION`)**, y que `sw.js` incluya `niveles.js` en sus archivos (`jardin: ["juego.js", "niveles.js"]`)
 - Pendiente: `buscaminas` existe en el repo pero falta su línea en `juegos.js`; `ajedrez` aún no existe (está reservado en `sw.js`)
+
+## Jardín contra zombis: meta y guía de Plants vs. Zombies (notas para seguir en otra sesión)
+
+**META DEL PROYECTO:** que «Jardín contra zombis» se parezca **lo más posible al Plants vs. Zombies original** (modo aventura de 50 niveles). Ante cualquier duda de diseño, hacer lo que hace el original. Mantener lo ya acordado: todo con emojis y canvas (sin imágenes), sonidos con WebAudio, juego funcional sin internet, y niveles definidos en `niveles.js`. Si Claude no recuerda un dato del original, debe **buscarlo en la wiki** (Plants vs. Zombies Wiki en wiki.gg o StrategyWiki) en vez de inventarlo.
+
+### Estructura del modo aventura original (5 zonas × 10 niveles = 50)
+
+Regla general: al ganar cada nivel se obtiene una planta nueva, **excepto** los niveles terminados en 4 y 9. El nivel X-5 es un minijuego/especial y el X-10 es la «batalla final» de la zona (todas las plantas llegan por banda transportadora). Los niveles con 0 banderas son 1-1, 2-5, 4-5 y 5-10.
+
+| Zona | Ambiente | Filas | Mecánica propia |
+|---|---|---|---|
+| 1 (1-1 a 1-10) | Día, jardín delantero | 5 | Caen soles del cielo |
+| 2 (2-1 a 2-10) | Noche, jardín delantero | 5 | **No caen soles del cielo.** Aparecen **lápidas** (donde no se puede plantar hasta quitarlas con la «grave buster»); los zombis también salen de lápidas. Plantas «hongo» baratas |
+| 3 (3-1 a 3-10) | Piscina, patio trasero (día) | **6** (las 2 de arriba y 2 de abajo son tierra; las **2 del medio son agua**) | En el agua solo se planta sobre **nenúfar** (lily pad) y llegan zombis acuáticos; en esas filas no hay cortadora (hay limpiapiscinas) |
+| 4 (4-1 a 4-10) | Niebla, patio trasero (noche) | 6 | **Niebla** cubre la parte derecha; se despeja con farol (plantern) o soplador (blover). 4-5 es «Vasebreaker» (romper jarrones) |
+| 5 (5-1 a 5-10) | Techo | 5 | **Todo se planta en macetas**; el techo es inclinado, así que casi todas las plantas que disparan no pasan de la pendiente (solo las catapultas llegan a todo el techo). 5-1 a 5-9 son de día; **5-10 es de noche** y es el jefe final (Dr. Edgar Zomboss) |
+
+### Niveles y plantas nuevas (zonas 1 y 2, según la wiki)
+
+**Zona 1 (Día):** 1-1 lanzaguisantes (solo 1 fila, 0 banderas) · 1-2 girasol (3 filas) · 1-3 petardo/cereza (3 filas) · 1-4 nuez (primera con 5 filas) · 1-5 **boliche de nueces** (banda transportadora, se gana la pala) · 1-6 mina de papa + zombi con garrocha · 1-7 lanzaguisantes de hielo (primer nivel de 2 banderas) · 1-8 planta carnívora (chomper; primer nivel donde hay que **elegir** las plantas porque hay más que ranuras) · 1-9 repetidora (2 banderas; al terminar llega la carta de los zombis, no una planta) · 1-10 **final del Día** con banda transportadora (lanzaguisantes, hielo, repetidora, chomper, nuez, mina, petardo), 2 banderas.
+
+**Zona 2 (Noche):** 2-1 seta Puff (monedas aparecen aquí) · 2-2 seta solar · 2-3 seta Fume · 2-4 grave buster (primer zombi con garrocha de noche) · 2-5 «Whack-a-zombie» (especial, 0 banderas) · 2-6 seta hipnótica · 2-7 seta miedosa · 2-8 seta de hielo · 2-9 seta Doom · 2-10 final de la noche con banda transportadora (puff, fume, miedosa, hipnótica, hielo, doom, grave buster), 2 banderas.
+
+**Zona 3 (Piscina):** 3-1 nenúfar · 3-2 calabaza aplastante (squash) · 3-3 tres-lanzaguisantes (threepeater) · 3-4 alga enredadora (tangle kelp) · 3-5 especial con banda y zombis miniatura · 3-6 jalapeño (aparece el equipo de trineo) · 3-7 pinchos (spikeweed) · 3-8 antorcha (torchwood) · 3-9 nuez alta (tall-nut) · 3-10 final de la piscina con banda.
+
+**Zona 4 (Niebla):** 4-1 seta marina (sea-shroom) · 4-2 farol (plantern) · 4-3 cactus · 4-4 soplador (blover) · 4-5 Vasebreaker · 4-6 repetidora dividida (split pea) · 4-7 estrella (starfruit) · 4-8 calabaza (pumpkin) · 4-9 seta imán (magnet-shroom) · 4-10 final de la niebla (pantalla que parpadea).
+
+**Zona 5 (Techo):** 5-1 catapulta de repollo (cabbage-pult) · 5-2 maceta (flower pot) · 5-3 catapulta de maíz (kernel-pult) · 5-4 café (coffee bean; luego aparece el Jardín Zen) · 5-5 banda transportadora · 5-6 ajo · 5-7 paraguas (umbrella leaf) · 5-8 caléndula (marigold) · 5-9 catapulta de sandía (melon-pult) · 5-10 jefe final Dr. Zomboss.
+
+(Datos tomados de la wiki; si hay duda de un nivel concreto, verificar ahí.)
+
+### Reglas del juego original que hay que copiar (de memoria; verificar números en la wiki al implementarlas)
+
+- Empiezas con **50 soles**; cada sol vale **25**; en zonas de día cae uno del cielo cada ~10 s; el girasol produce 25 cada ~24 s. Las cartas tienen **recarga**: rápida ≈ 7.5 s (lanzaguisantes, girasol…), lenta ≈ 30 s (nuez, mina de papa), muy lenta ≈ 50 s (petardo).
+- Costos de referencia: girasol 50 · lanzaguisantes 100 · petardo 150 · nuez 50 · mina de papa 25 · hielo 175 · chomper 150 · repetidora 200 · puff 0 · solar 25 · fume 75 · grave buster 75 · hipnótica 75 · miedosa 25 · seta de hielo 75 · Doom 125 · nenúfar 25 · squash 50 · threepeater 325 · tangle kelp 25 · jalapeño 125 · pinchos 100 · antorcha 175 · nuez alta 125 · maceta 25 · catapulta de repollo 100 · de maíz 100 · sandía 300 · café 75.
+- **Cortadora** por fila (ya existe): al llegar un zombi a la casa recorre la fila y los mata a todos; si no hay cortadora, pierdes.
+- **Oleadas y banderas:** la barra de progreso inferior muestra las banderas; la bandera es una oleada grande («Una enorme oleada de zombis se acerca») y al final hay una **última oleada** también enorme. (La barra y el aviso 🚩 ya existen.)
+- **Selección de plantas:** antes de empezar se eligen las cartas (ranuras: 6 al inicio, hay una 7.ª que se compra, y más adelante hasta 8–10); al aparecer más plantas que ranuras, hay que elegir.
+- **Pala** para quitar plantas (se gana en 1-5). **Banda transportadora:** en niveles especiales las cartas llegan solas, sin costo de soles, y no se eligen.
+- Zombis de la zona 1: normal (~200 de vida), **cono** (~570), **cubeta** (~1300), **garrocha** (salta la primera planta; rápido al principio), y más adelante periódico, puerta de malla, futbolista, bailarín, etc. Los de piscina nadan con flotador/esnórquel/delfín; también existen Zomboni, trineo, globo, bungee, escalera, caja sorpresa y catapulta.
+- **Hongos** de día duermen y se despiertan con café; de noche funcionan solos.
+
+### Qué existe hoy y qué falta (plan por fases)
+
+Hoy: 4 plantas (girasol, lanzaguisantes, nuez, petardo), 2 zombis (normal, cono), 5 filas fijas (`FILAS = 5` en `juego.js`; `NIVEL.filas` activa algunas), cortadoras, soles, oleadas con bandera, progreso en `localStorage`, 25 niveles provisionales.
+
+- **Fase 1 – Zona 1 de verdad (Día, 10 niveles):** rehacer los niveles para que sigan la tabla de arriba (1-1 con una sola fila y solo lanzaguisantes, 1-2 y 1-3 con 3 filas, 1-4 con 5, etc.). Plantas nuevas: mina de papa, lanzaguisantes de hielo (ralentiza), chomper (se come un zombi y tarda en masticar), repetidora. Zombis nuevos: cubeta y **garrocha** (salta una planta). Mecánicas: **pantalla de elegir plantas** antes del nivel (con ranuras limitadas), **pala**, **banda transportadora** (1-5 con boliche de nueces y 1-10), 0 banderas en 1-1.
+- **Fase 2 – Zona 2 (Noche):** fondo oscuro, **sin soles del cielo**, **lápidas** (casillas bloqueadas; los zombis también salen de ellas), plantas hongo (puff, solar, fume, grave buster, hipnótica, miedosa, de hielo, Doom), zombis periódico y puerta de malla, nivel 2-5 «Whack-a-zombie». Aquí hay que mover los niveles «Día 2-x» provisionales o reemplazarlos.
+- **Fase 3 – Zona 3 (Piscina):** **6 filas** (cambiar `FILAS` a 6 y ajustar `ALTO` y `CELDA_H`/`Y0` del canvas), 2 filas de agua con nenúfar, zombis con flotador, plantas nenúfar/squash/threepeater/tangle kelp/jalapeño/pinchos/antorcha/nuez alta, limpiapiscinas en vez de cortadora en el agua.
+- **Fase 4 – Zona 4 (Niebla):** niebla en el lado derecho (farol y soplador), 4-5 Vasebreaker, plantas cactus, estrella, calabaza, imán, repetidora dividida.
+- **Fase 5 – Zona 5 (Techo):** macetas, pendiente (los disparos rectos no pasan), catapultas (parábola), café, ajo, paraguas, caléndula, jefe Dr. Zomboss.
+- **Extras (cuando las zonas estén):** tienda de Crazy Dave y monedas, almanaque, Jardín Zen, minijuegos, modo supervivencia, repetir la aventura con más dificultad.
+
+### Reglas para quien siga el trabajo
+
+1. Primero lee este README y `jardin/juego.js`; no inventes plantas ni zombis que no estén en `PLANTAS`/`ZOMBIS` al escribir niveles: si hace falta uno nuevo, se agrega **primero** en `juego.js` (con su comportamiento) y luego se usa en `niveles.js`.
+2. Una fase a la vez. Al terminar una, actualizar el **Estado** y la tabla de arriba.
+3. Cada nivel nuevo se valida con un script (cuenta de zombis, `en` crecientes, plantas que existan) antes de entregarlo.
+4. Los niveles se nombran con el esquema real: **zona-nivel** (1-1 … 5-10), y el nombre de la zona (Día, Noche, Piscina, Niebla, Techo) va según la tabla.
 
 ## Plan: muchos juegos y uso sin internet (notas para seguir en otra sesión)
 
