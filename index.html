@@ -1,129 +1,62 @@
 <!doctype html>
-<!-- Ruta: index.html (portal, en la raíz del repo) -->
+<!-- Ruta: supermercado/index.html -->
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Juegos</title>
-  <meta name="theme-color" content="#1b2330" />
-  <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="icon" href="iconos/icono-192.png" />
-  <link rel="apple-touch-icon" href="iconos/icono-180.png" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="Juegos" />
-  <link rel="stylesheet" href="compartido/estilos.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Supermercado</title>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
   <style>
-    [hidden] { display: none !important; }
-    .titulo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .mini { padding: 3px 8px; font-size: .7rem; color: var(--suave); text-decoration: none; border: 1px dashed var(--borde); border-radius: 999px; opacity: .7; }
-    .mini:hover, .mini:focus-visible { opacity: 1; border-color: var(--acento); color: var(--texto); }
-    #sinred { font-size: .75rem; color: var(--suave); border: 1px solid var(--borde); border-radius: 999px; padding: 3px 8px; }
-    #ayudaIos { margin: 8px 12px 0; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 10px; font-size: .9rem; color: var(--suave); }
-    #ayudaIos button { margin-left: 8px; }
+    .caja { max-width: 440px; margin: 0 auto; padding: 10px; user-select: none; -webkit-user-select: none; }
+    .hud { display: flex; justify-content: space-between; align-items: end; gap: 8px; margin: 4px 2px 8px; }
+    .hud div { display: flex; flex-direction: column; font-size: 12px; opacity: .8; }
+    .hud b { font-size: 24px; line-height: 1; opacity: 1; font-variant-numeric: tabular-nums; }
+    .tablero { position: relative; border-radius: 22px; overflow: hidden; background: #efe3c8; box-shadow: 0 8px 0 #0004; touch-action: none; }
+    canvas { display: block; width: 100%; touch-action: none; }
+    .ovl { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; background: #1b2330d9; color: #fff; }
+    .ovl.oculto { display: none; }
+    .mejoras { position: absolute; left: 8px; right: 8px; top: 8px; z-index: 2; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 14px; background: #1b2330ee; color: #fff; }
+    .mejoras.oculto { display: none; }
+    .mejoras h3 { margin: 0 0 2px; font-size: 15px; }
+    .mej { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid #fff4; background: #2b3a55; color: #fff; font-size: 14px; text-align: left; }
+    .mej b { white-space: nowrap; }
+    .mej:disabled { opacity: .45; }
+    .ovl h2 { margin: 0; font-size: 30px; }
+    .ovl p { margin: 0; max-width: 34ch; line-height: 1.4; }
+    .ovl .btn { font-size: 18px; padding: 10px 26px; }
   </style>
 </head>
 <body>
   <header class="barra">
-    <div class="titulo">
-      <h1>🎮 Juegos</h1>
-      <!-- Juego escondido: «Reflejos» (carpeta ejemplo/), ya no está en juegos.js -->
-      <a class="mini" href="ejemplo/">Juego de prueba</a>
-      <button class="btn" id="instalar" hidden>📲 Instalar</button>
-      <span id="sinred" hidden>Sin conexión</span>
-    </div>
-    <div id="sesion"></div>
+    <a class="volver" href="../index.html">‹ Juegos</a>
+    <h1>🛒 Supermercado</h1>
   </header>
-  <div id="ayudaIos" hidden>
-    Para instalarlo en iPhone/iPad: toca <b>Compartir</b> (el cuadro con la flecha) y luego <b>Agregar a pantalla de inicio</b>.
-    <button class="btn" id="cerrarAyuda">Entendido</button>
-  </div>
   <main>
-    <div id="lista" class="rejilla"></div>
+    <div class="caja">
+      <div class="hud">
+        <div>Dinero<b id="dinero">$0</b></div>
+        <div>Cargando<b id="carga">0/3</b></div>
+        <div>Estantería<b id="estante">0/5</b></div>
+        <div>Clientes<b id="clientes">0/3</b></div>
+      </div>
+      <div class="tablero">
+        <canvas id="lienzo"></canvas>
+        <div class="mejoras oculto" id="mejoras">
+          <h3>🛠️ Mejoras</h3>
+          <button class="mej" id="mejCarga" type="button"><span></span><b></b></button>
+          <button class="mej" id="mejEmpleado" type="button"><span></span><b></b></button>
+          <button class="mej" id="mejEstante" type="button"><span></span><b></b></button>
+          <button class="mej" id="mejEdificio" type="button"><span></span><b></b></button>
+        </div>
+        <div class="ovl" id="ovl">
+          <h2>Supermercado</h2>
+          <p>Tu tienda está vacía. Camina hasta la estantería y el jardín para comprarlos. Lo que crece en el jardín lo recoges solo al acercarte (al empezar llevas hasta 3; cada mejora 🧤 te deja llevar una más) y se coloca solo en la estantería (caben 5). Los clientes toman sus productos y van a la caja: cobra parándote junto a ella o contrata a un empleado en la zona de mejoras 🛠️. Las estanterías de jitomates y de zanahorias son fijas; en las estanterías extra, toca el botón ↻ para elegir qué producto llevan.</p>
+          <p>Toca o arrastra para moverte (o usa las flechas / WASD).</p>
+          <button class="btn" id="ovlBtn">Jugar</button>
+        </div>
+      </div>
+    </div>
   </main>
-  <script type="module">
-    import { JUEGOS } from "./juegos.js";
-
-    // Lista de juegos: cada tarjeta lleva a su carpeta (o a su repo propio si tiene «url»)
-    const lista = document.getElementById("lista");
-    JUEGOS.forEach((j) => {
-      const a = document.createElement("a");
-      a.className = "tarjeta";
-      a.href = j.url || j.carpeta + "/";
-      const ico = document.createElement("span");
-      ico.className = "tarjeta-ico";
-      ico.textContent = j.icono || "🎲";
-      const n = document.createElement("b");
-      n.textContent = j.nombre;
-      const d = document.createElement("small");
-      d.textContent = j.descripcion || "";
-      a.append(ico, n, d);
-      lista.appendChild(a);
-    });
-
-    // ----- Sin conexión + instalar en la pantalla de inicio -----
-    const $ = (id) => document.getElementById(id);
-    const marcarRed = () => ($("sinred").hidden = navigator.onLine);
-    addEventListener("online", marcarRed);
-    addEventListener("offline", marcarRed);
-    marcarRed();
-
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
-
-    const instalada = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
-    const esIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    let evento = null;
-    if (!instalada) {
-      if (esIos) {
-        // iOS no permite instalar con un botón: se muestran los pasos
-        $("instalar").hidden = false;
-        $("instalar").addEventListener("click", () => ($("ayudaIos").hidden = false));
-        $("cerrarAyuda").addEventListener("click", () => ($("ayudaIos").hidden = true));
-      } else {
-        addEventListener("beforeinstallprompt", (e) => {
-          e.preventDefault();
-          evento = e;
-          $("instalar").hidden = false;
-        });
-        $("instalar").addEventListener("click", async () => {
-          if (!evento) return;
-          evento.prompt();
-          await evento.userChoice.catch(() => {});
-          evento = null;
-          $("instalar").hidden = true;
-        });
-      }
-    }
-    addEventListener("appinstalled", () => ($("instalar").hidden = true));
-
-    // ----- Sesión con Google y puntos totales (los mismos para todos los juegos) -----
-    // Se carga aparte: si Firebase no está disponible (sin conexión la primera vez), el portal igual se ve.
-    const zona = $("sesion");
-    try {
-      const { alCambiarSesion, entrar, salir, leerPerfil } = await import("./compartido/jugador.js");
-      alCambiarSesion(async (u) => {
-        zona.innerHTML = "";
-        const b = document.createElement("button");
-        b.className = "btn";
-        if (!u) {
-          b.textContent = "Entrar con Google";
-          b.addEventListener("click", () => entrar().catch((e) => alert(e.message)));
-          zona.appendChild(b);
-          return;
-        }
-        const t = document.createElement("span");
-        t.textContent = (u.displayName || "Jugador") + " · ";
-        b.textContent = "Salir";
-        b.addEventListener("click", salir);
-        zona.append(t, b);
-        try {
-          const p = await leerPerfil();
-          t.textContent = (u.displayName || "Jugador") + " · " + (p ? p.total || 0 : 0) + " pts · ";
-        } catch (e) {}
-      });
-    } catch (e) {
-      zona.textContent = "Sesión no disponible sin conexión";
-    }
-  </script>
+  <script type="module" src="juego.js"></script>
 </body>
 </html>
