@@ -5,6 +5,7 @@
 // Si tardas, se enojan y se van. Al terminar de comer se levantan TODOS y la mesa queda libre; algunos van al baño (cuesta 1 peso) y
 // los demás van directo a la recepción. Cada uno paga 5 pesos al salir (más lo que sumen las mejoras de SU mesa, que se tocan en la mesa; quien usó el baño paga además 1 peso).
 // TIENDA: tocando el mostrador de la recepción (🛒) se abre la zona de compras. Ahí se contrata (y se mejora) a la recepcionista y al mesero.
+// COCINERO Y MESAS: en la tienda se mejora al cocinero (10 niveles: cada nivel cocina más rápido) y se compran mesas nuevas para el comedor (hasta 12 en total, precio creciente).
 // AMPLIACIÓN: en la tienda se compra «Ampliar terreno» (una plaza detrás del restaurante, sobre el pasto). Solo entonces se desbloquean el SEGUNDO MESERO y la SEGUNDA PUERTA
 // (entrada por atrás, con su propia fila de espera y su mostrador). La SEGUNDA RECEPCIONISTA solo se puede contratar cuando ya existe la segunda puerta.
 // Empiezan lentos: cada mejora los hace más rápidos. Lo gastado sale de «dinero»; los puntos y el récord cuentan lo «ganado».
@@ -57,6 +58,11 @@ const PRECIO_RECEP = 20;                                 // contratar a la recep
 const PRECIO_MESERO = 20;                                // contratar al mesero (lleva solo los platillos)
 const RECEP_TIEMPOS_MS = [6500, 5000, 3800, 2800, 2000, 1600, 1300, 1050, 850, 700]; // por nivel (10 niveles): lo que tarda en dar mesa a un grupo (el nivel 1 es lento a propósito)
 const MESERO_VEL = [70, 95, 125, 160, 200, 230, 260, 295, 330, 370]; // por nivel (10 niveles): velocidad al caminar (px/s; la gente normal va a VEL = 150)
+// Cocinero: siempre existe (nivel 1); cada mejora lo hace más rápido. COCINA_FACTOR multiplica el tiempo de cocina de cada pedido (nivel 1 = 1 = como antes).
+const COCINA_FACTOR = [1, 0.85, 0.72, 0.61, 0.52, 0.44, 0.38, 0.33, 0.29, 0.25];   // por nivel (10 niveles)
+const COCINERO_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230];            // costo de subir al nivel 2, 3, 4 ... 10
+// Mesas nuevas: se compran en la tienda en este orden (la 5.ª, la 6.ª...). Después de las 4 iniciales caben 8 más.
+const MESA_PRECIOS = [30, 60, 100, 160, 240, 350, 500, 700];
 const RECEP_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230]; // costo de subir al nivel 2, 3, 4 ... 10 de la recepcionista
 const MESERO_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230]; // ídem para el mesero
 const PAUSA_MESERO_MS = 400;                             // ms que se detiene a tomar el platillo
@@ -129,6 +135,11 @@ const MESAS_BASE = [
   { id: 1, cx: 150 + DX, cy: 290 }, { id: 2, cx: 410 + DX, cy: 290 },   // las mesas empiezan junto al núcleo; el resto del comedor queda libre para más mesas
   { id: 3, cx: 150 + DX, cy: 440 }, { id: 4, cx: 410 + DX, cy: 440 },
 ];
+// Lugares de las mesas que se pueden comprar: siguen las dos columnas de las mesas base, una fila (150 de alto) más abajo cada vez. Se llenan en este orden.
+const MESAS_EXTRA = [590, 740, 890, 1040].flatMap((cy, f) => [
+  { id: 5 + f * 2, cx: 150 + DX, cy }, { id: 6 + f * 2, cx: 410 + DX, cy },
+]);
+const MESAS_TODAS = [...MESAS_BASE, ...MESAS_EXTRA];
 const ORDEN_SILLAS = ["cerca", "arriba", "abajo", "lejos"]; // 4 sillas por mesa; se ocupan en este orden
 const CARAS = ["🧑", "👩", "👨", "🧓", "👧", "👦", "🧔", "👱"];
 
@@ -198,6 +209,7 @@ let terreno2 = false, puerta2 = false;             // ampliación comprada / seg
 let lote = null; // terreno comprado: null (ninguno), "izq" o "atras"
 let puntosEnviados = 0, umbralPuntos = PUNTOS_LOTE, enviando = false; // puntos ya mandados al perfil, cuántos hacen falta para el siguiente envío, envío en curso
 let ranura = null; // partida activa (0, 1 o 2); null = estás en el menú y no se guarda nada
+let cocinero = 1, nMesas = MESAS_BASE.length; // nivel del cocinero (1 a 10) y mesas que hay en el comedor
 let mesaMejora = null; // mesa cuyo panel de mejoras está abierto (null = la tienda de la recepción)
 const nuevasMejoras = () => Object.fromEntries(MEJORAS_MESA.map((c) => [c.id, 0])); // cuántas mejoras tiene cada cosa de una mesa (0 a 5)
 const bonoAcum = (k) => BONO_MEJORAS.slice(0, k).reduce((t, b) => t + b, 0);        // lo que suman en total las primeras k mejoras
@@ -219,10 +231,12 @@ let esperas = []; // esperas pendientes: { fin, g, r }
 // Espera que no continúa si se reinició la partida mientras tanto
 const esp = (ms) => { const g = gen; return new Promise((r) => esperas.push({ fin: ahora() + ms, g, r })); };
 
+const crearMesa = (m) => ({ ...m, ocupada: false, plato: false, barra: null, esperando: false, tomado: false, enojo: false, listoDesde: 0, res: null, clientes: [], mejoras: nuevasMejoras(), slot: -1 });
 function nuevaPartida(datos = null) { // datos: partida guardada que se carga (null = partida nueva)
   gen++; esperas = [];
   ents = []; globos = []; monedas = [];
-  mesas = MESAS_BASE.map((m) => ({ ...m, ocupada: false, plato: false, barra: null, esperando: false, tomado: false, enojo: false, listoDesde: 0, res: null, clientes: [], mejoras: nuevasMejoras() }));
+  cocinero = 1; nMesas = MESAS_BASE.length;
+  mesas = MESAS_BASE.map(crearMesa);
   recepcion = Array(SLOTS.length).fill(null);
   dinero = 0; ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
   const habiaCambios = terreno2 || nEstac > ESTAC_INICIALES; terreno2 = false; lote = null; puerta2 = false;
@@ -267,7 +281,7 @@ function instantanea() {
     mesas: mesas.map((m) => ({ id: m.id, mejoras: { ...m.mejoras } })),
     receps: receps.map((r) => (r ? r.nivel : 0)),
     meseros: meseros.map((w) => (w ? w.nivel : 0)),
-    terreno2, lote, puerta2, nEstac,
+    terreno2, lote, puerta2, nEstac, cocinero, nMesas,
     fecha: Date.now(),
   };
 }
@@ -285,6 +299,9 @@ function aplicarGuardado(d) {
   atendidos = Math.max(0, Math.floor(num(d.atendidos))); perdidos = Math.max(0, Math.floor(num(d.perdidos)));
   reloj = Math.max(0, num(d.reloj)); proxLlegada = reloj + PRIMERA_LLEGADA_MS; proxAuto = reloj + PRIMER_AUTO_MS;
   puntosEnviados = Math.max(0, Math.min(Math.floor(num(d.puntosEnviados)), Math.floor(ganado / PESOS_POR_PUNTO))); // así no se mandan dos veces los mismos puntos al perfil
+  cocinero = Math.max(1, Math.min(COCINA_FACTOR.length, Math.floor(num(d.cocinero)) || 1));
+  nMesas = Math.max(MESAS_BASE.length, Math.min(MESAS_TODAS.length, Math.floor(num(d.nMesas)) || MESAS_BASE.length));
+  for (let i = MESAS_BASE.length; i < nMesas; i++) mesas.push(crearMesa(MESAS_TODAS[i]));
   (Array.isArray(d.mesas) ? d.mesas : []).forEach((s) => {
     const m = s && mesas.find((x) => x.id === s.id);
     if (m && s.mejoras) MEJORAS_MESA.forEach((c) => (m.mejoras[c.id] = Math.max(0, Math.min(c.precios.length, Math.floor(num(s.mejoras[c.id]))))));
@@ -424,6 +441,9 @@ async function irseEnojados(g, motivo) {
   activos--;
 }
 
+// ms que tarda la cocina en preparar un pedido de n personas con el cocinero actual
+const tiempoCocina = (n) => (T_COCINA_BASE + T_COCINA_POR_CLIENTE * n) * COCINA_FACTOR[cocinero - 1];
+
 // ----- Un grupo ya sentado, de principio a fin -----
 async function atender(n, clientes, mesa, pu = 0) {
   const P = PUERTAS[pu];
@@ -433,7 +453,7 @@ async function atender(n, clientes, mesa, pu = 0) {
   await esp(700);
   globo(mesa.cx, mesa.cy, "📝 Pidiendo…", 1100);
   await esp(1100);
-  const tCocina = T_COCINA_BASE + T_COCINA_POR_CLIENTE * n;
+  const tCocina = Math.round(tiempoCocina(n));
   mesa.barra = { t0: ahora(), dur: tCocina, color: "#f2994a" };
   cocinando++;
   await esp(tCocina);
@@ -499,7 +519,7 @@ function cerrarGrupo(mesa) {
 // ----- Entrega manual (todavía no hay mesero) -----
 // Se resuelve con true si entregas el platillo a tiempo, o con false si se acaba la paciencia (se revisa en cuadro())
 function esperarEntrega(m) {
-  return new Promise((res) => { m.listoDesde = ahora(); m.esperando = true; m.tomado = false; m.res = res; });
+  return new Promise((res) => { m.listoDesde = ahora(); m.esperando = true; m.tomado = false; m.res = res; asignarSlot(m); });
 }
 function entregar(m) {
   m.esperando = false; m.tomado = false; m.enojo = false;
@@ -510,8 +530,13 @@ function entregar(m) {
   if (r) r(true);
 }
 // Posición del platillo de cada mesa sobre el mostrador de la cocina
-const SLOT_X = [60, 110, 160, 210].map((x) => x + DX);
-const SLOT_Y = 55;
+// Lugares del mostrador: 6 por fila, 2 filas (caben los platillos de hasta 12 mesas). Cada platillo listo toma el primer lugar libre.
+const slotXY = (i) => [36 + DX + (i % 6) * 34, 50 + Math.floor(i / 6) * 14];
+function asignarSlot(m) {
+  const usados = new Set(mesas.filter((x) => x !== m && x.esperando && x.slot >= 0).map((x) => x.slot));
+  let i = 0; while (usados.has(i)) i++;
+  m.slot = i;
+}
 const TOL = (1 / ESCALA - 1) * 20;                    // los objetos pequeños se tocan con un poco más de margen
 const PAD_MESA = Math.min(72, 58 + (1 / ESCALA - 1) * 15); // cuánto alrededor de la mesa cuenta como tocarla (sin pisar a la mesa vecina)
 const dentro = (p, x0, y0, x1, y1) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1;
@@ -541,7 +566,7 @@ function tocar(sx, sy) {
   }
   const listos = mesas.filter((m) => m.esperando && !m.tomado && m.reservadoPor !== m.listoDesde); // sin los que el mesero ya va a buscar
   // Si tocas un platillo del mostrador, ese; si tocas otra parte de la cocina, el que lleva más tiempo esperando
-  let elegido = listos.find((m) => { const [px, py] = iso(SLOT_X[m.id - 1], SLOT_Y, 40); return Math.hypot(sx - px, sy - py) < Math.max(12, 28 * ESCALA); });
+  let elegido = listos.find((m) => { const [px, py] = iso(...slotXY(m.slot), 40); return Math.hypot(sx - px, sy - py) < Math.max(12, 28 * ESCALA); });
   if (!elegido && enCocina) elegido = listos.sort((a, b) => a.listoDesde - b.listoDesde)[0];
   if (elegido) { elegido.tomado = true; llevando = elegido; info("Llevas el platillo de la mesa " + elegido.id + ": toca esa mesa para entregarlo."); }
   else if (mesaTocada) abrirMejorasMesa(mesaTocada); // tocar una mesa (sin platillo en la mano) abre sus mejoras
@@ -664,9 +689,12 @@ function pintarTienda() {
   if (mesaMejora) { pintarMejorasMesa(mesaMejora, lista); return; }
   $("tiendaTitulo").textContent = "🛒 Tienda";
   const txtRecep = (n) => "Nivel " + n + " de " + (RECEP_PRECIOS_MEJORA.length + 1) + " · da mesa en " + (RECEP_TIEMPOS_MS[n - 1] / 1000).toFixed(1) + " s";
+  const txtCocinero = (n) => "Nivel " + n + " de " + (COCINERO_PRECIOS_MEJORA.length + 1) + " · un pedido para 4 personas tarda " + (tiempoCocina(4) / 1000).toFixed(1) + " s";
   const txtMesero = (n) => "Nivel " + n + " de " + (MESERO_PRECIOS_MEJORA.length + 1) + " · lleva los platillos a su paso";
   lista.append(
     filaTienda("🧑‍💼", "Recepcionista", receps[0], PRECIO_RECEP, RECEP_PRECIOS_MEJORA, txtRecep, () => contratarRecep(0), () => mejorarRecep(0)),
+    filaTienda("👨‍🍳", "Cocinero", { nivel: cocinero }, 0, COCINERO_PRECIOS_MEJORA, txtCocinero, null, mejorarCocinero),
+    filaMesaNueva(),
     filaTienda("🤵", "Mesero", meseros[0], PRECIO_MESERO, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(0), () => mejorarMesero(0)),
     filaTerreno(),
     filaTienda("🤵‍♀️", "Segundo mesero", meseros[1], PRECIO_MESERO2, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(1), () => mejorarMesero(1),
@@ -678,6 +706,31 @@ function pintarTienda() {
       !receps[0] ? "Primero contrata a la recepcionista." : puerta2 ? "" : "Se desbloquea con la segunda puerta en el nuevo terreno."),
     filaEstac()
   );
+}
+function mejorarCocinero() {
+  const precio = COCINERO_PRECIOS_MEJORA[cocinero - 1];
+  if (precio === undefined || dinero < precio) return;
+  dinero -= precio;
+  cocinero++;
+  info("Mejoraste al cocinero (nivel " + cocinero + "): ahora un pedido para 4 personas tarda " + (tiempoCocina(4) / 1000).toFixed(1) + " s. Los pedidos que ya se están cocinando siguen igual.");
+  actualizar();
+}
+// Fila de compra de mesas nuevas
+function filaMesaNueva() {
+  const lleno = nMesas >= MESAS_TODAS.length, precio = MESA_PRECIOS[nMesas - MESAS_BASE.length];
+  return filaSimple("🪑", "Comprar mesa",
+    lleno ? "Ya tienes las " + MESAS_TODAS.length + " mesas: el comedor está lleno." : "Tienes " + nMesas + " de " + MESAS_TODAS.length + " mesas. La nueva (mesa " + (nMesas + 1) + ") queda en el comedor, con sus 4 sillas.",
+    lleno ? "Comedor lleno" : "Comprar " + pesos(precio), lleno || dinero < precio, comprarMesa);
+}
+function comprarMesa() {
+  if (nMesas >= MESAS_TODAS.length) return;
+  const precio = MESA_PRECIOS[nMesas - MESAS_BASE.length];
+  if (precio === undefined || dinero < precio) return;
+  dinero -= precio;
+  mesas.push(crearMesa(MESAS_TODAS[nMesas]));
+  nMesas++;
+  info("¡Compraste la mesa " + nMesas + "! Ya pueden sentarse ahí. Tócala para mejorarla.");
+  actualizar();
 }
 // Fila de la tienda con tres botones: hay que elegir cuál terreno comprar (solo uno)
 function filaTerreno() {
@@ -776,7 +829,7 @@ async function servir(m, w) {
   const lado = m.cx < HALL_X ? 1 : -1;
   w.ocupado = true;
   m.reservadoPor = t0;
-  await ir(w.ent, [[HALL_X, 185], PUERTA_COCINA, COCINA_DENTRO, [SLOT_X[m.id - 1], 90]]);
+  await ir(w.ent, [[HALL_X, 185], PUERTA_COCINA, COCINA_DENTRO, [slotXY(m.slot)[0], 90]]);
   await esp(PAUSA_MESERO_MS);
   if (vigente() && !m.tomado) {
     m.tomado = true;
@@ -1152,7 +1205,7 @@ function dibujarMostrador() {
   const [dx, dy] = iso(32 + DX, 55, 40); emoji("🍳", dx, dy, 26 * ESCALA);
   for (const m of mesas) { // platillos listos esperando que los tomes
     if (!m.esperando || m.tomado) continue;
-    const [sx, sy] = iso(SLOT_X[m.id - 1], SLOT_Y, 26);
+    const [sx, sy] = iso(...slotXY(m.slot), 26);
     const resta = Math.max(0, 1 - (ahora() - m.listoDesde) / PACIENCIA_MS), u = ESC_UI;
     emoji("🍽️", sx, sy - 14 * ESCALA, 30 * ESCALA * (1 + Math.sin(ahora() / 180) * 0.08));
     texto(ESCALA < 0.8 ? String(m.id) : "Mesa " + m.id, sx, sy + 4 * u, 10, "#263238", "center");
@@ -1341,10 +1394,11 @@ function cuadro() {
 
 // ----- Sesión con Google (opcional: sin ella el juego funciona, pero no guarda puntos) -----
 let J = null;
-try { J = await import("../compartido/jugador.js"); } catch (e) {}
 const zona = $("sesion");
-if (!J) zona.textContent = "Sin sesión";
-else {
+zona.textContent = "Conectando…";
+// En segundo plano: si Firebase tarda (o no hay internet) los botones del menú funcionan igual; la sesión aparece cuando termina de cargar
+import("../compartido/jugador.js").then((m) => {
+  J = m;
   J.alCambiarSesion((u) => {
     zona.innerHTML = "";
     const b = document.createElement("button");
@@ -1361,7 +1415,7 @@ else {
     b.addEventListener("click", J.salir);
     zona.append(t, b);
   });
-}
+}).catch(() => { zona.textContent = "Sin sesión"; });
 
 // ----- Vista: zoom (➕ ➖, rueda, pellizco) y desplazamiento (arrastrar) -----
 // La lógica y el dibujo trabajan en «coordenadas base» (las de iso()); la cámara solo cambia cómo se ven en el lienzo.
@@ -1426,7 +1480,7 @@ $("alejar").addEventListener("click", () => zoomEn(camara.z - PASO_ZOOM, CW / 2,
 $("centrar").addEventListener("click", centrarCamara);
 $("cerrarTienda").addEventListener("click", cerrarTienda);
 $("reiniciar").addEventListener("click", () => {
-  if (!confirm("¿Empezar de cero esta partida? Se perderá lo que tienes guardado en la Partida " + (ranura + 1) + ".")) return;
+  if (!confirm("¿Empezar de cero esta partida?" + (ranura !== null ? " Se perderá lo que tienes guardado en la Partida " + (ranura + 1) + "." : ""))) return;
   enviarPuntos(true); // antes de empezar de cero, manda los puntos que falten
   nuevaPartida();     // (actualizar() guarda enseguida la partida en blanco en la misma ranura)
 });
@@ -1440,6 +1494,7 @@ function mostrarMenu(vista = "inicio") {
   ponerPausa(true);
   menu.hidden = false;
   $("menuInicio").hidden = vista !== "inicio";
+  $("menuJugar").hidden = vista !== "jugar";
   $("menuPartidas").hidden = vista !== "partidas";
   if (vista === "partidas") pintarPartidas();
 }
@@ -1472,7 +1527,7 @@ function pintarPartidas() {
       const mer = (Array.isArray(d.meseros) ? d.meseros : []).filter((n) => num(n) > 0).length;
       const lineas = [
         "💰 $" + fmt(Math.max(0, Math.round(num(d.dinero) * 2) / 2)) + " pesos",
-        "🪑 " + (mes.length || MESAS_BASE.length) + " mesas" + (mes.length ? " · mejoras de cada una: " + porMesa.map((n) => n + "/" + maxMejoras).join(" · ") : ""),
+        "🪑 " + (mes.length || MESAS_BASE.length) + " mesas · 👨‍🍳 cocinero nivel " + (Math.floor(num(d.cocinero)) || 1) + (mes.length ? " · mejoras de cada una: " + porMesa.map((n) => n + "/" + maxMejoras).join(" · ") : ""),
         "🧑‍💼 " + rec + " recepcionista(s) · 🤵 " + mer + " mesero(s) · 🅿️ " + (Math.floor(num(d.nEstac)) || ESTAC_INICIALES) + " lugares" + (LOTES[d.lote] ? " · terreno ampliado" : ""),
         "⏱️ " + fmtTiempo(Math.floor(num(d.reloj) / 1000)) + (d.fecha ? " · " + new Date(num(d.fecha)).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : ""),
       ];
@@ -1487,15 +1542,26 @@ function pintarPartidas() {
     cont.appendChild(caja);
   });
 }
-// «Jugar» sigue con la última partida que usaste (o con la primera ranura vacía si no hay ninguna)
-$("jugar").addEventListener("click", () => {
-  const t = leerTodo();
-  let i = t.ranuras[t.ultima] ? t.ultima : t.ranuras.findIndex((r) => !r);
-  if (i < 0) i = 0;
-  empezar(i);
-});
-$("verPartidas").addEventListener("click", () => mostrarMenu("partidas"));
-$("volverMenu").addEventListener("click", () => mostrarMenu("inicio"));
+// Partidas guardadas: apágalas/enciéndelas aquí. En false el botón sale desactivado («No disponible de momento»); en true abre la lista de partidas.
+const PARTIDAS_GUARDADAS_DISPONIBLES = false;
+// Nueva partida: empieza de cero en la primera ranura vacía (así nunca pisa una partida ya guardada). Si las 3 están ocupadas, juega sin guardar.
+function empezarNueva() {
+  const i = leerTodo().ranuras.findIndex((r) => !r);
+  ranura = i < 0 ? null : i;
+  nuevaPartida();
+  if (ranura !== null) guardarPartida();
+  menu.hidden = true;
+  ponerPausa(false);
+  centrarCamara();
+  if (ranura === null) info("Las 3 partidas guardadas están ocupadas: esta partida no se va a guardar.");
+}
+$("jugar").addEventListener("click", () => mostrarMenu("jugar"));
+$("btnNueva").addEventListener("click", empezarNueva);
+$("atrasJugar").addEventListener("click", () => mostrarMenu("inicio"));
+$("btnPartidas").disabled = !PARTIDAS_GUARDADAS_DISPONIBLES;
+$("avisoPartidas").hidden = PARTIDAS_GUARDADAS_DISPONIBLES;
+if (PARTIDAS_GUARDADAS_DISPONIBLES) $("btnPartidas").addEventListener("click", () => mostrarMenu("partidas"));
+$("volverMenu").addEventListener("click", () => mostrarMenu("jugar"));
 $("menuBtn").addEventListener("click", () => mostrarMenu("inicio"));
 
 centrarCamara();
