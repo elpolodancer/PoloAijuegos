@@ -1536,12 +1536,25 @@ $("acercar").addEventListener("click", () => zoomEn(camara.z + PASO_ZOOM, CW / 2
 $("alejar").addEventListener("click", () => zoomEn(camara.z - PASO_ZOOM, CW / 2, CH / 2));
 $("centrar").addEventListener("click", centrarCamara);
 $("cerrarTienda").addEventListener("click", cerrarTienda);
-const btnEmpleados = $("btnEmpleados"); // botón anclado a la pantalla (no al mapa): se ve igual aunque muevas o acerques la vista
-if (btnEmpleados) btnEmpleados.addEventListener("click", () => {
+let btnEmpleados = $("btnEmpleados"); // botón anclado a la pantalla (no al mapa): se ve igual aunque muevas o acerques la vista
+if (!btnEmpleados) { // si index.html es una versión vieja sin el botón, se crea desde aquí para que el personal nunca quede sin pantalla
+  btnEmpleados = document.createElement("button");
+  btnEmpleados.id = "btnEmpleados";
+  btnEmpleados.className = "btn";
+  btnEmpleados.textContent = "👥 Empleados";
+  btnEmpleados.setAttribute("aria-label", "Empleados");
+  btnEmpleados.style.cssText = "position:fixed;z-index:90;top:calc(8px + env(safe-area-inset-top,0px));right:calc(8px + env(safe-area-inset-right,0px));box-shadow:0 4px 14px rgba(0,0,0,.45)";
+  document.body.appendChild(btnEmpleados);
+  const barra = document.querySelector(".barra");
+  if (barra) barra.style.paddingRight = "150px"; // deja libre la esquina para el botón
+}
+{
+  btnEmpleados.addEventListener("click", () => {
   if ($("menu").hidden === false) return; // con el menú abierto no se usa
   if (!$("tienda").hidden && vistaEmpleados) cerrarTienda();
   else abrirTienda(null, true);
-});
+  });
+}
 $("reiniciar").addEventListener("click", () => {
   if (!confirm("¿Empezar de cero esta partida?" + (ranura !== null ? " Se perderá lo que tienes guardado en la Partida " + (ranura + 1) + "." : ""))) return;
   enviarPuntos(true); // antes de empezar de cero, manda los puntos que falten
