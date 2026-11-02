@@ -1335,7 +1335,8 @@ function bucle(ahora) {
 // ---------- Admin (solo para probar) ----------
 // El botón ⚙️ Admin aparece al abrir la página con «?admin» al final de la dirección y se queda guardado en ese aparato
 // (con «?admin=0» se vuelve a esconder). Para que lo vea todo el mundo, pon MOSTRAR_ADMIN_SIEMPRE = true.
-const MOSTRAR_ADMIN_SIEMPRE = false;
+const MOSTRAR_ADMIN_SIEMPRE = true;      // true: el botón ⚙️ Admin y el de dinero se ven siempre (pon false para esconderlos al publicar)
+const DINERO_RAPIDO = 1000;              // cuánto da el botón 💰 de la barra de arriba (cámbialo a la cantidad que quieras)
 const lee = (k) => { try { return localStorage.getItem(k) === "1"; } catch (e) { return false; } };
 const guarda = (k, v) => { try { localStorage.setItem(k, v ? "1" : "0"); } catch (e) {} };
 let verAdmin = MOSTRAR_ADMIN_SIEMPRE;
@@ -1345,6 +1346,15 @@ if (lee("super_admin")) verAdmin = true;
 if (verAdmin) {
   const $ = (id) => document.getElementById(id);
   $("admBtn").hidden = false;
+  // botón rápido de dinero, siempre a la vista en la barra de arriba
+  const bd = $("dineroBtn");
+  bd.textContent = "💰 +$" + DINERO_RAPIDO;
+  bd.hidden = false;
+  bd.addEventListener("click", () => {
+    dinero += DINERO_RAPIDO;
+    textos.push({ x: jugador.x, y: jugador.y - 34, vida: 1.1, txt: "+$" + DINERO_RAPIDO, col: "#7dff9a" });
+    tono(880, 0.06);
+  });
   $("admBtn").addEventListener("click", () => $("adm").classList.toggle("oculto"));
   const ajustes = [["admDinero", "super_adm_dinero", "dinero"], ["admRapido", "super_adm_rapido", "rapido"]];
   for (const [id, clave, campo] of ajustes) {
@@ -1355,7 +1365,7 @@ if (verAdmin) {
   const auto = $("admAuto");
   auto.checked = lee("super_adm_auto");
   auto.addEventListener("change", () => { guarda("super_adm_auto", auto.checked); if (auto.checked) desbloquearTodo(); });
-  $("admMas").addEventListener("click", () => { dinero += 1000; });
+  $("admMas").addEventListener("click", () => { dinero += DINERO_RAPIDO; });
   $("admTodo").addEventListener("click", desbloquearTodo);
   $("admReiniciar").addEventListener("click", () => location.reload());
   if (auto.checked) desbloquearTodo();
