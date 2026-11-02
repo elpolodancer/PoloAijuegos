@@ -2,14 +2,15 @@
 // «Restaurantes» (vista isométrica estilo Clash of Clans): los grupos de clientes (1, 2 o 4) llegan SOLOS y al azar durante la jornada.
 // Esperan frente a la recepción: TÚ tocas a la familia para darles una mesa. Si no hay mesa libre (o tardas mucho), se van enojados.
 // Ya sentados piden, la cocina prepara y TÚ llevas el platillo a mano (clic en la cocina para tomarlo, clic en la mesa para entregarlo).
-// Si tardas, se enojan y se van. Algunos van al baño (cuesta $1), comen y pagan $5 cada uno en la recepción.
+// Si tardas, se enojan y se van. Al terminar de comer se levantan TODOS y la mesa queda libre; algunos van al baño (cuesta $1) y
+// los demás van directo a la recepción. Cada uno paga $5 al salir (quien usó el baño paga además el $1).
 // TIENDA: tocando el mostrador de la recepción (🛒) se abre la zona de compras. Ahí se contrata (y se mejora) a la recepcionista y al mesero.
 // Empiezan lentos: cada mejora los hace más rápidos. Lo gastado sale de «dinero»; los puntos y el récord cuentan lo «ganado».
 // CIUDAD Y VISTA: el restaurante está en una calle, rodeado de manzanas con edificios, parques y carreteras. La vista se acerca/aleja (➕ ➖, rueda o pellizco) con límites cortos y se mueve arrastrando.
 const ID = "restaurantes";
 
 // ----- Ajustes -----
-const DURACION_DIA_MS = 120000;   // duración de la jornada: pasado este tiempo ya no llegan más clientes
+const DURACION_DIA_MS = 480000;   // duración de la jornada (8 min; antes 120000): pasado este tiempo ya no llegan más clientes
 const PRIMERA_LLEGADA_MS = 1500;  // cuándo llega el primer grupo
 const LLEGADA_MIN_MS = 4000;      // los grupos llegan al azar: entre un grupo y el siguiente pasan entre estos dos tiempos
 const LLEGADA_MAX_MS = 9000;
@@ -25,7 +26,7 @@ const VEL = 150;                  // velocidad de la gente (px por segundo)
 const T_COCINA_BASE = 3000;       // ms de cocina por pedido...
 const T_COCINA_POR_CLIENTE = 500; // ...más estos ms por cada cliente de la mesa
 const T_COMER = 5000;             // ms que tardan en comer
-const PROB_BANIO = 0.5;           // probabilidad de que un cliente vaya al baño mientras come
+const PROB_BANIO = 0.5;           // probabilidad de que un cliente vaya al baño al levantarse de la mesa
 const KEY_RECORD = "restaurantes_record";
 
 // ----- Personal (se compra en la tienda de la recepción) -----
@@ -230,26 +231,34 @@ async function atender(n, clientes, mesa) {
   mesa.plato = true;
   globo(mesa.cx, mesa.cy, "😋", 1200);
   mesa.barra = { t0: ahora(), dur: T_COMER, color: "#6fcf97" };
-  await Promise.all([esp(T_COMER), ...clientes.map((c, i) => banio(c, mesa, i))]);
+  await esp(T_COMER);
   mesa.barra = null;
   mesa.plato = false;
   globo(mesa.cx, mesa.cy, "🧾 La cuenta", 1200);
-  await esp(900);
+  // Terminaron de comer: se levantan todos y la mesa queda libre desde este momento (ya no se toca «mesa» para este grupo)
+  mesa.ocupada = false;
+  mesa.clientes = [];
 
-  // 5) Pagan en la recepción y se van
+  // 5) Cada quien decide si va al baño; luego todos pagan en la recepción (quien usó el baño paga además el baño) y se van
   await Promise.all(clientes.map(async (c, i) => {
     await esp(i * 300);
     const ida = rutaIda(mesa, i);
-    await ir(c, [...ida.slice(0, -1).reverse(), espera(i)]);
-    dinero += PAGO_POR_CLIENTE; ganado += PAGO_POR_CLIENTE;
+    let monto = PAGO_POR_CLIENTE;
+    if (Math.random() < PROB_BANIO) {
+      await banio(c, ida, i);
+      monto += COSTO_BANIO;
+      await ir(c, [espera(i)]);
+    } else await ir(c, [...ida.slice(0, -1).reverse(), espera(i)]);
+    dinero += monto; ganado += monto;
     atendidos++;
-    monedas.push({ x: c.x, y: c.y, t0: ahora(), monto: PAGO_POR_CLIENTE });
+    monedas.push({ x: c.x, y: c.y, t0: ahora(), monto });
     actualizar();
     await esp(500);
     await ir(c, [[HALL_X, 640], [HALL_X, H + 40]]);
     quitar(c);
   }));
-  cerrarGrupo(mesa);
+  activos--; // la mesa ya estaba libre: solo se descuenta el grupo cuando el último sale del restaurante
+  comprobarFin();
 }
 
 function cerrarGrupo(mesa) {
@@ -309,18 +318,12 @@ function tocar(sx, sy) {
 }
 function posEnLienzo(e) { const r = lienzo.getBoundingClientRect(); return [((e.clientX - r.left) * CW) / r.width, ((e.clientY - r.top) * CH) / r.height]; }
 
-// Mientras comen, algunos clientes van al baño y regresan
-async function banio(c, m, i) {
-  if (Math.random() >= PROB_BANIO) return;
-  await esp(400 + Math.random() * 1200);
-  const ida = rutaIda(m, i);
+// Al levantarse de la mesa, el cliente va al baño y sale hacia la recepción (ahí paga todo, baño incluido). «ida» es el camino de la entrada a su silla
+async function banio(c, ida, i) {
   const dentro = [400 + i * 22, 120];
   await ir(c, [...ida.slice(1, -1).reverse(), [HALL_X, 185], PUERTA_BANIO, dentro]);
-  dinero += COSTO_BANIO; ganado += COSTO_BANIO;
-  monedas.push({ x: c.x, y: c.y, t0: ahora(), monto: COSTO_BANIO });
-  actualizar();
   await esp(1000);
-  await ir(c, [PUERTA_BANIO, [HALL_X, 185], ...ida.slice(1)]);
+  await ir(c, [PUERTA_BANIO, [HALL_X, 185], ENTRADA]);
 }
 
 // ----- Tienda y personal -----
