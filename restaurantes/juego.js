@@ -39,6 +39,7 @@ const T_COCINA_POR_CLIENTE = 500; // ...más estos ms por cada cliente de la mes
 const T_COMER = 5000;             // ms que tardan en comer
 const PROB_BANIO = 0.5;           // probabilidad de que un cliente vaya al baño al levantarse de la mesa
 const KEY_RECORD = "restaurantes_record";
+const KEY_DINERO = "restaurantes_dinero"; // dinero guardado en el navegador (la partida —mejoras, personal, terrenos— todavía NO se guarda)
 
 // ----- Personal (se compra en la tienda de la recepción) -----
 const PRECIO_RECEP = 20;                                 // contratar a la recepcionista (da mesa sola)
@@ -191,7 +192,7 @@ function nuevaPartida() {
   ents = []; globos = []; monedas = [];
   mesas = MESAS_BASE.map((m) => ({ ...m, ocupada: false, plato: false, barra: null, esperando: false, tomado: false, enojo: false, listoDesde: 0, res: null, clientes: [] }));
   recepcion = Array(SLOTS.length).fill(null);
-  dinero = 0; ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
+  dinero = leerDinero(); ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
   const habiaCambios = terreno2 || nEstac > ESTAC_INICIALES; terreno2 = false; lote = null; puerta2 = false;
   nEstac = ESTAC_INICIALES; autosPerdidos = 0; proxAuto = PRIMER_AUTO_MS; nivelMesas = 1; nivelSillas = 1;
   CAJONES.forEach((k) => { k.usado = false; k.coche = null; k.pendientes = 0; });
@@ -209,9 +210,16 @@ function fmtTiempo(seg) {
   return (h ? h + ":" + dos(m) : m) + ":" + dos(s);
 }
 function info(t) { $("estado").textContent = t; }
+// Dinero guardado: se escribe cada vez que cambia (cobros y compras pasan por actualizar()) y se recupera al abrir el juego o al reiniciar.
+// Solo es el saldo: lo que compraste (mejoras, personal, terrenos, lugares) no se guarda, así que al volver empiezas con el dinero pero sin esas compras.
+function leerDinero() {
+  try { const n = Number(localStorage.getItem(KEY_DINERO)); return Number.isFinite(n) && n > 0 ? Math.round(n * 2) / 2 : 0; } catch (e) { return 0; }
+}
+function guardarDinero() { try { localStorage.setItem(KEY_DINERO, String(dinero)); } catch (e) {} }
 function leerRecord() { try { return Number(localStorage.getItem(KEY_RECORD)) || 0; } catch (e) { return 0; } }
 function actualizar() {
   $("dinero").textContent = fmt(dinero);
+  guardarDinero();
   $("record").textContent = fmt(leerRecord());
   if (!$("tienda").hidden) pintarTienda();
 }
