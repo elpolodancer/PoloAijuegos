@@ -17,4 +17,7 @@ export const JUEGOS = [
   { id: "puzles", nombre: "Pequeños puzles", icono: "🧩", descripcion: "Encaja piezas de formas raras en la cuadrícula: 70 niveles, algunos con límite de tiempo.", carpeta: "pequenos-puzles" },
   { id: "pixelart", nombre: "Pixelart por números", icono: "🎨", descripcion: "Sube una foto y píntala por números: se divide en 60 colores y hasta 100 millones de celdas (1000, 2500, 5000 o 10 000, este último con 120 colores).", carpeta: "pixelart" },
   { id: "supermercado", nombre: "Supermercado", icono: "🛒", descripcion: "Compra una estantería y un jardín, cultiva jitomates, colócalos para vender y atiende a los clientes: cada producto vale 1 dólar.", carpeta: "supermercado" },
+  { id: "pradera", nombre: "Pradera", icono: "🦊", descripcion: "Corre y salta por la pradera, aplasta bichos, rompe ladrillos y llega al castillo antes de que se acabe el tiempo (estilo Mario).", carpeta: "pradera" },
+  { id: "rompecabezas", nombre: "Rompecabezas", icono: "🧩", descripcion: "Arma un rompecabezas con tu propia imagen: de 32 a 512 piezas, con zoom y guía; si entras con Google puedes guardar tus imágenes.", carpeta: "rompecabezas" },
+  { id: "buscaminas", nombre: "Buscaminas", icono: "💣", descripcion: "Despeja el tablero sin pisar ninguna mina: toca para abrir, mantén pulsado para poner bandera. Tres niveles y tu mejor tiempo.", carpeta: "buscaminas" },
 ];
