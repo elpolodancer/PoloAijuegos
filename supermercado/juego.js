@@ -15,8 +15,7 @@ const EXT_H = 26;                   // cuánto crece hacia abajo la estantería 
 const EXTRA_ZANAHORIA_CAP = 2;      // espacios extra para zanahorias en la estantería de jitomates, hasta que compres la de zanahorias
 const CRECE_SEG = 4;                // cada cuántos segundos sale una verdura nueva en el jardín
 const MADURA_SEG = 1.5;             // lo que tarda en madurar una verdura recién salida
-const MAX_CLIENTES = 3;             // clientes a la vez en la tienda
-const MAX_CLIENTES_ZANAHORIA = 4;   // clientes a la vez una vez que compras el jardín de zanahorias
+const MAX_CLIENTES = 3;             // clientes a la vez con el primer jardín (cada jardín nuevo desbloqueado suma 1 más)
 const ESPERA_MIN = 3;               // segundos que tarda en llegar el siguiente cliente (al azar entre MIN y MAX)
 const ESPERA_MAX = 6;
 const CANT_MIN = 1;                 // unidades de cada producto en la lista de un cliente
@@ -31,7 +30,7 @@ const RADIO = 12;                   // tamaño del personaje
 const EXT_ANCHO = 300;              // ancho (px del mapa) que añade cada ampliación del edificio, a la izquierda o a la derecha
 const CAMARA_SUAVE = 8;             // qué tan rápido te sigue la cámara (más alto = más pegada al personaje)
 const EMP_CARGA = 3;                // productos que lleva de golpe un empleado de jardín
-const EMP_VEL = 85;                 // velocidad (px/s) de los empleados de jardín
+const EMP_VEL = 85 * 0.25;          // velocidad (px/s) de los empleados de jardín: 25% de la original (−75%). Pon 85 para la de antes
 const JARDIN_SEP = 4;               // separación (px) entre los jardines y el muro de arriba del edificio
 
 // Costos
@@ -52,6 +51,11 @@ const COSTO_EMP_JARDIN = {
   pepino: 75, chile: 90, papa: 105, cebolla: 120, fresa: 140, limon: 160, sandia: 180, aguacate: 200, mango: 230, pina: 260,
 };
 const COSTO_EMPLEADO = 30;
+const COSTO_CAJA_EXTRA = (n) => 40 + 30 * n;     // cajas registradoras adicionales (n = las que ya compraste)
+const COSTO_PUERTA_EXTRA = (n) => 25 + 25 * n;   // entradas adicionales
+const COSTO_EMP_CAJA_EXTRA = 40;                 // empleado para cada caja adicional
+const MAX_CAJAS_EXTRA = 3;
+const MAX_PUERTAS_EXTRA = 3;
 const COSTO_ESTANTE_EXTRA = (n) => 15 + 10 * n;   // n = estanterías extra que ya compraste
 // Edificio: arriba queda siempre el pasto con los jardines. Cada ampliación lo ensancha hacia el lado que elijas
 // (izquierda o derecha) y deja 2 estanterías más. Como queda más ancho que la pantalla, la cámara sigue al personaje.
@@ -100,10 +104,10 @@ function rectEstante(i) {
 }
 // Los jardines están en el pasto, pegados al muro de arriba del edificio (a donde se sale por la abertura del pasillo central)
 const CAJA = { x: 10, y: 466, w: 72, h: 40 };     // el mostrador (con toldo, caja registradora y cajón)
-const SLOTS_CAJA = [{ x: 100, y: 485 }, { x: 128, y: 485 }, { x: 156, y: 485 }, { x: 184, y: 485 }]; // la fila de la caja (4 lugares)
-const POS_EMPLEADO = { x: 46, y: 527 };
+const SLOT_COLS = 4, SLOT_FILAS = 2;               // la fila de cada caja: 4 lugares por renglón, 2 renglones (si hay más gente, se amontonan en el último)
 const MEJORAS_ZONA = { x: 10, y: 556, w: 108, h: 62 };
-const PUERTA = { x: 186, y: MUNDO.h + 14 };       // por donde entran y salen los clientes
+const PUERTA = { x: 186, y: MUNDO.h + 14 };       // la entrada inicial (las que compres se agregan a «puertas»)
+const PUERTA_Y = MUNDO.h + 14;
 const PASILLO_X = 180;                            // pasillo central entre estanterías
 const ABERTURA = { a: PASILLO_X - 30, b: PASILLO_X + 30 }; // hueco de la pared de arriba: por ahí se sale al pasto
 // Franjas (en y) que ocupan las filas de estanterías: los clientes las cruzan por el pasillo
@@ -129,6 +133,8 @@ const btnPatIzq = document.getElementById("mejPatIzq");
 const btnPatDer = document.getElementById("mejPatDer");
 const titEd = document.getElementById("titEdificio"), botsEd = document.getElementById("botsEdificio");
 const titPat = document.getElementById("titPatio"), botsPat = document.getElementById("botsPatio");
+const elConf = document.getElementById("confirmar"), elConfTxt = document.getElementById("confTxt");
+const elColocar = document.getElementById("colocar"), elColTxt = document.getElementById("colTxt"), btnColSi = document.getElementById("colSi");
 
 // ---------- Estado ----------
 let estado = "inicio";   // inicio | jugando
@@ -139,7 +145,12 @@ let tocando = false;
 let carga = [];          // ids de productos que llevas
 let estantes = [];       // estanterías compradas: { slot, x, y, w, h, producto, items: [] }
 let extra = [];          // zanahorias colocadas en los espacios extra de la estantería de jitomates
-let empleado = false;    // ¿ya contrataste al de la caja?
+// Cajas registradoras: la primera es fija; las demás se compran y se colocan donde quieras. dir: hacia dónde se forma la fila (1 derecha, -1 izquierda)
+const cajas = [{ x: CAJA.x, y: CAJA.y, w: CAJA.w, h: CAJA.h, dir: 1, emp: false, cola: [], orig: true }];
+const puertas = [{ x: PUERTA.x }];   // entradas/salidas de la tienda (la 1.ª es fija)
+let colocando = null;    // {tipo: "caja" | "puerta"} mientras eliges dónde poner lo que compraste
+let pregunta = null;     // jardín por el que se pregunta «¿comprar?»
+let rechazado = null;    // jardín al que dijiste «Ahora no»: no se vuelve a preguntar hasta que te alejes
 let edificio = 0;        // cuántas ampliaciones tiene el edificio (0 a COSTOS_EDIFICIO.length)
 let ampliaciones = [];   // cada una: { lado: -1 (izquierda) o 1 (derecha), x0: dónde empieza en el mapa }
 let xMin = 0, xMax = MUNDO.w;   // límites del EDIFICIO en x: crecen al ampliar el edificio
@@ -158,7 +169,6 @@ const alcanza = (c) => admin.dinero || dinero >= c;          // ¿alcanza el din
 const creceSeg = () => (admin.rapido ? 0 : CRECE_SEG);
 const maduraSeg = () => (admin.rapido ? 0 : MADURA_SEG);
 let clientes = [];
-let cola = [];           // clientes esperando en la caja, en orden
 let espera = 2;          // segundos para que llegue el siguiente cliente
 let traspasoT = 0;
 let textos = [];
@@ -190,7 +200,8 @@ colocarJardines();
 // Solo se muestra (y se puede comprar) el siguiente jardín: el primero que aún no has comprado
 const siguienteJardin = () => jardines.find((g) => !g.comprado) || null;
 const jardinDe = (id) => jardines.find((g) => g.producto === id);
-const maxClientes = () => (jardinDe("zanahoria").comprado ? MAX_CLIENTES_ZANAHORIA : MAX_CLIENTES);
+const jardinesComprados = () => jardines.filter((g) => g.comprado).length;
+const maxClientes = () => MAX_CLIENTES + Math.max(0, jardinesComprados() - 1);   // 1 jardín: 3 · 2 jardines: 4 · 3 jardines: 5 …
 // Un jardín (menos el 1.º) se compra cuando ya tienes la estantería del producto anterior
 const puedeJardin = (g) => { const k = IDS.indexOf(g.producto) - 1; return k < 0 || estantes.some((e) => e.slot === k); };
 
@@ -332,14 +343,31 @@ function comprarCosas() {
     cobrarCompra(COSTO_PRIMER_ESTANTE, r0.x + r0.w / 2, r0.y + r0.h + 10);
     nuevoEstante(0, "tomate");
   }
-  for (const g of jardines) {
-    if (g.comprado || g !== siguienteJardin() || !g.disponible || !alcanza(g.costo) || !cerca(g, ALCANCE_JARDIN)) continue;
-    if (!puedeJardin(g)) continue;                 // necesita la estantería del producto anterior
-    cobrarCompra(g.costo, g.x + g.w / 2, g.y + g.h + 10);
-    g.comprado = true;
-    g.reloj = creceSeg();
-  }
+  // Jardín: al pararte encima te pregunta si quieres comprarlo (no se compra solo)
+  const g = siguienteJardin();
+  const puedes = g && g.disponible && puedeJardin(g) && alcanza(g.costo) && cerca(g, ALCANCE_JARDIN);
+  if (rechazado && !cerca(rechazado, ALCANCE_JARDIN + 14)) rechazado = null;   // ya te alejaste: puede volver a preguntar
+  if (puedes) {
+    if (!pregunta && rechazado !== g) {
+      pregunta = g;
+      objetivo = null; tocando = false;                 // te quedas quieto mientras decides
+      elConfTxt.textContent = "¿Comprar el jardín de " + PRODUCTOS[g.producto].icono + " " + PRODUCTOS[g.producto].nombre + " por $" + g.costo + "?";
+      elConf.classList.remove("oculto");
+    }
+  } else if (pregunta) cerrarPregunta();
 }
+function cerrarPregunta() {
+  pregunta = null;
+  elConf.classList.add("oculto");
+}
+function comprarJardin(g) {
+  if (g.comprado || g !== siguienteJardin() || !alcanza(g.costo)) return;
+  cobrarCompra(g.costo, g.x + g.w / 2, g.y + g.h + 10);
+  g.comprado = true;
+  g.reloj = creceSeg();
+}
+document.getElementById("confSi").addEventListener("click", () => { if (pregunta) comprarJardin(pregunta); cerrarPregunta(); });
+document.getElementById("confNo").addEventListener("click", () => { rechazado = pregunta; cerrarPregunta(); });
 
 function crecerJardin(dt) {
   const ex = productosExistentes();
@@ -395,7 +423,84 @@ function cambiarProducto(e) {
   tono(600, 0.08);
 }
 
-const hayCajero = () => empleado || cerca(CAJA, ALCANCE_CAJA);
+// ----- Cajas registradoras y entradas -----
+const hayCajero = (k) => k.emp || cerca(k, ALCANCE_CAJA);
+// Lugar número «i» de la fila de la caja «k»
+function slotCaja(k, i) {
+  i = Math.min(i, SLOT_COLS * SLOT_FILAS - 1);
+  const col = i % SLOT_COLS, fila = Math.floor(i / SLOT_COLS);
+  return { x: k.dir > 0 ? k.x + 90 + col * 28 : k.x - 18 - col * 28, y: k.y + 19 + fila * 26 };
+}
+// Dónde se para el empleado de una caja
+const posEmpleadoCaja = (k) => ({ x: k.x + 36, y: k.y + 61 });
+// Los clientes eligen la caja con menos fila (y que tenga quien cobre)
+function cajaMasLibre() {
+  const puntos = (k) => k.cola.length + (hayCajero(k) ? 0 : 2);
+  return cajas.reduce((m, k) => (puntos(k) < puntos(m) ? k : m), cajas[0]);
+}
+const puertaMasCercana = (x) => puertas.reduce((m, p) => (Math.abs(p.x - x) < Math.abs(m.x - x) ? p : m), puertas[0]);
+
+const solapa = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+const infla = (r, m) => ({ x: r.x - m, y: r.y - m, w: r.w + 2 * m, h: r.h + 2 * m });
+// Lo que ocupa una caja: el mostrador con su toldo y el área donde se forma la fila
+function huellaCaja(k) {
+  const cuerpo = { x: k.x, y: k.y - 11, w: k.w, h: k.h + 11 };
+  const fila = { x: k.dir > 0 ? k.x + k.w : k.x - 116, y: k.y + 4, w: 116, h: 55 };
+  return [cuerpo, fila];
+}
+// Sitios donde hay (o habrá) estanterías: no se puede poner una caja encima
+function sitiosEstantes() {
+  const l = [rectEstante(0), rectEstante(1)];
+  l[0] = { ...l[0], h: l[0].h + EXT_H };
+  ampliaciones.forEach((a) => {
+    for (let d = 0; d < ESTANTES_POR_AMP; d++) l.push({ x: a.x0 + (d % 2 ? 165 : 15), y: d < 2 ? TOP + 18 : FILA_BAJA_Y, w: ESTANTE_W, h: ESTANTE_H });
+  });
+  return l;
+}
+// La caja que se está colocando: centrada donde estás parado. Devuelve la caja y si el sitio sirve
+function fantasmaCaja() {
+  const k = { x: Math.round(jugador.x - CAJA.w / 2), y: Math.round(jugador.y - CAJA.h / 2), w: CAJA.w, h: CAJA.h, dir: 1, emp: false, cola: [] };
+  if (k.x + 188 > xMax - 6) k.dir = -1;                                   // si a la derecha no cabe la fila, va a la izquierda
+  const huella = huellaCaja(k);
+  let ok = k.y - 11 >= CORREDOR_Y + 14 && k.y <= 548;                     // ni en el pasillo de arriba ni pegada a la pared de abajo
+  if (huella.some((r) => r.x < xMin + 6 || r.x + r.w > xMax - 6)) ok = false;
+  const ocupado = [...sitiosEstantes().map((r) => infla(r, 4)), infla(MEJORAS_ZONA, 6)];
+  cajas.forEach((o) => huellaCaja(o).forEach((r) => ocupado.push(r)));
+  if (huella.some((r) => ocupado.some((o) => solapa(r, o)))) ok = false;
+  return { k, ok };
+}
+// La entrada que se está colocando: sobre la pared de abajo, a la altura de tu personaje.
+// En las ampliaciones se ajusta al hueco entre estanterías para que nadie atraviese una estantería.
+function snapPuerta(x) {
+  if (x >= 30 && x <= MUNDO.w - 30) return x;
+  const cand = [30, MUNDO.w - 30, ...ampliaciones.map((a) => a.x0 + 150)];
+  return cand.reduce((m, c) => (Math.abs(c - x) < Math.abs(m - x) ? c : m), cand[0]);
+}
+function fantasmaPuerta() {
+  const x = snapPuerta(jugador.x);
+  const r = { x: x - 30, y: MUNDO.h - 14, w: 60, h: 14 };
+  const ok = !puertas.some((p) => Math.abs(p.x - x) < 70) && !solapa(r, infla(MEJORAS_ZONA, 4));
+  return { x, ok };
+}
+const costoCajaNueva = () => COSTO_CAJA_EXTRA(cajas.length - 1);
+const costoPuertaNueva = () => COSTO_PUERTA_EXTRA(puertas.length - 1);
+function terminarColocacion(ok) {
+  if (!colocando) return;
+  if (ok) {
+    if (colocando.tipo === "caja") {
+      const f = fantasmaCaja();
+      if (!f.ok || !alcanza(costoCajaNueva())) return;
+      cobrarCompra(costoCajaNueva(), f.k.x + f.k.w / 2, f.k.y - 20);
+      cajas.push({ ...f.k, cola: [], emp: false, boton: crearBotonEmpCaja(f.k) });
+    } else {
+      const f = fantasmaPuerta();
+      if (!f.ok || !alcanza(costoPuertaNueva())) return;
+      cobrarCompra(costoPuertaNueva(), f.x, MUNDO.h - 30);
+      puertas.push({ x: f.x });
+    }
+  }
+  colocando = null;
+}
 
 function nuevoCliente() {
   const existentes = productosExistentes();
@@ -408,8 +513,9 @@ function nuevoCliente() {
   });
   const camisas = ["#4aa8ff", "#ff7aa8", "#ffa534", "#c07cff", "#4fd16b", "#ffe14d"];
   const pieles = ["#f5cfa0", "#d9a066", "#a8714a", "#7a4a2e"];
+  const p = puertas[Math.floor(Math.random() * puertas.length)];   // entra por una de las entradas, al azar
   clientes.push({
-    x: PUERTA.x, y: PUERTA.y, estado: "comprando", lista, carrito: [], t: TOMAR_SEG, vel: azar(65, 90), off: azar(-30, 30),
+    x: p.x, y: PUERTA_Y, estado: "comprando", lista, carrito: [], t: TOMAR_SEG, vel: azar(65, 90), off: azar(-30, 30),
     camisa: camisas[Math.floor(Math.random() * camisas.length)],
     piel: pieles[Math.floor(Math.random() * pieles.length)],
   });
@@ -477,7 +583,7 @@ function actualizarClientes(dt) {
       const falta = faltante(c);
       if (!falta) {
         // ya tiene todo: va a la caja (o se va si no alcanzó a tomar nada)
-        if (c.carrito.length) { c.estado = "cola"; c.t = COBRO_SEG; cola.push(c); }
+        if (c.carrito.length) { c.estado = "cola"; c.t = COBRO_SEG; c.caja = cajaMasLibre(); c.caja.cola.push(c); }
         else c.estado = "saliendo";
         continue;
       }
@@ -498,27 +604,30 @@ function actualizarClientes(dt) {
         }
       } else c.t = TOMAR_SEG;
     } else if (c.estado === "saliendo") {
-      if (irTienda(c, PUERTA, dt)) c.fuera = true;
+      c.sal = c.sal || puertaMasCercana(c.x);   // sale por la entrada más cercana
+      if (irTienda(c, { x: c.sal.x, y: PUERTA_Y }, dt)) c.fuera = true;
     }
   }
-  // la fila de la caja: solo cobra el primero, y solo si hay quien cobre (tú junto a la caja o el empleado)
-  cola = cola.filter((c) => c.estado === "cola");
-  cola.forEach((c, i) => {
-    const llego = irTienda(c, SLOTS_CAJA[i], dt);
-    if (i !== 0 || !llego || !hayCajero()) return;
-    c.t -= dt;
-    if (c.t > 0) return;
-    // se cobra toda la compra junta, de una sola vez
-    const total = c.carrito.reduce((suma, id) => suma + PRODUCTOS[id].precio, 0);
-    if (total > 0) {
-      dinero += total;
-      textos.push({ x: c.x, y: c.y - 30, vida: 1.1, txt: "+$" + total, col: "#7dff9a" });
-      tono(880, 0.06); setTimeout(() => tono(1175, 0.08), 60); setTimeout(() => tono(1568, 0.1), 130);
-    }
-    c.carrito = [];
-    c.estado = "saliendo";
-  });
-  cola = cola.filter((c) => c.estado === "cola");
+  // la fila de cada caja: solo cobra el primero, y solo si hay quien cobre (tú junto a la caja o su empleado)
+  for (const k of cajas) {
+    k.cola = k.cola.filter((c) => c.estado === "cola");
+    k.cola.forEach((c, i) => {
+      const llego = irTienda(c, slotCaja(k, i), dt);
+      if (i !== 0 || !llego || !hayCajero(k)) return;
+      c.t -= dt;
+      if (c.t > 0) return;
+      // se cobra toda la compra junta, de una sola vez
+      const total = c.carrito.reduce((suma, id) => suma + PRODUCTOS[id].precio, 0);
+      if (total > 0) {
+        dinero += total;
+        textos.push({ x: c.x, y: c.y - 30, vida: 1.1, txt: "+$" + total, col: "#7dff9a" });
+        tono(880, 0.06); setTimeout(() => tono(1175, 0.08), 60); setTimeout(() => tono(1568, 0.1), 130);
+      }
+      c.carrito = [];
+      c.estado = "saliendo";
+    });
+    k.cola = k.cola.filter((c) => c.estado === "cola");
+  }
   clientes = clientes.filter((c) => !c.fuera);
 }
 
@@ -630,7 +739,7 @@ function desbloquearTodo() {
     if (!g.comprado) { g.comprado = true; g.reloj = creceSeg(); }
     if (!g.emp) g.emp = nuevoEmpleadoJardin(g);
   }
-  empleado = true;
+  cajas[0].emp = true;
   nivelCarga = COSTOS_CARGA.length;
 }
 
@@ -642,9 +751,20 @@ function comprarMejora(tipo) {
     cobrarCompra(COSTOS_CARGA[nivelCarga], x, y);
     nivelCarga++;
   } else if (tipo === "empleado") {
-    if (empleado || !alcanza(COSTO_EMPLEADO)) return;
+    if (cajas[0].emp || !alcanza(COSTO_EMPLEADO)) return;
     cobrarCompra(COSTO_EMPLEADO, x, y);
-    empleado = true;
+    cajas[0].emp = true;
+  } else if (tipo === "caja-nueva") {
+    if (colocando || cajas.length - 1 >= MAX_CAJAS_EXTRA || !alcanza(costoCajaNueva())) return;
+    colocando = { tipo: "caja" };      // el dinero se cobra al colocarla
+  } else if (tipo === "puerta-nueva") {
+    if (colocando || puertas.length - 1 >= MAX_PUERTAS_EXTRA || !alcanza(costoPuertaNueva())) return;
+    colocando = { tipo: "puerta" };
+  } else if (tipo.startsWith("emp-caja:")) {
+    const k = cajas[Number(tipo.slice(9))];
+    if (!k || k.emp || !alcanza(COSTO_EMP_CAJA_EXTRA)) return;
+    cobrarCompra(COSTO_EMP_CAJA_EXTRA, x, y);
+    k.emp = true;
   } else if (tipo.startsWith("emp:")) {
     const g = jardinDe(tipo.slice(4));
     if (!g || !g.comprado || g.emp || !alcanza(g.costoEmp) || !destinosDe(g.producto).length) return;
@@ -693,6 +813,22 @@ const btnsEmp = jardines.map((g) => {
   b.addEventListener("click", () => comprarMejora("emp:" + g.producto));
   return b;
 });
+// botones de cajas y entradas nuevas (van justo antes del bloque «Edificio»)
+function botonPanel(tipo) {
+  const b = document.createElement("button");
+  b.className = "mej"; b.type = "button";
+  b.innerHTML = "<span></span><b></b>";
+  panel.insertBefore(b, titEd);
+  b.addEventListener("click", () => comprarMejora(tipo));
+  return b;
+}
+const btnCajaNueva = botonPanel("caja-nueva");
+const btnPuertaNueva = botonPanel("puerta-nueva");
+// un botón de «empleado» por cada caja extra colocada
+function crearBotonEmpCaja(k) {
+  const i = cajas.length;   // índice que tendrá esa caja
+  return botonPanel("emp-caja:" + i);
+}
 btnCarga.addEventListener("click", () => comprarMejora("carga"));
 btnEmpleado.addEventListener("click", () => comprarMejora("empleado"));
 btnEstante.addEventListener("click", () => comprarMejora("estante"));
@@ -709,11 +845,20 @@ function pintarBoton(b, texto, precio, activo) {
 
 function actualizarPanel() {
   enMejoras = estado === "jugando" && distRect(jugador.x, jugador.y, MEJORAS_ZONA) <= 4;
-  panel.classList.toggle("oculto", !enMejoras);
+  panel.classList.toggle("oculto", !enMejoras || !!colocando);
   if (!enMejoras) return;
   if (nivelCarga >= COSTOS_CARGA.length) pintarBoton(btnCarga, "🧤 Carga al máximo (" + cargaMax() + ")", "", false);
   else pintarBoton(btnCarga, "🧤 Llevar más: " + cargaMax() + " → " + (cargaMax() + 1), "$" + COSTOS_CARGA[nivelCarga], alcanza(COSTOS_CARGA[nivelCarga]));
-  pintarBoton(btnEmpleado, empleado ? "👷 Empleado de caja" : "👷 Contratar empleado de caja", empleado ? "✓" : "$" + COSTO_EMPLEADO, !empleado && alcanza(COSTO_EMPLEADO));
+  pintarBoton(btnEmpleado, cajas[0].emp ? "👷 Empleado de caja" : "👷 Contratar empleado de caja", cajas[0].emp ? "✓" : "$" + COSTO_EMPLEADO, !cajas[0].emp && alcanza(COSTO_EMPLEADO));
+  cajas.forEach((k, i) => {
+    if (!k.boton) return;
+    pintarBoton(k.boton, "👷 Empleado de la caja " + (i + 1), k.emp ? "✓" : "$" + COSTO_EMP_CAJA_EXTRA, !k.emp && alcanza(COSTO_EMP_CAJA_EXTRA));
+  });
+  const extraCajas = cajas.length - 1, extraPuertas = puertas.length - 1;
+  if (extraCajas >= MAX_CAJAS_EXTRA) pintarBoton(btnCajaNueva, "🧾 Cajas registradoras al máximo", "", false);
+  else pintarBoton(btnCajaNueva, "🧾 Comprar caja registradora (la colocas tú)", "$" + costoCajaNueva(), !colocando && alcanza(costoCajaNueva()));
+  if (extraPuertas >= MAX_PUERTAS_EXTRA) pintarBoton(btnPuertaNueva, "🚪 Entradas al máximo", "", false);
+  else pintarBoton(btnPuertaNueva, "🚪 Comprar entrada (la colocas tú)", "$" + costoPuertaNueva(), !colocando && alcanza(costoPuertaNueva()));
   const slot = siguienteSlot();
   if (!hayPrimerEstante()) pintarBoton(btnEstante, "🗄️ Primero compra la estantería", "", false);
   else if (slot < 0) pintarBoton(btnEstante, "🗄️ Estanterías al máximo", "", false);
@@ -763,6 +908,20 @@ function actualizar(dt) {
   textos = textos.filter((t) => t.vida > 0);
 }
 
+function actualizarBarraColocar() {
+  const activa = estado === "jugando" && !!colocando;
+  elColocar.classList.toggle("oculto", !activa);
+  if (!activa) return;
+  const esCaja = colocando.tipo === "caja";
+  const ok = esCaja ? fantasmaCaja().ok : fantasmaPuerta().ok;
+  const costo = esCaja ? costoCajaNueva() : costoPuertaNueva();
+  elColTxt.textContent = (esCaja ? "🧾 Camina hasta donde quieras la caja registradora" : "🚪 Camina hasta donde quieras la entrada (se pone en la pared de abajo)") +
+    (ok ? " · $" + costo : " · aquí no se puede (rojo)");
+  btnColSi.disabled = !ok || !alcanza(costo);
+}
+document.getElementById("colSi").addEventListener("click", () => terminarColocacion(true));
+document.getElementById("colNo").addEventListener("click", () => terminarColocacion(false));
+
 function actualizarHud() {
   elDinero.textContent = admin.dinero ? "∞" : "$" + dinero;
   elCarga.textContent = carga.length + "/" + cargaMax();
@@ -772,6 +931,7 @@ function actualizarHud() {
     : "—";
   elClientes.textContent = clientes.length + "/" + maxClientes();
   actualizarPanel();
+  actualizarBarraColocar();
 }
 
 // ---------- Entrada ----------
@@ -896,8 +1056,10 @@ function dibujarSuelo() {
   ctx.fillRect(ABERTURA.b, TOP, xMax - ABERTURA.b, 14);
   ctx.fillRect(xMin, TOP, 4, MUNDO.h - TOP);
   ctx.fillRect(xMax - 4, TOP, 4, MUNDO.h - TOP);
-  ctx.fillStyle = "#8f6ad0"; caja(PUERTA.x - 30, MUNDO.h - 14, 60, 14, 4); ctx.fill();
-  etiqueta("Entrada", PUERTA.x, MUNDO.h - 26, "#6a4a1a");
+  for (const p of puertas) {
+    ctx.fillStyle = "#8f6ad0"; caja(p.x - 30, MUNDO.h - 14, 60, 14, 4); ctx.fill();
+    etiqueta("Entrada", p.x, MUNDO.h - 26, "#6a4a1a");
+  }
 }
 
 function dibujarMejoras() {
@@ -908,12 +1070,13 @@ function dibujarMejoras() {
   etiqueta("🛠️ Mejoras", x + w / 2, y + h / 2, "#fff");
 }
 
-function dibujarCaja() {
-  const { x, y, w, h } = CAJA;
+function dibujarCaja(k) {
+  const { x, y, w, h } = k;
   // ¿hay un cliente ya parado frente al mostrador y alguien que cobre? (el cajón se abre)
-  const c0 = cola[0];
-  const frente = c0 && Math.hypot(c0.x - SLOTS_CAJA[0].x, c0.y - SLOTS_CAJA[0].y) < 3;
-  const abierto = frente && hayCajero();
+  const c0 = k.cola[0];
+  const s0 = slotCaja(k, 0);
+  const frente = c0 && Math.hypot(c0.x - s0.x, c0.y - s0.y) < 3;
+  const abierto = frente && hayCajero(k);
   // sombra
   ctx.fillStyle = "rgba(0,0,0,.18)"; caja(x + 2, y + 4, w, h, 8); ctx.fill();
   // mueble de madera (frente con tablones)
@@ -956,9 +1119,10 @@ function dibujarCaja() {
     ctx.beginPath(); ctx.arc(x + ((i + 0.5) * w) / n, y - 3.5, w / n / 2, 0, Math.PI); ctx.fill();
   }
   ctx.fillStyle = "rgba(0,0,0,.15)"; ctx.fillRect(x, y - 11, w, 2);
-  if (empleado) {
-    persona(POS_EMPLEADO.x, POS_EMPLEADO.y, "#d9534f", "#d9a066", true);
-  } else if (cola.length) {
+  if (k.emp) {
+    const pe = posEmpleadoCaja(k);
+    persona(pe.x, pe.y, "#d9534f", "#d9a066", true);
+  } else if (k.cola.length) {
     etiqueta("¡Cobra aquí!", x + w / 2, y - 24, "#ffd24d");
   }
 }
@@ -1049,6 +1213,26 @@ function dibujarJardin(g) {
   });
 }
 
+function dibujarFantasma() {
+  if (!colocando || estado !== "jugando") return;
+  if (colocando.tipo === "caja") {
+    const { k, ok } = fantasmaCaja();
+    ctx.fillStyle = ok ? "rgba(60,200,100,.18)" : "rgba(230,60,60,.2)";
+    for (const r of huellaCaja(k)) ctx.fillRect(r.x, r.y, r.w, r.h);      // la fila de clientes también ocupa lugar
+    ctx.globalAlpha = 0.6;
+    dibujarCaja(k);
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 3; ctx.strokeStyle = ok ? "#2e9d4a" : "#e04646"; ctx.setLineDash([6, 4]);
+    caja(k.x - 2, k.y - 13, k.w + 4, k.h + 13, 8); ctx.stroke(); ctx.setLineDash([]);
+  } else {
+    const { x, ok } = fantasmaPuerta();
+    ctx.globalAlpha = 0.65;
+    ctx.fillStyle = ok ? "#58d27a" : "#e04646"; caja(x - 30, MUNDO.h - 14, 60, 14, 4); ctx.fill();
+    ctx.globalAlpha = 1;
+    etiqueta("Entrada", x, MUNDO.h - 26, ok ? "#1d6a3a" : "#a02020");
+  }
+}
+
 function dibujarPersonajes() {
   const todos = [{ y: jugador.y, f: () => dibujarJugador() }];
   clientes.forEach((c) => todos.push({ y: c.y, f: () => dibujarCliente(c) }));
@@ -1095,9 +1279,10 @@ function dibujar() {
   dibujarSuelo();
   dibujarMejoras();
   dibujarJardines();
-  dibujarCaja();
+  cajas.forEach(dibujarCaja);
   dibujarEstantes();
   dibujarPersonajes();
+  dibujarFantasma();
   // marca del lugar al que caminas
   if (objetivo && estado === "jugando") {
     ctx.strokeStyle = "rgba(0,0,0,.25)"; ctx.lineWidth = 2;
