@@ -14,30 +14,27 @@ const PIEZAS_INICIAL = 36;      // número de piezas que aparece al abrir los aj
 const LADO_MAX = 2000;          // la imagen se reduce a este lado máximo (px) antes de usarse/subirse
 const IMAGEN_MAX_MB = 15;       // tamaño máximo del archivo elegido
 const PIEZA_W = 80;             // ancho de pieza en unidades del «mundo» (no son píxeles)
-const IMAN = 0.35;              // qué tan cerca (fracción de pieza) para que encaje sola
+const IMAN = 0.35;              // qué tan cerca (fracción de pieza) para que un grupo se fije en su lugar del tablero
+const UNION = 0.35;             // qué tan cerca (fracción de pieza) para que dos piezas vecinas se peguen entre sí (en cualquier parte)
 const ZOOM_MAX = 8;
 const ZOOM_MIN_REL = 0.6;       // lo más que se puede alejar: este % del zoom con el que empieza el juego (0.6 = 60 %)
 const ZONA_PIEZAS = 0.4;        // tamaño de la zona donde se reparten las piezas (0.4 = 60 % más chica; 1 = como antes)
 const TABLERO_ANCHO = 0.84;     // al empezar, el tablero ocupa este % del ancho de la pantalla
 const DENSIDAD = 0.6;           // cuánto se pueden amontonar las piezas fuera del tablero (menos = más espacio)
 const GUIA_TENUE = 0;           // transparencia de la imagen sobre el tablero (0 = vacío, como el original)
-const TAP_PX = 8;               // movimiento máximo (px) para que un toque cuente como «girar pieza»
+const TAP_PX = 8;               // movimiento máximo (px) para que un toque cuente como «girar pieza» (solo con rotación activada)
+const SPRITE_MAX_PX = 16e6;     // al arrastrar, el grupo se congela como imagen si no pasa de esta área (px); si no, se dibuja pieza por pieza
 const PIEZAS_POR_PUNTO = 8;     // al perfil: 1 punto por cada 8 piezas
-const GUARDADAS_MAX = 12;
+const GUARDADAS_MAX = 60;       // cuántas imágenes se recuerdan en «Mis imágenes» (las más viejas se olvidan de la lista, no de imgbb)
 const CLAVE_GALERIA = "rompecabezas:imagenes";
+const CLAVE_HUELLAS = "rompecabezas:huellas";   // «huella» de cada imagen ya subida → su enlace (así la misma imagen no se sube dos veces)
+const HUELLAS_MAX = 200;
 
-// Categorías del menú. Tipos: «galeria» (imágenes guardadas), «archivo» (elegir del dispositivo),
-// «pintura» (imágenes dibujadas por el código; pintor = atardecer | bosque | oceano | mosaico | galaxia | globos)
-// y «urls» (tus propias imágenes de ibb.co):  { id: "familia", nombre: "Familia", tipo: "urls", urls: ["https://i.ibb.co/..."] }
+// Categorías del menú. Tipos: «galeria» (tus imágenes guardadas en imgbb), «archivo» (elegir del dispositivo)
+// y «urls» (imágenes fijas de ibb.co):  { id: "familia", nombre: "Familia", tipo: "urls", urls: ["https://i.ibb.co/..."] }
 const CATEGORIAS = [
   { id: "mias", nombre: "Mis imágenes", tipo: "galeria", emoji: "📷" },
   { id: "archivo", nombre: "Desde mi dispositivo", tipo: "archivo", emoji: "➕" },
-  { id: "atardeceres", nombre: "Atardeceres", tipo: "pintura", pintor: "atardecer", cuantas: 8 },
-  { id: "bosques", nombre: "Bosques", tipo: "pintura", pintor: "bosque", cuantas: 8 },
-  { id: "oceanos", nombre: "Océanos", tipo: "pintura", pintor: "oceano", cuantas: 8 },
-  { id: "mosaicos", nombre: "Mosaicos", tipo: "pintura", pintor: "mosaico", cuantas: 8 },
-  { id: "galaxias", nombre: "Galaxias", tipo: "pintura", pintor: "galaxia", cuantas: 8 },
-  { id: "globos", nombre: "Globos", tipo: "pintura", pintor: "globos", cuantas: 8 },
 ];
 
 // ---------- ESTADO ----------
@@ -46,18 +43,20 @@ const lienzo = $("lienzo");
 const g = lienzo.getContext("2d");
 let dpr = 1;
 let fuente = null;              // canvas con la imagen (ya reducida)
-let origenImg = "";             // "archivo" | "nube" | "pintura"
+let origenImg = "";             // "archivo" (elegida del dispositivo) | "nube" (ya está en imgbb)
 let urlNube = null;
 let volverA = "menu";           // a dónde regresa la X de los ajustes
 let opciones = [], idx = 0, bordes = null;
 let cols = 0, rows = 0, rotacion = false;
 let pw = PIEZA_W, ph = PIEZA_W, BW = 0, BH = 0, padW = 0, kS = 1;
-let piezas = [], sueltas = [], colocadas = 0;
+let piezas = [], sueltas = [], colocadas = 0;   // «sueltas» ahora es la lista de GRUPOS sin fijar (el último está arriba)
 let mundo = { x0: 0, y0: 0, x1: 0, y1: 0 };
 let zoomMin = 0.1;              // se calcula al repartir las piezas (ZOOM_MIN_REL × zoom inicial)
 let cam = { x: 0, y: 0, s: 1 };
 let guia = false, t0 = 0, acum = 0, terminado = false, iniciado = false, pausado = false;
 let sucio = false, temporizadorMsg = null, rafPrev = 0;
+let capa = null;                // lienzo auxiliar: todo el tablero SIN el grupo que se arrastra (se pinta una sola vez por arrastre)
+let rectL = null;               // posición del lienzo en pantalla (se guarda para no recalcular el layout en cada evento)
 
 const clamp = (s) => Math.min(ZOOM_MAX, Math.max(zoomMin, s));
 const fmt = (s) => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
@@ -117,111 +116,6 @@ function texturas() {
   st.setProperty("--lino", "url(" + lino.toDataURL() + ")");
 }
 
-// ---------- IMÁGENES DIBUJADAS POR CÓDIGO (originales, sin archivos) ----------
-function pAtardecer(x, W, H, r) {
-  const h = r() * 360;
-  const cielo = x.createLinearGradient(0, 0, 0, H * 0.75);
-  cielo.addColorStop(0, `hsl(${(h + 220) % 360} 55% 22%)`);
-  cielo.addColorStop(0.55, `hsl(${(h + 330) % 360} 70% 50%)`);
-  cielo.addColorStop(1, `hsl(${(h + 30) % 360} 90% 70%)`);
-  x.fillStyle = cielo; x.fillRect(0, 0, W, H);
-  const sx = W * (0.25 + r() * 0.5), sy = H * (0.45 + r() * 0.12), sr = H * (0.08 + r() * 0.05);
-  const halo = x.createRadialGradient(sx, sy, sr * 0.2, sx, sy, sr * 4);
-  halo.addColorStop(0, "rgba(255,240,200,.9)"); halo.addColorStop(1, "rgba(255,200,120,0)");
-  x.fillStyle = halo; x.fillRect(0, 0, W, H);
-  x.fillStyle = "#fff6d8"; x.beginPath(); x.arc(sx, sy, sr, 0, 7); x.fill();
-  for (let i = 0; i < 4; i++) {
-    const base = H * (0.62 + i * 0.1), amp = H * (0.12 - i * 0.015), f = 2 + r() * 3, ph = r() * 9;
-    x.fillStyle = `hsl(${(h + 260) % 360} ${35 - i * 5}% ${28 - i * 6}%)`;
-    x.beginPath(); x.moveTo(0, H);
-    for (let px = 0; px <= W; px += 8) {
-      x.lineTo(px, base - amp * (Math.sin((px / W) * f * 6.28 + ph) * 0.5 + Math.sin((px / W) * f * 17 + ph * 2) * 0.3 + 0.5));
-    }
-    x.lineTo(W, H); x.closePath(); x.fill();
-  }
-}
-function pBosque(x, W, H, r) {
-  const h = 90 + r() * 90;
-  const cielo = x.createLinearGradient(0, 0, 0, H);
-  cielo.addColorStop(0, `hsl(${h + 40} 60% 80%)`); cielo.addColorStop(1, `hsl(${h} 50% 90%)`);
-  x.fillStyle = cielo; x.fillRect(0, 0, W, H);
-  for (let capa = 0; capa < 6; capa++) {
-    const y0 = H * (0.42 + capa * 0.11), n = 9 + capa * 5;
-    x.fillStyle = `hsl(${h} ${38 + capa * 7}% ${64 - capa * 9}%)`;
-    for (let i = 0; i < n; i++) {
-      const px = ((i + r() * 0.8) / n) * W * 1.1 - W * 0.05, hh = H * (0.2 + capa * 0.035) * (0.8 + r() * 0.5), ww = hh * 0.46;
-      x.beginPath(); x.moveTo(px, y0 - hh); x.lineTo(px + ww / 2, y0); x.lineTo(px - ww / 2, y0); x.fill();
-    }
-    x.fillRect(0, y0, W, H - y0);
-  }
-}
-function pOceano(x, W, H, r) {
-  const h = 180 + r() * 50;
-  const cielo = x.createLinearGradient(0, 0, 0, H * 0.5);
-  cielo.addColorStop(0, `hsl(${h + 10} 70% 62%)`); cielo.addColorStop(1, `hsl(${h - 120} 90% 82%)`);
-  x.fillStyle = cielo; x.fillRect(0, 0, W, H);
-  x.fillStyle = "rgba(255,255,255,.85)"; x.beginPath(); x.arc(W * (0.2 + r() * 0.6), H * 0.22, H * 0.07, 0, 7); x.fill();
-  for (let i = 0; i < 7; i++) {
-    const base = H * (0.46 + i * 0.08), amp = H * (0.015 + i * 0.006), f = 3 + r() * 5, ph = r() * 9;
-    x.fillStyle = `hsl(${h} ${75 - i * 3}% ${62 - i * 7}%)`;
-    x.beginPath(); x.moveTo(0, H);
-    for (let px = 0; px <= W; px += 6) x.lineTo(px, base + amp * Math.sin((px / W) * f * 6.28 + ph));
-    x.lineTo(W, H); x.closePath(); x.fill();
-  }
-}
-function pMosaico(x, W, H, r) {
-  const h = r() * 360, n = 16, c = W / n;
-  x.fillStyle = `hsl(${h} 40% 18%)`; x.fillRect(0, 0, W, H);
-  for (let j = 0; j * c < H + c; j++) {
-    for (let i = 0; i < n; i++) {
-      const hh = (h + r() * 140) % 360;
-      x.fillStyle = `hsl(${hh} 80% ${45 + r() * 20}%)`;
-      x.beginPath(); x.arc(i * c + c / 2, j * c + c / 2, c * 0.46, 0, 7); x.fill();
-      x.fillStyle = `hsl(${(hh + 40) % 360} 85% 75%)`;
-      x.beginPath(); x.arc(i * c + c / 2, j * c + c / 2, c * (0.12 + r() * 0.18), 0, 7); x.fill();
-    }
-  }
-}
-function pGalaxia(x, W, H, r) {
-  x.fillStyle = "#050818"; x.fillRect(0, 0, W, H);
-  x.globalCompositeOperation = "lighter";
-  const h = r() * 360;
-  for (let i = 0; i < 9; i++) {
-    const px = W * (0.1 + r() * 0.8), py = H * (0.1 + r() * 0.8), rr = H * (0.25 + r() * 0.35);
-    const gr = x.createRadialGradient(px, py, 0, px, py, rr);
-    gr.addColorStop(0, `hsla(${(h + i * 38) % 360},90%,55%,.45)`); gr.addColorStop(1, "hsla(0,0%,0%,0)");
-    x.fillStyle = gr; x.fillRect(0, 0, W, H);
-  }
-  for (let i = 0; i < 700; i++) {
-    x.fillStyle = `rgba(255,255,255,${0.3 + r() * 0.7})`;
-    const s = r() < 0.04 ? 3 : 1.2; x.fillRect(r() * W, r() * H, s, s);
-  }
-  x.globalCompositeOperation = "source-over";
-}
-function pGlobos(x, W, H, r) {
-  const h = 190 + r() * 40;
-  const cielo = x.createLinearGradient(0, 0, 0, H);
-  cielo.addColorStop(0, `hsl(${h} 80% 60%)`); cielo.addColorStop(1, `hsl(${h - 30} 85% 88%)`);
-  x.fillStyle = cielo; x.fillRect(0, 0, W, H);
-  for (let i = 0; i < 38; i++) {
-    const px = r() * W, py = H * 0.1 + r() * H * 0.75, rr = H * (0.05 + r() * 0.07), hh = r() * 360;
-    x.strokeStyle = "rgba(60,60,80,.45)"; x.lineWidth = 2;
-    x.beginPath(); x.moveTo(px, py + rr * 1.15); x.quadraticCurveTo(px + rr * 0.3, py + rr * 2, px, py + rr * 2.6); x.stroke();
-    const gr = x.createRadialGradient(px - rr * 0.3, py - rr * 0.35, rr * 0.1, px, py, rr * 1.2);
-    gr.addColorStop(0, `hsl(${hh} 90% 78%)`); gr.addColorStop(1, `hsl(${hh} 80% 45%)`);
-    x.fillStyle = gr; x.beginPath(); x.ellipse(px, py, rr * 0.88, rr * 1.12, 0, 0, 7); x.fill();
-    x.fillStyle = "rgba(255,255,255,.55)"; x.beginPath(); x.ellipse(px - rr * 0.3, py - rr * 0.4, rr * 0.16, rr * 0.28, 0.5, 0, 7); x.fill();
-  }
-}
-const PINTORES = { atardecer: pAtardecer, bosque: pBosque, oceano: pOceano, mosaico: pMosaico, galaxia: pGalaxia, globos: pGlobos };
-
-function pintar(pintor, semilla, W, H) {
-  const c = document.createElement("canvas");
-  c.width = W; c.height = H;
-  PINTORES[pintor](c.getContext("2d"), W, H, rng(semilla * 7919 + 13));
-  return c;
-}
-
 // ---------- PANTALLAS ----------
 const PANTALLAS = ["menu", "cat", "cfg", "juego"];
 function pantalla(nombre) {
@@ -274,7 +168,7 @@ function pintarMenu() {
   cont.innerHTML = "";
   CATEGORIAS.forEach((c, i) => {
     let marco;
-    if (c.tipo === "pintura") marco = pintar(c.pintor, 1, 320, 240);
+    if (c.tipo === "galeria" && leerGaleria()[0]) marco = marcoImg(leerGaleria()[0]);   // vista previa: la más reciente
     else if (c.tipo === "urls" && c.urls && c.urls[0] && urlValida(c.urls[0])) marco = marcoImg(c.urls[0]);
     else marco = marcoEmoji(c.emoji || "🧩", i + 3);
     cont.appendChild(carta(marco, c.nombre, () => abrirCategoria(c)));
@@ -289,20 +183,12 @@ function abrirCategoria(c) {
   const vacio = (t) => { const p = document.createElement("p"); p.className = "vacio"; p.textContent = t; cont.appendChild(p); };
   if (c.tipo === "galeria") {
     const lista = leerGaleria();
-    if (!lista.length) vacio("Aún no hay imágenes guardadas. Elige una desde tu dispositivo y toca «Guardar imagen».");
+    if (!lista.length) vacio("Aún no hay imágenes guardadas. Elige una desde tu dispositivo: al jugar se guarda aquí sola (necesitas haber entrado con Google en el portal).");
     for (const u of lista) cont.appendChild(carta(marcoImg(u), "", () => elegirUrl(u, "cat")));
   } else if (c.tipo === "urls") {
     const lista = (c.urls || []).filter(urlValida);
     if (!lista.length) vacio("Esta categoría no tiene imágenes válidas de ibb.co.");
     for (const u of lista) cont.appendChild(carta(marcoImg(u), "", () => elegirUrl(u, "cat")));
-  } else {
-    for (let i = 1; i <= (c.cuantas || 8); i++) {
-      cont.appendChild(carta(pintar(c.pintor, i, 320, 240), "", () => {
-        fuente = pintar(c.pintor, i, 1600, 1200);
-        origenImg = "pintura"; urlNube = null;
-        abrirAjustes("cat");
-      }));
-    }
   }
   pantalla("cat");
 }
@@ -424,6 +310,8 @@ addEventListener("resize", () => { if (!$("cfg").hidden) dibujarPrev(); });
 // ---------- RESPONSIVE / DIBUJO DEL JUEGO ----------
 function tamano() {
   dpr = Math.min(devicePixelRatio || 1, 2);
+  rectL = null;
+  if (arr) arr.cache = null;
   const r = lienzo.getBoundingClientRect();
   if (!r.width || !r.height) return;
   lienzo.width = Math.max(1, Math.round(r.width * dpr));
@@ -438,39 +326,93 @@ function pedir() {
   requestAnimationFrame(dibujar);
 }
 
+// Dibuja una pieza en el contexto x. v = rectángulo visible del mundo (para saltarse las que no se ven) o null
+function dp(x, p, v) {
+  const cx = p.x + pw / 2, cy = p.y + ph / 2;
+  if (v && (cx + v.m < v.x0 || cx - v.m > v.x1 || cy + v.m < v.y0 || cy - v.m > v.y1)) return;
+  x.save();
+  x.translate(cx, cy);
+  if (p.rot) x.rotate((p.rot * Math.PI) / 2);
+  x.drawImage(p.cv, -pw / 2 - padW, -ph / 2 - padW, p.cv.width * kS, p.cv.height * kS);
+  x.restore();
+}
+
+function vista(W, H) {
+  const s = cam.s * dpr;
+  return { x0: cam.x, y0: cam.y, x1: cam.x + W / s, y1: cam.y + H / s, m: Math.max(pw, ph) * 0.9 + padW };  // m: cabe una pieza girada
+}
+
+// Pinta todo el tablero en el contexto x (el del lienzo o uno auxiliar), sin el grupo «excluir»
+function pintarEscena(x, W, H, excluir) {
+  const s = cam.s * dpr;
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  x.clearRect(0, 0, W, H);                       // el fondo de lino es CSS (queda quieto detrás)
+  x.setTransform(s, 0, 0, s, -cam.x * s, -cam.y * s);
+  x.imageSmoothingEnabled = true;
+  x.imageSmoothingQuality = "high";
+  if (guia || GUIA_TENUE > 0) {
+    x.globalAlpha = guia ? 0.6 : GUIA_TENUE;
+    x.drawImage(fuente, 0, 0, BW, BH);
+    x.globalAlpha = 1;
+  }
+  x.strokeStyle = "rgba(255,255,255,.95)";
+  x.lineWidth = 2.5 / cam.s;
+  x.strokeRect(0, 0, BW, BH);
+  const v = vista(W, H);
+  for (const p of piezas) if (p.ok) dp(x, p, v);
+  for (const gr of sueltas) if (gr !== excluir) for (const p of gr.m) dp(x, p, v);
+}
+
+// Al empezar a arrastrar: el resto del tablero se pinta UNA vez en «capa» y el grupo se congela como imagen.
+// Después, cada cuadro solo copia esas dos imágenes (en vez de redibujar todas las piezas).
+function congelar(gr, W, H) {
+  const s = cam.s * dpr;
+  if (!capa) capa = document.createElement("canvas");
+  if (capa.width !== W || capa.height !== H) { capa.width = W; capa.height = H; }
+  pintarEscena(capa.getContext("2d"), W, H, gr);
+  const mitad = Math.max(pw, ph) / 2 + padW;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of gr.m) {
+    const cx = p.x + pw / 2, cy = p.y + ph / 2;
+    x0 = Math.min(x0, cx - mitad); y0 = Math.min(y0, cy - mitad);
+    x1 = Math.max(x1, cx + mitad); y1 = Math.max(y1, cy + mitad);
+  }
+  const w = Math.ceil((x1 - x0) * s), h = Math.ceil((y1 - y0) * s);
+  let sprite = null;
+  if (w * h <= SPRITE_MAX_PX && w <= 4096 && h <= 4096) {
+    sprite = document.createElement("canvas");
+    sprite.width = w; sprite.height = h;
+    const x = sprite.getContext("2d");
+    x.setTransform(s, 0, 0, s, -x0 * s, -y0 * s);
+    x.imageSmoothingEnabled = true;
+    x.imageSmoothingQuality = "high";
+    for (const p of gr.m) dp(x, p, null);
+  }
+  return { sprite, x0, y0, ax: 0, ay: 0 };       // ax, ay: cuánto se ha movido el grupo desde que se congeló
+}
+
 function dibujar() {
   sucio = false;
   const W = lienzo.width, H = lienzo.height;
-  g.setTransform(1, 0, 0, 1, 0, 0);
-  g.clearRect(0, 0, W, H);                       // el fondo de lino es CSS (queda quieto detrás)
-  if (!fuente || !piezas.length) return;
-  const s = cam.s * dpr;
-  g.setTransform(s, 0, 0, s, -cam.x * s, -cam.y * s);
-  g.imageSmoothingEnabled = true;
-  g.imageSmoothingQuality = "high";
-
-  if (guia || GUIA_TENUE > 0) {
-    g.globalAlpha = guia ? 0.6 : GUIA_TENUE;
-    g.drawImage(fuente, 0, 0, BW, BH);
-    g.globalAlpha = 1;
+  if (!fuente || !piezas.length) { g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H); return; }
+  if (arr && arr.mov) {                          // arrastrando: camino rápido
+    if (!arr.cache) arr.cache = congelar(arr.g, W, H);
+    const c = arr.cache, s = cam.s * dpr;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, W, H);
+    g.drawImage(capa, 0, 0);
+    if (c.sprite) {
+      g.drawImage(c.sprite, Math.round((c.x0 + c.ax - cam.x) * s), Math.round((c.y0 + c.ay - cam.y) * s));
+    } else {                                     // grupo enorme: se dibuja pieza por pieza, pero solo ese grupo
+      g.setTransform(s, 0, 0, s, -cam.x * s, -cam.y * s);
+      g.imageSmoothingEnabled = true;
+      g.imageSmoothingQuality = "high";
+      const v = vista(W, H);
+      for (const p of arr.g.m) dp(g, p, v);
+    }
+    return;
   }
-  g.strokeStyle = "rgba(255,255,255,.95)";
-  g.lineWidth = 2.5 / cam.s;
-  g.strokeRect(0, 0, BW, BH);
-
-  const vx1 = cam.x + W / s, vy1 = cam.y + H / s;
-  const m = Math.max(pw, ph) * 0.9 + padW;       // margen (cabe una pieza girada)
-  const dp = (p) => {
-    const cx = p.x + pw / 2, cy = p.y + ph / 2;
-    if (cx + m < cam.x || cx - m > vx1 || cy + m < cam.y || cy - m > vy1) return;
-    g.save();
-    g.translate(cx, cy);
-    if (p.rot) g.rotate((p.rot * Math.PI) / 2);
-    g.drawImage(p.cv, -pw / 2 - padW, -ph / 2 - padW, p.cv.width * kS, p.cv.height * kS);
-    g.restore();
-  };
-  for (const p of piezas) if (p.ok) dp(p);
-  for (const p of sueltas) dp(p);
+  pintarEscena(g, W, H, null);
 }
 
 // ---------- PIEZAS ----------
@@ -555,13 +497,15 @@ function repartir() {
     p.y = Math.random() < hA / (hA + hB) ? aY0 + Math.random() * hA : bY0 + Math.random() * hB;
     p.rot = rotacion ? Math.floor(Math.random() * 4) : 0;
     p.ok = false;
+    p.g = { m: [p], ok: false };                  // grupo de una sola pieza
   }
   mundo = { x0: Math.min(vx0, 0) - pw, y0: aY0 - ph * 0.2, x1: Math.max(vx1, BW) + pw, y1: bY1 + ph * 1.2 };
-  sueltas = piezas.slice().sort(() => Math.random() - 0.5);
+  sueltas = piezas.map((p) => p.g).sort(() => Math.random() - 0.5);
   pedir();
 }
 
 function verTodo() {
+  if (arr) arr.cache = null;
   const W = lienzo.width / dpr, H = lienzo.height / dpr;
   const ww = mundo.x1 - mundo.x0, hh = mundo.y1 - mundo.y0;
   cam.s = clamp(Math.min(W / ww, H / hh));
@@ -582,6 +526,8 @@ function jugar() {
     $("msg").hidden = true;
     iniciar();
   }
+  // Una imagen elegida del dispositivo se guarda sola en imgbb (en segundo plano, ya con el juego en pantalla)
+  if (origenImg === "archivo" && !urlNube) setTimeout(() => guardarEnNube(true), 500);
 }
 
 // ---------- TIEMPO, PAUSA Y FINAL ----------
@@ -605,7 +551,7 @@ function continuar() {
 }
 $("pausa").addEventListener("click", pausar);
 $("pContinuar").addEventListener("click", continuar);
-$("pGuia").addEventListener("click", () => { guia = !guia; pedir(); continuar(); });
+$("pGuia").addEventListener("click", () => { guia = !guia; if (arr) arr.cache = null; pedir(); continuar(); });
 $("pTodo").addEventListener("click", () => { verTodo(); continuar(); });
 $("pMezclar").addEventListener("click", () => {
   if (colocadas > 0 && !confirm("Se mezclarán de nuevo las piezas. ¿Continuar?")) return;
@@ -641,10 +587,11 @@ async function ganar() {
 // ---------- ZOOM, ARRASTRE Y GIRO ----------
 const punt = new Map();
 let arr = null, pan = false, pinch = null;
-const pos = (e) => { const r = lienzo.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+const pos = (e) => { const r = rectL || (rectL = lienzo.getBoundingClientRect()); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
 const aMundo = (px, py) => ({ x: cam.x + px / cam.s, y: cam.y + py / cam.s });
 
 function zoom(f, px, py) {
+  if (arr) arr.cache = null;
   const wx = cam.x + px / cam.s, wy = cam.y + py / cam.s;
   cam.s = clamp(cam.s * f);
   cam.x = wx - px / cam.s;
@@ -652,46 +599,105 @@ function zoom(f, px, py) {
   pedir();
 }
 
-function buscar(wx, wy) {
+function buscar(wx, wy) {                        // devuelve { g: grupo, pz: pieza tocada } o null
   const hx = pw * 0.6, hy = ph * 0.6;
   for (let i = sueltas.length - 1; i >= 0; i--) {
-    const p = sueltas[i];
-    let dx = wx - (p.x + pw / 2), dy = wy - (p.y + ph / 2);
-    for (let k = 0; k < p.rot; k++) { const t = dx; dx = dy; dy = -t; }   // deshace el giro de la pieza
-    if (Math.abs(dx) <= hx && Math.abs(dy) <= hy) return p;
+    const gr = sueltas[i];
+    for (const p of gr.m) {
+      let dx = wx - (p.x + pw / 2), dy = wy - (p.y + ph / 2);
+      for (let k = 0; k < p.rot; k++) { const t = dx; dx = dy; dy = -t; }   // deshace el giro de la pieza
+      if (Math.abs(dx) <= hx && Math.abs(dy) <= hy) return { g: gr, pz: p };
+    }
   }
   return null;
 }
 
-function encajar(p) {                              // ¿está en su lugar (y sin girar)? entonces se queda fija
-  if (p.rot !== 0 || Math.hypot(p.x - p.c * pw, p.y - p.r * ph) >= IMAN * Math.min(pw, ph)) return false;
-  p.x = p.c * pw; p.y = p.r * ph; p.ok = true;
-  sueltas.splice(sueltas.indexOf(p), 1);
-  colocadas++;
-  if (navigator.vibrate) navigator.vibrate(12);
-  if (colocadas === piezas.length) ganar();
-  return true;
+// ---------- GRUPOS: piezas vecinas que se pegan entre sí ----------
+const VECINOS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+function moverGrupo(gr, dx, dy) {
+  for (const p of gr.m) { p.x += dx; p.y += dy; }
+}
+
+function girarGrupo(gr, pv) {                     // gira todo el grupo 90° alrededor de la pieza tocada
+  const cx = pv.x + pw / 2, cy = pv.y + ph / 2;
+  for (const p of gr.m) {
+    const dx = p.x + pw / 2 - cx, dy = p.y + ph / 2 - cy;
+    p.x = cx - dy - pw / 2;
+    p.y = cy + dx - ph / 2;
+    p.rot = (p.rot + 1) % 4;
+  }
+}
+
+// ¿Alguna pieza del grupo está pegada a su vecina de verdad (la que le toca)? Si sí, une los dos grupos.
+function unirUno(gr) {
+  const tol = UNION * Math.min(pw, ph);
+  for (const p of gr.m) {
+    for (const [dc, dr] of VECINOS) {
+      const c = p.c + dc, r = p.r + dr;
+      if (c < 0 || r < 0 || c >= cols || r >= rows) continue;
+      const q = piezas[r * cols + c];
+      if (q.g === gr || q.g.ok || q.rot !== p.rot) continue;     // solo si tienen el mismo giro
+      // Dónde debería estar el centro de p respecto al de q (el desfase del tablero, girado igual que las piezas)
+      let vx = -dc * pw, vy = -dr * ph;
+      for (let k = 0; k < p.rot; k++) { const t = vx; vx = -vy; vy = t; }
+      const ex = q.x + pw / 2 + vx, ey = q.y + ph / 2 + vy;
+      const fx = ex - (p.x + pw / 2), fy = ey - (p.y + ph / 2);
+      if (Math.hypot(fx, fy) >= tol) continue;
+      moverGrupo(gr, fx, fy);                      // el grupo soltado se ajusta al que ya estaba
+      const otro = q.g;
+      for (const m of otro.m) { m.g = gr; gr.m.push(m); }
+      sueltas.splice(sueltas.indexOf(otro), 1);
+      return true;
+    }
+  }
+  return false;
+}
+
+// ¿Alguna pieza del grupo está sobre su lugar del tablero (y sin girar)? Entonces TODO el grupo se queda fijo
+function fijar(gr) {
+  if (gr.m[0].rot !== 0) return false;
+  const tol = IMAN * Math.min(pw, ph);
+  for (const p of gr.m) {
+    const fx = p.c * pw - p.x, fy = p.r * ph - p.y;
+    if (Math.hypot(fx, fy) >= tol) continue;
+    for (const m of gr.m) { m.x = m.c * pw; m.y = m.r * ph; m.rot = 0; m.ok = true; }
+    gr.ok = true;
+    sueltas.splice(sueltas.indexOf(gr), 1);
+    colocadas += gr.m.length;
+    if (colocadas === piezas.length) ganar();
+    return true;
+  }
+  return false;
+}
+
+function asentar(gr) {                            // se llama al soltar un grupo (o al girarlo)
+  let unido = false;
+  while (unirUno(gr)) unido = true;               // puede pegarse con varios vecinos a la vez
+  const fijo = fijar(gr);
+  if ((unido || fijo) && navigator.vibrate) navigator.vibrate(fijo ? 25 : 12);
+  pedir();
 }
 
 function soltar() {
-  const p = arr.pz;
+  const gr = arr.g;
   arr = null;
-  encajar(p);
-  pedir();
+  asentar(gr);
 }
 
 lienzo.addEventListener("pointerdown", (e) => {
   if (!fuente || !piezas.length || pausado || terminado) return;
   lienzo.setPointerCapture(e.pointerId);
+  if (!punt.size) rectL = null;                   // al empezar un gesto se recalcula la posición del lienzo una vez
   const p = pos(e);
   punt.set(e.pointerId, p);
   if (punt.size === 1) {
     const w = aMundo(p.x, p.y);
-    const pz = buscar(w.x, w.y);
-    if (pz) {
-      arr = { pz, dx: w.x - pz.x, dy: w.y - pz.y, sx: p.x, sy: p.y, mov: false };
-      sueltas.splice(sueltas.indexOf(pz), 1);
-      sueltas.push(pz);                           // queda encima
+    const hit = buscar(w.x, w.y);
+    if (hit) {
+      arr = { g: hit.g, pz: hit.pz, lx: w.x, ly: w.y, sx: p.x, sy: p.y, tx: 0, ty: 0, mov: false, cache: null };
+      sueltas.splice(sueltas.indexOf(hit.g), 1);
+      sueltas.push(hit.g);                        // el grupo queda encima
       iniciarReloj();
       pedir();
     } else pan = true;
@@ -709,13 +715,16 @@ lienzo.addEventListener("pointermove", (e) => {
   const p = pos(e), ant = punt.get(e.pointerId);
   punt.set(e.pointerId, p);
   if (punt.size === 1) {
-    if (arr) {
-      if (!arr.mov && Math.hypot(p.x - arr.sx, p.y - arr.sy) > TAP_PX) arr.mov = true;
-      if (arr.mov) {
-        const w = aMundo(p.x, p.y);
-        arr.pz.x = w.x - arr.dx; arr.pz.y = w.y - arr.dy;
-        pedir();
-      }
+    if (arr) {                                    // la pieza sigue al dedo desde el primer píxel (sin zona muerta)
+      const w = aMundo(p.x, p.y);
+      const dx = w.x - arr.lx, dy = w.y - arr.ly;
+      arr.lx = w.x; arr.ly = w.y;
+      moverGrupo(arr.g, dx, dy);                  // todo el grupo se mueve junto
+      arr.tx += dx; arr.ty += dy;                 // total movido (para deshacerlo si resulta ser un toque)
+      if (arr.cache) { arr.cache.ax += dx; arr.cache.ay += dy; }
+      // Con rotación activada, un movimiento corto sigue contando como «toque»; sin rotación, cualquier movimiento es arrastre
+      if (!arr.mov && Math.hypot(p.x - arr.sx, p.y - arr.sy) > (rotacion ? TAP_PX : 0)) arr.mov = true;
+      pedir();
     } else if (pan) {
       cam.x -= (p.x - ant.x) / cam.s; cam.y -= (p.y - ant.y) / cam.s;
       pedir();
@@ -736,11 +745,11 @@ function fin(e) {
   punt.delete(e.pointerId);
   if (arr) {
     if (!arr.mov && rotacion && e.type === "pointerup") {   // un toque sin arrastrar gira la pieza 90°
-      const p = arr.pz;
+      const { g: gr, pz, tx, ty } = arr;
       arr = null;
-      p.rot = (p.rot + 1) % 4;
-      encajar(p);
-      pedir();
+      moverGrupo(gr, -tx, -ty);                   // el toque no debe mover la pieza
+      girarGrupo(gr, pz);
+      asentar(gr);
     } else soltar();
   }
   pinch = null;
@@ -838,29 +847,74 @@ async function tokenSesion() {
   return u.getIdToken();
 }
 
-$("guardar").addEventListener("click", async () => {
-  if (!fuente || origenImg !== "archivo" || urlNube) return;
-  if (URL_SUBIDA.startsWith("PEGA")) return aviso("Falta pegar la URL de tu Apps Script en compartido/configs.js");
-  const b = $("guardar");
-  b.disabled = true;
-  aviso("Subiendo imagen…", true);
-  try {
-    const token = await tokenSesion();
-    const imagen = fuente.toDataURL("image/jpeg", 0.88).split(",")[1];
-    // Sin cabecera Content-Type (text/plain) para evitar el preflight CORS de Apps Script
-    const r = await fetch(URL_SUBIDA, { method: "POST", body: JSON.stringify({ token, imagen }) });
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.error || "No se pudo subir");
-    urlNube = j.url;
-    guardarGaleria(j.url);
-    $("guardar").hidden = true;
-    $("enlace").hidden = false;
-    aviso("Imagen guardada ☁️");
-  } catch (e) {
-    b.disabled = false;
-    aviso(e.message || "Error al subir");
+// «Huella» de una imagen (dos sumas rápidas del texto base64): sirve para no subir dos veces la misma imagen
+function huella(txt) {
+  let a = 0x811c9dc5, b = 0x01000193 ^ txt.length;
+  for (let i = 0; i < txt.length; i++) {
+    const c = txt.charCodeAt(i);
+    a = Math.imul(a ^ c, 16777619);
+    b = Math.imul(b + c, 0x85ebca6b) ^ (b >>> 13);
   }
-});
+  return (a >>> 0).toString(36) + "-" + (b >>> 0).toString(36) + "-" + txt.length;
+}
+function leerHuellas() {
+  try { return JSON.parse(localStorage.getItem(CLAVE_HUELLAS) || "{}"); } catch (e) { return {}; }
+}
+function guardarHuella(h, url) {
+  const m = leerHuellas();
+  delete m[h];
+  m[h] = url;                                     // la más reciente queda al final
+  const claves = Object.keys(m);
+  for (const k of claves.slice(0, Math.max(0, claves.length - HUELLAS_MAX))) delete m[k];
+  try { localStorage.setItem(CLAVE_HUELLAS, JSON.stringify(m)); } catch (e) {}
+}
+
+// Sube la imagen elegida a imgbb y la añade a «Mis imágenes». auto = true cuando lo dispara «Jugar»
+let subiendo = null, avisoSesion = false;
+async function guardarEnNube(auto) {
+  const mia = fuente;                             // por si el jugador cambia de imagen mientras sube
+  if (!mia || origenImg !== "archivo" || urlNube || subiendo === mia) return;
+  if (URL_SUBIDA.startsWith("PEGA")) { if (!auto) aviso("Falta pegar la URL de tu Apps Script en compartido/configs.js"); return; }
+  if (navigator.onLine === false) { aviso("Sin conexión: la imagen no se guardó en tu galería"); return; }
+  let token;
+  try {
+    token = await tokenSesion();
+  } catch (e) {
+    if (!auto || !avisoSesion) aviso(e.message || "No se pudo comprobar la sesión");   // en automático, el aviso sale una sola vez
+    avisoSesion = true;
+    return;
+  }
+  subiendo = mia;
+  $("guardar").disabled = true;
+  aviso("Guardando imagen en tu galería…", true);
+  try {
+    const imagen = mia.toDataURL("image/jpeg", 0.88).split(",")[1];
+    const h = huella(imagen);
+    let url = leerHuellas()[h];                   // ¿ya se había subido esta misma imagen?
+    if (!url || !urlValida(url)) {
+      // Sin cabecera Content-Type (text/plain) para evitar el preflight CORS de Apps Script
+      const r = await fetch(URL_SUBIDA, { method: "POST", body: JSON.stringify({ token, imagen }) });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || "No se pudo subir");
+      url = j.url;
+      guardarHuella(h, url);
+    }
+    guardarGaleria(url);
+    pintarMenu();                                 // la tarjeta «Mis imágenes» muestra la más reciente
+    if (fuente === mia) {
+      urlNube = url;
+      $("guardar").hidden = true;
+      $("enlace").hidden = false;
+    }
+    aviso("Imagen guardada en tu galería ☁️");
+  } catch (e) {
+    aviso(e.message || "Error al subir");
+  } finally {
+    if (subiendo === mia) subiendo = null;
+    if (fuente === mia && !urlNube) $("guardar").disabled = false;
+  }
+}
+$("guardar").addEventListener("click", () => guardarEnNube(false));
 
 $("enlace").addEventListener("click", async () => {
   if (!urlNube) return;
