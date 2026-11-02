@@ -20,6 +20,18 @@
     .tienda-fila .ico { font-size: 1.8rem; }
     .tienda-fila .txt { flex: 1; }
     .tienda-fila small { display: block; color: var(--suave); }
+    .menu { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 16px; background: var(--fondo); overflow: auto; }
+    .menu-caja { width: min(100%, 460px); text-align: center; }
+    .menu-caja > div { display: flex; flex-direction: column; gap: 12px; }
+    .menu-caja h2 { margin: 0; }
+    .menu-caja p { margin: 0; color: var(--suave); }
+    .btn.grande { padding: 14px 18px; font-size: 1.1rem; }
+    .btn.sec { background: var(--tarjeta); border: 1px solid var(--borde); }
+    .ranuras { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+    .ranura { display: flex; flex-direction: column; gap: 4px; padding: 14px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; }
+    .ranura.llena { border-color: var(--acento); }
+    .ranura small { color: var(--suave); }
+    .ranura-botones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
   </style>
 </head>
 <body>
@@ -42,9 +54,26 @@
       <button class="btn" id="alejar" aria-label="Alejar" title="Alejar">➖</button>
       <button class="btn" id="acercar" aria-label="Acercar" title="Acercar">➕</button>
       <button class="btn" id="centrar" aria-label="Centrar la vista" title="Centrar la vista">🎯</button>
+      <button class="btn" id="menuBtn">☰ Menú</button>
       <button class="btn" id="reiniciar">Reiniciar</button>
     </div>
   </main>
+  <div id="menu" class="menu">
+    <div class="menu-caja">
+      <div id="menuInicio">
+        <h2>🍽️ Restaurantes</h2>
+        <p>Tu partida se guarda sola.</p>
+        <button class="btn grande" id="jugar">▶️ Jugar</button>
+        <button class="btn grande sec" id="verPartidas">💾 Partidas guardadas</button>
+        <a class="volver" href="../">← Volver a los juegos</a>
+      </div>
+      <div id="menuPartidas" hidden>
+        <h2>💾 Partidas guardadas</h2>
+        <div id="listaPartidas" class="ranuras"></div>
+        <button class="btn sec" id="volverMenu">← Atrás</button>
+      </div>
+    </div>
+  </div>
   <div id="tienda" class="tienda" role="dialog" aria-label="Tienda y mejoras de mesa" hidden>
     <div class="tienda-cab">
       <b id="tiendaTitulo">🛒 Tienda</b>

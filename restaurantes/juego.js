@@ -17,6 +17,12 @@
 // al restaurante y no se pueden comprar. Los datos de los lotes comprables están en LOTES; las manzanas de pasto, en PASTO.
 const ID = "restaurantes";
 
+// ----- ESCALA: tamaño de los objetos respecto a la cuadra -----
+// 1 = como antes. 0.5 = TODO lo que hay en la cuadra (mesas, sillas, gente, cocina, baño, recepción, autos, estacionamiento...) mide la MITAD respecto a la cuadra:
+// la cuadra queda 2 veces más grande (en objetos) y caben muchas más mesas y cosas. Distribución, velocidades, zoom y toques se calculan a partir de este número (prueba 0.4, 0.6, 1...).
+const ESCALA = 0.5;
+const ESC_UI = (ESCALA + 1) / 2; // textos, globos y barras se encogen menos que los objetos, para que se sigan leyendo
+
 // ----- Ajustes -----
 // El juego NO tiene fin: los clientes llegan sin parar y se puede jugar el tiempo que quieras (el reloj solo cuenta cuánto llevas jugando).
 const PRIMERA_LLEGADA_MS = 1500;  // cuándo llega el primer grupo
@@ -33,21 +39,26 @@ const ENOJO_MS = 8000;            // desde estos ms de espera (con el platillo y
 const PACIENCIA_MS = 15000;       // a estos ms sin recibir el platillo, los clientes se van sin pagar
 const PESOS_POR_PUNTO = 1;        // al perfil se envía 1 punto por cada peso ganado
 const PUNTOS_LOTE = 25;           // como no hay final, los puntos se mandan al perfil de 25 en 25 mientras juegas (y al reiniciar o salir de la página)
-const VEL = 150;                  // velocidad de la gente (px por segundo)
+const VEL = 150;                  // velocidad de la gente (px por segundo EN PANTALLA: con otra ESCALA se ajusta sola; igual MESERO_VEL y AUTO_VEL)
 const T_COCINA_BASE = 3000;       // ms de cocina por pedido...
 const T_COCINA_POR_CLIENTE = 500; // ...más estos ms por cada cliente de la mesa
 const T_COMER = 5000;             // ms que tardan en comer
 const PROB_BANIO = 0.5;           // probabilidad de que un cliente vaya al baño al levantarse de la mesa
 const KEY_RECORD = "restaurantes_record";
-const KEY_DINERO = "restaurantes_dinero"; // dinero guardado en el navegador (la partida —mejoras, personal, terrenos— todavía NO se guarda)
+const KEY_DINERO = "restaurantes_dinero"; // clave de la versión anterior (solo el saldo): se lee UNA vez para pasar ese dinero a la «Partida 1»
+// Partidas guardadas: 3 ranuras con autoguardado en el navegador (localStorage). Se guarda dinero, lo ganado, tiempo jugado, mejoras de cada mesa,
+// personal (nivel), terreno, segunda puerta y estacionamiento. NO se guardan los clientes que están en el local en ese momento.
+const KEY_PARTIDAS = "restaurantes_partidas";
+const NUM_PARTIDAS = 3;
+const AUTOGUARDADO_MS = 10000; // además de guardar en cada cobro/compra, se guarda cada tantos ms y al salir de la página
 
 // ----- Personal (se compra en la tienda de la recepción) -----
 const PRECIO_RECEP = 20;                                 // contratar a la recepcionista (da mesa sola)
 const PRECIO_MESERO = 20;                                // contratar al mesero (lleva solo los platillos)
-const RECEP_TIEMPOS_MS = [6500, 5000, 3800, 2800, 2000]; // por nivel: lo que tarda en dar mesa a un grupo (el nivel 1 es lento a propósito)
-const MESERO_VEL = [70, 95, 125, 160, 200];              // por nivel: velocidad al caminar (px/s; la gente normal va a VEL = 150)
-const RECEP_PRECIOS_MEJORA = [10, 20, 30, 45];           // costo de subir al nivel 2, 3, 4 y 5 de la recepcionista
-const MESERO_PRECIOS_MEJORA = [10, 20, 30, 45];          // ídem para el mesero
+const RECEP_TIEMPOS_MS = [6500, 5000, 3800, 2800, 2000, 1600, 1300, 1050, 850, 700]; // por nivel (10 niveles): lo que tarda en dar mesa a un grupo (el nivel 1 es lento a propósito)
+const MESERO_VEL = [70, 95, 125, 160, 200, 230, 260, 295, 330, 370]; // por nivel (10 niveles): velocidad al caminar (px/s; la gente normal va a VEL = 150)
+const RECEP_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230]; // costo de subir al nivel 2, 3, 4 ... 10 de la recepcionista
+const MESERO_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230]; // ídem para el mesero
 const PAUSA_MESERO_MS = 400;                             // ms que se detiene a tomar el platillo
 // Mejoras de cada mesa: se tocan en la mesa misma (no en la tienda) y cada mesa se mejora POR SEPARADO.
 // Cada cosa se puede mejorar 5 veces; cada mejora suma a lo que paga cada cliente que use ESA mesa: 50 centavos las dos primeras, 1 peso la 3.ª y la 4.ª, y 1.50 pesos la 5.ª.
@@ -88,27 +99,35 @@ const VIDRIO = { tapa: "#cfe8f7", izq: "#90b4cc", der: "#7aa0b8" };
 // ----- Vista (zoom y desplazamiento) -----
 const ZOOM_INICIAL = 0.85;      // zoom al abrir el juego (1 = como antes de la ciudad)
 const ZOOM_MIN = 0.7;           // lo más que se puede alejar (poco, para que la gente se siga viendo)
-const ZOOM_MAX = 1.3;           // lo más que se puede acercar (poco, para no tocar cosas sin querer)
-const PASO_ZOOM = 0.15;         // lo que cambia cada vez que tocas ➕ o ➖
+const ZOOM_MAX = 1.3 / ESCALA;   // lo más que se puede acercar (con objetos pequeños hace falta acercarse más: se ajusta con ESCALA)
+const PASO_ZOOM = 0.15 / ESCALA; // lo que cambia cada vez que tocas ➕ o ➖
 const UMBRAL_ARRASTRE_PX = 10;  // si el dedo se mueve más que esto (px de pantalla) es arrastre para mover la vista, no un toque
 
 // ----- Mapa plano de la lógica (560 × 680); la vista isométrica se proyecta al dibujar -----
-const W = 560, H = 680;
-const HALL_X = 280;                         // pasillo central
-const ENTRADA = [HALL_X, 570];              // inicio del pasillo, junto a la recepción
+// La cuadra «de antes» medía 560 × 680 objetos; con ESCALA menor, la cuadra mide más (en unidades del mapa) porque los objetos son más chicos.
+const W0 = 560, H0 = 680;
+const W = Math.round(W0 / ESCALA), H = Math.round(H0 / ESCALA);
+const ACERA = 40, CALLE = 120;              // ancho de la acera y de las calles (en unidades de objeto)
+const HALL_X = W / 2;                       // pasillo central
+// Cocina, baño y recepción forman un «núcleo» alrededor del pasillo: la cocina y el baño pegados a la pared de atrás y la recepción pegada a la puerta del frente.
+// DX mueve el núcleo al centro de la cuadra; DY mueve lo de enfrente hasta la puerta. Con ESCALA = 1 ambos valen 0 y todo queda como antes.
+const DX = (W - W0) / 2, DY = H - H0;
+const ENTRADA = [HALL_X, 570 + DY];         // inicio del pasillo, junto a la recepción
 // Lugares de espera: 2 por puerta (máximo 2 grupos esperando a la vez en cada una). «p» es la puerta (0 = la de siempre, 1 = la de atrás)
-const SLOTS = [{ p: 0, y: 606 }, { p: 0, y: 640 }, { p: 1, y: -84 }, { p: 1, y: -44 }];
+const SLOTS = [{ p: 0, y: 606 + DY }, { p: 0, y: 640 + DY }, { p: 1, y: -84 }, { p: 1, y: -44 }];
 const PUERTAS = [
-  { entrada: ENTRADA, spawn: [HALL_X, H + 30], pagoY: 585, llenoY: 664, salida: [[HALL_X, 640], [HALL_X, H + 40]], irse: (c) => [[HALL_X, Math.max(c.y, 640)], [HALL_X, H + 40]] },
+  { entrada: ENTRADA, spawn: [HALL_X, H + 30], pagoY: 585 + DY, llenoY: 664 + DY, salida: [[HALL_X, 640 + DY], [HALL_X, H + 40]], irse: (c) => [[HALL_X, Math.max(c.y, 640 + DY)], [HALL_X, H + 40]] },
   { entrada: [HALL_X, 14], spawn: [HALL_X, -190], pagoY: -24, llenoY: -130, salida: [[HALL_X, -90], [HALL_X, -200]], irse: (c) => [[HALL_X, Math.min(c.y, -90)], [HALL_X, -200]] },
 ];
-const PUERTA_COCINA = [225, 185];
-const PUERTA_BANIO = [430, 185];
+const PUERTA_COCINA = [225 + DX, 185];
+const COCINA_DENTRO = [225 + DX, 140];       // dentro de la cocina, frente a la puerta
+const RECT_COCINA = [10 + DX, 10, 260 + DX, 160];
+const PUERTA_BANIO = [430 + DX, 185];
 const MESERO_POST = [HALL_X + 45, 210];     // dónde espera el mesero cuando no hay platillos listos
 const MESERO_POST2 = [HALL_X - 45, 232];    // ídem para el segundo mesero
 const MESAS_BASE = [
-  { id: 1, cx: 150, cy: 290 }, { id: 2, cx: 410, cy: 290 },
-  { id: 3, cx: 150, cy: 440 }, { id: 4, cx: 410, cy: 440 },
+  { id: 1, cx: 150 + DX, cy: 290 }, { id: 2, cx: 410 + DX, cy: 290 },   // las mesas empiezan junto al núcleo; el resto del comedor queda libre para más mesas
+  { id: 3, cx: 150 + DX, cy: 440 }, { id: 4, cx: 410 + DX, cy: 440 },
 ];
 const ORDEN_SILLAS = ["cerca", "arriba", "abajo", "lejos"]; // 4 sillas por mesa; se ocupan en este orden
 const CARAS = ["🧑", "👩", "👨", "🧓", "👧", "👦", "🧔", "👱"];
@@ -116,8 +135,8 @@ const CARAS = ["🧑", "👩", "👨", "🧓", "👧", "👦", "🧔", "👱"];
 // ----- Terrenos que se pueden comprar (en el mapa plano) -----
 // rect: zona que se pavimenta como plaza al comprarlo [x0, y0, x1, y1]; centro: donde se pone el cartel «En venta». Flechas = hacia dónde queda en pantalla.
 const LOTES = {
-  izq:   { etiqueta: "Izquierda", de: "de la izquierda", flecha: "⬉", rect: [-200, 0, 0, H],   centro: [-480, 340] },
-  atras: { etiqueta: "Atrás",     de: "de atrás",        flecha: "⬈", rect: [0, -200, W, 0],   centro: [280, -540] },
+  izq:   { etiqueta: "Izquierda", de: "de la izquierda", flecha: "⬉", rect: [-200, 0, 0, H],   centro: [-(W + 2 * ACERA + CALLE) + W / 2, H / 2] },
+  atras: { etiqueta: "Atrás",     de: "de atrás",        flecha: "⬈", rect: [0, -200, W, 0],   centro: [HALL_X, -(H + 2 * ACERA + CALLE) + H / 2] },
 };
 
 // ----- Lugares de estacionamiento (en el mapa plano; se alinean con la acera que rodea la cuadra) -----
@@ -125,15 +144,16 @@ const LOTES = {
 // «acera» es donde bajan/suben las personas; «carril» es el punto de la calle desde donde el auto entra o sale.
 // Orden de compra: primero los 4 de enfrente (los 2 primeros flanquean la puerta), luego la derecha, la izquierda y al final atrás.
 const CAJON_ANCHO = 46, CAJON_FONDO = 60;
-const ENT_AUTO = [-330, 804], SAL_AUTO = [900, 804];                                         // por dónde entran y salen los autos (calle de enfrente)
-const ESQ_AUTO = { C0: [-124, 804], C1: [684, 804], C2: [684, -124], C3: [-124, -124] };     // esquinas del carril que rodea la cuadra
-const ACERA_Y = 702;                                                                         // acera de enfrente (donde caminan hacia la puerta)
+const CARRIL_F = H + 124;                                                                     // carril de la calle de enfrente
+const ENT_AUTO = [-330, CARRIL_F], SAL_AUTO = [W + 340, CARRIL_F];                                         // por dónde entran y salen los autos (calle de enfrente)
+const ESQ_AUTO = { C0: [-124, CARRIL_F], C1: [W + 124, CARRIL_F], C2: [W + 124, -124], C3: [-124, -124] };     // esquinas del carril que rodea la cuadra
+const ACERA_Y = H + 22;                                                                         // acera de enfrente (donde caminan hacia la puerta)
 function crearCajones() {
-  const out = [], ys = [640, 568, 496, 424, 352, 280, 208, 136];
-  [208, 352, 424, 496].forEach((x) => out.push({ lado: "f", x, y: 750, eje: "y", acera: [x, ACERA_Y], carril: [x, 804] }));
-  ys.forEach((y) => out.push({ lado: "d", x: 630, y, eje: "x", acera: [582, y], carril: [684, y] }));
+  const out = [], ys = [640, 568, 496, 424, 352, 280, 208, 136].map((y) => y + DY); // a los lados: de la puerta hacia atrás
+  [-72, 72, 144, 216].forEach((dx) => { const x = HALL_X + dx; out.push({ lado: "f", x, y: H + 70, eje: "y", acera: [x, ACERA_Y], carril: [x, CARRIL_F] }); });
+  ys.forEach((y) => out.push({ lado: "d", x: W + 70, y, eje: "x", acera: [W + 22, y], carril: [W + 124, y] }));
   ys.forEach((y) => out.push({ lado: "i", x: -70, y, eje: "x", acera: [-22, y], carril: [-124, y] }));
-  [192, 120, 48, 520].forEach((x) => out.push({ lado: "a", x, y: -70, eje: "y", acera: [x, -22], carril: [x, -124] }));
+  [-88, -160, -232, 240].forEach((dx) => { const x = HALL_X + dx; out.push({ lado: "a", x, y: -70, eje: "y", acera: [x, -22], carril: [x, -124] }); });
   return out.map((c) => ({ ...c, usado: false, coche: null, pendientes: 0 }));
 }
 const CAJONES = crearCajones();
@@ -153,9 +173,9 @@ function rutaCoche(k, saliendo) {
 function caminoAcera(k, pu) {
   if (pu === 1) return [k.acera];
   const r = [k.acera];
-  if (k.lado === "d") r.push([582, ACERA_Y]);
+  if (k.lado === "d") r.push([W + 22, ACERA_Y]);
   if (k.lado === "i") r.push([-22, ACERA_Y]);
-  if (k.lado === "a") r.push(k.x < HALL_X ? [-22, -22] : [582, -22], k.x < HALL_X ? [-22, ACERA_Y] : [582, ACERA_Y]);
+  if (k.lado === "a") r.push(k.x < HALL_X ? [-22, -22] : [W + 22, -22], k.x < HALL_X ? [-22, ACERA_Y] : [W + 22, ACERA_Y]);
   r.push([HALL_X, ACERA_Y]);
   return r;
 }
@@ -177,6 +197,7 @@ let receps = [null, null], meseros = [null, null]; // personal contratado (null 
 let terreno2 = false, puerta2 = false;             // ampliación comprada / segunda puerta comprada
 let lote = null; // terreno comprado: null (ninguno), "izq" o "atras"
 let puntosEnviados = 0, umbralPuntos = PUNTOS_LOTE, enviando = false; // puntos ya mandados al perfil, cuántos hacen falta para el siguiente envío, envío en curso
+let ranura = null; // partida activa (0, 1 o 2); null = estás en el menú y no se guarda nada
 let mesaMejora = null; // mesa cuyo panel de mejoras está abierto (null = la tienda de la recepción)
 const nuevasMejoras = () => Object.fromEntries(MEJORAS_MESA.map((c) => [c.id, 0])); // cuántas mejoras tiene cada cosa de una mesa (0 a 5)
 const bonoAcum = (k) => BONO_MEJORAS.slice(0, k).reduce((t, b) => t + b, 0);        // lo que suman en total las primeras k mejoras
@@ -198,19 +219,20 @@ let esperas = []; // esperas pendientes: { fin, g, r }
 // Espera que no continúa si se reinició la partida mientras tanto
 const esp = (ms) => { const g = gen; return new Promise((r) => esperas.push({ fin: ahora() + ms, g, r })); };
 
-function nuevaPartida() {
+function nuevaPartida(datos = null) { // datos: partida guardada que se carga (null = partida nueva)
   gen++; esperas = [];
   ents = []; globos = []; monedas = [];
   mesas = MESAS_BASE.map((m) => ({ ...m, ocupada: false, plato: false, barra: null, esperando: false, tomado: false, enojo: false, listoDesde: 0, res: null, clientes: [], mejoras: nuevasMejoras() }));
   recepcion = Array(SLOTS.length).fill(null);
-  dinero = leerDinero(); ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
+  dinero = 0; ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
   const habiaCambios = terreno2 || nEstac > ESTAC_INICIALES; terreno2 = false; lote = null; puerta2 = false;
   nEstac = ESTAC_INICIALES; autosPerdidos = 0; proxAuto = PRIMER_AUTO_MS;
   CAJONES.forEach((k) => { k.usado = false; k.coche = null; k.pendientes = 0; });
-  if (habiaCambios) armarFondo(); // quita la plaza y los lugares de estacionamiento de la partida anterior
   reloj = 0; proxLlegada = PRIMERA_LLEGADA_MS; ultimoSeg = -1; puntosEnviados = 0; umbralPuntos = PUNTOS_LOTE;
+  if (datos) aplicarGuardado(datos);
+  if (habiaCambios || datos) armarFondo(); // quita la plaza y los lugares de la partida anterior (o dibuja los de la partida cargada)
   cerrarTienda();
-  $("tiempo").textContent = fmtTiempo(0);
+  $("tiempo").textContent = fmtTiempo(Math.floor(reloj / 1000));
   info("Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para contratar personal y una mesa para mejorarla.");
   actualizar();
 }
@@ -221,16 +243,73 @@ function fmtTiempo(seg) {
   return (h ? h + ":" + dos(m) : m) + ":" + dos(s);
 }
 function info(t) { $("estado").textContent = t; }
-// Dinero guardado: se escribe cada vez que cambia (cobros y compras pasan por actualizar()) y se recupera al abrir el juego o al reiniciar.
-// Solo es el saldo: lo que compraste (mejoras, personal, terrenos, lugares) no se guarda, así que al volver empiezas con el dinero pero sin esas compras.
-function leerDinero() {
-  try { const n = Number(localStorage.getItem(KEY_DINERO)); return Number.isFinite(n) && n > 0 ? Math.round(n * 2) / 2 : 0; } catch (e) { return 0; }
+// ----- Partidas guardadas -----
+const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+function leerTodo() {
+  let t = null;
+  try { t = JSON.parse(localStorage.getItem(KEY_PARTIDAS)); } catch (e) {}
+  if (!t || !Array.isArray(t.ranuras)) {
+    t = { ultima: 0, ranuras: Array(NUM_PARTIDAS).fill(null) };
+    try { // primera vez con partidas: si había dinero guardado de la versión anterior, pasa a la Partida 1
+      const n = num(localStorage.getItem(KEY_DINERO));
+      if (n > 0) t.ranuras[0] = { dinero: Math.round(n * 2) / 2, fecha: Date.now() };
+    } catch (e) {}
+  }
+  while (t.ranuras.length < NUM_PARTIDAS) t.ranuras.push(null);
+  if (!(t.ultima >= 0 && t.ultima < NUM_PARTIDAS)) t.ultima = 0;
+  return t;
 }
-function guardarDinero() { try { localStorage.setItem(KEY_DINERO, String(dinero)); } catch (e) {} }
+function escribirTodo(t) { try { localStorage.setItem(KEY_PARTIDAS, JSON.stringify(t)); } catch (e) {} }
+// Foto de lo que se guarda de la partida actual
+function instantanea() {
+  return {
+    dinero, ganado, atendidos, perdidos, reloj: Math.floor(reloj), puntosEnviados,
+    mesas: mesas.map((m) => ({ id: m.id, mejoras: { ...m.mejoras } })),
+    receps: receps.map((r) => (r ? r.nivel : 0)),
+    meseros: meseros.map((w) => (w ? w.nivel : 0)),
+    terreno2, lote, puerta2, nEstac,
+    fecha: Date.now(),
+  };
+}
+function guardarPartida() {
+  if (ranura === null || !mesas) return;
+  const t = leerTodo();
+  t.ranuras[ranura] = instantanea();
+  t.ultima = ranura;
+  escribirTodo(t);
+}
+// Pone en el estado del juego lo que había guardado (se llama dentro de nuevaPartida, con el estado ya en blanco). Todo se valida: un dato raro no rompe la partida.
+function aplicarGuardado(d) {
+  const med = (v) => Math.max(0, Math.round(num(v) * 2) / 2); // múltiplos de 50 centavos
+  dinero = med(d.dinero); ganado = med(d.ganado);
+  atendidos = Math.max(0, Math.floor(num(d.atendidos))); perdidos = Math.max(0, Math.floor(num(d.perdidos)));
+  reloj = Math.max(0, num(d.reloj)); proxLlegada = reloj + PRIMERA_LLEGADA_MS; proxAuto = reloj + PRIMER_AUTO_MS;
+  puntosEnviados = Math.max(0, Math.min(Math.floor(num(d.puntosEnviados)), Math.floor(ganado / PESOS_POR_PUNTO))); // así no se mandan dos veces los mismos puntos al perfil
+  (Array.isArray(d.mesas) ? d.mesas : []).forEach((s) => {
+    const m = s && mesas.find((x) => x.id === s.id);
+    if (m && s.mejoras) MEJORAS_MESA.forEach((c) => (m.mejoras[c.id] = Math.max(0, Math.min(c.precios.length, Math.floor(num(s.mejoras[c.id]))))));
+  });
+  lote = LOTES[d.lote] ? d.lote : null;
+  terreno2 = !!lote;
+  puerta2 = terreno2 && !!d.puerta2;
+  nEstac = Math.max(ESTAC_INICIALES, Math.min(CAJONES.length, Math.floor(num(d.nEstac)) || ESTAC_INICIALES));
+  const rs = Array.isArray(d.receps) ? d.receps : [], ms = Array.isArray(d.meseros) ? d.meseros : [];
+  [0, 1].forEach((k) => {
+    const nr = Math.min(RECEP_TIEMPOS_MS.length, Math.floor(num(rs[k])));
+    if (nr > 0 && (k === 0 || (puerta2 && receps[0]))) receps[k] = { nivel: nr, g: null, t0: 0, emoji: k ? "👩‍💼" : "🧑‍💼" };
+    const nm = Math.min(MESERO_VEL.length, Math.floor(num(ms[k])));
+    if (nm > 0 && (k === 0 || (terreno2 && meseros[0]))) {
+      const post = k ? MESERO_POST2 : MESERO_POST;
+      const ent = nuevaEnt(k ? "🤵‍♀️" : "🤵", post[0], post[1]);
+      ent.vel = MESERO_VEL[nm - 1];
+      meseros[k] = { nivel: nm, ocupado: false, ent, post };
+    }
+  });
+}
 function leerRecord() { try { return Number(localStorage.getItem(KEY_RECORD)) || 0; } catch (e) { return 0; } }
 function actualizar() {
   $("dinero").textContent = fmt(dinero);
-  guardarDinero();
+  guardarPartida(); // autoguardado: cobros y compras pasan por aquí
   $("record").textContent = fmt(leerRecord());
   if (!$("tienda").hidden) pintarTienda();
 }
@@ -431,11 +510,13 @@ function entregar(m) {
   if (r) r(true);
 }
 // Posición del platillo de cada mesa sobre el mostrador de la cocina
-const SLOT_X = [60, 110, 160, 210];
+const SLOT_X = [60, 110, 160, 210].map((x) => x + DX);
 const SLOT_Y = 55;
+const TOL = (1 / ESCALA - 1) * 20;                    // los objetos pequeños se tocan con un poco más de margen
+const PAD_MESA = Math.min(72, 58 + (1 / ESCALA - 1) * 15); // cuánto alrededor de la mesa cuenta como tocarla (sin pisar a la mesa vecina)
 const dentro = (p, x0, y0, x1, y1) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1;
 // Del punto de pantalla al mapa plano, suponiendo que está a la altura z
-function aMundo(sx, sy, z) { const u = (sx - OX) / ISO, v = ((sy + z - OY) * 2) / ISO; return [(u + v) / 2, (v - u) / 2]; }
+function aMundo(sx, sy, z) { const u = (sx - OX) / ISO, v = ((sy + z * ESCALA - OY) * 2) / ISO; return [(u + v) / 2, (v - u) / 2]; }
 
 function tocar(sx, sy) {
   if (pausado) return; // con la tienda abierta el juego está en pausa
@@ -444,13 +525,14 @@ function tocar(sx, sy) {
   const grupo = recepcion.find((g) => {
     if (!g || !g.esperando) return false;
     const xs = g.clientes.map((c) => c.x);
-    return dentro([wx, wy], Math.min(...xs) - 28, g.y - 30, Math.max(...xs) + 28, g.y + 30);
+    const pad = 1 / ESCALA; // el aviso se toca igual de fácil que antes aunque la gente sea más chica
+    return dentro([wx, wy], Math.min(...xs) - 28 * pad, g.y - 30 * pad, Math.max(...xs) + 28 * pad, g.y + 30 * pad);
   });
   if (grupo) { darMesa(grupo); return; }
-  if (dentro(aMundo(sx, sy, 26), 335, 560, 465, 625) || dentro(aMundo(sx, sy, 0), 335, 560, 465, 650)) { abrirTienda(); return; } // mostrador de la recepción
-  if (puerta2 && (dentro(aMundo(sx, sy, 26), 335, -75, 465, -30) || dentro(aMundo(sx, sy, 0), 335, -75, 465, -30))) { abrirTienda(); return; } // mostrador de la recepción 2
-  const enCocina = dentro(aMundo(sx, sy, 0), 10, 10, 260, 160) || dentro(aMundo(sx, sy, 30), 10, 10, 260, 160);
-  const mesaTocada = mesas.find((m) => dentro(aMundo(sx, sy, 22), m.cx - 58, m.cy - 58, m.cx + 58, m.cy + 58));
+  if (dentro(aMundo(sx, sy, 26), 335 + DX - TOL, 560 + DY - TOL, 465 + DX + TOL, 625 + DY + TOL) || dentro(aMundo(sx, sy, 0), 335 + DX - TOL, 560 + DY - TOL, 465 + DX + TOL, 650 + DY + TOL)) { abrirTienda(); return; } // mostrador de la recepción
+  if (puerta2 && (dentro(aMundo(sx, sy, 26), 335 + DX - TOL, -75 - TOL, 465 + DX + TOL, -30 + TOL) || dentro(aMundo(sx, sy, 0), 335 + DX - TOL, -75 - TOL, 465 + DX + TOL, -30 + TOL))) { abrirTienda(); return; } // mostrador de la recepción 2
+  const enCocina = dentro(aMundo(sx, sy, 0), ...RECT_COCINA) || dentro(aMundo(sx, sy, 30), ...RECT_COCINA);
+  const mesaTocada = mesas.find((m) => dentro(aMundo(sx, sy, 22), m.cx - PAD_MESA, m.cy - PAD_MESA, m.cx + PAD_MESA, m.cy + PAD_MESA));
   if (llevando) {
     if (mesaTocada === llevando) entregar(llevando);
     else if (mesaTocada) info("Ese platillo es para la mesa " + llevando.id + ", no para la " + mesaTocada.id + ".");
@@ -459,7 +541,7 @@ function tocar(sx, sy) {
   }
   const listos = mesas.filter((m) => m.esperando && !m.tomado && m.reservadoPor !== m.listoDesde); // sin los que el mesero ya va a buscar
   // Si tocas un platillo del mostrador, ese; si tocas otra parte de la cocina, el que lleva más tiempo esperando
-  let elegido = listos.find((m) => { const [px, py] = iso(SLOT_X[m.id - 1], SLOT_Y, 40); return Math.hypot(sx - px, sy - py) < 28; });
+  let elegido = listos.find((m) => { const [px, py] = iso(SLOT_X[m.id - 1], SLOT_Y, 40); return Math.hypot(sx - px, sy - py) < Math.max(12, 28 * ESCALA); });
   if (!elegido && enCocina) elegido = listos.sort((a, b) => a.listoDesde - b.listoDesde)[0];
   if (elegido) { elegido.tomado = true; llevando = elegido; info("Llevas el platillo de la mesa " + elegido.id + ": toca esa mesa para entregarlo."); }
   else if (mesaTocada) abrirMejorasMesa(mesaTocada); // tocar una mesa (sin platillo en la mano) abre sus mejoras
@@ -469,7 +551,7 @@ function posEnLienzo(e) { const r = lienzo.getBoundingClientRect(); return [((e.
 
 // Al levantarse de la mesa, el cliente va al baño y sale hacia la recepción (ahí paga todo, baño incluido). «ida» es el camino de la entrada a su silla
 async function banio(c, ida, i, P = PUERTAS[0]) {
-  const dentro = [400 + i * 22, 120];
+  const dentro = [400 + DX + i * 22, 120];
   await ir(c, [...ida.slice(1, -1).reverse(), [HALL_X, 185], PUERTA_BANIO, dentro]);
   await esp(1000);
   await ir(c, [PUERTA_BANIO, [HALL_X, 185], P.entrada]);
@@ -694,16 +776,16 @@ async function servir(m, w) {
   const lado = m.cx < HALL_X ? 1 : -1;
   w.ocupado = true;
   m.reservadoPor = t0;
-  await ir(w.ent, [[HALL_X, 185], PUERTA_COCINA, [225, 140], [SLOT_X[m.id - 1], 90]]);
+  await ir(w.ent, [[HALL_X, 185], PUERTA_COCINA, COCINA_DENTRO, [SLOT_X[m.id - 1], 90]]);
   await esp(PAUSA_MESERO_MS);
   if (vigente() && !m.tomado) {
     m.tomado = true;
     w.ent.lleva = true;
-    await ir(w.ent, [[225, 140], PUERTA_COCINA, [HALL_X, 185], [HALL_X, m.cy], [m.cx + 82 * lado, m.cy]]);
+    await ir(w.ent, [COCINA_DENTRO, PUERTA_COCINA, [HALL_X, 185], [HALL_X, m.cy], [m.cx + 82 * lado, m.cy]]);
     w.ent.lleva = false;
     if (vigente()) entregar(m);
   }
-  await ir(w.ent, w.ent.y < 160 ? [[225, 140], PUERTA_COCINA, w.post] : [[HALL_X, w.ent.y], w.post]);
+  await ir(w.ent, w.ent.y < 160 ? [COCINA_DENTRO, PUERTA_COCINA, w.post] : [[HALL_X, w.ent.y], w.post]);
   w.ocupado = false;
 }
 
@@ -779,14 +861,15 @@ async function enviarPuntos(todo) {
   if (ok) umbralPuntos = PUNTOS_LOTE;
   else { puntosEnviados -= n; umbralPuntos = n + PUNTOS_LOTE; } // sin sesión o con error: se reintenta más adelante
 }
-document.addEventListener("visibilitychange", () => { if (document.hidden) enviarPuntos(true); });
-addEventListener("pagehide", () => enviarPuntos(true));
+document.addEventListener("visibilitychange", () => { if (document.hidden) { enviarPuntos(true); guardarPartida(); } });
+addEventListener("pagehide", () => { enviarPuntos(true); guardarPartida(); });
+setInterval(guardarPartida, AUTOGUARDADO_MS);
 
 // ----- Dibujo (vista isométrica 2:1, estilo Clash of Clans) -----
 // La lógica sigue usando el mapa plano (W × H) de arriba; aquí solo se proyecta cada punto a la pantalla.
 const CW = 720, CH = 480;               // tamaño del lienzo (debe coincidir con el <canvas> de index.html)
-const ISO = 0.55, OX = 400, OY = 100;   // escala y origen de la proyección (súbele ISO para acercar la vista)
-const iso = (x, y, z = 0) => [OX + (x - y) * ISO, OY + ((x + y) * ISO) / 2 - z];
+const ISO = 0.55 * ESCALA, OX = 400, OY = 100; // escala y origen de la proyección: la cuadra se ve del mismo tamaño en pantalla y los objetos se ven más chicos
+const iso = (x, y, z = 0) => [OX + (x - y) * ISO, OY + ((x + y) * ISO) / 2 - z * ESCALA]; // la altura z también se encoge con ESCALA
 
 function emoji(t, x, y, tam) { ctx.fillStyle = "#000"; ctx.font = tam + "px serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(t, x, y); } // fillStyle opaco: si no, el emoji hereda la transparencia de la sombra
 function caja(x, y, w, h, r) { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h); }
@@ -852,7 +935,6 @@ fondo.width = FW; fondo.height = FH;
 // ----- Ciudad alrededor del restaurante -----
 // El restaurante es la manzana (0, 0): su acera mide ACERA y las calles CALLE. Las demás manzanas se llenan de edificios y parques.
 // Los edificios de las manzanas de enfrente tienen tope de altura según su distancia, para que nunca tapen el restaurante.
-const ACERA = 40, CALLE = 120;
 const PX = W + 2 * ACERA + CALLE, PY = H + 2 * ACERA + CALLE; // separación entre manzanas
 const COL_ASFALTO = "#555b64", COL_ACERA = "#d0d3d6", COL_PASTO = "#9ccc65";
 // ZONA DE PASTO (terreno para ampliar el restaurante): manzanas que se ven como un solo pasto junto con la del restaurante, sin calles entre ellas.
@@ -883,10 +965,10 @@ function arbol(c, x, y, tam) {
   c.fillText("🌳", px, py - tam * 0.4);
 }
 function ventanas(c, x0, y0, x1, y1, h) {
-  const col = "rgba(227,242,253,.75)";
-  for (let z = 16; z + 14 <= h - 6; z += 26) {
-    for (let x = x0 + 14; x + 12 <= x1 - 10; x += 26) poly(c, [iso(x, y1, z), iso(x + 12, y1, z), iso(x + 12, y1, z + 14), iso(x, y1, z + 14)], col);
-    for (let y = y0 + 14; y + 12 <= y1 - 10; y += 26) poly(c, [iso(x1, y, z), iso(x1, y + 12, z), iso(x1, y + 12, z + 14), iso(x1, y, z + 14)], col);
+  const col = "rgba(227,242,253,.75)", k = 1 / ESCALA; // las ventanas son de la ciudad: se ven igual en pantalla
+  for (let z = 16 * k; z + 14 * k <= h - 6 * k; z += 26 * k) {
+    for (let x = x0 + 14 * k; x + 12 * k <= x1 - 10 * k; x += 26 * k) poly(c, [iso(x, y1, z), iso(x + 12 * k, y1, z), iso(x + 12 * k, y1, z + 14 * k), iso(x, y1, z + 14 * k)], col);
+    for (let y = y0 + 14 * k; y + 12 * k <= y1 - 10 * k; y += 26 * k) poly(c, [iso(x1, y, z), iso(x1, y + 12 * k, z), iso(x1, y + 12 * k, z + 14 * k), iso(x1, y, z + 14 * k)], col);
   }
 }
 function edificio(c, x0, y0, x1, y1, h, col) {
@@ -897,9 +979,9 @@ function armarCiudad(c) {
   c.fillStyle = COL_ASFALTO; c.fillRect(-FOX, -FOY, FW, FH); // todo es calle; encima van las aceras
   // línea central amarilla de cada calle (se interrumpe en los cruces)
   const enCruce = (v, centros) => centros.some((m) => Math.abs(v - m) < CALLE / 2 + 6);
-  for (let p = -2400; p < 2600; p += 60) for (const xc of CENTROS_X) if (!enCruce(p + 15, CENTROS_Y)) suelo(c, xc - 2, p, xc + 2, p + 30, "#e8c547");
-  for (let p = -2400; p < 2600; p += 60) for (const yc of CENTROS_Y) if (!enCruce(p + 15, CENTROS_X)) suelo(c, p, yc - 2, p + 30, yc + 2, "#e8c547");
-  for (let k = 0; k < 6; k++) suelo(c, 70 + k * 20, CENTROS_Y[3] - 52, 80 + k * 20, CENTROS_Y[3] + 52, "#f5f5f5"); // paso de cebra frente al restaurante
+  for (let p = -2400 / ESCALA; p < 2600 / ESCALA; p += 60) for (const xc of CENTROS_X) if (!enCruce(p + 15, CENTROS_Y)) suelo(c, xc - 2, p, xc + 2, p + 30, "#e8c547");
+  for (let p = -2400 / ESCALA; p < 2600 / ESCALA; p += 60) for (const yc of CENTROS_Y) if (!enCruce(p + 15, CENTROS_X)) suelo(c, p, yc - 2, p + 30, yc + 2, "#e8c547");
+  for (let k = 0; k < 6; k++) suelo(c, HALL_X - 210 + k * 20, CENTROS_Y[3] - 52, HALL_X - 200 + k * 20, CENTROS_Y[3] + 52, "#f5f5f5"); // paso de cebra frente al restaurante
   const cola = [];
   const hayPasto = (i, j) => PASTO.some((q) => q[0] === i && q[1] === j);
   const esZona = (i, j) => (i === 0 && j === 0) || hayPasto(i, j);
@@ -920,8 +1002,8 @@ function armarCiudad(c) {
     for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) {
       const ex0 = x0 + a * (W / 2) + 14, ex1 = x0 + (a + 1) * (W / 2) - 14;
       const ey0 = y0 + b * (H / 2) + 14, ey1 = y0 + (b + 1) * (H / 2) - 14;
-      const tope = ex1 > 0 && ey1 > 0 ? 0.5 * Math.max(ex0 - W, ey0 - H) : 220; // los de enfrente: más bajos cuanto más cerca del restaurante
-      const h = Math.max(24, Math.min(40 + ruido(i * 3 + a, j * 5 + b, 1) * 160, tope, 220));
+      const tope = ex1 > 0 && ey1 > 0 ? 0.5 * Math.max(ex0 - W, ey0 - H) : 220 / ESCALA; // los de enfrente: más bajos cuanto más cerca del restaurante
+      const h = Math.max(24 / ESCALA, Math.min((40 + ruido(i * 3 + a, j * 5 + b, 1) * 160) / ESCALA, tope, 220 / ESCALA)); // los edificios de la ciudad se ven igual de altos en pantalla
       const col = EDIFICIOS[Math.floor(ruido(i * 3 + a, j * 5 + b, 2) * EDIFICIOS.length)];
       cola.push({ d: (ex0 + ex1 + ey0 + ey1) / 2, f: () => edificio(c, ex0, ey0, ex1, ey1, h, col) });
     }
@@ -957,9 +1039,10 @@ function armarCiudad(c) {
 }
 // Árboles en la acera del restaurante: los de atrás se dibujan antes del piso y los de enfrente después (así tapan lo correcto)
 function arbolesAcera(c, lado) {
+  const r = (v) => v / ESCALA; // la distancia entre árboles se ve igual que antes en pantalla
   const pts = lado === "atras"
-    ? [[-20, 90], [-20, 230], [-20, 370], [-20, 510], [-20, 640], [90, -20], [230, -20], [370, -20], [510, -20]]
-    : [[W + 20, 230], [W + 20, 370], [W + 20, 510], [W + 20, 640], [40, H + 20], [120, H + 20], [520, H + 20]];
+    ? [[-20, r(90)], [-20, r(230)], [-20, r(370)], [-20, r(510)], [-20, r(640)], [r(90), -20], [r(230), -20], [r(370), -20], [r(510), -20]]
+    : [[W + 20, r(230)], [W + 20, r(370)], [W + 20, r(510)], [W + 20, r(640)], [r(40), H + 20], [r(120), H + 20], [r(520), H + 20]];
   pts.filter(([x, y]) => !enPlaza(x, y)).sort((p, q) => p[0] + p[1] - (q[0] + q[1])).forEach(([x, y]) => arbol(c, x, y, 32)); // donde se pavimentó la plaza no hay árboles
 }
 // Plaza del terreno ampliado (detrás del restaurante: x de 0 a W, y de -200 a 0) y puerta de atrás
@@ -985,7 +1068,7 @@ function carteles(c) {
   }
 }
 function puertaAtras(c) {
-  caja3d(c, 250, -4, 310, 0, 5, MADERA_OSCURA);
+  caja3d(c, HALL_X - 30, -4, HALL_X + 30, 0, 5, MADERA_OSCURA);
   const [ex, ey] = iso(HALL_X, -130, 0);
   c.font = "700 13px system-ui, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.lineWidth = 3; c.strokeStyle = "rgba(0,0,0,.6)"; c.strokeText("Entrada 2", ex, ey);
   texto("Entrada 2", ex, ey, 13, "#fff", "center", c);
@@ -993,14 +1076,14 @@ function puertaAtras(c) {
 // Lugares de estacionamiento comprados: casilla oscura con borde blanco y una «P». Si hay alguno atrás, se pinta también la calle de atrás
 function estacionamiento(c) {
   const visibles = CAJONES.slice(0, nEstac);
-  if (visibles.some((k) => k.lado === "a")) suelo(c, -150, -148, 700, -100, COL_ASFALTO);
-  if (visibles.some((k) => k.lado === "i")) suelo(c, -148, -148, -100, 830, COL_ASFALTO); // a los lados ya no hay carretera: el carril se pinta al comprar lugares
-  if (visibles.some((k) => k.lado === "d")) suelo(c, 660, -148, 708, 830, COL_ASFALTO);
+  if (visibles.some((k) => k.lado === "a")) suelo(c, -150, -148, W + 140, -100, COL_ASFALTO);
+  if (visibles.some((k) => k.lado === "i")) suelo(c, -148, -148, -100, H + 150, COL_ASFALTO); // a los lados ya no hay carretera: el carril se pinta al comprar lugares
+  if (visibles.some((k) => k.lado === "d")) suelo(c, W + 100, -148, W + 148, H + 150, COL_ASFALTO);
   for (const k of visibles) {
     const ax = k.eje === "x" ? CAJON_FONDO : CAJON_ANCHO, ay = k.eje === "x" ? CAJON_ANCHO : CAJON_FONDO;
     suelo(c, k.x - ax / 2, k.y - ay / 2, k.x + ax / 2, k.y + ay / 2, "#454b53", 0, "#f5f5f5");
     const [px, py] = iso(k.x, k.y);
-    texto("P", px, py, 13, "rgba(255,255,255,.55)", "center", c);
+    texto("P", px, py, Math.max(7, 13 * ESCALA), "rgba(255,255,255,.55)", "center", c);
   }
 }
 function armarFondo() {
@@ -1013,25 +1096,25 @@ function armarFondo() {
   estacionamiento(c);
   // piso del comedor
   for (let i = 0; i < W / 40; i++) for (let j = 0; j < H / 40; j++) suelo(c, i * 40, j * 40, i * 40 + 40, j * 40 + 40, (i + j) % 2 ? "#e4cfa9" : "#ecd9b8");
-  cuarto(c, 10, 10, 260, 160, "#eceff1", "#cfd8dc", "#b0bec5", 200, 50);   // cocina
-  cuarto(c, 330, 10, 550, 160, "#e1f5fa", "#b6e0ea", "#80c4d3", 400, 60);   // baño
-  const [kx, ky] = iso(135, 10, 70); texto("Cocina", kx, ky, 14, "#37474f", "center", c);
-  const [bx, by] = iso(440, 10, 70); texto("Baño", bx, by, 14, "#1f5d70", "center", c);
+  cuarto(c, 10 + DX, 10, 260 + DX, 160, "#eceff1", "#cfd8dc", "#b0bec5", 200 + DX, 50);   // cocina
+  cuarto(c, 330 + DX, 10, 550 + DX, 160, "#e1f5fa", "#b6e0ea", "#80c4d3", 400 + DX, 60);   // baño
+  const [kx, ky] = iso(135 + DX, 10, 70); texto("Cocina", kx, ky, 14, "#37474f", "center", c);
+  const [bx, by] = iso(440 + DX, 10, 70); texto("Baño", bx, by, 14, "#1f5d70", "center", c);
   const [cx, cy] = iso(40, 520, 0); texto("Comedor", cx, cy, 13, "rgba(91,70,54,.75)", "center", c);
   // puerta de entrada
-  caja3d(c, 250, H - 4, 310, H, 5, MADERA_OSCURA);
+  caja3d(c, HALL_X - 30, H - 4, HALL_X + 30, H, 5, MADERA_OSCURA);
   if (puerta2) puertaAtras(c);
   arbolesAcera(c, "enfrente");
-  const [ex, ey] = iso(280, H, 0); // el letrero queda sobre la calle: letras blancas con contorno oscuro
+  const [ex, ey] = iso(HALL_X, H, 0); // el letrero queda sobre la calle: letras blancas con contorno oscuro
   c.font = "700 13px system-ui, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.lineWidth = 3; c.strokeStyle = "rgba(0,0,0,.6)"; c.strokeText("Entrada", ex + 4, ey + 30);
   texto("Entrada", ex + 4, ey + 30, 13, "#fff", "center", c);
 }
 
 function sombra(x, y, r) {
   const [sx, sy] = iso(x, y);
-  ctx.fillStyle = "rgba(0,0,0,.2)"; ctx.beginPath(); ctx.ellipse(sx, sy, r, r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "rgba(0,0,0,.2)"; ctx.beginPath(); ctx.ellipse(sx, sy, r * ESCALA, r * ESCALA * 0.45, 0, 0, Math.PI * 2); ctx.fill();
 }
-function persona(e, x, y, z, tam) { sombra(x, y, 13); const [sx, sy] = iso(x, y, z); emoji(e, sx, sy, tam); }
+function persona(e, x, y, z, tam) { sombra(x, y, 13); const [sx, sy] = iso(x, y, z); emoji(e, sx, sy, tam * ESCALA); }
 
 function dibujarMesa(m) {
   caja3d(ctx, m.cx - 32, m.cy - 32, m.cx + 32, m.cy + 32, 22, MESA_ESTILOS[m.mejoras.mesa], "#5b4636");
@@ -1039,23 +1122,24 @@ function dibujarMesa(m) {
   if (llevando === m) { suelo(ctx, m.cx - 32, m.cy - 32, m.cx + 32, m.cy + 32, null, 22, "#ffd54a"); suelo(ctx, m.cx - 34, m.cy - 34, m.cx + 34, m.cy + 34, null, 22, "#ffd54a"); }
   const [sx, sy] = iso(m.cx, m.cy, 22);
   const nm = totalMejoras(m);
-  texto("Mesa " + m.id + (nm ? " ★" + nm : ""), sx, sy + 9, 10, nm ? "#ffe082" : "#fff", "center"); // ★ = mejoras compradas en esa mesa
-  // Lo que ya mejoraste se ve sobre la mesa: cubiertos, bebidas y servilletas (más grandes mientras más mejoras)
+  const etq = ESCALA < 0.8 ? String(m.id) : "Mesa " + m.id; // con objetos pequeños solo el número, para no tapar las sillas
+  texto(etq + (nm ? " ★" + nm : ""), sx, sy + 9 * ESCALA, 10, nm ? "#ffe082" : "#fff", "center"); // ★ = mejoras compradas en esa mesa
   [["cubiertos", "🍴", -20, 14], ["bebidas", "🥤", 14, -20], ["servilletas", "🧻", 20, 18]].forEach(([id, em, dx, dy]) => {
     const k = m.mejoras[id];
-    if (k) { const [ex, ey] = iso(m.cx + dx, m.cy + dy, 24); emoji(em, ex, ey, 10 + k * 1.6); }
+    if (k) { const [ex, ey] = iso(m.cx + dx, m.cy + dy, 24); emoji(em, ex, ey, (10 + k * 1.6) * ESCALA); }
   });
-  if (m.plato) emoji("🍽️", sx, sy - 4, 22);
+  if (m.plato) emoji("🍽️", sx, sy - 4 * ESCALA, 22 * ESCALA);
+  const bw = 48 * ESC_UI, bh = 7 * ESC_UI, by = sy - 38 * ESC_UI; // barras de paciencia y de avance
   if (m.esperando) { // paciencia: verde, y roja desde que se enojan
     const resta = Math.max(0, 1 - (ahora() - m.listoDesde) / PACIENCIA_MS);
-    ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(sx - 24, sy - 38, 48, 7);
-    ctx.fillStyle = m.enojo ? "#e74c3c" : "#6fcf97"; ctx.fillRect(sx - 24, sy - 38, 48 * resta, 7);
-    emoji(m.enojo ? "😡" : "⏳", sx, sy - 52, 20);
+    ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(sx - bw / 2, by, bw, bh);
+    ctx.fillStyle = m.enojo ? "#e74c3c" : "#6fcf97"; ctx.fillRect(sx - bw / 2, by, bw * resta, bh);
+    emoji(m.enojo ? "😡" : "⏳", sx, sy - 52 * ESC_UI, 20 * ESC_UI);
   }
   if (m.barra) {
     const f = Math.min(1, (ahora() - m.barra.t0) / m.barra.dur);
-    ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(sx - 24, sy - 38, 48, 7);
-    ctx.fillStyle = m.barra.color; ctx.fillRect(sx - 24, sy - 38, 48 * f, 7);
+    ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(sx - bw / 2, by, bw, bh);
+    ctx.fillStyle = m.barra.color; ctx.fillRect(sx - bw / 2, by, bw * f, bh);
   }
 }
 function dibujarSilla(s, m) {
@@ -1064,46 +1148,46 @@ function dibujarSilla(s, m) {
   if (cojin) caja3d(ctx, s.x - 8, s.y - 8, s.x + 8, s.y + 8, 10 + k, cojin, "#5b4636"); // cada nivel la hace un poco más alta
 }
 function dibujarMostrador() {
-  caja3d(ctx, 20, 40, 250, 70, 26, ACERO, "#546e7a");
-  const [dx, dy] = iso(32, 55, 40); emoji("🍳", dx, dy, 26);
+  caja3d(ctx, 20 + DX, 40, 250 + DX, 70, 26, ACERO, "#546e7a");
+  const [dx, dy] = iso(32 + DX, 55, 40); emoji("🍳", dx, dy, 26 * ESCALA);
   for (const m of mesas) { // platillos listos esperando que los tomes
     if (!m.esperando || m.tomado) continue;
     const [sx, sy] = iso(SLOT_X[m.id - 1], SLOT_Y, 26);
-    const resta = Math.max(0, 1 - (ahora() - m.listoDesde) / PACIENCIA_MS);
-    emoji("🍽️", sx, sy - 14, 30 * (1 + Math.sin(ahora() / 180) * 0.08));
-    texto("Mesa " + m.id, sx, sy + 4, 10, "#263238", "center");
-    ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fillRect(sx - 16, sy + 11, 32, 5);
-    ctx.fillStyle = m.enojo ? "#e74c3c" : "#2e9e5b"; ctx.fillRect(sx - 16, sy + 11, 32 * resta, 5);
+    const resta = Math.max(0, 1 - (ahora() - m.listoDesde) / PACIENCIA_MS), u = ESC_UI;
+    emoji("🍽️", sx, sy - 14 * ESCALA, 30 * ESCALA * (1 + Math.sin(ahora() / 180) * 0.08));
+    texto(ESCALA < 0.8 ? String(m.id) : "Mesa " + m.id, sx, sy + 4 * u, 10, "#263238", "center");
+    ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fillRect(sx - 16 * u, sy + 11 * u, 32 * u, 5 * u);
+    ctx.fillStyle = m.enojo ? "#e74c3c" : "#2e9e5b"; ctx.fillRect(sx - 16 * u, sy + 11 * u, 32 * u * resta, 5 * u);
   }
 }
 function dibujarChef() {
-  persona("🧑‍🍳", 110, 112, 20 + (cocinando > 0 ? Math.abs(Math.sin(ahora() / 120)) * 5 : 0), 34);
-  if (cocinando > 0) { const [sx, sy] = iso(150, 100, 44); emoji("♨️", sx, sy, 20); }
+  persona("🧑‍🍳", 110 + DX, 112, 20 + (cocinando > 0 ? Math.abs(Math.sin(ahora() / 120)) * 5 : 0), 34);
+  if (cocinando > 0) { const [sx, sy] = iso(150 + DX, 100, 44); emoji("♨️", sx, sy, 20 * ESCALA); }
 }
 // Aviso sobre el grupo que espera en la recepción: «toca para dar mesa» y su barra de paciencia (roja cuando ya están enojados)
 function dibujarEspera(g) {
   const [sx, sy0] = iso(HALL_X, g.y, g.slot % 2 === 0 ? 112 : 78);
-  const sy = sy0 + Math.sin(ahora() / 200) * 3;
+  const sy = sy0 + Math.sin(ahora() / 200) * 3, f = ESC_UI;
   const t = mesas.some((m) => !m.ocupada) ? "👆 Toca para dar mesa" : "⏳ Esperando mesa";
-  ctx.font = "700 13px system-ui, sans-serif";
-  const w = ctx.measureText(t).width + 16;
-  ctx.fillStyle = "#fff"; caja(sx - w / 2, sy - 12, w, 24, 8); ctx.fill();
+  ctx.font = "700 " + 13 * f + "px system-ui, sans-serif";
+  const w = ctx.measureText(t).width + 16 * f;
+  ctx.fillStyle = "#fff"; caja(sx - w / 2, sy - 12 * f, w, 24 * f, 8 * f); ctx.fill();
   ctx.strokeStyle = g.enojo ? "#e74c3c" : "#7c5cff"; ctx.lineWidth = 2; ctx.stroke();
-  texto(t, sx, sy, 13, "#3b2a1a", "center");
+  texto(t, sx, sy, 13 * f, "#3b2a1a", "center");
   const resta = Math.max(0, 1 - (reloj - g.desde) / g.pacienciaMs);
-  ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(sx - 30, sy + 16, 60, 6);
-  ctx.fillStyle = g.enojo ? "#e74c3c" : "#6fcf97"; ctx.fillRect(sx - 30, sy + 16, 60 * resta, 6);
+  ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(sx - 30 * f, sy + 16 * f, 60 * f, 6 * f);
+  ctx.fillStyle = g.enojo ? "#e74c3c" : "#6fcf97"; ctx.fillRect(sx - 30 * f, sy + 16 * f, 60 * f * resta, 6 * f);
 }
 function dibujarEscritorio() {
-  caja3d(ctx, 340, 585, 460, 619, 26, MADERA_OSCURA, "#3e2c23");
-  const [sx, sy] = iso(400, 602, 26); texto("Recepción", sx, sy, 11, "#fff", "center");
-  const [bx, by] = iso(400, 636, 0); // etiqueta que invita a abrir la tienda
-  const t = "🛒 Tienda";
-  ctx.font = "700 13px system-ui, sans-serif";
-  const w = ctx.measureText(t).width + 16;
-  ctx.fillStyle = "#fff"; caja(bx - w / 2, by - 12, w, 24, 8); ctx.fill();
+  caja3d(ctx, 340 + DX, 585 + DY, 460 + DX, 619 + DY, 26, MADERA_OSCURA, "#3e2c23");
+  const [sx, sy] = iso(400 + DX, 602 + DY, 26); texto("Recepción", sx, sy, 11 * ESC_UI, "#fff", "center");
+  const [bx, by] = iso(400 + DX, 636 + DY, 0); // etiqueta que invita a abrir la tienda
+  const t = "🛒 Tienda", f = ESC_UI;
+  ctx.font = "700 " + 13 * f + "px system-ui, sans-serif";
+  const w = ctx.measureText(t).width + 16 * f;
+  ctx.fillStyle = "#fff"; caja(bx - w / 2, by - 12 * f, w, 24 * f, 8 * f); ctx.fill();
   ctx.strokeStyle = "#7c5cff"; ctx.lineWidth = 2; ctx.stroke();
-  texto(t, bx, by, 13, "#3b2a1a", "center");
+  texto(t, bx, by, 13 * f, "#3b2a1a", "center");
 }
 // Recepcionista contratada: de pie detrás del mostrador; mientras atiende se ve su barra de avance
 function dibujarRecepcionista(r, x, y) {
@@ -1111,13 +1195,14 @@ function dibujarRecepcionista(r, x, y) {
   if (!r.g) return;
   const f = Math.min(1, (reloj - r.t0) / RECEP_TIEMPOS_MS[r.nivel - 1]);
   const [sx, sy] = iso(x, y, 78);
-  ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(sx - 24, sy, 48, 7);
-  ctx.fillStyle = "#7c5cff"; ctx.fillRect(sx - 24, sy, 48 * f, 7);
+  const bw = 48 * ESC_UI, bh = 7 * ESC_UI;
+  ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(sx - bw / 2, sy, bw, bh);
+  ctx.fillStyle = "#7c5cff"; ctx.fillRect(sx - bw / 2, sy, bw * f, bh);
 }
 // Mostrador de la segunda puerta (en el terreno de atrás)
 function dibujarEscritorio2() {
-  caja3d(ctx, 340, -70, 460, -36, 26, MADERA_OSCURA, "#3e2c23");
-  const [sx, sy] = iso(400, -53, 26); texto("Recepción 2", sx, sy, 11, "#fff", "center");
+  caja3d(ctx, 340 + DX, -70, 460 + DX, -36, 26, MADERA_OSCURA, "#3e2c23");
+  const [sx, sy] = iso(400 + DX, -53, 26); texto("Recepción 2", sx, sy, 11 * ESC_UI, "#fff", "center");
 }
 // Caja que va de la altura z0 a z1 (para apilar la cabina sobre la carrocería)
 function cajaAlta(c, x0, y0, x1, y1, z0, z1, col, borde) {
@@ -1134,29 +1219,29 @@ function dibujarCoche(e) {
 function dibujarEnt(e) {
   if (e.coche) { dibujarCoche(e); return; }
   persona(e.emoji, e.x, e.y, 20, 34);
-  if (e.lleva) { const [px, py] = iso(e.x, e.y, 56); emoji("🍽️", px, py, 20); } // el mesero con un platillo en la mano
-  if (e.enojado) { const [sx, sy] = iso(e.x, e.y, 52); emoji("😡", sx + Math.sin(ahora() / 60) * 2, sy, 20); }
+  if (e.lleva) { const [px, py] = iso(e.x, e.y, 56); emoji("🍽️", px, py, 20 * ESCALA); } // el mesero con un platillo en la mano
+  if (e.enojado) { const [sx, sy] = iso(e.x, e.y, 52); emoji("😡", sx + Math.sin(ahora() / 60) * 2 * ESCALA, sy, 20 * ESCALA); }
 }
 
 function dibujarGlobos() {
-  const t = ahora();
+  const t = ahora(), f = ESC_UI;
   globos = globos.filter((g) => t < g.hasta);
   for (const g of globos) {
     const [sx, sy] = iso(g.x, g.y, 72);
-    ctx.font = "700 13px system-ui, sans-serif";
-    const w = ctx.measureText(g.texto).width + 16;
-    ctx.fillStyle = "#fff"; caja(sx - w / 2, sy - 12, w, 24, 8); ctx.fill();
+    ctx.font = "700 " + 13 * f + "px system-ui, sans-serif";
+    const w = ctx.measureText(g.texto).width + 16 * f;
+    ctx.fillStyle = "#fff"; caja(sx - w / 2, sy - 12 * f, w, 24 * f, 8 * f); ctx.fill();
     ctx.strokeStyle = "#5b4636"; ctx.lineWidth = 1.5; ctx.stroke();
-    texto(g.texto, sx, sy, 13, "#3b2a1a", "center");
+    texto(g.texto, sx, sy, 13 * f, "#3b2a1a", "center");
   }
 }
 function dibujarMonedas() {
-  const t = ahora();
+  const t = ahora(), f = ESC_UI;
   monedas = monedas.filter((c) => t - c.t0 < 1000);
   for (const c of monedas) {
     const a = (t - c.t0) / 1000, [sx, sy] = iso(c.x, c.y, 50);
     ctx.globalAlpha = 1 - a;
-    texto("+" + pesos(c.monto), sx, sy - a * 40, 17, "#b8860b", "center");
+    texto("+" + pesos(c.monto), sx, sy - a * 40 * f, 17 * f, "#b8860b", "center");
     ctx.globalAlpha = 1;
   }
 }
@@ -1171,18 +1256,18 @@ function dibujar() {
     cola.push({ d: m.cx + m.cy, f: () => dibujarMesa(m) });
     for (const t of ORDEN_SILLAS) { const s = silla(m, t); cola.push({ d: s.x + s.y - 0.5, f: () => dibujarSilla(s, m) }); }
   }
-  cola.push({ d: 190, f: dibujarMostrador });
-  cola.push({ d: 222, f: dibujarChef });
-  cola.push({ d: 1002, f: dibujarEscritorio });
-  if (puerta2) cola.push({ d: 347, f: dibujarEscritorio2 });
-  receps.forEach((r, k) => { if (r) cola.push({ d: k ? 318 : 975, f: () => dibujarRecepcionista(r, 400, k ? -84 : 572) }); });
-  [[365, 85, "🚽"], [365, 125, "🚽"], [515, 85, "🚰"]].forEach(([x, y, em]) => cola.push({ d: x + y, f: () => persona(em, x, y, 16, 30) }));
+  cola.push({ d: 190 + DX, f: dibujarMostrador });
+  cola.push({ d: 222 + DX, f: dibujarChef });
+  cola.push({ d: 1002 + DX + DY, f: dibujarEscritorio });
+  if (puerta2) cola.push({ d: 347 + DX, f: dibujarEscritorio2 });
+  receps.forEach((r, k) => { if (r) cola.push({ d: (k ? 318 : 975 + DY) + DX, f: () => dibujarRecepcionista(r, 400 + DX, k ? -84 : 572 + DY) }); });
+  [[365, 85, "🚽"], [365, 125, "🚽"], [515, 85, "🚰"]].forEach(([x0, y, em]) => { const x = x0 + DX; cola.push({ d: x + y, f: () => persona(em, x, y, 16, 30) }); });
   for (const e of ents) cola.push({ d: e.x + e.y + 0.1, f: () => dibujarEnt(e) });
   cola.sort((a, b) => a.d - b.d).forEach((o) => o.f());
   dibujarGlobos();
   dibujarMonedas();
   recepcion.forEach((g) => { if (g && g.esperando) dibujarEspera(g); });
-  if (llevando) emoji("🍽️", puntero.x, puntero.y - 26, 34); // el platillo que traes en la mano
+  if (llevando) emoji("🍽️", puntero.x, puntero.y - 26 * ESC_UI, 34 * ESC_UI); // el platillo que traes en la mano
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (pausado) { ctx.fillStyle = "rgba(0,0,0,.55)"; caja(CW / 2 - 70, 8, 140, 30, 10); ctx.fill(); texto("⏸️ En pausa", CW / 2, 23, 16, "#fff", "center"); }
 }
@@ -1205,7 +1290,7 @@ function cuadro() {
   for (const e of ents) {
     if (!e.ruta.length) continue;
     const [tx, ty] = e.ruta[0];
-    const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy), paso = (e.vel || VEL) * dt;
+    const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy), paso = ((e.vel || VEL) * dt) / ESCALA;
     if (e.coche && d > 0) e.eje = Math.abs(dx) >= Math.abs(dy) ? "x" : "y"; // el auto apunta hacia donde avanza
     if (d <= paso) {
       e.x = tx; e.y = ty; e.ruta.shift();
@@ -1340,8 +1425,81 @@ $("acercar").addEventListener("click", () => zoomEn(camara.z + PASO_ZOOM, CW / 2
 $("alejar").addEventListener("click", () => zoomEn(camara.z - PASO_ZOOM, CW / 2, CH / 2));
 $("centrar").addEventListener("click", centrarCamara);
 $("cerrarTienda").addEventListener("click", cerrarTienda);
-$("reiniciar").addEventListener("click", () => { enviarPuntos(true); nuevaPartida(); }); // antes de empezar de cero, manda los puntos que falten
+$("reiniciar").addEventListener("click", () => {
+  if (!confirm("¿Empezar de cero esta partida? Se perderá lo que tienes guardado en la Partida " + (ranura + 1) + ".")) return;
+  enviarPuntos(true); // antes de empezar de cero, manda los puntos que falten
+  nuevaPartida();     // (actualizar() guarda enseguida la partida en blanco en la misma ranura)
+});
+
+// ----- Menú inicial y partidas guardadas -----
+const menu = $("menu");
+function mostrarMenu(vista = "inicio") {
+  if (ranura !== null) { enviarPuntos(true); guardarPartida(); }
+  ranura = null; // en el menú no se autoguarda nada
+  cerrarTienda();
+  ponerPausa(true);
+  menu.hidden = false;
+  $("menuInicio").hidden = vista !== "inicio";
+  $("menuPartidas").hidden = vista !== "partidas";
+  if (vista === "partidas") pintarPartidas();
+}
+// Abre la ranura i: si tiene partida la carga; si está vacía empieza una nueva
+function empezar(i) {
+  ranura = i;
+  nuevaPartida(leerTodo().ranuras[i]);
+  guardarPartida();
+  menu.hidden = true;
+  ponerPausa(false);
+  centrarCamara();
+}
+const minimo = (...p) => { const e = document.createElement(p[0]); if (p[1]) e.className = p[1]; if (p[2] !== undefined) e.textContent = p[2]; return e; };
+function pintarPartidas() {
+  const t = leerTodo(), cont = $("listaPartidas");
+  cont.innerHTML = "";
+  const maxMejoras = MEJORAS_MESA.length * PRECIOS_MEJORA.length; // por mesa
+  t.ranuras.forEach((d, i) => {
+    const caja = minimo("div", "ranura" + (d ? " llena" : ""));
+    caja.appendChild(minimo("b", "", "💾 Partida " + (i + 1)));
+    const botones = minimo("div", "ranura-botones");
+    const boton = (txt, fn, sec) => { const b = minimo("button", "btn" + (sec ? " sec" : ""), txt); b.addEventListener("click", fn); botones.appendChild(b); };
+    if (!d) {
+      caja.appendChild(minimo("small", "", "Vacía"));
+      boton("▶️ Nueva partida", () => empezar(i));
+    } else {
+      const mes = Array.isArray(d.mesas) ? d.mesas : [];
+      const porMesa = mes.map((m) => MEJORAS_MESA.reduce((s, c) => s + Math.max(0, Math.min(5, Math.floor(num(m.mejoras && m.mejoras[c.id])))), 0));
+      const rec = (Array.isArray(d.receps) ? d.receps : []).filter((n) => num(n) > 0).length;
+      const mer = (Array.isArray(d.meseros) ? d.meseros : []).filter((n) => num(n) > 0).length;
+      const lineas = [
+        "💰 $" + fmt(Math.max(0, Math.round(num(d.dinero) * 2) / 2)) + " pesos",
+        "🪑 " + (mes.length || MESAS_BASE.length) + " mesas" + (mes.length ? " · mejoras de cada una: " + porMesa.map((n) => n + "/" + maxMejoras).join(" · ") : ""),
+        "🧑‍💼 " + rec + " recepcionista(s) · 🤵 " + mer + " mesero(s) · 🅿️ " + (Math.floor(num(d.nEstac)) || ESTAC_INICIALES) + " lugares" + (LOTES[d.lote] ? " · terreno ampliado" : ""),
+        "⏱️ " + fmtTiempo(Math.floor(num(d.reloj) / 1000)) + (d.fecha ? " · " + new Date(num(d.fecha)).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : ""),
+      ];
+      lineas.forEach((l) => caja.appendChild(minimo("small", "", l)));
+      boton("▶️ Continuar", () => empezar(i));
+      boton("🗑️ Borrar", () => {
+        if (!confirm("¿Borrar la Partida " + (i + 1) + "? No se puede deshacer.")) return;
+        const x = leerTodo(); x.ranuras[i] = null; escribirTodo(x); pintarPartidas();
+      }, true);
+    }
+    caja.appendChild(botones);
+    cont.appendChild(caja);
+  });
+}
+// «Jugar» sigue con la última partida que usaste (o con la primera ranura vacía si no hay ninguna)
+$("jugar").addEventListener("click", () => {
+  const t = leerTodo();
+  let i = t.ranuras[t.ultima] ? t.ultima : t.ranuras.findIndex((r) => !r);
+  if (i < 0) i = 0;
+  empezar(i);
+});
+$("verPartidas").addEventListener("click", () => mostrarMenu("partidas"));
+$("volverMenu").addEventListener("click", () => mostrarMenu("inicio"));
+$("menuBtn").addEventListener("click", () => mostrarMenu("inicio"));
+
 centrarCamara();
 armarFondo();
-nuevaPartida();
+nuevaPartida(); // fondo del juego detrás del menú; no se guarda (ranura = null) hasta que elijas «Jugar» o una partida
+mostrarMenu();
 requestAnimationFrame(cuadro);
