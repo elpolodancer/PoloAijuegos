@@ -47,10 +47,10 @@ const T_COMER = 5000;             // ms que tardan en comer
 const PROB_BANIO = 0.5;           // probabilidad de que un cliente vaya al baño al levantarse de la mesa
 const KEY_RECORD = "restaurantes_record";
 const KEY_DINERO = "restaurantes_dinero"; // clave de la versión anterior (solo el saldo): se lee UNA vez para pasar ese dinero a la «Partida 1»
-// Partidas guardadas: 3 ranuras con autoguardado en el navegador (localStorage). Se guarda dinero, lo ganado, tiempo jugado, mejoras de cada mesa,
+// Partidas guardadas: 6 ranuras (cuadrícula) con autoguardado en el navegador (localStorage). Se guarda dinero, lo ganado, tiempo jugado, mejoras de cada mesa,
 // personal (nivel), terreno, segunda puerta y estacionamiento. NO se guardan los clientes que están en el local en ese momento.
 const KEY_PARTIDAS = "restaurantes_partidas";
-const NUM_PARTIDAS = 3;
+const NUM_PARTIDAS = 6; // recuadros de la cuadrícula de partidas
 const AUTOGUARDADO_MS = 10000; // además de guardar en cada cobro/compra, se guarda cada tantos ms y al salir de la página
 
 // ----- Personal (se compra en la tienda de la recepción) -----
@@ -1487,7 +1487,9 @@ $("reiniciar").addEventListener("click", () => {
 
 // ----- Menú inicial y partidas guardadas -----
 const menu = $("menu");
-function mostrarMenu(vista = "inicio") {
+let modoPartidas = "guardadas"; // la cuadrícula se abre desde «Nueva partida» ("nueva": elegir dónde crearla) o desde «Partidas guardadas» ("guardadas")
+function mostrarMenu(vista = "inicio", modo = null) {
+  if (modo) modoPartidas = modo;
   if (ranura !== null) { enviarPuntos(true); guardarPartida(); }
   ranura = null; // en el menú no se autoguarda nada
   cerrarTienda();
@@ -1509,30 +1511,39 @@ function empezar(i) {
 }
 const minimo = (...p) => { const e = document.createElement(p[0]); if (p[1]) e.className = p[1]; if (p[2] !== undefined) e.textContent = p[2]; return e; };
 function pintarPartidas() {
-  const t = leerTodo(), cont = $("listaPartidas");
+  const t = leerTodo(), cont = $("listaPartidas"), esNueva = modoPartidas === "nueva";
+  $("tituloPartidas").textContent = esNueva ? "🆕 Nueva partida" : "💾 Partidas guardadas";
+  $("avisoRanuras").textContent = esNueva
+    ? "Elige un recuadro para crear tu partida: ahí se guardarán tus mejoras, mesas, terrenos y compras."
+    : "Elige una partida para continuar, o un recuadro vacío para crear una nueva.";
   cont.innerHTML = "";
-  const maxMejoras = MEJORAS_MESA.length * PRECIOS_MEJORA.length; // por mesa
   t.ranuras.forEach((d, i) => {
-    const caja = minimo("div", "ranura" + (d ? " llena" : ""));
+    const caja = minimo("div", "ranura" + (d ? " llena" : " vacia"));
     caja.appendChild(minimo("b", "", "💾 Partida " + (i + 1)));
     const botones = minimo("div", "ranura-botones");
     const boton = (txt, fn, sec) => { const b = minimo("button", "btn" + (sec ? " sec" : ""), txt); b.addEventListener("click", fn); botones.appendChild(b); };
     if (!d) {
       caja.appendChild(minimo("small", "", "Vacía"));
-      boton("▶️ Nueva partida", () => empezar(i));
+      boton("➕ Crear aquí", () => crearEn(i));
     } else {
       const mes = Array.isArray(d.mesas) ? d.mesas : [];
-      const porMesa = mes.map((m) => MEJORAS_MESA.reduce((s, c) => s + Math.max(0, Math.min(5, Math.floor(num(m.mejoras && m.mejoras[c.id])))), 0));
+      const mejoras = mes.reduce((tot, m) => tot + MEJORAS_MESA.reduce((s2, c) => s2 + Math.max(0, Math.min(5, Math.floor(num(m.mejoras && m.mejoras[c.id])))), 0), 0);
       const rec = (Array.isArray(d.receps) ? d.receps : []).filter((n) => num(n) > 0).length;
       const mer = (Array.isArray(d.meseros) ? d.meseros : []).filter((n) => num(n) > 0).length;
       const lineas = [
         "💰 $" + fmt(Math.max(0, Math.round(num(d.dinero) * 2) / 2)) + " pesos",
-        "🪑 " + (mes.length || MESAS_BASE.length) + " mesas · 👨‍🍳 cocinero nivel " + (Math.floor(num(d.cocinero)) || 1) + (mes.length ? " · mejoras de cada una: " + porMesa.map((n) => n + "/" + maxMejoras).join(" · ") : ""),
-        "🧑‍💼 " + rec + " recepcionista(s) · 🤵 " + mer + " mesero(s) · 🅿️ " + (Math.floor(num(d.nEstac)) || ESTAC_INICIALES) + " lugares" + (LOTES[d.lote] ? " · terreno ampliado" : ""),
+        "🪑 " + (Math.floor(num(d.nMesas)) || mes.length || MESAS_BASE.length) + " mesas · ✨ " + mejoras + " mejoras de mesa",
+        "👨‍🍳 Cocinero nivel " + (Math.floor(num(d.cocinero)) || 1),
+        "🧑‍💼 " + rec + " recepcionista(s) · 🤵 " + mer + " mesero(s)",
+        "🅿️ " + (Math.floor(num(d.nEstac)) || ESTAC_INICIALES) + " lugares" + (LOTES[d.lote] ? " · 🌱 terreno ampliado" : "") + (d.puerta2 ? " · 🚪 segunda puerta" : ""),
         "⏱️ " + fmtTiempo(Math.floor(num(d.reloj) / 1000)) + (d.fecha ? " · " + new Date(num(d.fecha)).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : ""),
       ];
       lineas.forEach((l) => caja.appendChild(minimo("small", "", l)));
       boton("▶️ Continuar", () => empezar(i));
+      if (esNueva) boton("♻️ Empezar de cero", () => {
+        if (!confirm("¿Empezar de cero en la Partida " + (i + 1) + "? Se perderá lo que tienes guardado ahí.")) return;
+        crearEn(i);
+      }, true);
       boton("🗑️ Borrar", () => {
         if (!confirm("¿Borrar la Partida " + (i + 1) + "? No se puede deshacer.")) return;
         const x = leerTodo(); x.ranuras[i] = null; escribirTodo(x); pintarPartidas();
@@ -1543,24 +1554,22 @@ function pintarPartidas() {
   });
 }
 // Partidas guardadas: apágalas/enciéndelas aquí. En false el botón sale desactivado («No disponible de momento»); en true abre la lista de partidas.
-const PARTIDAS_GUARDADAS_DISPONIBLES = false;
-// Nueva partida: empieza de cero en la primera ranura vacía (así nunca pisa una partida ya guardada). Si las 3 están ocupadas, juega sin guardar.
-function empezarNueva() {
-  const i = leerTodo().ranuras.findIndex((r) => !r);
-  ranura = i < 0 ? null : i;
+const PARTIDAS_GUARDADAS_DISPONIBLES = true;
+// Crea una partida nueva (de cero) en la ranura i y empieza a jugar: queda guardada ahí con todas sus mejoras y compras
+function crearEn(i) {
+  ranura = i;
   nuevaPartida();
-  if (ranura !== null) guardarPartida();
+  guardarPartida();
   menu.hidden = true;
   ponerPausa(false);
   centrarCamara();
-  if (ranura === null) info("Las 3 partidas guardadas están ocupadas: esta partida no se va a guardar.");
 }
 $("jugar").addEventListener("click", () => mostrarMenu("jugar"));
-$("btnNueva").addEventListener("click", empezarNueva);
+$("btnNueva").addEventListener("click", () => mostrarMenu("partidas", "nueva"));
 $("atrasJugar").addEventListener("click", () => mostrarMenu("inicio"));
 $("btnPartidas").disabled = !PARTIDAS_GUARDADAS_DISPONIBLES;
 $("avisoPartidas").hidden = PARTIDAS_GUARDADAS_DISPONIBLES;
-if (PARTIDAS_GUARDADAS_DISPONIBLES) $("btnPartidas").addEventListener("click", () => mostrarMenu("partidas"));
+if (PARTIDAS_GUARDADAS_DISPONIBLES) $("btnPartidas").addEventListener("click", () => mostrarMenu("partidas", "guardadas"));
 $("volverMenu").addEventListener("click", () => mostrarMenu("jugar"));
 $("menuBtn").addEventListener("click", () => mostrarMenu("inicio"));
 
