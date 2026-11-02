@@ -1697,6 +1697,26 @@ btnMover.addEventListener("click", () => {
   btnMover.textContent = "✅ Listo";
   info("🛠️ Modo mover: toca la cocina o el baño para elegirlo y luego toca dónde quieres ponerlo. Se mueven a lo largo de la pared del fondo, sin tapar el pasillo del centro.");
 });
+// ----- BOTÓN TEMPORAL DE PRUEBAS: «+$1,000» -----
+// Sirve para probar el progreso sin esperar. Suma a «dinero» (lo que gastas), NO a «ganado»: no cuenta para puntos ni récord.
+// Para quitarlo: pon BOTON_DINERO_PRUEBA en false (o borra este bloque).
+const BOTON_DINERO_PRUEBA = true;
+const DINERO_PRUEBA = 1000;
+if (BOTON_DINERO_PRUEBA) {
+  const bp = document.createElement("button");
+  bp.id = "btnDineroPrueba";
+  bp.className = "btn";
+  bp.textContent = "💵 +" + pesos(DINERO_PRUEBA);
+  bp.title = "Botón temporal de pruebas";
+  bp.addEventListener("click", () => {
+    if ($("menu").hidden === false || ranura === null) return; // solo mientras juegas una partida
+    dinero += DINERO_PRUEBA;
+    info("💵 Prueba: recibiste " + pesos(DINERO_PRUEBA) + ".");
+    actualizar();
+  });
+  const rei2 = $("reiniciar");
+  if (rei2 && rei2.parentNode) rei2.parentNode.insertBefore(bp, rei2); else document.body.appendChild(bp);
+}
 $("reiniciar").addEventListener("click", () => {
   if (!confirm("¿Empezar de cero esta partida?" + (ranura !== null ? " Se perderá lo que tienes guardado en la Partida " + (ranura + 1) + "." : ""))) return;
   enviarPuntos(true); // antes de empezar de cero, manda los puntos que falten
