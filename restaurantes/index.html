@@ -26,7 +26,9 @@
     #estado:empty { display: none; }
     .acciones { left: 8px; right: 56px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; }
     .acciones .btn { padding: 6px 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, .4); }
-    .btn-empleados { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(8px + env(safe-area-inset-right, 0px)); box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
+    .btn-perfil { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(8px + env(safe-area-inset-right, 0px)); display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; padding: 0; overflow: hidden; font-size: 1.2rem; border-radius: 50%; box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
+    .btn-perfil img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .btn-empleados { top: calc(54px + env(safe-area-inset-top, 0px)); right: calc(8px + env(safe-area-inset-right, 0px)); box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
     .tienda { position: fixed; z-index: 100; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(92vw, 420px); padding: 14px; background: var(--tarjeta); border: 1px solid var(--acento); border-radius: 16px; box-shadow: 0 8px 30px rgba(0, 0, 0, .5); }
     .tienda-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
     .tienda-fila { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--borde); }
@@ -61,10 +63,11 @@
     <div class="escena">
       <canvas id="lienzo" class="lienzo" width="720" height="480" aria-label="Restaurante en vista isométrica con cocina, baño, recepción y cuatro mesas; toca a los clientes que esperan para darles mesa"></canvas>
       <div class="marcador encima">
-        <span>💰 $<b id="dinero">0</b> pesos</span>
+        <span>💰 $<b id="dinero">0</b> dólares</span>
         <span>⏱️ Jugando <b id="tiempo">0:00</b></span>
-        <span>🏆 Récord $<b id="record">0</b> pesos</span>
+        <span>🏆 Récord $<b id="record">0</b> dólares</span>
       </div>
+      <button class="btn btn-perfil encima" id="btnPerfil" aria-label="Perfil del jugador" title="Perfil">👤</button>
       <button class="btn btn-empleados encima" id="btnEmpleados" aria-label="Empleados">👥 Empleados</button>
       <p id="estado" class="encima">Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para comprar mesas, terreno y estacionamiento, una mesa para mejorarla, y 👥 Empleados (arriba a la derecha) para el personal.</p>
       <div class="acciones encima">
@@ -103,7 +106,7 @@
   <div id="tienda" class="tienda" role="dialog" aria-label="Tienda y mejoras de mesa" hidden>
     <div class="tienda-cab">
       <b id="tiendaTitulo">🛒 Tienda</b>
-      <span>💰 $<b id="tiendaDinero">0</b> pesos</span>
+      <span>💰 $<b id="tiendaDinero">0</b> dólares</span>
       <button class="btn" id="cerrarTienda">Cerrar</button>
     </div>
     <div id="tiendaLista"></div>

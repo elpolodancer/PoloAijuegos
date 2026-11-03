@@ -2,8 +2,8 @@
 // «Restaurantes» (vista isométrica estilo Clash of Clans): los grupos de clientes (1, 2 o 4) llegan SOLOS y al azar durante la jornada.
 // Esperan frente a la recepción: TÚ tocas a la familia para darles una mesa. Si no hay mesa libre esperan 8 s (a los 5 s se enojan 😡) y luego se van; si tardas mucho en atenderlos, también se van enojados.
 // Ya sentados piden, la cocina prepara y TÚ llevas el platillo a mano (clic en la cocina para tomarlo, clic en la mesa para entregarlo).
-// Si tardas, se enojan y se van. Al terminar de comer se levantan TODOS y la mesa queda libre; algunos van al baño (cuesta 1 peso) y
-// los demás van directo a la recepción. Cada uno paga 5 pesos al salir (más lo que sumen las mejoras de SU mesa, que se tocan en la mesa; quien usó el baño paga además 1 peso).
+// Si tardas, se enojan y se van. Al terminar de comer se levantan TODOS y la mesa queda libre; algunos van al baño (cuesta 1 dólar) y
+// los demás van directo a la recepción. Cada uno paga 5 dólares al salir (más lo que sumen las mejoras de SU mesa, que se tocan en la mesa; quien usó el baño paga además 1 dólar).
 // TIENDA: tocando el mostrador de la recepción (🛒) se abre la zona de compras. Ahí se contrata (y se mejora) a la recepcionista y al mesero.
 // SEGUNDO COCINERO: se contrata en la tienda ($1500, sin otro requisito) y cocina junto con el primero: sus velocidades se suman (cada uno según su nivel).
 // COCINERO Y MESAS: en la tienda se mejora al cocinero (10 niveles: cada nivel cocina más rápido) y se compran mesas nuevas para el comedor (hasta 16 en total, en filas y columnas de 4 × 4; precio creciente).
@@ -39,11 +39,11 @@ const ENOJO_RECEP_MS = 7000;      // un grupo esperando en la recepción sin que
 const PACIENCIA_RECEP_MS = 12000; // ...y a estos ms se va sin entrar
 const ENOJO_SIN_MESA_MS = 5000;      // si llegan y todas las mesas están ocupadas: a estos ms de espera aparece el 😡 sobre sus cabezas...
 const PACIENCIA_SIN_MESA_MS = 8000;  // ...y a estos ms (8 s en total) se van sin entrar
-const PAGO_POR_CLIENTE = 5;       // pesos que paga cada cliente (con mesas y sillas de nivel 1)
-const COSTO_BANIO = 1;            // pesos que cuesta usar el baño
+const PAGO_POR_CLIENTE = 5;       // dólares que paga cada cliente (con mesas y sillas de nivel 1)
+const COSTO_BANIO = 1;            // dólares que cuesta usar el baño
 const ENOJO_MS = 8000;            // desde estos ms de espera (con el platillo ya listo) los clientes se ven enojados
 const PACIENCIA_MS = 15000;       // a estos ms sin recibir el platillo, los clientes se van sin pagar
-const PESOS_POR_PUNTO = 1;        // al perfil se envía 1 punto por cada peso ganado
+const DOLARES_POR_PUNTO = 1;        // al perfil se envía 1 punto por cada dólar ganado
 const PUNTOS_LOTE = 25;           // como no hay final, los puntos se mandan al perfil de 25 en 25 mientras juegas (y al reiniciar o salir de la página)
 const VEL = 150;                  // velocidad de la gente (px por segundo EN PANTALLA: con otra ESCALA se ajusta sola; igual MESERO_VEL y AUTO_VEL)
 const T_COCINA_BASE = 3000;       // ms de cocina por pedido...
@@ -77,7 +77,7 @@ const RECEP_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230]; // costo d
 const MESERO_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230]; // ídem para el mesero
 const PAUSA_MESERO_MS = 400;                             // ms que se detiene a tomar el platillo
 // Mejoras de cada mesa: se tocan en la mesa misma (no en la tienda) y cada mesa se mejora POR SEPARADO.
-// Cada cosa se puede mejorar 5 veces; cada mejora suma a lo que paga cada cliente que use ESA mesa: 50 centavos las dos primeras, 1 peso la 3.ª y la 4.ª, y 1.50 pesos la 5.ª.
+// Cada cosa se puede mejorar 5 veces; cada mejora suma a lo que paga cada cliente que use ESA mesa: 50 centavos las dos primeras, 1 dólar la 3.ª y la 4.ª, y 1.50 dólares la 5.ª.
 const BONO_MEJORAS = [0.5, 0.5, 1, 1, 1.5];   // lo que suma la 1.ª, 2.ª, 3.ª, 4.ª y 5.ª mejora de cada cosa (por cliente)
 const PRECIOS_MEJORA = [10, 15, 25, 40, 60];  // lo que cuesta cada una de esas 5 mejoras
 const MEJORAS_MESA = [
@@ -227,7 +227,7 @@ function aplicarPosHabs(pos) {
   }
   recalcHab();
 }
-// Decoraciones: cada una que compras suma «bono» pesos a lo que paga CADA cliente (se ven en los costados del comedor)
+// Decoraciones: cada una que compras suma «bono» dólares a lo que paga CADA cliente (se ven en los costados del comedor)
 const DECORACIONES = [
   { id: "plantas", ico: "🪴", nombre: "Plantas", precio: 2000, bono: 0.5, lugares: [[60, 330], [60, 780], [1060, 330], [1060, 780]] },
   { id: "cuadros", ico: "🖼️", nombre: "Cuadros", precio: 5000, bono: 1, lugares: [[130, 480], [130, 930], [990, 480], [990, 930]] },
@@ -319,9 +319,9 @@ function caminoAcera(k, pu) {
 }
 
 const $ = (id) => document.getElementById(id);
-// ----- Pesos mexicanos: se pueden dividir en monedas de 50 centavos (5, 5.50, 6, ...). Los múltiplos de 0.5 son exactos, no hay errores de redondeo -----
+// ----- Dólares: se pueden dividir en monedas de 50 centavos (5, 5.50, 6, ...). Los múltiplos de 0.5 son exactos, no hay errores de redondeo -----
 const fmt = (n) => (Number.isInteger(n) ? n.toLocaleString("en-US") : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })); // 5 → «5», 5.5 → «5.50», 10000 → «10,000»
-const pesos = (n) => "$" + fmt(n);                                    // 5.5 → «$5.50»
+const dolares = (n) => "$" + fmt(n);                                    // 5.5 → «$5.50»
 const lienzo = $("lienzo");
 const ctx = lienzo.getContext("2d");
 
@@ -334,6 +334,7 @@ let llevando = null;                    // mesa cuyo platillo traes en la mano
 let receps = [null, null], meseros = [null, null]; // personal contratado (null = todavía no): { nivel, ... }; [0] el de siempre, [1] el de la ampliación
 let terreno2 = false, puerta2 = false;             // ampliación comprada / segunda puerta comprada
 let lotes = []; // terrenos comprados (claves «i,j» de PASTO), en el orden en que se compraron
+let usuario = null, perfilDatos = null, vistaPerfil = false; // jugador con sesión de Google (null = sin sesión), su perfil leído de Firebase, true = el panel abierto es el de «👤 Perfil»
 let anuncios = {}, paginaWeb = false, vistaAnuncios = false; // anuncios: { id: momento del reloj en que termina }; página web comprada; true = el panel abierto es el de «📢 Anuncios»
 let vistaConstruir = false; // true = el panel abierto es el de «🏗️ Construir» (habitaciones y decoraciones)
 let modoMover = false, habSel = null, btnMover = null; // modo «🛠️ Mover» (cocina y baño): activo / cuarto elegido ("cocina" o "banio") / el botón
@@ -440,7 +441,7 @@ function aplicarGuardado(d) {
   dinero = med(d.dinero); ganado = med(d.ganado);
   atendidos = Math.max(0, Math.floor(num(d.atendidos))); perdidos = Math.max(0, Math.floor(num(d.perdidos)));
   reloj = Math.max(0, num(d.reloj)); proxLlegada = reloj + PRIMERA_LLEGADA_MS; proxAuto = reloj + PRIMER_AUTO_MS;
-  puntosEnviados = Math.max(0, Math.min(Math.floor(num(d.puntosEnviados)), Math.floor(ganado / PESOS_POR_PUNTO))); // así no se mandan dos veces los mismos puntos al perfil
+  puntosEnviados = Math.max(0, Math.min(Math.floor(num(d.puntosEnviados)), Math.floor(ganado / DOLARES_POR_PUNTO))); // así no se mandan dos veces los mismos puntos al perfil
   cocinero = Math.max(1, Math.min(COCINA_FACTOR.length, Math.floor(num(d.cocinero)) || 1));
   cocinero2 = Math.max(0, Math.min(COCINA_FACTOR.length, Math.floor(num(d.cocinero2)) || 0));
   nMesas = Math.max(MESAS_BASE.length, Math.min(MESAS_TODAS.length, Math.floor(num(d.nMesas)) || MESAS_BASE.length));
@@ -775,20 +776,22 @@ async function visitarHabs(c, ida, i, P = PUERTAS[0], ids = []) {
 }
 
 // ----- Tienda y personal -----
-function abrirTienda(mesa = null, empleados = false, construir = false, anuncio = false) { // sin mesa: la tienda de la recepción; con mesa: el panel de mejoras de esa mesa; empleados: el panel de personal
+function abrirTienda(mesa = null, empleados = false, construir = false, anuncio = false, perfil = false) { // sin mesa: la tienda de la recepción; con mesa: el panel de mejoras de esa mesa; empleados: el panel de personal
   mesaMejora = mesa;
   vistaEmpleados = empleados;
   vistaConstruir = construir;
   vistaAnuncios = anuncio;
+  vistaPerfil = perfil;
+  if (perfil) cargarPerfil();
   pintarTienda();
   $("tienda").hidden = false;
   ponerPausa(true);
-  info(mesa ? "⏸️ Juego en pausa mientras mejoras la mesa " + mesa.id + "." : empleados ? "⏸️ Juego en pausa mientras ves a tus empleados." : anuncio ? "⏸️ Juego en pausa mientras eliges tus anuncios." : construir ? "⏸️ Juego en pausa mientras construyes." : "⏸️ Juego en pausa mientras estás en la tienda.");
+  info(mesa ? "⏸️ Juego en pausa mientras mejoras la mesa " + mesa.id + "." : empleados ? "⏸️ Juego en pausa mientras ves a tus empleados." : anuncio ? "⏸️ Juego en pausa mientras eliges tus anuncios." : perfil ? "⏸️ Juego en pausa mientras ves tu perfil." : construir ? "⏸️ Juego en pausa mientras construyes." : "⏸️ Juego en pausa mientras estás en la tienda.");
 }
 function abrirMejorasMesa(m) { abrirTienda(m); }
 function cerrarTienda() {
   const estabaEnPausa = pausado;
-  mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false;
+  mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false;
   $("tienda").hidden = true;
   ponerPausa(false);
   if (estabaEnPausa) info("▶️ Juego reanudado.");
@@ -812,7 +815,7 @@ function filaTienda(ico, nombre, p, precio, mejoras, texto, comprar, mejorar, bl
     b.disabled = true;
   } else if (!p) {
     d.textContent = "Todavía no está contratado.";
-    b.textContent = "Contratar " + pesos(precio);
+    b.textContent = "Contratar " + dolares(precio);
     b.disabled = dinero < precio;
     b.addEventListener("click", comprar);
   } else if (p.nivel > mejoras.length) {
@@ -822,7 +825,7 @@ function filaTienda(ico, nombre, p, precio, mejoras, texto, comprar, mejorar, bl
   } else {
     const c = mejoras[p.nivel - 1];
     d.textContent = texto(p.nivel);
-    b.textContent = "Mejorar " + pesos(c);
+    b.textContent = "Mejorar " + dolares(c);
     b.disabled = dinero < c;
     b.addEventListener("click", mejorar);
   }
@@ -856,14 +859,14 @@ function pintarMejorasMesa(m, lista) {
   $("tiendaTitulo").textContent = "🪑 Mesa " + m.id;
   const res = document.createElement("small");
   res.style.cssText = "display:block;margin:2px 0 6px;color:var(--suave)";
-  res.textContent = "Cada cliente de esta mesa paga " + pesos(pagoPorCliente(m)) + (bonoMesa(m) || bonoDeco() ? " (" + pesos(PAGO_POR_CLIENTE) + (bonoMesa(m) ? " + " + pesos(bonoMesa(m)) + " de mejoras" : "") + (bonoDeco() ? " + " + pesos(bonoDeco()) + " de decoración" : "") + ")" : " (sin mejoras todavía)") + ". Las mejoras son solo de esta mesa.";
+  res.textContent = "Cada cliente de esta mesa paga " + dolares(pagoPorCliente(m)) + (bonoMesa(m) || bonoDeco() ? " (" + dolares(PAGO_POR_CLIENTE) + (bonoMesa(m) ? " + " + dolares(bonoMesa(m)) + " de mejoras" : "") + (bonoDeco() ? " + " + dolares(bonoDeco()) + " de decoración" : "") + ")" : " (sin mejoras todavía)") + ". Las mejoras son solo de esta mesa.";
   lista.appendChild(res);
   const maxB = BONO_MEJORAS.length;
   for (const c of MEJORAS_MESA) {
     const k = m.mejoras[c.id];
     const txt = (nivel) => {
       const hechas = nivel - 1;
-      return "Mejoras " + hechas + " de " + maxB + (hechas ? " · ya suma " + pesos(bonoAcum(hechas)) + " por cliente" : "") + (hechas < maxB ? " · la siguiente suma " + pesos(BONO_MEJORAS[hechas]) : " · al máximo");
+      return "Mejoras " + hechas + " de " + maxB + (hechas ? " · ya suma " + dolares(bonoAcum(hechas)) + " por cliente" : "") + (hechas < maxB ? " · la siguiente suma " + dolares(BONO_MEJORAS[hechas]) : " · al máximo");
     };
     lista.appendChild(filaTienda(c.ico, c.nombre, { nivel: k + 1 }, 0, c.precios, txt, null, () => mejorarCosaMesa(m, c.id)));
   }
@@ -873,7 +876,7 @@ function mejorarCosaMesa(m, id) {
   if (!c || precio === undefined || dinero < precio) return;
   dinero -= precio;
   m.mejoras[id]++;
-  info("Mesa " + m.id + ": mejoraste " + c.nombre.toLowerCase() + " (" + m.mejoras[id] + " de " + BONO_MEJORAS.length + "). Ahora cada cliente de esa mesa paga " + pesos(pagoPorCliente(m)) + ".");
+  info("Mesa " + m.id + ": mejoraste " + c.nombre.toLowerCase() + " (" + m.mejoras[id] + " de " + BONO_MEJORAS.length + "). Ahora cada cliente de esa mesa paga " + dolares(pagoPorCliente(m)) + ".");
   actualizar();
 }
 function pintarTienda() {
@@ -885,6 +888,7 @@ function pintarTienda() {
   if (vistaEmpleados) { pintarEmpleados(lista); return; }
   if (vistaConstruir) { pintarConstruir(lista); return; }
   if (vistaAnuncios) { pintarAnuncios(lista); return; }
+  if (vistaPerfil) { pintarPerfil(lista); return; }
   $("tiendaTitulo").textContent = "🛒 Tienda";
   const hint = document.createElement("small");
   hint.style.cssText = "display:block;margin:2px 0 6px;color:var(--suave)";
@@ -895,9 +899,45 @@ function pintarTienda() {
     filaTerreno(),
     filaSimple("🚪", "Segunda puerta",
       puerta2 ? "Los clientes también llegan por la puerta de atrás, con su propia fila y mostrador." : terreno2 ? "Una entrada nueva en el terreno de atrás: doble de lugares de espera." : "Se desbloquea al ampliar el terreno.",
-      puerta2 ? "Comprada" : terreno2 ? "Comprar " + pesos(PRECIO_PUERTA2) : "🔒 Bloqueado", puerta2 || !terreno2 || dinero < PRECIO_PUERTA2, comprarPuerta2),
+      puerta2 ? "Comprada" : terreno2 ? "Comprar " + dolares(PRECIO_PUERTA2) : "🔒 Bloqueado", puerta2 || !terreno2 || dinero < PRECIO_PUERTA2, comprarPuerta2),
     filaEstac()
   );
+}
+// Panel «👤 Perfil»: tu sesión de Google, tus puntos y cómo vas en esta partida
+async function cargarPerfil() {
+  perfilDatos = null;
+  if (!J || !usuario) return;
+  try { perfilDatos = await J.leerPerfil(); } catch (e) {}
+  if (vistaPerfil && !$("tienda").hidden) pintarTienda();
+}
+function pintarPerfil(lista) {
+  $("tiendaTitulo").textContent = "👤 Perfil";
+  const fila = (ico, texto, extra) => {
+    const f = document.createElement("div");
+    f.className = "tienda-fila";
+    const i = document.createElement("span");
+    i.className = "ico";
+    if (typeof ico === "string") i.textContent = ico; else i.appendChild(ico);
+    const t = document.createElement("div");
+    t.className = "txt";
+    t.append(...texto);
+    f.append(i, t);
+    if (extra) f.appendChild(extra);
+    return f;
+  };
+  const negrita = (x) => { const b = document.createElement("b"); b.textContent = x; return b; };
+  const peq = (x) => { const d = document.createElement("small"); d.textContent = x; return d; };
+  const boton = (txt, fn) => { const b = document.createElement("button"); b.className = "btn"; b.textContent = txt; b.disabled = !J; b.addEventListener("click", fn); return b; };
+  if (!usuario) {
+    lista.appendChild(fila("👤", [negrita("Jugador sin sesión"), peq(J ? "Entra con Google para que tus puntos se guarden en tu perfil. Sin sesión el juego funciona igual, pero no se suman puntos." : "Conectando…")],
+      boton("Entrar con Google", () => J.entrar().catch((e) => alert(e.message)))));
+  } else {
+    let avatar = "👤";
+    if (usuario.photoURL) { avatar = document.createElement("img"); avatar.src = usuario.photoURL; avatar.alt = ""; avatar.referrerPolicy = "no-referrer"; avatar.style.cssText = "width:40px;height:40px;border-radius:50%;object-fit:cover;display:block"; }
+    lista.appendChild(fila(avatar, [negrita(usuario.displayName || "Jugador"), peq(perfilDatos ? "Puntos de todos los juegos: " + fmt(perfilDatos.total || 0) : "Puntos de todos los juegos: …")], boton("Salir", () => J.salir())));
+  }
+  lista.appendChild(fila("🏆", [negrita("Esta partida"), peq("💰 Ganado: " + dolares(ganado) + " · Récord: " + dolares(leerRecord()) + " · ⏱️ Jugando " + fmtTiempo(Math.floor(reloj / 1000)))]));
+  lista.appendChild(fila("🍽️", [negrita("Clientes"), peq("Atendidos: " + atendidos + " · Perdidos: " + perdidos + " · 🚗 Autos sin lugar: " + autosPerdidos)]));
 }
 // Panel «📢 Anuncios»: anuncios temporales y página web (compra única)
 function pintarAnuncios(lista) {
@@ -911,11 +951,11 @@ function pintarAnuncios(lista) {
     const activo = anuncioActivo(a);
     lista.appendChild(filaSimple(a.ico, a.nombre,
       "+" + Math.round(a.bono * 100) + " % de clientes durante " + fmtTiempo(ANUNCIO_DURACION_MS / 1000) + (activo ? " · activo, quedan " + fmtTiempo(Math.ceil((anuncios[a.id] - reloj) / 1000)) + " (si lo compras otra vez se suma)" : "") + ".",
-      (activo ? "Renovar " : "Comprar ") + pesos(a.precio), dinero < a.precio, () => comprarAnuncio(a.id)));
+      (activo ? "Renovar " : "Comprar ") + dolares(a.precio), dinero < a.precio, () => comprarAnuncio(a.id)));
   }
   lista.appendChild(filaSimple("🌐", "Página web",
     paginaWeb ? "Tu página web atrae +" + Math.round(BONO_WEB * 100) + " % de clientes para siempre." : "Compra única: +" + Math.round(BONO_WEB * 100) + " % de clientes para siempre.",
-    paginaWeb ? "Comprada" : "Comprar " + pesos(PRECIO_WEB), paginaWeb || dinero < PRECIO_WEB, comprarPaginaWeb));
+    paginaWeb ? "Comprada" : "Comprar " + dolares(PRECIO_WEB), paginaWeb || dinero < PRECIO_WEB, comprarPaginaWeb));
 }
 function comprarAnuncio(id) {
   const a = ANUNCIOS.find((x) => x.id === id);
@@ -948,7 +988,7 @@ function comprarHab(id) {
   dinero -= h.precio;
   habsExtra[id] = x0;
   armarFondo();
-  info("🏗️ ¡Compraste " + h.nombre + "! Algunos clientes pasarán por ahí al terminar de comer y gastarán " + pesos(h.gasto) + " cada vez." + (reacomodo ? " Reacomodé las habitaciones para que cupiera." : "") + " Puedes cambiarla de lugar con 🛠️ Mover.");
+  info("🏗️ ¡Compraste " + h.nombre + "! Algunos clientes pasarán por ahí al terminar de comer y gastarán " + dolares(h.gasto) + " cada vez." + (reacomodo ? " Reacomodé las habitaciones para que cupiera." : "") + " Puedes cambiarla de lugar con 🛠️ Mover.");
   actualizar();
 }
 function comprarDeco(id) {
@@ -956,7 +996,7 @@ function comprarDeco(id) {
   if (!d || decos.includes(id) || dinero < d.precio) return;
   dinero -= d.precio;
   decos.push(id);
-  info("🎨 ¡Compraste " + d.nombre.toLowerCase() + "! Ahora cada cliente paga " + pesos(d.bono) + " más.");
+  info("🎨 ¡Compraste " + d.nombre.toLowerCase() + "! Ahora cada cliente paga " + dolares(d.bono) + " más.");
   actualizar();
 }
 function pintarConstruir(lista) {
@@ -976,15 +1016,15 @@ function pintarConstruir(lista) {
   for (const id of Object.keys(HAB_NUEVAS)) {
     const h = HAB_NUEVAS[id], tengo = habsExtra[id] !== undefined, sinHueco = !tengo && lugarLibreHab(id) === null, sinLugar = sinHueco && !reacomodoHabs(id);
     lista.appendChild(filaSimple(h.ico, h.etiqueta,
-      tengo ? "Comprada: cada cliente que pasa gasta " + pesos(h.gasto) + "."
+      tengo ? "Comprada: cada cliente que pasa gasta " + dolares(h.gasto) + "."
         : sinLugar ? "No hay espacio en la pared del fondo."
-        : "Cada cliente que pasa gasta " + pesos(h.gasto) + "." + (sinHueco ? " No hay un hueco libre: al comprarla se reacomodan las habitaciones." : ""),
-      tengo ? "Comprada" : sinLugar ? "Sin espacio" : "Comprar " + pesos(h.precio), tengo || sinLugar || dinero < h.precio, () => comprarHab(id)));
+        : "Cada cliente que pasa gasta " + dolares(h.gasto) + "." + (sinHueco ? " No hay un hueco libre: al comprarla se reacomodan las habitaciones." : ""),
+      tengo ? "Comprada" : sinLugar ? "Sin espacio" : "Comprar " + dolares(h.precio), tengo || sinLugar || dinero < h.precio, () => comprarHab(id)));
   }
   lista.appendChild(seccion("🎨 Decoraciones", "Cada una que compres suma dinero a lo que paga CADA cliente, en todas las mesas."));
   for (const d of DECORACIONES) {
     const tengo = decos.includes(d.id);
-    lista.appendChild(filaSimple(d.ico, d.nombre, (tengo ? "Comprada: " : "") + "cada cliente paga " + pesos(d.bono) + " más.", tengo ? "Comprada" : "Comprar " + pesos(d.precio), tengo || dinero < d.precio, () => comprarDeco(d.id)));
+    lista.appendChild(filaSimple(d.ico, d.nombre, (tengo ? "Comprada: " : "") + "cada cliente paga " + dolares(d.bono) + " más.", tengo ? "Comprada" : "Comprar " + dolares(d.precio), tengo || dinero < d.precio, () => comprarDeco(d.id)));
   }
 }
 function pintarEmpleados(lista) {
@@ -1035,7 +1075,7 @@ function filaMesaNueva() {
   const lleno = nMesas >= MESAS_TODAS.length, precio = MESA_PRECIOS[nMesas - MESAS_BASE.length];
   return filaSimple("🪑", "Comprar mesa",
     lleno ? "Ya tienes las " + MESAS_TODAS.length + " mesas: el comedor está lleno." : "Tienes " + nMesas + " de " + MESAS_TODAS.length + " mesas. La nueva (mesa " + (nMesas + 1) + ") queda en el comedor, con sus 4 sillas.",
-    lleno ? "Comedor lleno" : "Comprar " + pesos(precio), lleno || dinero < precio, comprarMesa);
+    lleno ? "Comedor lleno" : "Comprar " + dolares(precio), lleno || dinero < precio, comprarMesa);
 }
 function comprarMesa() {
   if (nMesas >= MESAS_TODAS.length) return;
@@ -1070,11 +1110,11 @@ function filaTerreno() {
     b.disabled = true;
     col.appendChild(b);
   } else {
-    d.textContent = "Terrenos: " + (lotes.length + 1) + " de " + total + ". El siguiente cuesta " + pesos(precio) + " y cada uno sale más caro. Solo puedes comprar los que tocan tu terreno actual." + (terreno2 ? "" : " El primero desbloquea la segunda puerta.");
+    d.textContent = "Terrenos: " + (lotes.length + 1) + " de " + total + ". El siguiente cuesta " + dolares(precio) + " y cada uno sale más caro. Solo puedes comprar los que tocan tu terreno actual." + (terreno2 ? "" : " El primero desbloquea la segunda puerta.");
     for (const k of lotesDisponibles()) {
       const L = datosLote(k), b = document.createElement("button");
       b.className = "btn";
-      b.textContent = L.flecha + " " + L.etiqueta + " " + pesos(precio);
+      b.textContent = L.flecha + " " + L.etiqueta + " " + dolares(precio);
       b.disabled = dinero < precio;
       b.addEventListener("click", () => comprarTerreno(k));
       col.appendChild(b);
@@ -1167,7 +1207,7 @@ function filaEstac() {
   const precio = precioEstac(nEstac - ESTAC_INICIALES);
   return filaSimple("🅿️", "Lugar de estacionamiento",
     "Tienes " + nEstac + " de " + total + ". Cada auto trae " + PERSONAS_AUTO + " personas; si no hay lugar, pasa de largo y no vuelve.",
-    "Comprar " + pesos(precio), dinero < precio, comprarEstac);
+    "Comprar " + dolares(precio), dinero < precio, comprarEstac);
 }
 function comprarEstac() {
   if (nEstac >= CAJONES.length) return;
@@ -1222,7 +1262,7 @@ async function despedir(c, pu = 0) {
 // Se mandan por lotes de PUNTOS_LOTE mientras juegas; «todo» manda lo que falte (al reiniciar o al salir de la página).
 async function enviarPuntos(todo) {
   if (!J || (enviando && !todo)) return;
-  const g = gen, total = Math.floor(ganado / PESOS_POR_PUNTO), n = total - puntosEnviados;
+  const g = gen, total = Math.floor(ganado / DOLARES_POR_PUNTO), n = total - puntosEnviados;
   if (n <= 0 || (!todo && n < umbralPuntos)) return;
   puntosEnviados = total; enviando = true;
   let ok = false;
@@ -1445,7 +1485,7 @@ function carteles(c) {
   if (precio === undefined) return;
   for (const k of lotesDisponibles()) {
     const L = datosLote(k), [sx, sy] = iso(L.i * PX + W / 2, L.j * PY + H / 2);
-    const t = "🏷️ Terreno " + L.etiqueta.toLowerCase() + " · " + pesos(precio);
+    const t = "🏷️ Terreno " + L.etiqueta.toLowerCase() + " · " + dolares(precio);
     c.font = "700 15px system-ui, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.lineWidth = 4; c.strokeStyle = "rgba(0,0,0,.55)"; c.strokeText(t, sx, sy);
     texto(t, sx, sy, 15, "#fff", "center", c);
   }
@@ -1632,7 +1672,7 @@ function dibujarMonedas() {
   for (const c of monedas) {
     const a = (t - c.t0) / 1000, [sx, sy] = iso(c.x, c.y, 50);
     ctx.globalAlpha = 1 - a;
-    texto("+" + pesos(c.monto), sx, sy - a * 40 * f, 17 * f, "#b8860b", "center");
+    texto("+" + dolares(c.monto), sx, sy - a * 40 * f, 17 * f, "#b8860b", "center");
     ctx.globalAlpha = 1;
   }
 }
@@ -1800,6 +1840,7 @@ zona.textContent = "Conectando…";
 import("../compartido/jugador.js").then((m) => {
   J = m;
   J.alCambiarSesion((u) => {
+    usuario = u; perfilDatos = null; pintarBotonPerfil(); if (vistaPerfil && !$("tienda").hidden) cargarPerfil();
     zona.innerHTML = "";
     const b = document.createElement("button");
     b.className = "btn";
@@ -1923,6 +1964,33 @@ if (!btnMover) {
   const rei = $("reiniciar");
   if (rei && rei.parentNode) rei.parentNode.insertBefore(btnMover, rei); else document.body.appendChild(btnMover);
 }
+let btnPerfil = $("btnPerfil"); // botón redondo de la esquina superior derecha (foto de tu cuenta de Google, o 👤 si no hay sesión)
+if (!btnPerfil) { // si index.html es una versión vieja sin el botón, se crea desde aquí
+  btnPerfil = document.createElement("button");
+  btnPerfil.id = "btnPerfil";
+  btnPerfil.className = "btn";
+  btnPerfil.setAttribute("aria-label", "Perfil del jugador");
+  btnPerfil.style.cssText = "position:fixed;z-index:90;top:calc(8px + env(safe-area-inset-top,0px));right:calc(8px + env(safe-area-inset-right,0px));width:38px;height:38px;padding:0;border-radius:50%;overflow:hidden;font-size:1.2rem;box-shadow:0 4px 14px rgba(0,0,0,.45)";
+  (lienzo.parentNode || document.body).appendChild(btnPerfil);
+  btnEmpleados.style.top = "calc(54px + env(safe-area-inset-top,0px))"; // el de Empleados baja para dejarle su lugar
+}
+function pintarBotonPerfil() {
+  btnPerfil.textContent = "";
+  if (usuario && usuario.photoURL) {
+    const im = document.createElement("img");
+    im.src = usuario.photoURL; im.alt = ""; im.referrerPolicy = "no-referrer";
+    im.style.cssText = "width:100%;height:100%;object-fit:cover;display:block";
+    im.addEventListener("error", () => { btnPerfil.textContent = "👤"; });
+    btnPerfil.appendChild(im);
+  } else btnPerfil.textContent = "👤";
+  btnPerfil.title = usuario ? (usuario.displayName || "Jugador") : "Perfil";
+}
+pintarBotonPerfil();
+btnPerfil.addEventListener("click", () => {
+  if ($("menu").hidden === false) return; // con el menú abierto no se usa
+  if (!$("tienda").hidden && vistaPerfil) cerrarTienda();
+  else abrirTienda(null, false, false, false, true);
+});
 let btnAnuncios = $("btnAnuncios"); // si index.html no lo trae, se crea aquí junto al botón Reiniciar
 if (!btnAnuncios) {
   btnAnuncios = document.createElement("button");
@@ -1970,12 +2038,12 @@ if (BOTON_DINERO_PRUEBA) {
   const bp = document.createElement("button");
   bp.id = "btnDineroPrueba";
   bp.className = "btn";
-  bp.textContent = "💵 +" + pesos(DINERO_PRUEBA);
+  bp.textContent = "💵 +" + dolares(DINERO_PRUEBA);
   bp.title = "Botón temporal de pruebas";
   bp.addEventListener("click", () => {
     if ($("menu").hidden === false || ranura === null) return; // solo mientras juegas una partida
     dinero += DINERO_PRUEBA;
-    info("💵 Prueba: recibiste " + pesos(DINERO_PRUEBA) + ".");
+    info("💵 Prueba: recibiste " + dolares(DINERO_PRUEBA) + ".");
     actualizar();
   });
   const rei2 = $("reiniciar");
@@ -2036,7 +2104,7 @@ function pintarPartidas() {
       const mer = (Array.isArray(d.meseros) ? d.meseros : []).filter((n) => num(n) > 0).length;
       const nLotes = Array.isArray(d.lotes) ? d.lotes.length : d.lote ? 1 : 0;
       const lineas = [
-        "💰 $" + fmt(Math.max(0, Math.round(num(d.dinero) * 2) / 2)) + " pesos",
+        "💰 $" + fmt(Math.max(0, Math.round(num(d.dinero) * 2) / 2)) + " dólares",
         "🪑 " + (Math.floor(num(d.nMesas)) || mes.length || MESAS_BASE.length) + " mesas · ✨ " + mejoras + " mejoras de mesa",
         "👨‍🍳 Cocinero nivel " + (Math.floor(num(d.cocinero)) || 1) + (num(d.cocinero2) > 0 ? " · 👩‍🍳 2.º nivel " + Math.floor(num(d.cocinero2)) : ""),
         "🧑‍💼 " + rec + " recepcionista(s) · 🤵 " + mer + " mesero(s)",
