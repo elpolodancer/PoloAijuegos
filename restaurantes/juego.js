@@ -18,7 +18,7 @@
 // TERRENOS: el restaurante ocupa la esquina inferior derecha de una cuadrícula de 3 × 3 manzanas; las otras 8 son pasto (sin carreteras entre ellas), a la izquierda y detrás.
 // Los terrenos se compran en la tienda («Ampliar terreno»): las 8 manzanas de pasto son los terrenos 2.º a 9.º y se compran de uno en uno, solo los que tocan tu terreno actual (el restaurante o uno ya comprado).
 // El precio sube con cada terreno (ver TERRENO_PRECIOS: $10,000 el 2.º ... $500,000 el 9.º). Las manzanas de pasto están en PASTO.
-// HABITACIONES: la cocina, el baño y las nuevas (cafetería, heladería y pastelería, $20,000 cada una en «🏗️ Construir») van en la pared del fondo y se pueden cambiar de lugar con «🛠️ Mover»
+// HABITACIONES: la cocina, el baño y las nuevas (cafetería, heladería, pastelería y oficina del jefe, $20,000 cada una en «🏗️ Construir»; la oficina es solo del jefe: los clientes no pasan por ahí) van en la pared del fondo y se pueden cambiar de lugar con «🛠️ Mover»
 // (ver errorHab: no pueden tapar el pasillo del centro ni empalmarse entre sí). Al terminar de comer, cada cliente va a 0-4 de esos lugares (ver PESOS_VISITAS) y gasta en cada uno.
 // DECORACIONES: también en «🏗️ Construir»; cada una suma dinero a lo que paga cada cliente (ver DECORACIONES).
 const ID = "restaurantes";
@@ -88,6 +88,8 @@ const MESERO_VEL = [70, 95, 125, 160, 200, 230, 260, 295, 330, 370]; // por nive
 const COCINA_FACTOR = [1, 0.85, 0.72, 0.61, 0.52, 0.44, 0.38, 0.33, 0.29, 0.25];   // por nivel (10 niveles)
 const COCINERO_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230];            // costo de subir al nivel 2, 3, 4 ... 10
 // Mesas nuevas: se compran en la tienda en este orden (la 5.ª, la 6.ª...). Después de las 4 iniciales caben 12 más (hasta 16 en total: 4 filas × 4 columnas).
+const DINERO_INICIAL = 700;    // dólares con los que empieza una partida nueva
+const PRECIO_COCINERO = 450;   // contratar al primer cocinero: al empezar NO hay ninguno y sin cocinero no se puede dar mesa a nadie
 const PRECIO_COCINERO2 = 1500; // segundo cocinero (usa los mismos 10 niveles y precios de mejora que el primero)
 const MESA_PRECIOS = [30, 60, 100, 160, 240, 350, 500, 700, 900, 1150, 1450, 1800]; // una por cada mesa nueva (12)
 const RECEP_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230]; // costo de subir al nivel 2, 3, 4 ... 10 de la recepcionista
@@ -98,10 +100,11 @@ const PAUSA_MESERO_MS = 400;                             // ms que se detiene a 
 // Cada cosa se puede mejorar 5 veces; cada mejora suma a lo que paga cada cliente que use ESA mesa: 50 centavos las dos primeras, 1 dólar la 3.ª y la 4.ª, y 1.50 dólares la 5.ª.
 const BONO_MEJORAS = [0.5, 0.5, 1, 1, 1.5];   // lo que suma la 1.ª, 2.ª, 3.ª, 4.ª y 5.ª mejora de cada cosa (por cliente)
 const PRECIOS_MEJORA = [10, 15, 25, 40, 60];  // lo que cuesta cada una de esas 5 mejoras
+const PRECIOS_SILLA = [80, ...PRECIOS_MEJORA.slice(1)]; // las dos sillas: la 1.ª mejora cuesta $80 y las demás igual que las otras cosas
 const MEJORAS_MESA = [
   { id: "mesa", ico: "🪑", nombre: "Mesa", precios: PRECIOS_MEJORA },
-  { id: "silla1", ico: "💺", nombre: "Silla 1", precios: PRECIOS_MEJORA, viejo: "sillas" },       // banca de arriba (en las partidas viejas «Sillas» valía para las dos)
-  { id: "silla2", ico: "💺", nombre: "Silla 2", precios: PRECIOS_MEJORA, viejo: "sillas" },       // banca de abajo
+  { id: "silla1", ico: "💺", nombre: "Silla 1", precios: PRECIOS_SILLA, viejo: "sillas" },       // banca de arriba (en las partidas viejas «Sillas» valía para las dos)
+  { id: "silla2", ico: "💺", nombre: "Silla 2", precios: PRECIOS_SILLA, viejo: "sillas" },       // banca de abajo
   { id: "cubiertos", ico: "🍴", nombre: "Cubiertos", precios: PRECIOS_MEJORA },
   { id: "condimentos", ico: "🧂", nombre: "Condimentos", precios: PRECIOS_MEJORA, viejo: "servilletas" },
   { id: "bebidas", ico: "🥤", nombre: "Bebidas", precios: PRECIOS_MEJORA },
@@ -187,6 +190,8 @@ const HAB_NUEVAS = {
   cafeteria: { nombre: "la cafetería", etiqueta: "Cafetería", ico: "☕", ancho: 150, precio: 20000, gasto: 10, piso: ["#fbe9d7", "#f3d9bd"], pared: "#c8a27a", colorTexto: "#5d4037", adornos: [[35, 70, "☕"], [115, 70, "🥐"]] },
   heladeria: { nombre: "la heladería", etiqueta: "Heladería", ico: "🍦", ancho: 150, precio: 20000, gasto: 8, piso: ["#fde4ef", "#f9c9de"], pared: "#e8a2c0", colorTexto: "#8e2a58", adornos: [[35, 70, "🍦"], [115, 70, "🍨"]] },
   pasteleria: { nombre: "la pastelería", etiqueta: "Pastelería", ico: "🍰", ancho: 150, precio: 20000, gasto: 12, piso: ["#fff4c2", "#ffe9a0"], pared: "#e6c96a", colorTexto: "#7a5c00", adornos: [[35, 70, "🍰"], [115, 70, "🎂"]] },
+  // sinVisitas: los clientes NO pasan por ahí (no está en ORDEN_VISITAS); es solo del jefe. Todavía no hace nada más (gasto 0).
+  oficina: { nombre: "la oficina del jefe", etiqueta: "Oficina del jefe", ico: "🕴️", ancho: 120, precio: 20000, gasto: 0, sinVisitas: true, piso: ["#e9dccb", "#d8c4a8"], pared: "#7b5b45", colorTexto: "#4e342e", adornos: [[25, 70, "🗄️"], [90, 70, "🕴️"]] },
 };
 let habsExtra = {}; // habitaciones nuevas compradas: id → x de su esquina izquierda
 const x0Hab = (id) => (id === "cocina" ? COC_X0 + KX : id === "banio" ? BAN_X0 + BX : habsExtra[id]);
@@ -364,7 +369,7 @@ let vistaConstruir = false; // true = el panel abierto es el de «🏗️ Constr
 let modoMover = false, habSel = null, btnMover = null; // modo «🛠️ Mover» (cocina y baño): activo / cuarto elegido ("cocina" o "banio") / el botón
 let puntosEnviados = 0, umbralPuntos = PUNTOS_LOTE, enviando = false; // puntos ya mandados al perfil, cuántos hacen falta para el siguiente envío, envío en curso
 let ranura = null; // partida activa (0, 1 o 2); null = estás en el menú y no se guarda nada
-let cocinero = 1, cocinero2 = 0, nMesas = MESAS_BASE.length; // nivel del cocinero (1 a 10), del segundo cocinero (0 = sin contratar) y mesas que hay en el comedor
+let cocinero = 0, cocinero2 = 0, nMesas = MESAS_BASE.length; // nivel del cocinero (0 = sin contratar, 1 a 10), del segundo cocinero (0 = sin contratar) y mesas que hay en el comedor
 let menuMesaEl = null, tabMesa = "mejoras", cosaSel = "mesa"; // menú de la mesa: su elemento, pestaña abierta (mejoras / personal) y cosa elegida
 let mesaMejora = null; // mesa cuyo panel de mejoras está abierto (null = la tienda de la recepción)
 let vistaEmpleados = false; // true = el panel abierto es el de «Empleados» (botón fijo en la esquina de la pantalla)
@@ -403,20 +408,25 @@ const crearMesa = (m) => ({ ...m, ocupada: false, plato: false, barra: null, esp
 function nuevaPartida(datos = null) { // datos: partida guardada que se carga (null = partida nueva)
   gen++; esperas = [];
   ents = []; globos = []; monedas = [];
-  cocinero = 1; cocinero2 = 0; nMesas = MESAS_BASE.length; cocinaNiv = {};
+  cocinero = 0; cocinero2 = 0; nMesas = MESAS_BASE.length; cocinaNiv = {};
   mesas = MESAS_BASE.map(crearMesa);
   recepcion = Array(SLOTS.length).fill(null);
-  dinero = 0; ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
+  dinero = DINERO_INICIAL; ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
   const habiaCambios = terreno2 || nEstac > ESTAC_INICIALES || KX !== 0 || BX !== 0 || Object.keys(habsExtra).length > 0; terreno2 = false; lotes = []; puerta2 = false; KX = 0; BX = 0; habsExtra = {}; decos = []; recalcHab(); salirMover();
   nEstac = ESTAC_INICIALES; autosPerdidos = 0; proxAuto = PRIMER_AUTO_MS;
   anuncios = {}; paginaWeb = false;
   CAJONES.forEach((k) => { k.usado = false; k.coche = null; k.pendientes = 0; });
   reloj = 0; proxLlegada = PRIMERA_LLEGADA_MS; ultimoSeg = -1; puntosEnviados = 0; umbralPuntos = PUNTOS_LOTE;
   if (datos) aplicarGuardado(datos);
+  else { // partida nueva: ya empiezas con un mesero (nivel 1) que lleva los platillos a las mesas
+    const ent = nuevaEnt("🤵", MESERO_POST[0], MESERO_POST[1]);
+    ent.vel = MESERO_VEL[0];
+    meseros[0] = { nivel: 1, ocupado: false, ent, post: MESERO_POST };
+  }
   if (habiaCambios || datos) armarFondo(); // quita la plaza y los lugares de la partida anterior (o dibuja los de la partida cargada)
   cerrarTienda();
   $("tiempo").textContent = fmtTiempo(Math.floor(reloj / 1000));
-  info("Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para comprar mesas, terreno y estacionamiento, una mesa para mejorarla, y 👥 Empleados y 🍳 Cocina (arriba a la derecha) para el personal y las mejoras de la cocina.");
+  info("Ya tienes un mesero que lleva los platillos, pero empiezas sin cocinero: contrata uno en 👥 Empleados (" + dolares(PRECIO_COCINERO) + "). Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para comprar mesas, terreno y estacionamiento, una mesa para mejorarla, y 👥 Empleados y 🍳 Cocina (arriba a la derecha) para el personal y las mejoras de la cocina.");
   actualizar();
 }
 
@@ -476,8 +486,8 @@ function aplicarGuardado(d) {
   atendidos = Math.max(0, Math.floor(num(d.atendidos))); perdidos = Math.max(0, Math.floor(num(d.perdidos)));
   reloj = Math.max(0, num(d.reloj)); proxLlegada = reloj + PRIMERA_LLEGADA_MS; proxAuto = reloj + PRIMER_AUTO_MS;
   puntosEnviados = Math.max(0, Math.min(Math.floor(num(d.puntosEnviados)), Math.floor(ganado / DOLARES_POR_PUNTO))); // así no se mandan dos veces los mismos puntos al perfil
-  cocinero = Math.max(1, Math.min(COCINA_FACTOR.length, Math.floor(num(d.cocinero)) || 1));
-  cocinero2 = Math.max(0, Math.min(COCINA_FACTOR.length, Math.floor(num(d.cocinero2)) || 0));
+  cocinero = d.cocinero === undefined ? 1 : Math.max(0, Math.min(COCINA_FACTOR.length, Math.floor(num(d.cocinero)))); // una partida muy vieja (sin este dato) ya tenía cocinero
+  cocinero2 = cocinero ? Math.max(0, Math.min(COCINA_FACTOR.length, Math.floor(num(d.cocinero2)) || 0)) : 0; // el segundo cocinero necesita al primero
   cocinaNiv = {}; // mejoras de la cocina: solo ids conocidos, niveles válidos y sin saltarse lo que hay que tener antes
   if (d.cocina && typeof d.cocina === "object") MEJORAS_COCINA.forEach((c) => { const n = Math.max(0, Math.min(c.precios.length + 1, Math.floor(num(d.cocina[c.id])))); if (n > 0) cocinaNiv[c.id] = n; });
   MEJORAS_COCINA.forEach((c) => { if (c.requiere && !cocinaNiv[c.requiere]) delete cocinaNiv[c.id]; });
@@ -619,6 +629,7 @@ function esperarAtencion(g) {
 }
 // El jugador tocó al grupo: se le asigna una mesa libre al azar (si no hay ninguna, el grupo sigue esperando hasta que se acabe su paciencia)
 function darMesa(g, empleado) {
+  if (!hayCocinero()) { if (!empleado) info("🍳 No hay cocinero: contrata uno en 👥 Empleados (" + dolares(PRECIO_COCINERO) + ") para poder dar mesa."); return; }
   const libres = mesas.filter((m) => !m.ocupada);
   if (!libres.length) { if (!empleado) info("No hay mesa libre todavía: están esperando."); return; }
   g.esperando = false; g.enojo = false;
@@ -650,7 +661,8 @@ async function irseEnojados(g, motivo) {
 
 // ms que tarda la cocina en preparar un pedido de n personas con el cocinero actual
 // Los dos cocineros trabajan juntos: sus velocidades (1 / factor) se suman. Con uno solo queda igual que antes; con dos del mismo nivel el pedido tarda la mitad.
-const velCocina = () => 1 / COCINA_FACTOR[cocinero - 1] + (cocinero2 ? 1 / COCINA_FACTOR[cocinero2 - 1] : 0);
+const velCocina = () => (cocinero ? 1 / COCINA_FACTOR[cocinero - 1] : 0) + (cocinero2 ? 1 / COCINA_FACTOR[cocinero2 - 1] : 0); // 0 = no hay cocineros: no se cocina nada
+const hayCocinero = () => cocinero > 0 || cocinero2 > 0;
 const tiempoCocina = (n) => ((T_COCINA_BASE + T_COCINA_POR_CLIENTE * n) / velCocina()) * factorCocina("vel"); // estufa, horno y ventilación lo acortan
 
 // ----- Un grupo ya sentado, de principio a fin -----
@@ -1060,7 +1072,7 @@ function pintarMenuCocina() {
   barra.append(rel, el("span", "mm-pct", "⬆ " + pct.toFixed(2) + "%"));
 
   const stats = el("div", "mm-stats");
-  stats.append(el("span", null, "💰 " + dolares(dinero)), el("span", null, "⏱️ " + (tiempoCocina(4) / 1000).toFixed(1) + " s"), el("span", null, "⏳ ×" + factorCocina("paciencia").toFixed(2)));
+  stats.append(el("span", null, "💰 " + dolares(dinero)), el("span", null, "⏱️ " + (hayCocinero() ? (tiempoCocina(4) / 1000).toFixed(1) + " s" : "—")), el("span", null, "⏳ ×" + factorCocina("paciencia").toFixed(2)));
 
   const tarj = el("div", "mm-card"), cab2 = el("div", "mm-card-cab");
   cab2.append(el("b", "mm-card-nombre", c.nombre), el("span", "mm-nivel", !tiene ? "Sin comprar" : tope ? "Nivel: MÁX" : "Nivel: " + n));
@@ -1217,7 +1229,7 @@ function comprarHab(id) {
   dinero -= h.precio;
   habsExtra[id] = x0;
   armarFondo();
-  info("🏗️ ¡Compraste " + h.nombre + "! Algunos clientes pasarán por ahí al terminar de comer y gastarán " + dolares(h.gasto) + " cada vez." + (reacomodo ? " Reacomodé las habitaciones para que cupiera." : "") + " Puedes cambiarla de lugar con 🛠️ Mover.");
+  info("🏗️ ¡Compraste " + h.nombre + "! " + (h.sinVisitas ? "Los clientes no pasan por ahí: es solo del jefe." : "Algunos clientes pasarán por ahí al terminar de comer y gastarán " + dolares(h.gasto) + " cada vez.") + (reacomodo ? " Reacomodé las habitaciones para que cupiera." : "") + " Puedes cambiarla de lugar con 🛠️ Mover.");
   actualizar();
 }
 function comprarDeco(id) {
@@ -1245,9 +1257,9 @@ function pintarConstruir(lista) {
   for (const id of Object.keys(HAB_NUEVAS)) {
     const h = HAB_NUEVAS[id], tengo = habsExtra[id] !== undefined, sinHueco = !tengo && lugarLibreHab(id) === null, sinLugar = sinHueco && !reacomodoHabs(id);
     lista.appendChild(filaSimple(h.ico, h.etiqueta,
-      tengo ? "Comprada: cada cliente que pasa gasta " + dolares(h.gasto) + "."
+      tengo ? (h.sinVisitas ? "Comprada: es solo del jefe, los clientes no pasan por aquí." : "Comprada: cada cliente que pasa gasta " + dolares(h.gasto) + ".")
         : sinLugar ? "No hay espacio en la pared del fondo."
-        : "Cada cliente que pasa gasta " + dolares(h.gasto) + "." + (sinHueco ? " No hay un hueco libre: al comprarla se reacomodan las habitaciones." : ""),
+        : (h.sinVisitas ? "Solo del jefe: los clientes no pasan por aquí." : "Cada cliente que pasa gasta " + dolares(h.gasto) + ".") + (sinHueco ? " No hay un hueco libre: al comprarla se reacomodan las habitaciones." : ""),
       tengo ? "Comprada" : sinLugar ? "Sin espacio" : "Comprar " + dolares(h.precio), tengo || sinLugar || dinero < h.precio, () => comprarHab(id)));
   }
   lista.appendChild(seccion("🎨 Decoraciones", "Cada una que compres suma dinero a lo que paga CADA cliente, en todas las mesas."));
@@ -1263,8 +1275,9 @@ function pintarEmpleados(lista) {
   const txtMesero = (n) => "Nivel " + n + " de " + (MESERO_PRECIOS_MEJORA.length + 1) + " · lleva los platillos a su paso";
   const filas = [
     { existe: !!receps[0], f: () => filaTienda("🧑‍💼", "Recepcionista", receps[0], PRECIO_RECEP, RECEP_PRECIOS_MEJORA, txtRecep, () => contratarRecep(0), () => mejorarRecep(0)) },
-    { existe: true, f: () => filaTienda("👨‍🍳", "Cocinero", { nivel: cocinero }, 0, COCINERO_PRECIOS_MEJORA, txtCocinero, null, mejorarCocinero) },
-    { existe: !!cocinero2, f: () => filaTienda("👩‍🍳", "Segundo cocinero", cocinero2 ? { nivel: cocinero2 } : null, PRECIO_COCINERO2, COCINERO_PRECIOS_MEJORA, txtCocinero, contratarCocinero2, mejorarCocinero2) },
+    { existe: !!cocinero, f: () => filaTienda("👨‍🍳", "Cocinero", cocinero ? { nivel: cocinero } : null, PRECIO_COCINERO, COCINERO_PRECIOS_MEJORA, txtCocinero, contratarCocinero, mejorarCocinero) },
+    { existe: !!cocinero2, f: () => filaTienda("👩‍🍳", "Segundo cocinero", cocinero2 ? { nivel: cocinero2 } : null, PRECIO_COCINERO2, COCINERO_PRECIOS_MEJORA, txtCocinero, contratarCocinero2, mejorarCocinero2,
+      !cocinero ? "Primero contrata al cocinero." : "") },
     { existe: !!meseros[0], f: () => filaTienda("🤵", "Mesero", meseros[0], PRECIO_MESERO, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(0), () => mejorarMesero(0)) },
     { existe: !!meseros[1], f: () => filaTienda("🤵‍♀️", "Segundo mesero", meseros[1], PRECIO_MESERO2, MESERO_PRECIOS_MEJORA, txtMesero, () => contratarMesero(1), () => mejorarMesero(1),
       !meseros[0] ? "Primero contrata al mesero." : "") },
@@ -1276,8 +1289,15 @@ function pintarEmpleados(lista) {
   lista.append(titulo("Contratados (" + hay.length + ")"), ...hay.map((x) => x.f()));
   if (faltan.length) lista.append(titulo("Por contratar"), ...faltan.map((x) => x.f()));
 }
+function contratarCocinero() {
+  if (cocinero || dinero < PRECIO_COCINERO) return;
+  dinero -= PRECIO_COCINERO;
+  cocinero = 1;
+  info("👨‍🍳 ¡Contrataste al cocinero! Ya puedes dar mesa a los clientes: un pedido para 4 personas tarda " + (tiempoCocina(4) / 1000).toFixed(1) + " s. Mejóralo en 👥 Empleados.");
+  actualizar();
+}
 function contratarCocinero2() {
-  if (cocinero2 || dinero < PRECIO_COCINERO2) return;
+  if (!cocinero || cocinero2 || dinero < PRECIO_COCINERO2) return;
   dinero -= PRECIO_COCINERO2;
   cocinero2 = 1;
   info("Contrataste al segundo cocinero: cocina junto con el primero y ahora un pedido para 4 personas tarda " + (tiempoCocina(4) / 1000).toFixed(1) + " s. Mejóralo en 👥 Empleados.");
@@ -1292,6 +1312,7 @@ function mejorarCocinero2() {
   actualizar();
 }
 function mejorarCocinero() {
+  if (!cocinero) return;
   const precio = COCINERO_PRECIOS_MEJORA[cocinero - 1];
   if (precio === undefined || dinero < precio) return;
   dinero -= precio;
@@ -1757,7 +1778,7 @@ function armarFondo() {
     if (habsExtra[id] === undefined) continue;
     const h = HAB_NUEVAS[id], x0 = habsExtra[id];
     cuarto(c, x0, HAB_Y0, x0 + h.ancho, HAB_Y1, h.piso[0], h.piso[1], h.pared, x0 + 50, 50);
-    const [hx, hy] = iso(x0 + h.ancho / 2, 10, 70); texto(h.etiqueta, hx, hy, 14, h.colorTexto, "center", c);
+    const [hx, hy] = iso(x0 + h.ancho / 2, 10, 70); texto(h.etiqueta, hx, hy, h.etiqueta.length > 10 ? 11 : 14, h.colorTexto, "center", c);
   }
   const [cx, cy] = iso(40, 520, 0); texto("Comedor", cx, cy, 13, "rgba(91,70,54,.75)", "center", c);
   // puerta de entrada
@@ -1829,7 +1850,7 @@ function dibujarEquipoCocina() { // lo que compraste (y la estufa) se ve en el p
 }
 function dibujarChef() {
   dibujarEquipoCocina();
-  persona("🧑‍🍳", 110 + DX + KX, 112, 20 + (cocinando > 0 ? Math.abs(Math.sin(ahora() / 120)) * 5 : 0), 34);
+  if (cocinero) persona("🧑‍🍳", 110 + DX + KX, 112, 20 + (cocinando > 0 ? Math.abs(Math.sin(ahora() / 120)) * 5 : 0), 34);
   if (cocinero2) persona("👩‍🍳", 190 + DX + KX, 112, 20 + (cocinando > 0 ? Math.abs(Math.sin(ahora() / 120 + 1.5)) * 5 : 0), 34); // segundo cocinero, a la derecha del primero
   if (cocinando > 0) { const [sx, sy] = iso(150 + DX + KX, 100, 44); emoji("♨️", sx, sy, 20 * ESCALA); }
 }
@@ -2359,7 +2380,7 @@ function pintarPartidas() {
       const lineas = [
         "💰 $" + fmt(Math.max(0, Math.round(num(d.dinero) * 2) / 2)) + " dólares",
         "🪑 " + (Math.floor(num(d.nMesas)) || mes.length || MESAS_BASE.length) + " mesas · ✨ " + mejoras + " mejoras de mesa",
-        "👨‍🍳 Cocinero nivel " + (Math.floor(num(d.cocinero)) || 1) + (num(d.cocinero2) > 0 ? " · 👩‍🍳 2.º nivel " + Math.floor(num(d.cocinero2)) : ""),
+        "👨‍🍳 " + (d.cocinero === undefined || num(d.cocinero) > 0 ? "Cocinero nivel " + (Math.floor(num(d.cocinero)) || 1) : "Sin cocinero") + (num(d.cocinero2) > 0 ? " · 👩‍🍳 2.º nivel " + Math.floor(num(d.cocinero2)) : ""),
         "🧑‍💼 " + rec + " recepcionista(s) · 🤵 " + mer + " mesero(s)",
         "🅿️ " + (Math.floor(num(d.nEstac)) || ESTAC_INICIALES) + " lugares" + (nLotes ? " · 🌱 " + (nLotes + 1) + " de " + (TERRENO_PRECIOS.length + 1) + " terrenos" : "") + (d.puerta2 ? " · 🚪 segunda puerta" : ""),
         "⏱️ " + fmtTiempo(Math.floor(num(d.reloj) / 1000)) + (d.fecha ? " · " + new Date(num(d.fecha)).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : ""),
