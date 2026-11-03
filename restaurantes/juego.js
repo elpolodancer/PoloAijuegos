@@ -66,7 +66,7 @@ const T_COMER = 5000;             // ms que tardan en comer
 // Con los 4 lugares: 0 → 40 %, 1 → 35 %, 2 → 15 %, 3 → 7 %, 4 → 3 %. Con solo el baño: se mantiene casi como antes (≈ 47 % va al baño).
 const PESOS_VISITAS = [40, 35, 15, 7, 3];
 const ORDEN_VISITAS = ["banio", "cafeteria", "heladeria", "pasteleria"];
-// ----- Cocina: al tocarla (si no hay platillos listos) o con el botón «🍳 Cocina» se abre su menú de mejoras (el juego se pausa) -----
+// ----- Cocina: al tocarla (si no hay platillos listos) se abre su menú de mejoras (el juego se pausa) -----
 // compra = lo que cuesta comprarlo (0 = ya lo tienes desde el principio). precios = lo que cuesta cada una de sus 5 mejoras.
 // tipo: "vel" = multiplica el tiempo de cocina (menos = más rápido) · "pago" = suma dólares a lo que paga CADA cliente de TODAS las mesas
 //       (solo múltiplos de 0.50: el dinero se reparte en monedas de 50 centavos) · "paciencia" = multiplica lo que aguantan esperando el platillo ya listo.
@@ -446,7 +446,7 @@ function nuevaPartida(datos = null) { // datos: partida guardada que se carga (n
   armarFondo(); // quita la plaza y los lugares de la partida anterior (o dibuja los de la partida cargada)
   cerrarTienda();
   $("tiempo").textContent = fmtTiempo(Math.floor(reloj / 1000));
-  info("Ya tienes un mesero que lleva los platillos, pero empiezas sin cocinero: contrata uno en 👥 Empleados (" + dolares(PRECIO_COCINERO) + "). Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para comprar terreno y estacionamiento, la 🕴️ oficina del jefe para comprar mesas y zonas, una mesa para mejorarla, y 👥 Empleados y 🍳 Cocina (arriba a la derecha) para el personal y las mejoras de la cocina.");
+  info("Ya tienes un mesero que lleva los platillos, pero empiezas sin cocinero: contrata uno en 👥 Empleados (" + dolares(PRECIO_COCINERO) + "). Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para comprar terreno y estacionamiento, la 🕴️ oficina del jefe para comprar mesas y zonas, una mesa para mejorarla, y 👥 Empleados (arriba a la derecha) para el personal. Toca la cocina para mejorarla.");
   actualizar();
 }
 
@@ -564,6 +564,8 @@ function leerRecord() { try { return Number(localStorage.getItem(KEY_RECORD)) ||
 function actualizar() {
   $("dinero").textContent = fmt(dinero);
   $("energia").textContent = ENERGIA_USADA + "/" + energiaTotal();
+  const ne = $("numEmpleados"); // total de empleados contratados (recepcionistas, cocineros y meseros)
+  if (ne) ne.textContent = receps.filter(Boolean).length + (cocinero ? 1 : 0) + (cocinero2 ? 1 : 0) + meseros.filter(Boolean).length;
   guardarPartida(); // autoguardado: cobros y compras pasan por aquí
   $("record").textContent = fmt(leerRecord());
   if (!$("tienda").hidden) pintarTienda();
@@ -879,7 +881,7 @@ function abrirMejorasMesa(m) { // tocar una mesa: menú con «Mejoras» y «Pers
   ponerPausa(true);
   info("⏸️ Juego en pausa mientras mejoras la mesa " + m.id + ".");
 }
-function abrirCocina() { // tocar la cocina o el botón «🍳 Cocina»: menú de mejoras de la cocina (el juego se pausa)
+function abrirCocina() { // tocar la cocina: menú de mejoras de la cocina (el juego se pausa)
   mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false; vistaGeneradores = false;
   vistaCocina = true; cosaCocina = MEJORAS_COCINA[0].id;
   $("tienda").hidden = true;
@@ -2332,21 +2334,6 @@ if (!btnEmpleados) { // si index.html es una versión vieja sin el botón, se cr
   else abrirTienda(null, true);
   });
 }
-let btnCocina = $("btnCocina"); // botón anclado a la pantalla, debajo de «Empleados»: abre el menú de la cocina aunque haya platillos listos
-if (!btnCocina) { // si index.html es una versión vieja sin el botón, se crea desde aquí
-  btnCocina = document.createElement("button");
-  btnCocina.id = "btnCocina";
-  btnCocina.className = "btn";
-  btnCocina.textContent = "🍳 Cocina";
-  btnCocina.setAttribute("aria-label", "Cocina");
-  btnCocina.style.cssText = "position:fixed;z-index:90;top:calc(100px + env(safe-area-inset-top,0px));right:calc(8px + env(safe-area-inset-right,0px));box-shadow:0 4px 14px rgba(0,0,0,.45)";
-  (lienzo.parentNode || document.body).appendChild(btnCocina);
-}
-btnCocina.addEventListener("click", () => {
-  if ($("menu").hidden === false || modoMover) return; // con el menú abierto (o moviendo habitaciones) no se usa
-  if (vistaCocina && menuMesaEl && !menuMesaEl.hidden) cerrarTienda();
-  else abrirCocina();
-});
 btnMover = $("btnMover"); // si index.html no lo trae, se crea aquí junto al botón Reiniciar
 if (!btnMover) {
   btnMover = document.createElement("button");

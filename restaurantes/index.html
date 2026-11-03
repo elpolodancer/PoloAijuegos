@@ -19,17 +19,21 @@
     .lienzo { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; margin: 0; background: #8bbf6a; border: 0; border-radius: 0; }
     .encima { position: absolute; z-index: 5; pointer-events: none; } /* lo de encima deja pasar los toques al lienzo (solo los botones los reciben) */
     .encima .btn, .encima a { pointer-events: auto; }
-    .marcador { top: calc(8px + env(safe-area-inset-top, 0px)); left: calc(8px + env(safe-area-inset-left, 0px)); max-width: calc(100% - 150px); display: flex; flex-wrap: wrap; gap: 2px 14px; padding: 5px 10px; font-size: .8rem; font-weight: 700; background: rgba(15, 18, 32, .68); border-radius: 12px; }
-    .marcador span { color: var(--suave); }
-    .marcador b { color: var(--texto); }
+    /* Arriba a la izquierda: perfil + dólares + energía */
+    .izq { top: calc(8px + env(safe-area-inset-top, 0px)); left: calc(8px + env(safe-area-inset-left, 0px)); max-width: calc(100% - 150px); display: flex; align-items: center; gap: 6px; }
+    .caja { display: flex; align-items: center; gap: 4px; height: 38px; padding: 0 10px; font-size: .85rem; font-weight: 700; white-space: nowrap; background: rgba(15, 18, 32, .68); border-radius: 12px; }
+    .caja b { color: var(--texto); }
+    .btn-perfil { flex: none; display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; padding: 0; overflow: hidden; font-size: 1.2rem; border-radius: 50%; box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
+    .btn-perfil img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    /* Arriba a la derecha: récord y tiempo, y debajo Empleados y Cocina */
+    .der { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(8px + env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+    .der .stats { display: flex; flex-direction: column; gap: 1px; padding: 5px 10px; font-size: .8rem; font-weight: 700; text-align: right; background: rgba(15, 18, 32, .68); border-radius: 12px; }
+    .der .stats b { color: var(--texto); }
+    .der .btn { box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
     #estado { left: 8px; right: 8px; bottom: calc(52px + env(safe-area-inset-bottom, 0px)); margin: 0 auto; width: fit-content; max-width: calc(100% - 64px); padding: 4px 10px; font-size: .75rem; line-height: 1.25; text-align: center; color: var(--texto); background: rgba(15, 18, 32, .68); border-radius: 10px; min-height: 0; }
     #estado:empty { display: none; }
     .acciones { left: 8px; right: 56px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; }
     .acciones .btn { padding: 6px 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, .4); }
-    .btn-perfil { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(8px + env(safe-area-inset-right, 0px)); display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; padding: 0; overflow: hidden; font-size: 1.2rem; border-radius: 50%; box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
-    .btn-perfil img { display: block; width: 100%; height: 100%; object-fit: cover; }
-    .btn-empleados { top: calc(54px + env(safe-area-inset-top, 0px)); right: calc(8px + env(safe-area-inset-right, 0px)); box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
-    .btn-cocina { top: calc(100px + env(safe-area-inset-top, 0px)); right: calc(8px + env(safe-area-inset-right, 0px)); box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
     .tienda { position: fixed; z-index: 100; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(92vw, 420px); padding: 14px; background: var(--tarjeta); border: 1px solid var(--acento); border-radius: 16px; box-shadow: 0 8px 30px rgba(0, 0, 0, .5); }
     .tienda-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
     .tienda-fila { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--borde); }
@@ -63,16 +67,19 @@
   <main>
     <div class="escena">
       <canvas id="lienzo" class="lienzo" width="720" height="480" aria-label="Restaurante en vista isométrica con cocina, baño, recepción y cuatro mesas; toca a los clientes que esperan para darles mesa"></canvas>
-      <div class="marcador encima">
-        <span>💰 $<b id="dinero">0</b> dólares</span>
-        <span>⚡ Energía <b id="energia">22/33</b></span>
-        <span>⏱️ Jugando <b id="tiempo">0:00</b></span>
-        <span>🏆 Récord $<b id="record">0</b> dólares</span>
+      <div class="izq encima">
+        <button class="btn btn-perfil" id="btnPerfil" aria-label="Perfil del jugador" title="Perfil">👤</button>
+        <div class="caja" title="Dólares">💵 <span>$<b id="dinero">0</b></span></div>
+        <div class="caja" title="Energía">⚡ <b id="energia">22/33</b></div>
       </div>
-      <button class="btn btn-perfil encima" id="btnPerfil" aria-label="Perfil del jugador" title="Perfil">👤</button>
-      <button class="btn btn-empleados encima" id="btnEmpleados" aria-label="Empleados">👥 Empleados</button>
-      <button class="btn btn-cocina encima" id="btnCocina" aria-label="Cocina">🍳 Cocina</button>
-      <p id="estado" class="encima">Empiezas sin cocinero: contrata uno en 👥 Empleados ($450 dólares). Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para comprar terreno y estacionamiento, la 🕴️ oficina del jefe para comprar mesas y zonas, una mesa para mejorarla, y 👥 Empleados y 🍳 Cocina (arriba a la derecha) para el personal y las mejoras de la cocina.</p>
+      <div class="der encima">
+        <div class="stats">
+          <span>🏆 Récord $<b id="record">0</b></span>
+          <span>⏱️ <b id="tiempo">0:00</b></span>
+        </div>
+        <button class="btn" id="btnEmpleados" aria-label="Empleados">👥 Empleados (<span id="numEmpleados">0</span>)</button>
+      </div>
+      <p id="estado" class="encima">Empiezas sin cocinero: contrata uno en 👥 Empleados ($450 dólares). Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para comprar terreno y estacionamiento, la 🕴️ oficina del jefe para comprar mesas y zonas, una mesa para mejorarla, y 👥 Empleados (arriba a la derecha) para el personal. Toca la cocina para mejorarla.</p>
       <div class="acciones encima">
         <button class="btn" id="alejar" aria-label="Alejar" title="Alejar">➖</button>
         <button class="btn" id="acercar" aria-label="Acercar" title="Acercar">➕</button>
