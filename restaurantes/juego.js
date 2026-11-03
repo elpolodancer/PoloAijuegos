@@ -20,6 +20,7 @@
 // El precio sube con cada terreno (ver TERRENO_PRECIOS: $10,000 el 2.º ... $500,000 el 9.º). Las manzanas de pasto están en PASTO.
 // HABITACIONES: la cocina y la oficina del jefe ya vienen hechas. En la oficina (tócala) se compran las mesas, el baño ($10), la heladería, la cafetería y la pastelería ($20,000 cada una); el cuarto de limpieza se compra en «🏗️ Construir». La oficina y el cuarto de limpieza son solo para el personal: los clientes no pasan por ahí. Todas van en la pared del fondo y se pueden cambiar de lugar con «🛠️ Mover»
 // (ver errorHab: no pueden tapar el pasillo del centro ni empalmarse entre sí). Al terminar de comer, cada cliente va a 0-4 de esos lugares (ver PESOS_VISITAS) y gasta en cada uno.
+// ENERGÍA: la «⚡ sala de generadores» ya viene construida. Empiezas con 22/33 de energía (usada/disponible); tocando la sala compras un generador cuadrado ($10) que se ve dentro y sube la energía disponible de 33 a 48 (ver ENERGIA_*).
 // DECORACIONES: también en «🏗️ Construir»; cada una suma dinero a lo que paga cada cliente (ver DECORACIONES).
 const ID = "restaurantes";
 
@@ -43,6 +44,14 @@ const ENOJO_SIN_MESA_MS = 5000;      // si llegan y todas las mesas están ocupa
 const PACIENCIA_SIN_MESA_MS = 8000;  // ...y a estos ms (8 s en total) se van sin entrar
 const PAGO_POR_CLIENTE = 5;       // dólares que paga cada cliente (con mesas y sillas de nivel 1)
 const COSTO_BANIO = 1;            // dólares que cuesta usar el baño
+// ----- Energía -----
+const ENERGIA_BASE = 33;           // energía disponible al empezar (sin generadores)
+const ENERGIA_USADA = 22;          // energía que se está usando (por ahora fija: aún no hay cosas que gasten energía)
+const ENERGIA_POR_GENERADOR = 15;  // cada generador suma esta energía disponible (33 → 48)
+const GENERADOR_PRECIOS = [10];    // precio de cada generador, en orden. Para permitir más generadores, agrega más precios (hay lugar para 4: ver GEN_LUGARES)
+const GEN_LUGARES = [[20, 50], [70, 50], [20, 100], [70, 100]]; // dónde va cada generador dentro de la sala: [x relativo al cuarto, y]
+const GEN_LADO = 30;               // los generadores son cuadrados de este lado
+const GEN_COLOR = { tapa: "#ffe082", izq: "#ffb300", der: "#e08e00" };
 const PRECIO_BANIO = 10;          // dólares que cuesta COMPRAR el baño (al empezar no hay; se compra en la oficina del jefe)
 const ENOJO_MS = 8000;            // desde estos ms de espera (con el platillo ya listo) los clientes se ven enojados
 const PACIENCIA_MS = 15000;       // a estos ms sin recibir el platillo, los clientes se van sin pagar
@@ -194,10 +203,13 @@ const HAB_NUEVAS = {
   pasteleria: { nombre: "la pastelería", etiqueta: "Pastelería", ico: "🍰", ancho: 150, precio: 20000, enOficina: true, gasto: 12, piso: ["#fff4c2", "#ffe9a0"], pared: "#e6c96a", colorTexto: "#7a5c00", adornos: [[35, 70, "🍰"], [115, 70, "🎂"]] },
   // sinVisitas: los clientes NO pasan por ahí (no está en ORDEN_VISITAS); soloPara = quién la usa. Todavía no hacen nada más (gasto 0).
   oficina: { nombre: "la oficina del jefe", etiqueta: "Oficina del jefe", ico: "🕴️", ancho: 120, precio: 20000, inicial: true, gasto: 0, sinVisitas: true, soloPara: "el jefe", piso: ["#e9dccb", "#d8c4a8"], pared: "#7b5b45", colorTexto: "#4e342e", adornos: [[25, 70, "🗄️"], [90, 70, "🕴️"]] },
+  generadores: { nombre: "la sala de generadores", etiqueta: "Generadores", ico: "⚡", ancho: 130, precio: 20000, inicial: true, gasto: 0, sinVisitas: true, soloPara: "la energía del restaurante", piso: ["#eceff1", "#cfd8dc"], pared: "#78909c", colorTexto: "#37474f", adornos: [] },
   limpieza: { nombre: "el cuarto de limpieza", etiqueta: "Limpieza", ico: "🧹", ancho: 110, precio: 20000, gasto: 0, sinVisitas: true, soloPara: "los empleados de limpieza", piso: ["#e0f2f1", "#c5e4e1"], pared: "#4f9a94", colorTexto: "#00544f", adornos: [[25, 70, "🧹"], [80, 70, "🧽"]] },
 };
 let habsExtra = {}; // habitaciones nuevas compradas: id → x de su esquina izquierda
 let banioComprado = false; // el baño ya no viene hecho: se compra (PRECIO_BANIO) en la oficina del jefe
+let generadores = 0; // generadores comprados (cada uno suma ENERGIA_POR_GENERADOR de energía disponible)
+const energiaTotal = () => ENERGIA_BASE + generadores * ENERGIA_POR_GENERADOR;
 const OFICINA_X0 = 160;    // dónde está la oficina del jefe al empezar (junto a la cocina)
 const x0Hab = (id) => (id === "cocina" ? COC_X0 + KX : id === "banio" ? BAN_X0 + BX : habsExtra[id]);
 const anchoHab = (id) => (id === "cocina" ? COC_ANCHO : id === "banio" ? BAN_ANCHO : HAB_NUEVAS[id].ancho);
@@ -370,6 +382,7 @@ let terreno2 = false, puerta2 = false;             // ampliación comprada / seg
 let lotes = []; // terrenos comprados (claves «i,j» de PASTO), en el orden en que se compraron
 let usuario = null, perfilDatos = null, vistaPerfil = false; // jugador con sesión de Google (null = sin sesión), su perfil leído de Firebase, true = el panel abierto es el de «👤 Perfil»
 let anuncios = {}, paginaWeb = false, vistaAnuncios = false; // anuncios: { id: momento del reloj en que termina }; página web comprada; true = el panel abierto es el de «📢 Anuncios»
+let vistaGeneradores = false; // true = el panel abierto es el de la «⚡ sala de generadores»
 let vistaOficina = false; // true = el panel abierto es el de la «🕴️ oficina del jefe» (compras de mesas y zonas)
 let vistaConstruir = false; // true = el panel abierto es el de «🏗️ Construir» (habitaciones y decoraciones)
 let modoMover = false, habSel = null, btnMover = null; // modo «🛠️ Mover» (cocina y baño): activo / cuarto elegido ("cocina" o "banio") / el botón
@@ -418,7 +431,7 @@ function nuevaPartida(datos = null) { // datos: partida guardada que se carga (n
   mesas = MESAS_BASE.map(crearMesa);
   recepcion = Array(SLOTS.length).fill(null);
   dinero = DINERO_INICIAL; ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
-  const habiaCambios = terreno2 || nEstac > ESTAC_INICIALES || KX !== 0 || BX !== 0 || Object.keys(habsExtra).length > 0; terreno2 = false; lotes = []; puerta2 = false; KX = 0; BX = 0; habsExtra = {}; banioComprado = false; decos = []; recalcHab(); salirMover();
+  const habiaCambios = terreno2 || nEstac > ESTAC_INICIALES || KX !== 0 || BX !== 0 || Object.keys(habsExtra).length > 0; terreno2 = false; lotes = []; puerta2 = false; KX = 0; BX = 0; habsExtra = {}; banioComprado = false; generadores = 0; decos = []; recalcHab(); salirMover();
   nEstac = ESTAC_INICIALES; autosPerdidos = 0; proxAuto = PRIMER_AUTO_MS;
   anuncios = {}; paginaWeb = false;
   CAJONES.forEach((k) => { k.usado = false; k.coche = null; k.pendientes = 0; });
@@ -428,7 +441,7 @@ function nuevaPartida(datos = null) { // datos: partida guardada que se carga (n
     const ent = nuevaEnt("🤵", MESERO_POST[0], MESERO_POST[1]);
     ent.vel = MESERO_VEL[0];
     meseros[0] = { nivel: 1, ocupado: false, ent, post: MESERO_POST };
-    ponerOficinaInicial(); // la oficina del jefe ya viene construida
+    ponerHabsIniciales(); // la oficina del jefe ya viene construida
   }
   armarFondo(); // quita la plaza y los lugares de la partida anterior (o dibuja los de la partida cargada)
   cerrarTienda();
@@ -474,7 +487,7 @@ function instantanea() {
     mesas: mesas.map((m) => ({ id: m.id, mejoras: { ...m.mejoras } })),
     receps: receps.map((r) => (r ? r.nivel : 0)),
     meseros: meseros.map((w) => (w ? w.nivel : 0)),
-    terreno2, lotes: lotes.slice(), kx: KX, bx: BX, habs: { ...habsExtra }, decos: decos.slice(), puerta2, nEstac, cocinero, cocinero2, nMesas, cocina: { ...cocinaNiv }, banio: banioComprado,
+    terreno2, lotes: lotes.slice(), kx: KX, bx: BX, habs: { ...habsExtra }, decos: decos.slice(), puerta2, nEstac, cocinero, cocinero2, nMesas, cocina: { ...cocinaNiv }, banio: banioComprado, generadores,
     anuncios: { ...anuncios }, paginaWeb,
     fecha: Date.now(),
   };
@@ -527,7 +540,8 @@ function aplicarGuardado(d) {
         if (d.habs[id] !== undefined && x0 > 0 && !errorHab(id, x0)) habsExtra[id] = x0;
       }
     }
-    ponerOficinaInicial(); // las partidas de antes no tenían oficina: se les construye una (si no cabe, las compras siguen en la tienda)
+    ponerHabsIniciales(); // las partidas de antes no tenían oficina ni sala de generadores: se les construyen (si no cabe la oficina, las compras siguen en la tienda)
+    generadores = habsExtra.generadores === undefined ? 0 : Math.max(0, Math.min(GENERADOR_PRECIOS.length, Math.floor(num(d.generadores)))); // sin la sala no hay generadores
     decos = Array.isArray(d.decos) ? DECORACIONES.map((q) => q.id).filter((id) => d.decos.includes(id)) : [];
   }
   nEstac = Math.max(ESTAC_INICIALES, Math.min(CAJONES.length, Math.floor(num(d.nEstac)) || ESTAC_INICIALES));
@@ -549,6 +563,7 @@ function aplicarGuardado(d) {
 function leerRecord() { try { return Number(localStorage.getItem(KEY_RECORD)) || 0; } catch (e) { return 0; } }
 function actualizar() {
   $("dinero").textContent = fmt(dinero);
+  $("energia").textContent = ENERGIA_USADA + "/" + energiaTotal();
   guardarPartida(); // autoguardado: cobros y compras pasan por aquí
   $("record").textContent = fmt(leerRecord());
   if (!$("tienda").hidden) pintarTienda();
@@ -791,6 +806,8 @@ function tocar(sx, sy) {
   const enCocina = dentro(aMundo(sx, sy, 0), ...RECT_COCINA) || dentro(aMundo(sx, sy, 30), ...RECT_COCINA);
   const RO = habsExtra.oficina === undefined ? null : [habsExtra.oficina, HAB_Y0, habsExtra.oficina + HAB_NUEVAS.oficina.ancho, HAB_Y1];
   const enOficina = !!RO && (dentro(aMundo(sx, sy, 0), ...RO) || dentro(aMundo(sx, sy, 30), ...RO));
+  const RG = habsExtra.generadores === undefined ? null : [habsExtra.generadores, HAB_Y0, habsExtra.generadores + HAB_NUEVAS.generadores.ancho, HAB_Y1];
+  const enGeneradores = !!RG && (dentro(aMundo(sx, sy, 0), ...RG) || dentro(aMundo(sx, sy, 30), ...RG));
   const mesaTocada = mesas.find((m) => dentro(aMundo(sx, sy, 22), m.cx - PAD_MESA, m.cy - PAD_MESA, m.cx + PAD_MESA, m.cy + PAD_MESA));
   if (llevando) {
     if (mesaTocada === llevando) entregar(llevando);
@@ -806,6 +823,7 @@ function tocar(sx, sy) {
   else if (mesaTocada) abrirMejorasMesa(mesaTocada); // tocar una mesa (sin platillo en la mano) abre sus mejoras
   else if (enCocina) abrirCocina(); // sin platillos listos, tocar la cocina abre sus mejoras
   else if (enOficina) abrirTienda(null, false, false, false, false, true); // tocar la oficina del jefe: compras de mesas y zonas
+  else if (enGeneradores) abrirTienda(null, false, false, false, false, false, true); // tocar la sala de generadores: comprar generadores
 }
 function posEnLienzo(e) { const r = lienzo.getBoundingClientRect(); return [((e.clientX - r.left) * CW) / r.width, ((e.clientY - r.top) * CH) / r.height]; }
 
@@ -836,24 +854,25 @@ async function visitarHabs(c, ida, i, P = PUERTAS[0], ids = []) {
 }
 
 // ----- Tienda y personal -----
-function abrirTienda(mesa = null, empleados = false, construir = false, anuncio = false, perfil = false, oficina = false) { // sin mesa: la tienda de la recepción; con mesa: el panel de mejoras de esa mesa; empleados: el panel de personal
+function abrirTienda(mesa = null, empleados = false, construir = false, anuncio = false, perfil = false, oficina = false, generador = false) { // sin mesa: la tienda de la recepción; con mesa: el panel de mejoras de esa mesa; empleados: el panel de personal
   if (menuMesaEl) menuMesaEl.hidden = true;
   vistaCocina = false;
   mesaMejora = mesa;
   vistaEmpleados = empleados;
   vistaConstruir = construir;
   vistaOficina = oficina;
+  vistaGeneradores = generador;
   vistaAnuncios = anuncio;
   vistaPerfil = perfil;
   if (perfil) cargarPerfil();
   pintarTienda();
   $("tienda").hidden = false;
   ponerPausa(true);
-  info(mesa ? "⏸️ Juego en pausa mientras mejoras la mesa " + mesa.id + "." : empleados ? "⏸️ Juego en pausa mientras ves a tus empleados." : anuncio ? "⏸️ Juego en pausa mientras eliges tus anuncios." : perfil ? "⏸️ Juego en pausa mientras ves tu perfil." : oficina ? "⏸️ Juego en pausa mientras estás en la oficina del jefe." : construir ? "⏸️ Juego en pausa mientras construyes." : "⏸️ Juego en pausa mientras estás en la tienda.");
+  info(mesa ? "⏸️ Juego en pausa mientras mejoras la mesa " + mesa.id + "." : empleados ? "⏸️ Juego en pausa mientras ves a tus empleados." : anuncio ? "⏸️ Juego en pausa mientras eliges tus anuncios." : perfil ? "⏸️ Juego en pausa mientras ves tu perfil." : generador ? "⏸️ Juego en pausa mientras estás en la sala de generadores." : oficina ? "⏸️ Juego en pausa mientras estás en la oficina del jefe." : construir ? "⏸️ Juego en pausa mientras construyes." : "⏸️ Juego en pausa mientras estás en la tienda.");
 }
 function abrirMejorasMesa(m) { // tocar una mesa: menú con «Mejoras» y «Personal» (el juego se pausa)
   mesaMejora = m; tabMesa = "mejoras"; cosaSel = MEJORAS_MESA[0].id; vistaCocina = false;
-  vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false;
+  vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false; vistaGeneradores = false;
   $("tienda").hidden = true;
   pintarMenuMesa();
   menuMesa().hidden = false;
@@ -861,7 +880,7 @@ function abrirMejorasMesa(m) { // tocar una mesa: menú con «Mejoras» y «Pers
   info("⏸️ Juego en pausa mientras mejoras la mesa " + m.id + ".");
 }
 function abrirCocina() { // tocar la cocina o el botón «🍳 Cocina»: menú de mejoras de la cocina (el juego se pausa)
-  mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false;
+  mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false; vistaGeneradores = false;
   vistaCocina = true; cosaCocina = MEJORAS_COCINA[0].id;
   $("tienda").hidden = true;
   pintarMenuMesa();
@@ -871,7 +890,7 @@ function abrirCocina() { // tocar la cocina o el botón «🍳 Cocina»: menú d
 }
 function cerrarTienda() {
   const estabaEnPausa = pausado;
-  vistaCocina = false; mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false;
+  vistaCocina = false; mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false; vistaGeneradores = false;
   $("tienda").hidden = true;
   if (menuMesaEl) menuMesaEl.hidden = true;
   ponerPausa(false);
@@ -1142,6 +1161,7 @@ function pintarTienda() {
   if (vistaEmpleados) { pintarEmpleados(lista); return; }
   if (vistaConstruir) { pintarConstruir(lista); return; }
   if (vistaOficina) { pintarOficina(lista); return; }
+  if (vistaGeneradores) { pintarGeneradores(lista); return; }
   if (vistaAnuncios) { pintarAnuncios(lista); return; }
   if (vistaPerfil) { pintarPerfil(lista); return; }
   $("tiendaTitulo").textContent = "🛒 Tienda";
@@ -1288,17 +1308,41 @@ function comprarBanio() {
   info("🚻 ¡Compraste el baño! Algunos clientes irán al terminar de comer y pagarán " + dolares(COSTO_BANIO) + " cada vez." + (reacomodo ? " Reacomodé las habitaciones para que cupiera." : "") + " Puedes cambiarlo de lugar con 🛠️ Mover.");
   actualizar();
 }
-// La oficina del jefe ya viene construida: en su lugar de siempre, o en el primer hueco, o reacomodando las demás. Si de plano no cabe, queda sin oficina (y las compras siguen en la tienda).
-function ponerOficinaInicial() {
-  if (habsExtra.oficina !== undefined) return;
-  let x0 = !errorHab("oficina", OFICINA_X0) ? OFICINA_X0 : lugarLibreHab("oficina");
+// La oficina del jefe y la sala de generadores ya vienen construidas: en su lugar de siempre, o en el primer hueco, o reacomodando las demás. Si de plano no caben, quedan sin construir.
+function ponerHabsIniciales() {
+  ponerHabInicial("oficina", OFICINA_X0);
+  ponerHabInicial("generadores", W - 10 - HAB_NUEVAS.generadores.ancho); // la sala de generadores va al fondo, en la esquina derecha
+}
+function ponerHabInicial(id, preferido) {
+  if (habsExtra[id] !== undefined) return;
+  let x0 = !errorHab(id, preferido) ? preferido : lugarLibreHab(id);
   if (x0 === null) {
-    const pos = reacomodoHabs("oficina");
+    const pos = reacomodoHabs(id);
     if (!pos) return;
-    x0 = pos.oficina; delete pos.oficina;
+    x0 = pos[id]; delete pos[id];
     aplicarPosHabs(pos);
   }
-  habsExtra.oficina = x0;
+  habsExtra[id] = x0;
+}
+// Panel de la «⚡ sala de generadores» (se abre tocándola): aquí se compran los generadores que dan energía
+function pintarGeneradores(lista) {
+  $("tiendaTitulo").textContent = "⚡ Sala de generadores";
+  const nota = document.createElement("small");
+  nota.style.cssText = "display:block;margin:2px 0 6px;color:var(--suave)";
+  nota.textContent = "Energía: usas " + ENERGIA_USADA + " de " + energiaTotal() + " disponibles. Cada generador se ve dentro de la sala.";
+  const precio = GENERADOR_PRECIOS[generadores]; // undefined = ya compraste todos
+  lista.append(nota, filaSimple("🟨", "Generador cuadrado",
+    precio === undefined ? "Comprado: la energía disponible es " + energiaTotal() + "." : "Sube la energía disponible de " + energiaTotal() + " a " + (energiaTotal() + ENERGIA_POR_GENERADOR) + ".",
+    precio === undefined ? "Comprado" : "Comprar " + dolares(precio), precio === undefined || dinero < precio, comprarGenerador));
+}
+function comprarGenerador() {
+  const precio = GENERADOR_PRECIOS[generadores];
+  if (precio === undefined || dinero < precio || habsExtra.generadores === undefined) return;
+  const antes = energiaTotal();
+  dinero -= precio;
+  generadores++;
+  info("⚡ ¡Compraste un generador! La energía disponible subió de " + antes + " a " + energiaTotal() + ".");
+  actualizar();
 }
 // Panel de la «🕴️ oficina del jefe» (se abre tocándola): aquí se compran las mesas y las zonas del restaurante
 function pintarOficina(lista) {
@@ -1859,6 +1903,12 @@ function sombra(x, y, r) {
   const [sx, sy] = iso(x, y);
   ctx.fillStyle = "rgba(0,0,0,.2)"; ctx.beginPath(); ctx.ellipse(sx, sy, r * ESCALA, r * ESCALA * 0.45, 0, 0, Math.PI * 2); ctx.fill();
 }
+function dibujarGenerador(x, y) { // generador cuadrado: una caja amarilla con un rayo encima
+  sombra(x + GEN_LADO / 2, y + GEN_LADO / 2, 20);
+  caja3d(ctx, x, y, x + GEN_LADO, y + GEN_LADO, 22, GEN_COLOR, "#8d5a00");
+  const [sx, sy] = iso(x + GEN_LADO / 2, y + GEN_LADO / 2, 22);
+  emoji("⚡", sx, sy, 26 * ESCALA);
+}
 function persona(e, x, y, z, tam) { sombra(x, y, 13); const [sx, sy] = iso(x, y, z); emoji(e, sx, sy, tam * ESCALA); }
 
 function dibujarMesa(m) {
@@ -2020,6 +2070,10 @@ function dibujar() {
   for (const id of Object.keys(HAB_NUEVAS)) { // adornos de las habitaciones nuevas
     if (habsExtra[id] === undefined) continue;
     HAB_NUEVAS[id].adornos.forEach(([dx, y, em]) => { const x = habsExtra[id] + dx; cola.push({ d: x + y, f: () => persona(em, x, y, 16, 30) }); });
+  }
+  if (habsExtra.generadores !== undefined) for (let i = 0; i < generadores; i++) { // generadores comprados, dentro de su sala
+    const x = habsExtra.generadores + GEN_LUGARES[i][0], y = GEN_LUGARES[i][1];
+    cola.push({ d: x + y + GEN_LADO, f: () => dibujarGenerador(x, y) });
   }
   DECORACIONES.filter((q) => decos.includes(q.id)).forEach((q) => q.lugares.forEach(([x, y]) => cola.push({ d: x + y, f: () => persona(q.ico, x, y, 18, 36) })));
   (banioComprado ? [[365, 85, "🚽"], [365, 125, "🚽"], [515, 85, "🚰"]] : []).forEach(([x0, y, em]) => { const x = x0 + DX + BX; cola.push({ d: x + y, f: () => persona(em, x, y, 16, 30) }); });
