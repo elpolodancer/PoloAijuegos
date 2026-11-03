@@ -1026,7 +1026,8 @@ setInterval(guardarPartida, AUTOGUARDADO_MS);
 
 // ----- Dibujo (vista isométrica 2:1, estilo Clash of Clans) -----
 // La lógica sigue usando el mapa plano (W × H) de arriba; aquí solo se proyecta cada punto a la pantalla.
-const CW = 720, CH = 480;               // tamaño del lienzo (debe coincidir con el <canvas> de index.html)
+let CW = 720;                           // ancho del lienzo en unidades del juego: se adapta a la pantalla (ver ajustarLienzo); el alto es fijo
+const CH = 480;                         // alto del lienzo (debe coincidir con el <canvas> de index.html)
 const ISO = 0.55 * ESCALA, OX = 400, OY = 100; // escala y origen de la proyección: la cuadra se ve del mismo tamaño en pantalla y los objetos se ven más chicos
 const iso = (x, y, z = 0) => [OX + (x - y) * ISO, OY + ((x + y) * ISO) / 2 - z * ESCALA]; // la altura z también se encoge con ESCALA
 
@@ -1613,6 +1614,21 @@ function centrarCamara() {
   camara.vy = CENTRO_VISTA[1] - CH / camara.z / 2;
   limitarCamara();
 }
+// El lienzo ocupa casi toda la pantalla: su ancho (CW) se ajusta a la forma del espacio disponible para que nada se estire; el alto (CH) no cambia
+function ajustarLienzo() {
+  const r = lienzo.getBoundingClientRect();
+  if (!(r.width > 0 && r.height > 0)) return;
+  const nuevo = Math.max(240, Math.min(1600, Math.round((CH * r.width) / r.height)));
+  if (nuevo === CW) return;
+  const cx = camara.vx + CW / camara.z / 2, cy = camara.vy + CH / camara.z / 2; // lo que se estaba viendo en el centro
+  CW = nuevo;
+  lienzo.width = CW; // al cambiar el tamaño el lienzo se borra; se vuelve a dibujar en el siguiente cuadro
+  camara.vx = cx - CW / camara.z / 2;
+  limitarCamara();
+}
+addEventListener("resize", ajustarLienzo);
+addEventListener("orientationchange", () => setTimeout(ajustarLienzo, 250));
+ajustarLienzo();
 // Cambia el zoom dejando quieto el punto (fx, fy) del lienzo
 function zoomEn(z, fx, fy) {
   z = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
@@ -1668,7 +1684,7 @@ if (!btnEmpleados) { // si index.html es una versión vieja sin el botón, se cr
   btnEmpleados.textContent = "👥 Empleados";
   btnEmpleados.setAttribute("aria-label", "Empleados");
   btnEmpleados.style.cssText = "position:fixed;z-index:90;top:calc(8px + env(safe-area-inset-top,0px));right:calc(8px + env(safe-area-inset-right,0px));box-shadow:0 4px 14px rgba(0,0,0,.45)";
-  document.body.appendChild(btnEmpleados);
+  (lienzo.parentNode || document.body).appendChild(btnEmpleados);
   const barra = document.querySelector(".barra");
   if (barra) barra.style.paddingRight = "150px"; // deja libre la esquina para el botón
 }
