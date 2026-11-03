@@ -1,94 +1,129 @@
 <!doctype html>
-<!-- Ruta: restaurantes/index.html -->
+<!-- Ruta: index.html (portal, en la raíz del repo) -->
 <html lang="es">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Restaurantes</title>
+  <title>Juegos</title>
   <meta name="theme-color" content="#1b2330" />
-  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="iconos/icono-192.png" />
+  <link rel="apple-touch-icon" href="iconos/icono-180.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Juegos" />
+  <link rel="stylesheet" href="compartido/estilos.css" />
   <style>
-    .lienzo { max-width: 760px; background: #8bbf6a; }
-    .marcador { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; font-weight: 700; }
-    .marcador span { color: var(--suave); }
-    .marcador b { color: var(--texto); }
-    #estado { min-height: 1.4em; margin: 6px 0; text-align: center; }
-    .acciones { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
-    .tienda { position: fixed; z-index: 100; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(92vw, 420px); padding: 14px; background: var(--tarjeta); border: 1px solid var(--acento); border-radius: 16px; box-shadow: 0 8px 30px rgba(0, 0, 0, .5); }
-    .tienda-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
-    .tienda-fila { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--borde); }
-    .tienda-fila .ico { font-size: 1.8rem; }
-    .tienda-fila .txt { flex: 1; }
-    .tienda-fila small { display: block; color: var(--suave); }
-    .menu { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 16px; background: var(--fondo); overflow: auto; }
-    .menu-caja { width: min(100%, 460px); text-align: center; }
-    .menu-caja > div { display: flex; flex-direction: column; gap: 12px; }
-    .menu-caja h2 { margin: 0; }
-    .menu-caja p { margin: 0; color: var(--suave); }
-    .btn.grande { padding: 14px 18px; font-size: 1.1rem; }
-    .btn.sec { background: var(--tarjeta); border: 1px solid var(--borde); }
-    .ranuras { display: flex; flex-direction: column; gap: 10px; text-align: left; }
-    .ranura { display: flex; flex-direction: column; gap: 4px; padding: 14px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; }
-    .ranura.llena { border-color: var(--acento); }
-    .ranura small { color: var(--suave); }
-    .ranura-botones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+    [hidden] { display: none !important; }
+    .titulo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .mini { padding: 3px 8px; font-size: .7rem; color: var(--suave); text-decoration: none; border: 1px dashed var(--borde); border-radius: 999px; opacity: .7; }
+    .mini:hover, .mini:focus-visible { opacity: 1; border-color: var(--acento); color: var(--texto); }
+    #sinred { font-size: .75rem; color: var(--suave); border: 1px solid var(--borde); border-radius: 999px; padding: 3px 8px; }
+    #ayudaIos { margin: 8px 12px 0; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 10px; font-size: .9rem; color: var(--suave); }
+    #ayudaIos button { margin-left: 8px; }
   </style>
 </head>
 <body>
   <header class="barra">
-    <div>
-      <a class="volver" href="../">← Juegos</a>
-      <h1>🍽️ Restaurantes</h1>
+    <div class="titulo">
+      <h1>🎮 Juegos</h1>
+      <!-- Juego escondido: «Reflejos» (carpeta ejemplo/), ya no está en juegos.js -->
+      <a class="mini" href="ejemplo/">Juego de prueba</a>
+      <button class="btn" id="instalar" hidden>📲 Instalar</button>
+      <span id="sinred" hidden>Sin conexión</span>
     </div>
     <div id="sesion"></div>
   </header>
+  <div id="ayudaIos" hidden>
+    Para instalarlo en iPhone/iPad: toca <b>Compartir</b> (el cuadro con la flecha) y luego <b>Agregar a pantalla de inicio</b>.
+    <button class="btn" id="cerrarAyuda">Entendido</button>
+  </div>
   <main>
-    <div class="marcador">
-      <span>💰 $<b id="dinero">0</b> pesos</span>
-      <span>⏱️ Jugando <b id="tiempo">0:00</b></span>
-      <span>🏆 Récord $<b id="record">0</b> pesos</span>
-    </div>
-    <canvas id="lienzo" class="lienzo" width="720" height="480" aria-label="Restaurante en vista isométrica con cocina, baño, recepción y cuatro mesas; toca a los clientes que esperan para darles mesa"></canvas>
-    <p id="estado">Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para contratar personal y una mesa para mejorarla.</p>
-    <div class="acciones">
-      <button class="btn" id="alejar" aria-label="Alejar" title="Alejar">➖</button>
-      <button class="btn" id="acercar" aria-label="Acercar" title="Acercar">➕</button>
-      <button class="btn" id="centrar" aria-label="Centrar la vista" title="Centrar la vista">🎯</button>
-      <button class="btn" id="menuBtn">☰ Menú</button>
-      <button class="btn" id="reiniciar">Reiniciar</button>
-    </div>
+    <div id="lista" class="rejilla"></div>
   </main>
-  <div id="menu" class="menu">
-    <div class="menu-caja">
-      <div id="menuInicio">
-        <h2>🍽️ Restaurantes</h2>
-        <p>Tu partida se guarda sola.</p>
-        <button class="btn grande" id="jugar">▶️ Jugar</button>
-        <a class="volver" href="../">← Volver a los juegos</a>
-      </div>
-      <div id="menuJugar" hidden>
-        <h2>▶️ Jugar</h2>
-        <button class="btn grande sec" id="btnPartidas" disabled>💾 Partidas guardadas</button>
-        <p id="avisoPartidas">No disponible de momento</p>
-        <button class="btn grande" id="btnNueva">🆕 Nueva partida</button>
-        <button class="btn sec" id="atrasJugar">← Atrás</button>
-      </div>
-      <div id="menuPartidas" hidden>
-        <h2>💾 Partidas guardadas</h2>
-        <div id="listaPartidas" class="ranuras"></div>
-        <button class="btn sec" id="volverMenu">← Atrás</button>
-      </div>
-    </div>
-  </div>
-  <div id="tienda" class="tienda" role="dialog" aria-label="Tienda y mejoras de mesa" hidden>
-    <div class="tienda-cab">
-      <b id="tiendaTitulo">🛒 Tienda</b>
-      <span>💰 $<b id="tiendaDinero">0</b> pesos</span>
-      <button class="btn" id="cerrarTienda">Cerrar</button>
-    </div>
-    <div id="tiendaLista"></div>
-  </div>
-  <script type="module" src="juego.js"></script>
-  <script type="module" src="../compartido/pantalla-completa.js"></script>
+  <script type="module">
+    import { JUEGOS } from "./juegos.js";
+
+    // Lista de juegos: cada tarjeta lleva a su carpeta (o a su repo propio si tiene «url»)
+    const lista = document.getElementById("lista");
+    JUEGOS.forEach((j) => {
+      const a = document.createElement("a");
+      a.className = "tarjeta";
+      a.href = j.url || j.carpeta + "/";
+      const ico = document.createElement("span");
+      ico.className = "tarjeta-ico";
+      ico.textContent = j.icono || "🎲";
+      const n = document.createElement("b");
+      n.textContent = j.nombre;
+      const d = document.createElement("small");
+      d.textContent = j.descripcion || "";
+      a.append(ico, n, d);
+      lista.appendChild(a);
+    });
+
+    // ----- Sin conexión + instalar en la pantalla de inicio -----
+    const $ = (id) => document.getElementById(id);
+    const marcarRed = () => ($("sinred").hidden = navigator.onLine);
+    addEventListener("online", marcarRed);
+    addEventListener("offline", marcarRed);
+    marcarRed();
+
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+
+    const instalada = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+    const esIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    let evento = null;
+    if (!instalada) {
+      if (esIos) {
+        // iOS no permite instalar con un botón: se muestran los pasos
+        $("instalar").hidden = false;
+        $("instalar").addEventListener("click", () => ($("ayudaIos").hidden = false));
+        $("cerrarAyuda").addEventListener("click", () => ($("ayudaIos").hidden = true));
+      } else {
+        addEventListener("beforeinstallprompt", (e) => {
+          e.preventDefault();
+          evento = e;
+          $("instalar").hidden = false;
+        });
+        $("instalar").addEventListener("click", async () => {
+          if (!evento) return;
+          evento.prompt();
+          await evento.userChoice.catch(() => {});
+          evento = null;
+          $("instalar").hidden = true;
+        });
+      }
+    }
+    addEventListener("appinstalled", () => ($("instalar").hidden = true));
+
+    // ----- Sesión con Google y puntos totales (los mismos para todos los juegos) -----
+    // Se carga aparte: si Firebase no está disponible (sin conexión la primera vez), el portal igual se ve.
+    const zona = $("sesion");
+    try {
+      const { alCambiarSesion, entrar, salir, leerPerfil } = await import("./compartido/jugador.js");
+      alCambiarSesion(async (u) => {
+        zona.innerHTML = "";
+        const b = document.createElement("button");
+        b.className = "btn";
+        if (!u) {
+          b.textContent = "Entrar con Google";
+          b.addEventListener("click", () => entrar().catch((e) => alert(e.message)));
+          zona.appendChild(b);
+          return;
+        }
+        const t = document.createElement("span");
+        t.textContent = (u.displayName || "Jugador") + " · ";
+        b.textContent = "Salir";
+        b.addEventListener("click", salir);
+        zona.append(t, b);
+        try {
+          const p = await leerPerfil();
+          t.textContent = (u.displayName || "Jugador") + " · " + (p ? p.total || 0 : 0) + " pts · ";
+        } catch (e) {}
+      });
+    } catch (e) {
+      zona.textContent = "Sesión no disponible sin conexión";
+    }
+  </script>
 </body>
 </html>
