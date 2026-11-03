@@ -17,7 +17,9 @@
 // TERRENOS: el restaurante ocupa la esquina inferior derecha de una cuadrícula de 3 × 3 manzanas; las otras 8 son pasto (sin carreteras entre ellas), a la izquierda y detrás.
 // Los terrenos se compran en la tienda («Ampliar terreno»): las 8 manzanas de pasto son los terrenos 2.º a 9.º y se compran de uno en uno, solo los que tocan tu terreno actual (el restaurante o uno ya comprado).
 // El precio sube con cada terreno (ver TERRENO_PRECIOS: $10,000 el 2.º ... $500,000 el 9.º). Las manzanas de pasto están en PASTO.
-// COCINA Y BAÑO: con el botón «🛠️ Mover» se pueden cambiar de lugar a lo largo de la pared del fondo (ver errorHab: no pueden tapar el pasillo del centro ni empalmarse entre sí).
+// HABITACIONES: la cocina, el baño y las nuevas (cafetería, heladería y pastelería, $20,000 cada una en «🏗️ Construir») van en la pared del fondo y se pueden cambiar de lugar con «🛠️ Mover»
+// (ver errorHab: no pueden tapar el pasillo del centro ni empalmarse entre sí). Al terminar de comer, cada cliente va a 0-4 de esos lugares (ver PESOS_VISITAS) y gasta en cada uno.
+// DECORACIONES: también en «🏗️ Construir»; cada una suma dinero a lo que paga cada cliente (ver DECORACIONES).
 const ID = "restaurantes";
 
 // ----- ESCALA: tamaño de los objetos respecto a la cuadra -----
@@ -46,7 +48,11 @@ const VEL = 150;                  // velocidad de la gente (px por segundo EN PA
 const T_COCINA_BASE = 3000;       // ms de cocina por pedido...
 const T_COCINA_POR_CLIENTE = 500; // ...más estos ms por cada cliente de la mesa
 const T_COMER = 5000;             // ms que tardan en comer
-const PROB_BANIO = 0.5;           // probabilidad de que un cliente vaya al baño al levantarse de la mesa
+// Al terminar de comer, cada cliente va a 0, 1, 2, 3 o 4 «lugares» (baño, cafetería, heladería, pastelería), siempre en ese orden y entre los que ya tengas.
+// PESOS_VISITAS[n] = qué tan probable es hacer n cosas (pesos relativos: 40/100 = 40 %). Entre más cosas, menos probable. Si tienes menos lugares, solo cuentan los primeros pesos.
+// Con los 4 lugares: 0 → 40 %, 1 → 35 %, 2 → 15 %, 3 → 7 %, 4 → 3 %. Con solo el baño: se mantiene casi como antes (≈ 47 % va al baño).
+const PESOS_VISITAS = [40, 35, 15, 7, 3];
+const ORDEN_VISITAS = ["banio", "cafeteria", "heladeria", "pasteleria"];
 const KEY_RECORD = "restaurantes_record";
 const KEY_DINERO = "restaurantes_dinero"; // clave de la versión anterior (solo el saldo): se lee UNA vez para pasar ese dinero a la «Partida 1»
 // Partidas guardadas: 6 ranuras (cuadrícula) con autoguardado en el navegador (localStorage). Se guarda dinero, lo ganado, tiempo jugado, mejoras de cada mesa,
@@ -142,14 +148,81 @@ function recalcHab() {
   PUERTA_BANIO = [430 + DX + BX, 185];
 }
 recalcHab();
-// ¿Se puede poner la cocina (cual = "cocina") o el baño ("banio") con su esquina izquierda en x0, estando el otro cuarto con la suya en otroX0? Devuelve el motivo si no, o "" si sí.
-function errorHab(cual, x0, otroX0) {
-  const w = cual === "cocina" ? COC_ANCHO : BAN_ANCHO, wo = cual === "cocina" ? BAN_ANCHO : COC_ANCHO, x1 = x0 + w;
+// Habitaciones nuevas: se compran en «🏗️ Construir» y van en la pared del fondo (como la cocina y el baño; se mueven con «🛠️ Mover»).
+// gasto = lo que paga el cliente cada vez que pasa por ahí (como el baño, que cuesta COSTO_BANIO). adornos = [x relativo al cuarto, y, emoji].
+const HAB_NUEVAS = {
+  cafeteria: { nombre: "la cafetería", etiqueta: "Cafetería", ico: "☕", ancho: 150, precio: 20000, gasto: 10, piso: ["#fbe9d7", "#f3d9bd"], pared: "#c8a27a", colorTexto: "#5d4037", adornos: [[35, 70, "☕"], [115, 70, "🥐"]] },
+  heladeria: { nombre: "la heladería", etiqueta: "Heladería", ico: "🍦", ancho: 150, precio: 20000, gasto: 8, piso: ["#fde4ef", "#f9c9de"], pared: "#e8a2c0", colorTexto: "#8e2a58", adornos: [[35, 70, "🍦"], [115, 70, "🍨"]] },
+  pasteleria: { nombre: "la pastelería", etiqueta: "Pastelería", ico: "🍰", ancho: 150, precio: 20000, gasto: 12, piso: ["#fff4c2", "#ffe9a0"], pared: "#e6c96a", colorTexto: "#7a5c00", adornos: [[35, 70, "🍰"], [115, 70, "🎂"]] },
+};
+let habsExtra = {}; // habitaciones nuevas compradas: id → x de su esquina izquierda
+const x0Hab = (id) => (id === "cocina" ? COC_X0 + KX : id === "banio" ? BAN_X0 + BX : habsExtra[id]);
+const anchoHab = (id) => (id === "cocina" ? COC_ANCHO : id === "banio" ? BAN_ANCHO : HAB_NUEVAS[id].ancho);
+const nombreHab = (id) => (id === "cocina" ? "la cocina" : id === "banio" ? "el baño" : HAB_NUEVAS[id].nombre);
+const habsPuestas = () => ["cocina", "banio", ...Object.keys(HAB_NUEVAS).filter((id) => habsExtra[id] !== undefined)];
+const posHabs = () => Object.fromEntries(habsPuestas().map((id) => [id, x0Hab(id)]));
+// Puerta (por donde se entra, en el pasillo de enfrente) y lugar dentro del cuarto
+const puertaHab = (id) => (id === "cocina" ? PUERTA_COCINA : id === "banio" ? PUERTA_BANIO : [x0Hab(id) + HAB_NUEVAS[id].ancho / 2, 185]);
+const dentroHab = (id, i) => (id === "banio" ? [400 + DX + BX + i * 22, 120] : [x0Hab(id) + 35 + (i % 4) * 26, 120]);
+// ¿Se puede poner la habitación «cual» con su esquina izquierda en x0, estando las demás en «pos» (id → x0)? Devuelve el motivo si no, o "" si sí.
+function errorHab(cual, x0, pos = posHabs()) {
+  const x1 = x0 + anchoHab(cual);
   if (x0 < 10 || x1 > W - 10) return "No cabe ahí: se saldría del restaurante.";
   if (x0 < HALL_X + 50 && x1 > HALL_X - 20) return "Ahí estorbaría el pasillo del centro, por donde entran los clientes.";
-  if (x0 < otroX0 + wo + 10 && x1 + 10 > otroX0) return "Ahí se empalmaría con " + (cual === "cocina" ? "el baño" : "la cocina") + ".";
+  for (const [id, ox] of Object.entries(pos)) {
+    if (id !== cual && x0 < ox + anchoHab(id) + 10 && x1 + 10 > ox) return "Ahí se empalmaría con " + nombreHab(id) + ".";
+  }
   return "";
 }
+// Primer lugar libre (de izquierda a derecha) para una habitación nueva, o null si no cabe
+function lugarLibreHab(id) {
+  for (let x0 = 10; x0 + anchoHab(id) <= W - 10; x0 += 10) if (!errorHab(id, x0)) return x0;
+  return null;
+}
+// Si no hay un hueco suficiente, busca un reacomodo de TODAS las habitaciones (cada lado del pasillo, una junto a otra) que deje lugar a «nueva» y mueva lo menos posible.
+// Devuelve { id: x0 } o null si de plano no caben.
+function reacomodoHabs(nueva) {
+  const ids = [...habsPuestas(), ...(nueva ? [nueva] : [])];
+  const orden = (id) => (id === nueva ? W : x0Hab(id)); // la nueva se pone al final de su lado
+  const zonas = [[10, HALL_X - 20], [HALL_X + 50, W - 10]]; // [donde empieza, donde termina] cada lado del pasillo central
+  let mejor = null;
+  for (let mascara = 0; mascara < 1 << ids.length; mascara++) {
+    const lados = [[], []], pos = {};
+    ids.forEach((id, k) => lados[(mascara >> k) & 1].push(id));
+    let cabe = true;
+    lados.forEach((grupo, z) => {
+      let x = zonas[z][0];
+      for (const id of grupo.sort((a, b) => orden(a) - orden(b))) { pos[id] = x; x += anchoHab(id) + 10; }
+      if (x - 10 > zonas[z][1]) cabe = false;
+    });
+    if (!cabe) continue;
+    const costo = ids.reduce((t, id) => t + (id === nueva ? 0 : Math.abs(pos[id] - x0Hab(id))), 0);
+    if (!mejor || costo < mejor.costo) mejor = { pos, costo };
+  }
+  return mejor && mejor.pos;
+}
+// Pone las habitaciones en las posiciones de «pos» (id → x0); quien estaba dentro de una que se mueve se va con ella
+function aplicarPosHabs(pos) {
+  const cambios = [];
+  for (const id of habsPuestas()) {
+    const dx = (pos[id] === undefined ? x0Hab(id) : pos[id]) - x0Hab(id);
+    if (dx) cambios.push([[x0Hab(id), HAB_Y0, x0Hab(id) + anchoHab(id), HAB_Y1], dx]);
+  }
+  desplazarEntes(cambios);
+  for (const id of Object.keys(pos)) {
+    if (id === "cocina") KX = pos[id] - COC_X0; else if (id === "banio") BX = pos[id] - BAN_X0; else habsExtra[id] = pos[id];
+  }
+  recalcHab();
+}
+// Decoraciones: cada una que compras suma «bono» pesos a lo que paga CADA cliente (se ven en los costados del comedor)
+const DECORACIONES = [
+  { id: "plantas", ico: "🪴", nombre: "Plantas", precio: 2000, bono: 0.5, lugares: [[60, 330], [60, 780], [1060, 330], [1060, 780]] },
+  { id: "cuadros", ico: "🖼️", nombre: "Cuadros", precio: 5000, bono: 1, lugares: [[130, 480], [130, 930], [990, 480], [990, 930]] },
+  { id: "lamparas", ico: "💡", nombre: "Lámparas de pie", precio: 9000, bono: 1.5, lugares: [[60, 560], [60, 1010], [1060, 560], [1060, 1010]] },
+  { id: "fuente", ico: "⛲", nombre: "Fuente", precio: 15000, bono: 2.5, lugares: [[80, 1170], [1040, 1170]] },
+];
+let decos = []; // ids de las decoraciones compradas
+const bonoDeco = () => DECORACIONES.filter((d) => decos.includes(d.id)).reduce((t, d) => t + d.bono, 0);
 const MESERO_POST = [HALL_X + 45, 210];     // dónde espera el mesero cuando no hay platillos listos
 const MESERO_POST2 = [HALL_X - 45, 232];    // ídem para el segundo mesero
 const MESAS_BASE = [
@@ -247,6 +320,7 @@ let llevando = null;                    // mesa cuyo platillo traes en la mano
 let receps = [null, null], meseros = [null, null]; // personal contratado (null = todavía no): { nivel, ... }; [0] el de siempre, [1] el de la ampliación
 let terreno2 = false, puerta2 = false;             // ampliación comprada / segunda puerta comprada
 let lotes = []; // terrenos comprados (claves «i,j» de PASTO), en el orden en que se compraron
+let vistaConstruir = false; // true = el panel abierto es el de «🏗️ Construir» (habitaciones y decoraciones)
 let modoMover = false, habSel = null, btnMover = null; // modo «🛠️ Mover» (cocina y baño): activo / cuarto elegido ("cocina" o "banio") / el botón
 let puntosEnviados = 0, umbralPuntos = PUNTOS_LOTE, enviando = false; // puntos ya mandados al perfil, cuántos hacen falta para el siguiente envío, envío en curso
 let ranura = null; // partida activa (0, 1 o 2); null = estás en el menú y no se guarda nada
@@ -256,7 +330,7 @@ let vistaEmpleados = false; // true = el panel abierto es el de «Empleados» (b
 const nuevasMejoras = () => Object.fromEntries(MEJORAS_MESA.map((c) => [c.id, 0])); // cuántas mejoras tiene cada cosa de una mesa (0 a 5)
 const bonoAcum = (k) => BONO_MEJORAS.slice(0, k).reduce((t, b) => t + b, 0);        // lo que suman en total las primeras k mejoras
 const bonoMesa = (m) => MEJORAS_MESA.reduce((t, c) => t + bonoAcum(m.mejoras[c.id]), 0); // extra por cliente de esa mesa
-const pagoPorCliente = (m) => PAGO_POR_CLIENTE + bonoMesa(m);                        // lo que paga cada cliente que usa la mesa m
+const pagoPorCliente = (m) => PAGO_POR_CLIENTE + bonoMesa(m) + bonoDeco();                        // lo que paga cada cliente que usa la mesa m
 const totalMejoras = (m) => MEJORAS_MESA.reduce((t, c) => t + m.mejoras[c.id], 0);   // mejoras compradas en esa mesa (de 25 posibles)
 let nEstac = ESTAC_INICIALES, proxAuto = 0, autosPerdidos = 0; // lugares de estacionamiento disponibles, cuándo pasa el próximo auto, autos que no hallaron lugar
 let puntero = { x: -99, y: -99 };       // último punto tocado/señalado en el lienzo (para dibujar el platillo)
@@ -281,7 +355,7 @@ function nuevaPartida(datos = null) { // datos: partida guardada que se carga (n
   mesas = MESAS_BASE.map(crearMesa);
   recepcion = Array(SLOTS.length).fill(null);
   dinero = 0; ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
-  const habiaCambios = terreno2 || nEstac > ESTAC_INICIALES || KX !== 0 || BX !== 0; terreno2 = false; lotes = []; puerta2 = false; KX = 0; BX = 0; recalcHab(); salirMover();
+  const habiaCambios = terreno2 || nEstac > ESTAC_INICIALES || KX !== 0 || BX !== 0 || Object.keys(habsExtra).length > 0; terreno2 = false; lotes = []; puerta2 = false; KX = 0; BX = 0; habsExtra = {}; decos = []; recalcHab(); salirMover();
   nEstac = ESTAC_INICIALES; autosPerdidos = 0; proxAuto = PRIMER_AUTO_MS;
   CAJONES.forEach((k) => { k.usado = false; k.coche = null; k.pendientes = 0; });
   reloj = 0; proxLlegada = PRIMERA_LLEGADA_MS; ultimoSeg = -1; puntosEnviados = 0; umbralPuntos = PUNTOS_LOTE;
@@ -330,7 +404,7 @@ function instantanea() {
     mesas: mesas.map((m) => ({ id: m.id, mejoras: { ...m.mejoras } })),
     receps: receps.map((r) => (r ? r.nivel : 0)),
     meseros: meseros.map((w) => (w ? w.nivel : 0)),
-    terreno2, lotes: lotes.slice(), kx: KX, bx: BX, puerta2, nEstac, cocinero, cocinero2, nMesas,
+    terreno2, lotes: lotes.slice(), kx: KX, bx: BX, habs: { ...habsExtra }, decos: decos.slice(), puerta2, nEstac, cocinero, cocinero2, nMesas,
     fecha: Date.now(),
   };
 }
@@ -369,8 +443,16 @@ function aplicarGuardado(d) {
   puerta2 = terreno2 && !!d.puerta2;
   { // cocina y baño movidos: solo si el lugar guardado es válido
     const kx = Math.round(num(d.kx) / 10) * 10, bx = Math.round(num(d.bx) / 10) * 10;
-    if ((kx || bx) && !errorHab("cocina", COC_X0 + kx, BAN_X0 + bx) && !errorHab("banio", BAN_X0 + bx, COC_X0 + kx)) { KX = kx; BX = bx; }
+    if ((kx || bx) && !errorHab("cocina", COC_X0 + kx, { banio: BAN_X0 + bx }) && !errorHab("banio", BAN_X0 + bx, { cocina: COC_X0 + kx })) { KX = kx; BX = bx; }
     recalcHab();
+    habsExtra = {}; // habitaciones nuevas y decoraciones: solo las válidas
+    if (d.habs && typeof d.habs === "object") {
+      for (const id of Object.keys(HAB_NUEVAS)) {
+        const x0 = Math.round(num(d.habs[id]) / 10) * 10;
+        if (d.habs[id] !== undefined && x0 > 0 && !errorHab(id, x0)) habsExtra[id] = x0;
+      }
+    }
+    decos = Array.isArray(d.decos) ? DECORACIONES.map((q) => q.id).filter((id) => d.decos.includes(id)) : [];
   }
   nEstac = Math.max(ESTAC_INICIALES, Math.min(CAJONES.length, Math.floor(num(d.nEstac)) || ESTAC_INICIALES));
   const rs = Array.isArray(d.receps) ? d.receps : [], ms = Array.isArray(d.meseros) ? d.meseros : [];
@@ -556,14 +638,14 @@ async function atender(n, clientes, mesa, pu = 0) {
   mesa.ocupada = false;
   mesa.clientes = [];
 
-  // 5) Cada quien decide si va al baño; luego todos pagan en la recepción (quien usó el baño paga además el baño) y se van
+  // 5) Cada quien decide a qué cuartos va (baño, cafetería, heladería, pastelería); luego todos pagan en la recepción (más lo que gastaron en cada cuarto) y se van
   await Promise.all(clientes.map(async (c, i) => {
     await esp(i * 300);
     const ida = rutaIda(mesa, i, P);
     let monto = tarifa;
-    if (Math.random() < PROB_BANIO) {
-      await banio(c, ida, i, P);
-      monto += COSTO_BANIO;
+    const visitas = elegirVisitas(); // a qué cuartos va (ninguno, uno o varios, en orden)
+    if (visitas.length) {
+      monto += await visitarHabs(c, ida, i, P, visitas);
       await ir(c, [espera(i)]);
     } else await ir(c, [...ida.slice(0, -1).reverse(), espera(i)]);
     if (miGen !== gen) return; // la partida cambió mientras caminaba: este cobro no es de la partida actual
@@ -645,27 +727,46 @@ function tocar(sx, sy) {
 }
 function posEnLienzo(e) { const r = lienzo.getBoundingClientRect(); return [((e.clientX - r.left) * CW) / r.width, ((e.clientY - r.top) * CH) / r.height]; }
 
-// Al levantarse de la mesa, el cliente va al baño y sale hacia la recepción (ahí paga todo, baño incluido). «ida» es el camino de la entrada a su silla
-async function banio(c, ida, i, P = PUERTAS[0]) {
-  const dentro = [400 + DX + BX + i * 22, 120];
-  await ir(c, [...ida.slice(1, -1).reverse(), [HALL_X, 185], PUERTA_BANIO, dentro]);
-  await esp(1000);
-  await ir(c, [PUERTA_BANIO, [HALL_X, 185], P.entrada]);
+// Elige a qué cuartos va un cliente al levantarse: cuántos (0 a 4, cada vez menos probable) y cuáles (al azar, pero siempre en el orden de ORDEN_VISITAS)
+function elegirVisitas() {
+  const disp = ORDEN_VISITAS.filter((id) => id === "banio" || habsExtra[id] !== undefined);
+  const pesos = PESOS_VISITAS.slice(0, disp.length + 1);
+  let r = Math.random() * pesos.reduce((a, b) => a + b, 0), n = 0;
+  while (n < pesos.length - 1 && r >= pesos[n]) { r -= pesos[n]; n++; }
+  const mezcla = disp.slice();
+  for (let k = mezcla.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [mezcla[k], mezcla[j]] = [mezcla[j], mezcla[k]]; }
+  const elegidas = mezcla.slice(0, n);
+  return disp.filter((id) => elegidas.includes(id));
+}
+const gastoHab = (id) => (id === "banio" ? COSTO_BANIO : HAB_NUEVAS[id].gasto);
+// El cliente recorre los cuartos «ids» en orden y sale hacia la recepción (ahí paga todo). Devuelve lo que gastó en los cuartos. «ida» es el camino de la entrada a su silla
+async function visitarHabs(c, ida, i, P = PUERTAS[0], ids = []) {
+  let total = 0;
+  for (let k = 0; k < ids.length; k++) {
+    const id = ids[k], [px, py] = puertaHab(id);
+    await ir(c, [...(k === 0 ? ida.slice(1, -1).reverse() : []), [HALL_X, 185], [px, py], dentroHab(id, i)]);
+    await esp(1000);
+    total += gastoHab(id);
+    const [qx, qy] = puertaHab(id); // por si lo moviste mientras estaba dentro
+    await ir(c, k === ids.length - 1 ? [[qx, qy], [HALL_X, 185], P.entrada] : [[qx, qy], [HALL_X, 185]]);
+  }
+  return total;
 }
 
 // ----- Tienda y personal -----
-function abrirTienda(mesa = null, empleados = false) { // sin mesa: la tienda de la recepción; con mesa: el panel de mejoras de esa mesa; empleados: el panel de personal
+function abrirTienda(mesa = null, empleados = false, construir = false) { // sin mesa: la tienda de la recepción; con mesa: el panel de mejoras de esa mesa; empleados: el panel de personal
   mesaMejora = mesa;
   vistaEmpleados = empleados;
+  vistaConstruir = construir;
   pintarTienda();
   $("tienda").hidden = false;
   ponerPausa(true);
-  info(mesa ? "⏸️ Juego en pausa mientras mejoras la mesa " + mesa.id + "." : empleados ? "⏸️ Juego en pausa mientras ves a tus empleados." : "⏸️ Juego en pausa mientras estás en la tienda.");
+  info(mesa ? "⏸️ Juego en pausa mientras mejoras la mesa " + mesa.id + "." : empleados ? "⏸️ Juego en pausa mientras ves a tus empleados." : construir ? "⏸️ Juego en pausa mientras construyes." : "⏸️ Juego en pausa mientras estás en la tienda.");
 }
 function abrirMejorasMesa(m) { abrirTienda(m); }
 function cerrarTienda() {
   const estabaEnPausa = pausado;
-  mesaMejora = null; vistaEmpleados = false;
+  mesaMejora = null; vistaEmpleados = false; vistaConstruir = false;
   $("tienda").hidden = true;
   ponerPausa(false);
   if (estabaEnPausa) info("▶️ Juego reanudado.");
@@ -733,7 +834,7 @@ function pintarMejorasMesa(m, lista) {
   $("tiendaTitulo").textContent = "🪑 Mesa " + m.id;
   const res = document.createElement("small");
   res.style.cssText = "display:block;margin:2px 0 6px;color:var(--suave)";
-  res.textContent = "Cada cliente de esta mesa paga " + pesos(pagoPorCliente(m)) + (bonoMesa(m) ? " (" + pesos(PAGO_POR_CLIENTE) + " + " + pesos(bonoMesa(m)) + " de mejoras)" : " (sin mejoras todavía)") + ". Las mejoras son solo de esta mesa.";
+  res.textContent = "Cada cliente de esta mesa paga " + pesos(pagoPorCliente(m)) + (bonoMesa(m) || bonoDeco() ? " (" + pesos(PAGO_POR_CLIENTE) + (bonoMesa(m) ? " + " + pesos(bonoMesa(m)) + " de mejoras" : "") + (bonoDeco() ? " + " + pesos(bonoDeco()) + " de decoración" : "") + ")" : " (sin mejoras todavía)") + ". Las mejoras son solo de esta mesa.";
   lista.appendChild(res);
   const maxB = BONO_MEJORAS.length;
   for (const c of MEJORAS_MESA) {
@@ -760,6 +861,7 @@ function pintarTienda() {
   lista.innerHTML = "";
   if (mesaMejora) { pintarMejorasMesa(mesaMejora, lista); return; }
   if (vistaEmpleados) { pintarEmpleados(lista); return; }
+  if (vistaConstruir) { pintarConstruir(lista); return; }
   $("tiendaTitulo").textContent = "🛒 Tienda";
   const hint = document.createElement("small");
   hint.style.cssText = "display:block;margin:2px 0 6px;color:var(--suave)";
@@ -775,6 +877,60 @@ function pintarTienda() {
   );
 }
 // Panel «Empleados»: primero los contratados (con su nivel y su botón de mejora) y luego los que todavía se pueden contratar
+// Panel «🏗️ Construir»: habitaciones nuevas y decoraciones
+function comprarHab(id) {
+  const h = HAB_NUEVAS[id];
+  if (habsExtra[id] !== undefined || dinero < h.precio) return;
+  let x0 = lugarLibreHab(id), reacomodo = false;
+  if (x0 === null) { // sin hueco: se reacomodan todas las habitaciones para que quepa
+    const pos = reacomodoHabs(id);
+    if (!pos) return; // el panel ya avisa que no hay espacio
+    x0 = pos[id]; delete pos[id];
+    aplicarPosHabs(pos);
+    reacomodo = true;
+  }
+  dinero -= h.precio;
+  habsExtra[id] = x0;
+  armarFondo();
+  info("🏗️ ¡Compraste " + h.nombre + "! Algunos clientes pasarán por ahí al terminar de comer y gastarán " + pesos(h.gasto) + " cada vez." + (reacomodo ? " Reacomodé las habitaciones para que cupiera." : "") + " Puedes cambiarla de lugar con 🛠️ Mover.");
+  actualizar();
+}
+function comprarDeco(id) {
+  const d = DECORACIONES.find((q) => q.id === id);
+  if (!d || decos.includes(id) || dinero < d.precio) return;
+  dinero -= d.precio;
+  decos.push(id);
+  info("🎨 ¡Compraste " + d.nombre.toLowerCase() + "! Ahora cada cliente paga " + pesos(d.bono) + " más.");
+  actualizar();
+}
+function pintarConstruir(lista) {
+  $("tiendaTitulo").textContent = "🏗️ Construir";
+  const seccion = (titulo, texto) => {
+    const d = document.createElement("div");
+    d.style.cssText = "margin:8px 0 2px";
+    const b = document.createElement("b");
+    b.textContent = titulo;
+    const s = document.createElement("small");
+    s.style.cssText = "display:block;color:var(--suave)";
+    s.textContent = texto;
+    d.append(b, s);
+    return d;
+  };
+  lista.appendChild(seccion("🏠 Habitaciones", "Al terminar de comer, algunos clientes pasan por ellas (cuantas más tengas, más lugares pueden visitar) y gastan ahí. Van en la pared del fondo; cámbialas de lugar con 🛠️ Mover."));
+  for (const id of Object.keys(HAB_NUEVAS)) {
+    const h = HAB_NUEVAS[id], tengo = habsExtra[id] !== undefined, sinHueco = !tengo && lugarLibreHab(id) === null, sinLugar = sinHueco && !reacomodoHabs(id);
+    lista.appendChild(filaSimple(h.ico, h.etiqueta,
+      tengo ? "Comprada: cada cliente que pasa gasta " + pesos(h.gasto) + "."
+        : sinLugar ? "No hay espacio en la pared del fondo."
+        : "Cada cliente que pasa gasta " + pesos(h.gasto) + "." + (sinHueco ? " No hay un hueco libre: al comprarla se reacomodan las habitaciones." : ""),
+      tengo ? "Comprada" : sinLugar ? "Sin espacio" : "Comprar " + pesos(h.precio), tengo || sinLugar || dinero < h.precio, () => comprarHab(id)));
+  }
+  lista.appendChild(seccion("🎨 Decoraciones", "Cada una que compres suma dinero a lo que paga CADA cliente, en todas las mesas."));
+  for (const d of DECORACIONES) {
+    const tengo = decos.includes(d.id);
+    lista.appendChild(filaSimple(d.ico, d.nombre, (tengo ? "Comprada: " : "") + "cada cliente paga " + pesos(d.bono) + " más.", tengo ? "Comprada" : "Comprar " + pesos(d.precio), tengo || dinero < d.precio, () => comprarDeco(d.id)));
+  }
+}
 function pintarEmpleados(lista) {
   $("tiendaTitulo").textContent = "👥 Empleados";
   const txtRecep = (n) => "Nivel " + n + " de " + (RECEP_PRECIOS_MEJORA.length + 1) + " · da mesa en " + (RECEP_TIEMPOS_MS[n - 1] / 1000).toFixed(1) + " s";
@@ -1272,6 +1428,12 @@ function armarFondo() {
   cuarto(c, 330 + DX + BX, HAB_Y0, 550 + DX + BX, HAB_Y1, "#e1f5fa", "#b6e0ea", "#80c4d3", 400 + DX + BX, 60);   // baño
   const [kx, ky] = iso(135 + DX + KX, 10, 70); texto("Cocina", kx, ky, 14, "#37474f", "center", c);
   const [bx, by] = iso(440 + DX + BX, 10, 70); texto("Baño", bx, by, 14, "#1f5d70", "center", c);
+  for (const id of Object.keys(HAB_NUEVAS)) { // habitaciones nuevas (si ya las compraste)
+    if (habsExtra[id] === undefined) continue;
+    const h = HAB_NUEVAS[id], x0 = habsExtra[id];
+    cuarto(c, x0, HAB_Y0, x0 + h.ancho, HAB_Y1, h.piso[0], h.piso[1], h.pared, x0 + 50, 50);
+    const [hx, hy] = iso(x0 + h.ancho / 2, 10, 70); texto(h.etiqueta, hx, hy, 14, h.colorTexto, "center", c);
+  }
   const [cx, cy] = iso(40, 520, 0); texto("Comedor", cx, cy, 13, "rgba(91,70,54,.75)", "center", c);
   // puerta de entrada
   caja3d(c, HALL_X - 30, H - 4, HALL_X + 30, H, 5, MADERA_OSCURA);
@@ -1435,6 +1597,11 @@ function dibujar() {
   cola.push({ d: 1002 + DX + DY, f: dibujarEscritorio });
   if (puerta2) cola.push({ d: 347 + DX, f: dibujarEscritorio2 });
   receps.forEach((r, k) => { if (r) cola.push({ d: (k ? 318 : 975 + DY) + DX, f: () => dibujarRecepcionista(r, 400 + DX, k ? -84 : 572 + DY) }); });
+  for (const id of Object.keys(HAB_NUEVAS)) { // adornos de las habitaciones nuevas
+    if (habsExtra[id] === undefined) continue;
+    HAB_NUEVAS[id].adornos.forEach(([dx, y, em]) => { const x = habsExtra[id] + dx; cola.push({ d: x + y, f: () => persona(em, x, y, 16, 30) }); });
+  }
+  DECORACIONES.filter((q) => decos.includes(q.id)).forEach((q) => q.lugares.forEach(([x, y]) => cola.push({ d: x + y, f: () => persona(q.ico, x, y, 18, 36) })));
   [[365, 85, "🚽"], [365, 125, "🚽"], [515, 85, "🚰"]].forEach(([x0, y, em]) => { const x = x0 + DX + BX; cola.push({ d: x + y, f: () => persona(em, x, y, 16, 30) }); });
   for (const e of ents) cola.push({ d: e.x + e.y + 0.1, f: () => dibujarEnt(e) });
   cola.sort((a, b) => a.d - b.d).forEach((o) => o.f());
@@ -1446,64 +1613,59 @@ function dibujar() {
   if (pausado) { ctx.fillStyle = "rgba(0,0,0,.55)"; caja(CW / 2 - 70, 8, 140, 30, 10); ctx.fill(); texto("⏸️ En pausa", CW / 2, 23, 16, "#fff", "center"); }
 }
 
-// ----- Mover la cocina y el baño (botón «🛠️ Mover») -----
-// Se mueven a lo largo de la pared del fondo. Con un cuarto elegido, tocas dónde quieres ponerlo (se centra ahí). Todo lo demás (mostrador, cocineros, escusados, rutas) se corre con él.
-const HABS = {
-  cocina: { nombre: "la cocina", ancho: COC_ANCHO, x0: () => COC_X0 + KX },
-  banio: { nombre: "el baño", ancho: BAN_ANCHO, x0: () => BAN_X0 + BX },
-};
-const x0Otro = (cual) => (cual === "cocina" ? BAN_X0 + BX : COC_X0 + KX);
-const x0Deseado = (cual, wx) => Math.round((wx - HABS[cual].ancho / 2) / 10) * 10; // centrado en wx y en múltiplos de 10
+// ----- Mover las habitaciones (botón «🛠️ Mover») -----
+// Se mueven a lo largo de la pared del fondo. Con un cuarto elegido, tocas dónde quieres ponerlo (se centra ahí). Todo lo demás (mostrador, cocineros, escusados, adornos, rutas) se corre con él.
+const x0Deseado = (cual, wx) => Math.round((wx - anchoHab(cual) / 2) / 10) * 10; // centrado en wx y en múltiplos de 10
 function salirMover() {
   modoMover = false; habSel = null;
   if (btnMover) btnMover.textContent = "🛠️ Mover";
 }
 function tocarMover(sx, sy) {
   const sobre = (cual) => {
-    const x0 = HABS[cual].x0(), r = [x0, HAB_Y0, x0 + HABS[cual].ancho, HAB_Y1];
+    const x0 = x0Hab(cual), r = [x0, HAB_Y0, x0 + anchoHab(cual), HAB_Y1];
     return dentro(aMundo(sx, sy, 0), ...r) || dentro(aMundo(sx, sy, 30), ...r);
   };
-  const tocado = sobre("cocina") ? "cocina" : sobre("banio") ? "banio" : null;
+  const tocado = habsPuestas().find((id) => sobre(id)) || null;
   if (tocado) { // tocar un cuarto lo elige (o le quita la elección si ya estaba elegido)
     habSel = habSel === tocado ? null : tocado;
-    info(habSel ? "🛠️ Elegiste " + HABS[tocado].nombre + ": toca el lugar donde quieres ponerlo (verde = se puede, rojo = no)." : "🛠️ Toca la cocina o el baño para elegirlo.");
+    info(habSel ? "🛠️ Elegiste " + nombreHab(tocado) + ": toca el lugar donde quieres ponerlo (verde = se puede, rojo = no)." : "🛠️ Toca una habitación para elegirla.");
     return;
   }
-  if (!habSel) { info("🛠️ Primero toca la cocina o el baño para elegirlo."); return; }
+  if (!habSel) { info("🛠️ Primero toca una habitación (cocina, baño...) para elegirla."); return; }
   moverHab(habSel, x0Deseado(habSel, aMundo(sx, sy, 0)[0]));
 }
 function moverHab(cual, x0) {
-  const act = HABS[cual].x0();
-  if (x0 === act) { info("🛠️ " + HABS[cual].nombre.replace(/^./, (m) => m.toUpperCase()) + " ya está ahí."); return; }
-  const err = errorHab(cual, x0, x0Otro(cual));
+  const act = x0Hab(cual);
+  if (x0 === act) { info("🛠️ Ya está ahí."); return; }
+  const err = errorHab(cual, x0);
   if (err) { info("🛠️ " + err); return; }
   const dx = x0 - act;
-  desplazarEntes([act, HAB_Y0, act + HABS[cual].ancho, HAB_Y1], dx); // quien estaba dentro (o iba para allá) se corre con el cuarto
-  if (cual === "cocina") KX += dx; else BX += dx;
-  recalcHab();
+  aplicarPosHabs({ [cual]: x0 }); // quien estaba dentro (o iba para allá) se corre con el cuarto
   armarFondo();
-  info("🛠️ Listo, moviste " + HABS[cual].nombre + ". Toca otro lugar para moverlo de nuevo, o «✅ Listo» arriba para terminar.");
+  info("🛠️ Listo, moviste " + nombreHab(cual) + ". Toca otro lugar para moverlo de nuevo, o «✅ Listo» arriba para terminar.");
   actualizar(); // guarda la partida
 }
-// Las personas que están dentro del cuarto r (o van hacia él) se mueven dx junto con él; quien solo pasa por enfrente no se toca
-function desplazarEntes(r, dx) {
-  const en = (x, y, ymax) => x >= r[0] && x <= r[2] && y >= r[1] && y <= ymax;
+// cambios = [[rect del cuarto, dx], ...]: las personas que están dentro de un cuarto que se mueve (o van hacia él) se mueven dx con él; quien solo pasa por enfrente no se toca.
+// Cada persona se mueve una sola vez, según el lugar donde estaba el cuarto ANTES de moverse
+function desplazarEntes(cambios) {
   for (const e of ents) {
     if (e.coche) continue;
-    const dentroAhora = en(e.x, e.y, r[3] + 5);
-    if (!dentroAhora && !e.ruta.some((p) => en(p[0], p[1], r[3] + 5))) continue;
-    if (dentroAhora) e.x += dx;
-    e.ruta.forEach((p) => { if (en(p[0], p[1], 200)) p[0] += dx; }); // incluye la puerta (y = 185)
+    const en = (r, x, y, ymax) => x >= r[0] && x <= r[2] && y >= r[1] && y <= ymax;
+    const c = cambios.find(([r]) => en(r, e.x, e.y, r[3] + 5) || e.ruta.some((q) => en(r, q[0], q[1], r[3] + 5)));
+    if (!c) continue;
+    const [r, dx] = c;
+    if (en(r, e.x, e.y, r[3] + 5)) e.x += dx;
+    e.ruta.forEach((q) => { if (en(r, q[0], q[1], 200)) q[0] += dx; }); // incluye la puerta (y = 185)
   }
 }
 function dibujarMover() {
-  for (const cual of ["cocina", "banio"]) {
-    const x0 = HABS[cual].x0(), sel = cual === habSel;
-    suelo(ctx, x0, HAB_Y0, x0 + HABS[cual].ancho, HAB_Y1, sel ? "rgba(255,213,74,.35)" : "rgba(124,92,255,.18)", 0, sel ? "#ffd54a" : "#7c5cff");
+  for (const cual of habsPuestas()) {
+    const x0 = x0Hab(cual), sel = cual === habSel;
+    suelo(ctx, x0, HAB_Y0, x0 + anchoHab(cual), HAB_Y1, sel ? "rgba(255,213,74,.35)" : "rgba(124,92,255,.18)", 0, sel ? "#ffd54a" : "#7c5cff");
   }
   if (habSel && (puntero.x !== -99 || puntero.y !== -99)) { // vista previa de dónde quedaría
-    const gx0 = x0Deseado(habSel, aMundo(puntero.x, puntero.y, 0)[0]), mal = errorHab(habSel, gx0, x0Otro(habSel));
-    suelo(ctx, gx0, HAB_Y0, gx0 + HABS[habSel].ancho, HAB_Y1, mal ? "rgba(231,76,60,.4)" : "rgba(46,158,91,.4)", 0, mal ? "#e74c3c" : "#2e9e5b");
+    const gx0 = x0Deseado(habSel, aMundo(puntero.x, puntero.y, 0)[0]), mal = errorHab(habSel, gx0);
+    suelo(ctx, gx0, HAB_Y0, gx0 + anchoHab(habSel), HAB_Y1, mal ? "rgba(231,76,60,.4)" : "rgba(46,158,91,.4)", 0, mal ? "#e74c3c" : "#2e9e5b");
   }
 }
 
@@ -1701,17 +1863,33 @@ if (!btnMover) {
   btnMover.id = "btnMover";
   btnMover.className = "btn";
   btnMover.textContent = "🛠️ Mover";
-  btnMover.title = "Mover la cocina y el baño";
+  btnMover.title = "Mover las habitaciones";
   const rei = $("reiniciar");
   if (rei && rei.parentNode) rei.parentNode.insertBefore(btnMover, rei); else document.body.appendChild(btnMover);
 }
 btnMover.addEventListener("click", () => {
   if ($("menu").hidden === false) return; // con el menú abierto no se usa
-  if (modoMover) { salirMover(); info("Listo: la cocina y el baño quedaron donde los pusiste."); return; }
+  if (modoMover) { salirMover(); info("Listo: las habitaciones quedaron donde las pusiste."); return; }
   cerrarTienda();
   modoMover = true; habSel = null;
   btnMover.textContent = "✅ Listo";
-  info("🛠️ Modo mover: toca la cocina o el baño para elegirlo y luego toca dónde quieres ponerlo. Se mueven a lo largo de la pared del fondo, sin tapar el pasillo del centro.");
+  info("🛠️ Modo mover: toca una habitación (cocina, baño...) para elegirla y luego toca dónde quieres ponerla. Se mueven a lo largo de la pared del fondo, sin tapar el pasillo del centro.");
+});
+// ----- Botón «🏗️ Construir»: habitaciones y decoraciones -----
+let btnConstruir = $("btnConstruir"); // si index.html no lo trae, se crea aquí junto a «Mover»
+if (!btnConstruir) {
+  btnConstruir = document.createElement("button");
+  btnConstruir.id = "btnConstruir";
+  btnConstruir.className = "btn";
+  btnConstruir.textContent = "🏗️ Construir";
+  btnConstruir.title = "Comprar habitaciones y decoraciones";
+  if (btnMover && btnMover.parentNode) btnMover.parentNode.insertBefore(btnConstruir, btnMover); else document.body.appendChild(btnConstruir);
+}
+btnConstruir.addEventListener("click", () => {
+  if ($("menu").hidden === false) return; // con el menú abierto no se usa
+  if (!$("tienda").hidden && vistaConstruir) { cerrarTienda(); return; }
+  salirMover();
+  abrirTienda(null, false, true);
 });
 // ----- BOTÓN TEMPORAL DE PRUEBAS: «+$1,000» -----
 // Sirve para probar el progreso sin esperar. Suma a «dinero» (lo que gastas), NO a «ganado»: no cuenta para puntos ni récord.
