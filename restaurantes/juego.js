@@ -31,9 +31,11 @@ const ESC_UI = (ESCALA + 1) / 2; // textos, globos y barras se encogen menos que
 
 // ----- Ajustes -----
 // El juego NO tiene fin: los clientes llegan sin parar y se puede jugar el tiempo que quieras (el reloj solo cuenta cuánto llevas jugando).
-const PRIMERA_LLEGADA_MS = 1500;  // cuándo llega el primer grupo
+const PRIMERA_LLEGADA_MS = 4000;  // cuándo llega el primer grupo
 const LLEGADA_MIN_MS = 4000;      // los grupos llegan al azar: entre un grupo y el siguiente pasan entre estos dos tiempos
 const LLEGADA_MAX_MS = 9000;
+const RAMPA_INICIO = 0.2;         // al empezar una partida llega solo este porcentaje del ritmo normal de clientes (0.2 = 20 %; grupos a pie y autos)...
+const RAMPA_MS = 5 * 60 * 1000;   // ...y sube poco a poco hasta el 100 % en este tiempo de juego (5 minutos)
 const OPCIONES = [1, 2, 4];       // clientes que pueden llegar en cada grupo
 const ENOJO_RECEP_MS = 7000;      // un grupo esperando en la recepción sin que lo atiendas se ve enojado desde aquí...
 const PACIENCIA_RECEP_MS = 12000; // ...y a estos ms se va sin entrar
@@ -76,16 +78,19 @@ const MESA_PRECIOS = [30, 60, 100, 160, 240, 350, 500, 700, 900, 1150, 1450, 180
 const RECEP_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230]; // costo de subir al nivel 2, 3, 4 ... 10 de la recepcionista
 const MESERO_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230]; // ídem para el mesero
 const PAUSA_MESERO_MS = 400;                             // ms que se detiene a tomar el platillo
-// Mejoras de cada mesa: se tocan en la mesa misma (no en la tienda) y cada mesa se mejora POR SEPARADO.
+// Mejoras de cada mesa: se tocan en la mesa misma (se abre su menú con las pestañas «Mejoras» y «Personal») y cada mesa se mejora POR SEPARADO.
+// «viejo» = nombre que tenía la mejora en las partidas guardadas antes del cambio (así no se pierde lo ya comprado).
 // Cada cosa se puede mejorar 5 veces; cada mejora suma a lo que paga cada cliente que use ESA mesa: 50 centavos las dos primeras, 1 dólar la 3.ª y la 4.ª, y 1.50 dólares la 5.ª.
 const BONO_MEJORAS = [0.5, 0.5, 1, 1, 1.5];   // lo que suma la 1.ª, 2.ª, 3.ª, 4.ª y 5.ª mejora de cada cosa (por cliente)
 const PRECIOS_MEJORA = [10, 15, 25, 40, 60];  // lo que cuesta cada una de esas 5 mejoras
 const MEJORAS_MESA = [
   { id: "mesa", ico: "🪑", nombre: "Mesa", precios: PRECIOS_MEJORA },
-  { id: "sillas", ico: "💺", nombre: "Sillas", precios: PRECIOS_MEJORA },
+  { id: "silla1", ico: "💺", nombre: "Silla 1", precios: PRECIOS_MEJORA, viejo: "sillas" },       // banca de arriba (en las partidas viejas «Sillas» valía para las dos)
+  { id: "silla2", ico: "💺", nombre: "Silla 2", precios: PRECIOS_MEJORA, viejo: "sillas" },       // banca de abajo
   { id: "cubiertos", ico: "🍴", nombre: "Cubiertos", precios: PRECIOS_MEJORA },
+  { id: "condimentos", ico: "🧂", nombre: "Condimentos", precios: PRECIOS_MEJORA, viejo: "servilletas" },
   { id: "bebidas", ico: "🥤", nombre: "Bebidas", precios: PRECIOS_MEJORA },
-  { id: "servilletas", ico: "🧻", nombre: "Servilletas", precios: PRECIOS_MEJORA },
+  { id: "decoracion", ico: "🪴", nombre: "Decoración", precios: PRECIOS_MEJORA },               // decoración de la propia mesa
 ];
 // Ampliación (segundo terreno): cada cosa se desbloquea con la anterior
 // Precio de cada terreno nuevo, en el orden en que se compran (el restaurante es el 1.º): 2.º, 3.º, 4.º ... 9.º. El primero que compres desbloquea la segunda puerta.
@@ -114,7 +119,7 @@ const BONO_WEB = 0.10;     // +10 % de clientes para siempre
 const PERSONAS_AUTO = 4;         // cada auto trae siempre 4 personas
 const AUTO_MIN_MS = 1500;        // los autos llegan al azar: entre uno y el siguiente pasan entre estos dos tiempos
 const AUTO_MAX_MS = 3000;
-const PRIMER_AUTO_MS = 3000;     // cuándo pasa el primer auto
+const PRIMER_AUTO_MS = 8000;     // cuándo pasa el primer auto
 const AUTO_VEL = 230;            // velocidad de los autos (px por segundo)
 const COCHES = [ // colores de carrocería (tapa, cara izquierda, cara derecha)
   { tapa: "#ef9a9a", izq: "#e53935", der: "#b71c1c" },
@@ -253,7 +258,11 @@ const MESAS_EXT = [290, 440, 590, 740].flatMap((cy, f) => [
   { id: 9 + f * 2, cx: 0 + DX, cy, ext: true }, { id: 10 + f * 2, cx: 560 + DX, cy, ext: true },
 ]);
 const MESAS_TODAS = [...MESAS_BASE, ...MESAS_EXTRA, ...MESAS_EXT];
-const ORDEN_SILLAS = ["cerca", "arriba", "abajo", "lejos"]; // 4 sillas por mesa; se ocupan en este orden
+// Cada mesa tiene 2 bancas en lados opuestos (arriba y abajo) y en cada banca caben 2 personas (4 por mesa, como antes).
+const BANCAS = ["arriba", "abajo"];
+const ORDEN_SILLAS = ["arriba", "abajo", "arriba", "abajo"]; // banca de cada lugar (0 a 3): primero uno en cada banca (los del fondo) y luego el segundo de cada banca
+const BANCA_LARGO = 54;  // largo de cada banca
+const ASIENTO_SEP = 14;  // distancia de cada persona al centro de su banca
 const CARAS = ["🧑", "👩", "👨", "🧓", "👧", "👦", "🧔", "👱"];
 
 // ----- Terrenos que se pueden comprar (en el mapa plano) -----
@@ -341,13 +350,14 @@ let modoMover = false, habSel = null, btnMover = null; // modo «🛠️ Mover»
 let puntosEnviados = 0, umbralPuntos = PUNTOS_LOTE, enviando = false; // puntos ya mandados al perfil, cuántos hacen falta para el siguiente envío, envío en curso
 let ranura = null; // partida activa (0, 1 o 2); null = estás en el menú y no se guarda nada
 let cocinero = 1, cocinero2 = 0, nMesas = MESAS_BASE.length; // nivel del cocinero (1 a 10), del segundo cocinero (0 = sin contratar) y mesas que hay en el comedor
+let menuMesaEl = null, tabMesa = "mejoras", cosaSel = "mesa"; // menú de la mesa: su elemento, pestaña abierta (mejoras / personal) y cosa elegida
 let mesaMejora = null; // mesa cuyo panel de mejoras está abierto (null = la tienda de la recepción)
 let vistaEmpleados = false; // true = el panel abierto es el de «Empleados» (botón fijo en la esquina de la pantalla)
 const nuevasMejoras = () => Object.fromEntries(MEJORAS_MESA.map((c) => [c.id, 0])); // cuántas mejoras tiene cada cosa de una mesa (0 a 5)
 const bonoAcum = (k) => BONO_MEJORAS.slice(0, k).reduce((t, b) => t + b, 0);        // lo que suman en total las primeras k mejoras
 const bonoMesa = (m) => MEJORAS_MESA.reduce((t, c) => t + bonoAcum(m.mejoras[c.id]), 0); // extra por cliente de esa mesa
 const pagoPorCliente = (m) => PAGO_POR_CLIENTE + bonoMesa(m) + bonoDeco();                        // lo que paga cada cliente que usa la mesa m
-const totalMejoras = (m) => MEJORAS_MESA.reduce((t, c) => t + m.mejoras[c.id], 0);   // mejoras compradas en esa mesa (de 25 posibles)
+const totalMejoras = (m) => MEJORAS_MESA.reduce((t, c) => t + m.mejoras[c.id], 0);   // mejoras compradas en esa mesa (de 35 posibles: 7 cosas × 5)
 let nEstac = ESTAC_INICIALES, proxAuto = 0, autosPerdidos = 0; // lugares de estacionamiento disponibles, cuándo pasa el próximo auto, autos que no hallaron lugar
 let puntero = { x: -99, y: -99 };       // último punto tocado/señalado en el lienzo (para dibujar el platillo)
 
@@ -365,6 +375,7 @@ const esp = (ms) => { const g = gen; return new Promise((r) => esperas.push({ fi
 
 const anuncioActivo = (a) => (anuncios[a.id] || 0) > reloj;
 const bonoClientes = () => (paginaWeb ? BONO_WEB : 0) + ANUNCIOS.reduce((t, a) => t + (anuncioActivo(a) ? a.bono : 0), 0); // +X (0.06 = +6 %) de clientes que llegan
+const ritmoLlegadas = () => RAMPA_INICIO + (1 - RAMPA_INICIO) * Math.min(1, reloj / RAMPA_MS); // 0.2 al empezar → 1 pasada la rampa (se calcula con el tiempo jugado, así que una partida guardada no vuelve a empezar de cero)
 const crearMesa = (m) => ({ ...m, ocupada: false, plato: false, barra: null, esperando: false, tomado: false, enojo: false, listoDesde: 0, res: null, clientes: [], mejoras: nuevasMejoras(), slot: -1 });
 function nuevaPartida(datos = null) { // datos: partida guardada que se carga (null = partida nueva)
   gen++; esperas = [];
@@ -448,7 +459,7 @@ function aplicarGuardado(d) {
   for (let i = MESAS_BASE.length; i < nMesas; i++) mesas.push(crearMesa(MESAS_TODAS[i]));
   (Array.isArray(d.mesas) ? d.mesas : []).forEach((s) => {
     const m = s && mesas.find((x) => x.id === s.id);
-    if (m && s.mejoras) MEJORAS_MESA.forEach((c) => (m.mejoras[c.id] = Math.max(0, Math.min(c.precios.length, Math.floor(num(s.mejoras[c.id]))))));
+    if (m && s.mejoras) MEJORAS_MESA.forEach((c) => (m.mejoras[c.id] = Math.max(0, Math.min(c.precios.length, Math.floor(num(s.mejoras[c.id] !== undefined ? s.mejoras[c.id] : s.mejoras[c.viejo]))))));
   });
   // Terrenos: solo manzanas de pasto, sin repetir y pegadas a lo que ya es tuyo (un dato raro no deja terrenos «flotando»). Las partidas viejas guardaban un solo «lote».
   const pedidos = Array.isArray(d.lotes) ? d.lotes.filter((k) => typeof k === "string") : [];
@@ -496,6 +507,7 @@ function actualizar() {
   guardarPartida(); // autoguardado: cobros y compras pasan por aquí
   $("record").textContent = fmt(leerRecord());
   if (!$("tienda").hidden) pintarTienda();
+  if (menuMesaEl && !menuMesaEl.hidden) pintarMenuMesa();
 }
 
 // ----- Personas que caminan -----
@@ -516,22 +528,20 @@ function ir(e, ruta) {
 function globo(x, y, texto, ms) { globos.push({ x, y, texto, hasta: ahora() + ms }); }
 
 // ----- Sillas y rutas -----
-function silla(m, tipo) {
-  const lado = m.cx < HALL_X ? 1 : -1; // 1: la mesa está a la izquierda del pasillo
-  if (tipo === "cerca") return { x: m.cx + 48 * lado, y: m.cy };
-  if (tipo === "lejos") return { x: m.cx - 48 * lado, y: m.cy };
-  if (tipo === "arriba") return { x: m.cx, y: m.cy - 48 };
-  return { x: m.cx, y: m.cy + 48 };
+function silla(m, tipo) { // centro de la banca de arriba o de abajo de la mesa
+  return { x: m.cx, y: m.cy + (tipo === "arriba" ? -48 : 48) };
 }
-// Camino desde la recepción hasta la silla i de la mesa m (siempre sale del pasillo, sin cruzar mesas)
+function asiento(m, i) { // dónde se sienta la persona i (0 a 3): 2 por banca; la 0 y la 1 se sientan al fondo (lejos del pasillo) y la 2 y la 3 junto al pasillo
+  const lado = m.cx < HALL_X ? 1 : -1, tipo = ORDEN_SILLAS[i], b = silla(m, tipo);
+  return { x: b.x + (i < 2 ? -1 : 1) * lado * ASIENTO_SEP, y: b.y, tipo };
+}
+// Camino desde la recepción hasta el lugar i de la mesa m (siempre sale del pasillo, sin cruzar mesas)
 function rutaIda(m, i, P = PUERTAS[0]) {
-  const tipo = ORDEN_SILLAS[i], s = silla(m, tipo), E = P.entrada;
-  if (m.ext) { // mesas de las columnas de afuera: por el pasillo de arriba (o el de abajo para la silla de abajo)
-    const y = tipo === "abajo" ? m.cy + 75 : m.cy - 70;
+  const s = asiento(m, i), E = P.entrada;
+  if (m.ext) { // mesas de las columnas de afuera: por el pasillo de arriba (o el de abajo para la banca de abajo)
+    const y = s.tipo === "abajo" ? m.cy + 75 : m.cy - 70;
     return [E, [HALL_X, y], [s.x, y], [s.x, s.y]];
   }
-  if (tipo === "cerca") return [E, [HALL_X, m.cy], [s.x, s.y]];
-  if (tipo === "lejos") return [E, [HALL_X, m.cy - 70], [s.x, m.cy - 70], [s.x, s.y]];
   return [E, [HALL_X, s.y], [s.x, s.y]];
 }
 
@@ -777,6 +787,7 @@ async function visitarHabs(c, ida, i, P = PUERTAS[0], ids = []) {
 
 // ----- Tienda y personal -----
 function abrirTienda(mesa = null, empleados = false, construir = false, anuncio = false, perfil = false) { // sin mesa: la tienda de la recepción; con mesa: el panel de mejoras de esa mesa; empleados: el panel de personal
+  if (menuMesaEl) menuMesaEl.hidden = true;
   mesaMejora = mesa;
   vistaEmpleados = empleados;
   vistaConstruir = construir;
@@ -788,11 +799,20 @@ function abrirTienda(mesa = null, empleados = false, construir = false, anuncio 
   ponerPausa(true);
   info(mesa ? "⏸️ Juego en pausa mientras mejoras la mesa " + mesa.id + "." : empleados ? "⏸️ Juego en pausa mientras ves a tus empleados." : anuncio ? "⏸️ Juego en pausa mientras eliges tus anuncios." : perfil ? "⏸️ Juego en pausa mientras ves tu perfil." : construir ? "⏸️ Juego en pausa mientras construyes." : "⏸️ Juego en pausa mientras estás en la tienda.");
 }
-function abrirMejorasMesa(m) { abrirTienda(m); }
+function abrirMejorasMesa(m) { // tocar una mesa: menú con «Mejoras» y «Personal» (el juego se pausa)
+  mesaMejora = m; tabMesa = "mejoras"; cosaSel = MEJORAS_MESA[0].id;
+  vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false;
+  $("tienda").hidden = true;
+  pintarMenuMesa();
+  menuMesa().hidden = false;
+  ponerPausa(true);
+  info("⏸️ Juego en pausa mientras mejoras la mesa " + m.id + ".");
+}
 function cerrarTienda() {
   const estabaEnPausa = pausado;
   mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false;
   $("tienda").hidden = true;
+  if (menuMesaEl) menuMesaEl.hidden = true;
   ponerPausa(false);
   if (estabaEnPausa) info("▶️ Juego reanudado.");
 }
@@ -855,21 +875,123 @@ function filaSimple(ico, nombre, texto, boton, deshabilitado, accion) {
   fila.append(i, t, b);
   return fila;
 }
-function pintarMejorasMesa(m, lista) {
-  $("tiendaTitulo").textContent = "🪑 Mesa " + m.id;
-  const res = document.createElement("small");
-  res.style.cssText = "display:block;margin:2px 0 6px;color:var(--suave)";
-  res.textContent = "Cada cliente de esta mesa paga " + dolares(pagoPorCliente(m)) + (bonoMesa(m) || bonoDeco() ? " (" + dolares(PAGO_POR_CLIENTE) + (bonoMesa(m) ? " + " + dolares(bonoMesa(m)) + " de mejoras" : "") + (bonoDeco() ? " + " + dolares(bonoDeco()) + " de decoración" : "") + ")" : " (sin mejoras todavía)") + ". Las mejoras son solo de esta mesa.";
-  lista.appendChild(res);
-  const maxB = BONO_MEJORAS.length;
-  for (const c of MEJORAS_MESA) {
-    const k = m.mejoras[c.id];
-    const txt = (nivel) => {
-      const hechas = nivel - 1;
-      return "Mejoras " + hechas + " de " + maxB + (hechas ? " · ya suma " + dolares(bonoAcum(hechas)) + " por cliente" : "") + (hechas < maxB ? " · la siguiente suma " + dolares(BONO_MEJORAS[hechas]) : " · al máximo");
-    };
-    lista.appendChild(filaTienda(c.ico, c.nombre, { nivel: k + 1 }, 0, c.precios, txt, null, () => mejorarCosaMesa(m, c.id)));
+// ----- Menú de la mesa (al tocarla): pestañas «Mejoras» y «Personal» -----
+function menuMesa() { // se crea la primera vez que se necesita (junto con su estilo)
+  if (menuMesaEl) return menuMesaEl;
+  const st = document.createElement("style");
+  st.textContent = [
+    ".mm{position:fixed;inset:0;z-index:150;display:flex;align-items:center;justify-content:center;padding:8px;background:rgba(10,6,2,.6)}",
+    ".mm-caja{width:min(100%,470px);max-height:100%;overflow-y:auto;color:#fff;background:linear-gradient(#ff9440,#ffb74d 60%,#ffc870);border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.6);padding-bottom:14px}",
+    ".mm-tabs{display:flex;gap:4px;padding:8px 8px 0;background:#8f2d00;border-radius:18px 18px 0 0}",
+    ".mm-tab{flex:1;padding:10px 6px;font:inherit;font-size:1.05rem;font-weight:800;color:#ffd9b3;background:#b83c00;border:0;border-radius:14px 14px 0 0;cursor:pointer}",
+    ".mm-tab.act{color:#fff;background:#ff9440}",
+    ".mm-atras{flex:0 0 52px;font-size:1.3rem}",
+    ".mm-cab{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:10px 12px 8px}",
+    ".mm-titulo{margin:0;font-size:1.9rem;font-weight:900;text-shadow:0 2px 0 rgba(120,40,0,.55)}",
+    ".mm-pildora{padding:7px 12px;font-size:.85rem;font-weight:800;background:#7a2200;border-radius:999px}",
+    ".mm-barra{position:relative;height:26px;margin:0 12px 10px;overflow:hidden;background:#c43e00;border-radius:8px}",
+    ".mm-relleno{position:absolute;inset:0 auto 0 0;background:#12b3a6;border-radius:8px}",
+    ".mm-pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.95rem;font-weight:900;text-shadow:0 1px 0 rgba(0,0,0,.4)}",
+    ".mm-stats{display:flex;justify-content:space-around;gap:8px;margin:0 12px 12px;padding:8px 10px;font-size:1.15rem;font-weight:900;background:#5a1c00;border-radius:12px}",
+    ".mm-card{margin:0 12px 14px;padding:12px;color:#5a2a12;background:#fff;border-radius:14px;box-shadow:0 3px 0 rgba(120,50,0,.35)}",
+    ".mm-card-cab{display:flex;align-items:center;justify-content:space-between;gap:8px}",
+    ".mm-card-nombre{font-size:1.3rem}",
+    ".mm-nivel{padding:4px 18px;font-size:.8rem;font-weight:900;color:#fff;background:#5a1c00;border-radius:8px}",
+    ".mm-card-cuerpo{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px}",
+    ".mm-card-ico{font-size:3rem;line-height:1}",
+    ".mm-card-txt{flex:1;min-width:140px}",
+    ".mm-card-txt p{margin:0 0 8px;font-size:.85rem;font-weight:700;line-height:1.25}",
+    ".mm-ingreso{display:flex;gap:18px;font-weight:900}",
+    ".mm-mas{color:#1faa59}",
+    ".mm-mejorar{min-width:104px;padding:8px 12px;font:inherit;font-weight:900;color:#fff;text-align:center;background:linear-gradient(#3fdc6a,#1faa59);border:0;border-radius:12px;box-shadow:0 4px 0 #148040;cursor:pointer}",
+    ".mm-mejorar:disabled{background:#b7b7b7;box-shadow:0 4px 0 #8a8a8a;cursor:default}",
+    ".mm-mejorar span{display:block}",
+    ".mm-rejilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px;padding:0 12px}",
+    ".mm-tile{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px 6px;font:inherit;color:#fff;background:#c43e00;border:0;border-radius:12px;box-shadow:0 4px 0 #8f2d00;cursor:pointer}",
+    ".mm-tile.sel{color:#5a2a12;background:#fff;box-shadow:0 4px 0 #c9a88a}",
+    ".mm-tile-ico{font-size:1.9rem;line-height:1.1}",
+    ".mm-tile-nom{font-size:.68rem;font-weight:800}",
+    ".mm-tile-niv{padding:2px 6px;font-size:.62rem;font-weight:900;color:#fff;background:#5a1c00;border-radius:6px}",
+    ".mm-tile-niv.ok{background:#1faa59}",
+    ".mm-tile-niv.max{background:#d19a1f}",
+    ".mm-personal{max-height:55vh;margin:0 12px;padding:4px 10px 8px;overflow-y:auto;background:#4a1a05;border-radius:14px}",
+  ].join("\n");
+  document.head.appendChild(st);
+  menuMesaEl = document.createElement("div");
+  menuMesaEl.className = "mm";
+  menuMesaEl.hidden = true;
+  menuMesaEl.setAttribute("role", "dialog");
+  menuMesaEl.setAttribute("aria-label", "Menú de la mesa");
+  menuMesaEl.addEventListener("click", (e) => { if (e.target === menuMesaEl) cerrarTienda(); }); // tocar fuera del cuadro lo cierra
+  document.body.appendChild(menuMesaEl);
+  return menuMesaEl;
+}
+function pintarMenuMesa() {
+  const m = mesaMejora;
+  if (!m) return;
+  const raiz = menuMesa(), previo = raiz.firstChild ? raiz.firstChild.scrollTop : 0;
+  raiz.innerHTML = "";
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
+  const caja = el("div", "mm-caja");
+  const personal = tabMesa === "personal";
+
+  const tabs = el("div", "mm-tabs");
+  const atras = el("button", "mm-tab mm-atras", "←");
+  atras.setAttribute("aria-label", "Cerrar");
+  atras.addEventListener("click", cerrarTienda);
+  const tMejoras = el("button", "mm-tab" + (personal ? "" : " act"), "Mejoras");
+  const tPersonal = el("button", "mm-tab" + (personal ? " act" : ""), "👥 Personal");
+  tMejoras.addEventListener("click", () => { tabMesa = "mejoras"; pintarMenuMesa(); });
+  tPersonal.addEventListener("click", () => { tabMesa = "personal"; pintarMenuMesa(); });
+  tabs.append(atras, tMejoras, tPersonal);
+
+  const cab = el("div", "mm-cab");
+  cab.appendChild(el("h2", "mm-titulo", personal ? "Personal" : "Mesa " + m.id));
+  if (!personal) cab.appendChild(el("span", "mm-pildora", "💵 Paga " + dolares(pagoPorCliente(m)) + " por cliente"));
+  caja.append(tabs, cab);
+
+  if (personal) {
+    const stats = el("div", "mm-stats");
+    stats.appendChild(el("span", null, "💰 " + dolares(dinero)));
+    const lista = el("div", "mm-personal");
+    pintarEmpleados(lista);
+    caja.append(stats, lista);
+  } else {
+    const c = MEJORAS_MESA.find((x) => x.id === cosaSel) || MEJORAS_MESA[0], k = m.mejoras[c.id], max = c.precios.length, precio = c.precios[k];
+    const total = MEJORAS_MESA.length * BONO_MEJORAS.length, pct = (totalMejoras(m) / total) * 100;
+    const barra = el("div", "mm-barra"), rel = el("div", "mm-relleno");
+    rel.style.width = pct + "%";
+    barra.append(rel, el("span", "mm-pct", "⬆ " + pct.toFixed(2) + "%"));
+
+    const stats = el("div", "mm-stats");
+    stats.append(el("span", null, "💰 " + dolares(dinero)), el("span", null, "💵 " + dolares(pagoPorCliente(m))), el("span", null, "👥 4"));
+
+    const tarj = el("div", "mm-card"), cab2 = el("div", "mm-card-cab");
+    cab2.append(el("b", "mm-card-nombre", c.nombre), el("span", "mm-nivel", k >= max ? "Nivel: MÁX" : "Nivel: " + (k + 1)));
+    const cuerpo = el("div", "mm-card-cuerpo"), txt = el("div", "mm-card-txt"), ing = el("div", "mm-ingreso");
+    ing.append(el("span", null, "💵 " + dolares(bonoAcum(k))), el("span", "mm-mas", k < max ? "+" + dolares(BONO_MEJORAS[k]) : "MÁX"));
+    txt.append(el("p", null, c.nombre + ": mejora este elemento para aumentar el dinero recaudado en esta mesa."), ing);
+    const btn = el("button", "mm-mejorar");
+    btn.append(el("span", null, k >= max ? "MÁXIMO" : "💵 " + dolares(precio)), el("span", null, k >= max ? "" : "MEJORAR"));
+    btn.disabled = k >= max || dinero < precio;
+    btn.addEventListener("click", () => mejorarCosaMesa(m, c.id));
+    cuerpo.append(el("div", "mm-card-ico", c.ico), txt, btn);
+    tarj.append(cab2, cuerpo);
+
+    const rej = el("div", "mm-rejilla");
+    for (const q of MEJORAS_MESA) {
+      const kk = m.mejoras[q.id], mx = q.precios.length, puede = kk < mx && dinero >= q.precios[kk];
+      const t = el("button", "mm-tile" + (q.id === c.id ? " sel" : ""));
+      t.title = q.nombre;
+      t.append(el("span", "mm-tile-ico", q.ico), el("span", "mm-tile-nom", q.nombre),
+        el("span", "mm-tile-niv" + (kk >= mx ? " max" : puede ? " ok" : ""), kk >= mx ? "MÁX" : (puede ? "⬆ " : "") + "Nivel: " + (kk + 1)));
+      t.addEventListener("click", () => { cosaSel = q.id; pintarMenuMesa(); });
+      rej.appendChild(t);
+    }
+    caja.append(barra, stats, tarj, rej);
   }
+  raiz.appendChild(caja);
+  caja.scrollTop = previo;
 }
 function mejorarCosaMesa(m, id) {
   const c = MEJORAS_MESA.find((x) => x.id === id), k = m.mejoras[id], precio = c && c.precios[k];
@@ -884,7 +1006,6 @@ function pintarTienda() {
   const lista = $("tiendaLista");
   lista.style.cssText = "max-height:52vh;overflow-y:auto"; // con tantas filas, la lista se desplaza
   lista.innerHTML = "";
-  if (mesaMejora) { pintarMejorasMesa(mesaMejora, lista); return; }
   if (vistaEmpleados) { pintarEmpleados(lista); return; }
   if (vistaConstruir) { pintarConstruir(lista); return; }
   if (vistaAnuncios) { pintarAnuncios(lista); return; }
@@ -1554,7 +1675,7 @@ function dibujarMesa(m) {
   const nm = totalMejoras(m);
   const etq = ESCALA < 0.8 ? String(m.id) : "Mesa " + m.id; // con objetos pequeños solo el número, para no tapar las sillas
   texto(etq + (nm ? " ★" + nm : ""), sx, sy + 9 * ESCALA, 10, nm ? "#ffe082" : "#fff", "center"); // ★ = mejoras compradas en esa mesa
-  [["cubiertos", "🍴", -20, 14], ["bebidas", "🥤", 14, -20], ["servilletas", "🧻", 20, 18]].forEach(([id, em, dx, dy]) => {
+  [["cubiertos", "🍴", -20, 14], ["bebidas", "🥤", 14, -20], ["condimentos", "🧂", 20, 18], ["decoracion", "🪴", -22, -22]].forEach(([id, em, dx, dy]) => {
     const k = m.mejoras[id];
     if (k) { const [ex, ey] = iso(m.cx + dx, m.cy + dy, 24); emoji(em, ex, ey, (10 + k * 1.6) * ESCALA); }
   });
@@ -1572,10 +1693,11 @@ function dibujarMesa(m) {
     ctx.fillStyle = m.barra.color; ctx.fillRect(sx - bw / 2, by, bw * f, bh);
   }
 }
-function dibujarSilla(s, m) {
-  caja3d(ctx, s.x - 10, s.y - 10, s.x + 10, s.y + 10, 10, SILLA, "#5b4636");
-  const k = m.mejoras.sillas, cojin = SILLA_COJINES[k];
-  if (cojin) caja3d(ctx, s.x - 8, s.y - 8, s.x + 8, s.y + 8, 10 + k, cojin, "#5b4636"); // cada nivel la hace un poco más alta
+function dibujarSilla(s, m, tipo) { // banca larga para 2 personas: la de arriba es la «Silla 1» y la de abajo la «Silla 2»
+  const L = BANCA_LARGO / 2;
+  caja3d(ctx, s.x - L, s.y - 10, s.x + L, s.y + 10, 10, SILLA, "#5b4636");
+  const k = tipo === "arriba" ? m.mejoras.silla1 : m.mejoras.silla2, cojin = SILLA_COJINES[k];
+  if (cojin) caja3d(ctx, s.x - L + 2, s.y - 8, s.x + L - 2, s.y + 8, 10 + k, cojin, "#5b4636"); // cada nivel la hace un poco más alta
 }
 function dibujarMostrador() {
   caja3d(ctx, 20 + DX + KX, 40, 250 + DX + KX, 70, 26, ACERO, "#546e7a");
@@ -1686,7 +1808,7 @@ function dibujar() {
   const cola = [];
   for (const m of mesas) {
     cola.push({ d: m.cx + m.cy, f: () => dibujarMesa(m) });
-    for (const t of ORDEN_SILLAS) { const s = silla(m, t); cola.push({ d: s.x + s.y - 0.5, f: () => dibujarSilla(s, m) }); }
+    for (const t of BANCAS) { const s = silla(m, t); cola.push({ d: s.x + s.y - 15, f: () => dibujarSilla(s, m, t) }); } // -15: la banca se pinta antes que las 2 personas sentadas en ella
   }
   cola.push({ d: 190 + DX + KX, f: dibujarMostrador });
   cola.push({ d: 222 + DX + KX, f: dibujarChef });
@@ -1776,8 +1898,8 @@ function cuadro() {
     if (vencidas.length) { esperas = esperas.filter((w) => hoy < w.fin); vencidas.forEach((w) => { if (w.g === gen) w.r(); }); }
   }
   reloj += dt * 1000; // (con la tienda abierta «dt» es 0: el reloj también se pausa)
-  if (reloj >= proxLlegada) { llegar(OPCIONES[Math.floor(Math.random() * OPCIONES.length)]); proxLlegada = reloj + azar(LLEGADA_MIN_MS, LLEGADA_MAX_MS) / (1 + bonoClientes()); }
-  if (reloj >= proxAuto) { llegarAuto(); proxAuto = reloj + azar(AUTO_MIN_MS, AUTO_MAX_MS) / (1 + bonoClientes()); }
+  if (reloj >= proxLlegada) { llegar(OPCIONES[Math.floor(Math.random() * OPCIONES.length)]); proxLlegada = reloj + azar(LLEGADA_MIN_MS, LLEGADA_MAX_MS) / ((1 + bonoClientes()) * ritmoLlegadas()); }
+  if (reloj >= proxAuto) { llegarAuto(); proxAuto = reloj + azar(AUTO_MIN_MS, AUTO_MAX_MS) / ((1 + bonoClientes()) * ritmoLlegadas()); }
   const seg = Math.floor(reloj / 1000);
   if (seg !== ultimoSeg) { ultimoSeg = seg; $("tiempo").textContent = fmtTiempo(seg); }
   for (const e of ents) {
@@ -2099,7 +2221,7 @@ function pintarPartidas() {
       boton("➕ Crear aquí", () => crearEn(i));
     } else {
       const mes = Array.isArray(d.mesas) ? d.mesas : [];
-      const mejoras = mes.reduce((tot, m) => tot + MEJORAS_MESA.reduce((s2, c) => s2 + Math.max(0, Math.min(5, Math.floor(num(m.mejoras && m.mejoras[c.id])))), 0), 0);
+      const mejoras = mes.reduce((tot, m) => tot + MEJORAS_MESA.reduce((s2, c) => s2 + Math.max(0, Math.min(5, Math.floor(num(m.mejoras && (m.mejoras[c.id] !== undefined ? m.mejoras[c.id] : m.mejoras[c.viejo]))))), 0), 0);
       const rec = (Array.isArray(d.receps) ? d.receps : []).filter((n) => num(n) > 0).length;
       const mer = (Array.isArray(d.meseros) ? d.meseros : []).filter((n) => num(n) > 0).length;
       const nLotes = Array.isArray(d.lotes) ? d.lotes.length : d.lote ? 1 : 0;
