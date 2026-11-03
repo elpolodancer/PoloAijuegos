@@ -1,6 +1,6 @@
 // Ruta: rompecabezas/juego.js
 // Rompecabezas con 4 pantallas (menú → categoría → ajustes → juego), piezas con lengüetas,
-// número de piezas con deslizador, rotación opcional, pausa, vista fija (sin zoom) y subida segura a imgbb
+// número de piezas con deslizador, rotación opcional, pausa, zoom opcional (nunca se ve menos que la vista inicial) y subida segura a imgbb
 // mediante un Apps Script (la API key NUNCA va aquí).
 
 import { URL_SUBIDA_IMAGENES } from "../compartido/configs.js";
@@ -20,6 +20,9 @@ const MARGEN_PX = 3;            // aire (px) entre el tablero y el borde de la p
 const TABLERO_MAX = 0.72;       // el tablero nunca ocupa más de este % del otro lado de la pantalla (así siempre queda sitio para las piezas)
 const BOTON_PX = 64;            // zona (px) de la esquina superior derecha que tapa el botón de pausa: ahí no se reparten piezas
 const GUIA_TENUE = 0;           // transparencia de la imagen sobre el tablero (0 = vacío, como el original)
+const ZOOM_MAX = 8;             // acercamiento máximo (1 = vista inicial; no se puede alejar por debajo de 1)
+const ZOOM_DOBLE = 2.5;         // acercamiento del doble toque / doble clic sobre una zona vacía
+const DOBLE_TOQUE_MS = 320;     // tiempo máximo entre los dos toques
 const TAP_PX = 8;               // movimiento máximo (px) para que un toque cuente como «girar pieza» (solo con rotación activada)
 const SPRITE_MAX_PX = 16e6;     // al arrastrar, el grupo viaja como imagen flotante; si su área (px) pasa de esto, se ve con menos resolución SOLO mientras lo mueves
 const PIEZAS_POR_PUNTO = 8;     // al perfil: 1 punto por cada 8 piezas
@@ -48,7 +51,10 @@ let opciones = [], idx = 0, bordes = null;
 let cols = 0, rows = 0, rotacion = false;
 let pw = PIEZA_W, ph = PIEZA_W, BW = 0, BH = 0, padW = 0, kS = 1;
 let piezas = [], sueltas = [], colocadas = 0;   // «sueltas» ahora es la lista de GRUPOS sin fijar (el último está arriba)
-let cam = { x: 0, y: 0, s: 1 };   // la vista es FIJA: no hay zoom ni desplazamiento; solo se recalcula al girar/cambiar el tamaño de la pantalla
+let cam = { x: 0, y: 0, s: 1 };   // vista ACTUAL (la que se dibuja): es la vista inicial (base) con el zoom y el desplazamiento aplicados
+let base = { x: 0, y: 0, s: 1 };  // vista INICIAL: todo el tablero y las piezas a la vista. El zoom nunca se aleja más que esto
+let zoom = 1;                   // 1 = vista inicial; hasta ZOOM_MAX
+let pan = null, pinch = null, vacio = null, ultToque = null;   // gestos de la vista (desplazar, pellizcar, doble toque)
 let modoHor = true;             // true = pantalla horizontal (PC): tablero a lo alto y piezas a los lados; false = vertical (celular)
 let guia = false, t0 = 0, acum = 0, terminado = false, iniciado = false, pausado = false;
 let sucio = false, temporizadorMsg = null, rafPrev = 0;
@@ -506,16 +512,17 @@ function iniciar() {
 // ---------- VISTA FIJA Y REPARTO ----------
 // Pantalla horizontal (PC): el tablero ocupa TODO el alto y las piezas van en las franjas sobrantes de la izquierda y la derecha.
 // Pantalla vertical (celular): el tablero ocupa TODO el ancho y las piezas van en las franjas sobrantes de arriba y de abajo.
-// No hay zoom ni desplazamiento: todo lo que existe está siempre a la vista (las piezas pueden quedar muy juntas).
+// Al empezar, todo está a la vista (vista inicial). Después se puede acercar con zoom, pero nunca alejar más que esa vista.
 function ajustarCamara() {
   const W = lienzo.width / dpr, H = lienzo.height / dpr;
   if (!(W > 0 && H > 0 && BW > 0 && BH > 0)) return null;
   const hor = W >= H;
   let s = hor ? (H - 2 * MARGEN_PX) / BH : (W - 2 * MARGEN_PX) / BW;
   s = Math.min(s, hor ? (W * TABLERO_MAX) / BW : (H * TABLERO_MAX) / BH);   // imágenes muy anchas/altas: se reserva sitio para las piezas
-  cam.s = s;
-  cam.x = BW / 2 - W / (2 * s);
-  cam.y = BH / 2 - H / (2 * s);
+  base = { x: BW / 2 - W / (2 * s), y: BH / 2 - H / (2 * s), s };
+  zoom = 1;                                       // al repartir, girar o cambiar el tamaño de la pantalla se vuelve a la vista inicial
+  pan = pinch = vacio = null;
+  cam.s = base.s; cam.x = base.x; cam.y = base.y;
   modoHor = hor;
   return { hor, W, H };
 }
@@ -668,7 +675,34 @@ async function ganar() {
   } catch (e) {}
 }
 
-// ---------- ARRASTRE Y GIRO (sin zoom ni desplazamiento de la vista) ----------
+// ---------- ZOOM: solo acercar; la vista nunca muestra más que la vista inicial ----------
+function limitarCam() {                           // la vista actual debe quedar siempre dentro de la vista inicial
+  const W = lienzo.width / dpr, H = lienzo.height / dpr;
+  const mx = Math.max(0, W / base.s - W / cam.s), my = Math.max(0, H / base.s - H / cam.s);
+  cam.x = Math.min(base.x + mx, Math.max(base.x, cam.x));
+  cam.y = Math.min(base.y + my, Math.max(base.y, cam.y));
+}
+// Aplica un zoom z (entre 1 y ZOOM_MAX) dejando el punto del mundo (wx, wy) justo bajo el punto de pantalla (fx, fy)
+function ponerZoom(z, fx, fy, wx, wy) {
+  zoom = Math.min(ZOOM_MAX, Math.max(1, z));
+  cam.s = base.s * zoom;
+  cam.x = wx - fx / cam.s;
+  cam.y = wy - fy / cam.s;
+  limitarCam();
+  pedir();
+}
+function dobleToque(v) {                          // doble toque / doble clic en una zona vacía: acerca, o restaura si ya estaba acercado
+  const t = Date.now();
+  if (ultToque && t - ultToque.t < DOBLE_TOQUE_MS && Math.hypot(v.sx - ultToque.x, v.sy - ultToque.y) < 30) {
+    ultToque = null;
+    if (zoom > 1) ponerZoom(1, 0, 0, base.x, base.y);
+    else { const w = aMundo(v.sx, v.sy); ponerZoom(ZOOM_DOBLE, v.sx, v.sy, w.x, w.y); }
+    return;
+  }
+  ultToque = { t, x: v.sx, y: v.sy };
+}
+
+// ---------- ARRASTRE Y GIRO ----------
 const punt = new Map();
 let arr = null;
 // La posición se limita al lienzo: así una pieza nunca puede quedar arrastrada fuera de la pantalla
@@ -775,7 +809,15 @@ function soltar() {
 lienzo.addEventListener("pointerdown", (e) => {
   if (!fuente || !piezas.length || pausado || terminado) return;
   e.preventDefault();
-  if (punt.size) return;                          // un solo dedo a la vez: el pellizco no hace nada (no hay zoom)
+  if (punt.size) {                                // ya hay un dedo apoyado
+    if (arr || pinch || punt.size > 1) return;    // si arrastra una pieza (o ya hay pellizco) el dedo extra no hace nada
+    lienzo.setPointerCapture(e.pointerId);        // dedo vacío + otro dedo vacío = pellizco para el zoom
+    punt.set(e.pointerId, pos(e));
+    const [a, b] = [...punt.values()];
+    pinch = { d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), z0: zoom, w: aMundo((a.x + b.x) / 2, (a.y + b.y) / 2) };
+    pan = null; vacio = null;
+    return;
+  }
   lienzo.setPointerCapture(e.pointerId);
   rectL = null;                                   // al empezar un gesto se recalcula la posición del lienzo una vez
   const p = pos(e);
@@ -787,13 +829,31 @@ lienzo.addEventListener("pointerdown", (e) => {
     sueltas.splice(sueltas.indexOf(hit.g), 1);
     sueltas.push(hit.g);                          // el grupo queda encima
     iniciarReloj();                               // (no se redibuja nada al tocar: no se ve ningún cambio todavía)
+  } else {                                        // zona vacía: con zoom se puede desplazar la vista arrastrando
+    vacio = { sx: p.x, sy: p.y, mov: false };
+    pan = zoom > 1 ? { px: p.x, py: p.y, cx: cam.x, cy: cam.y } : null;
   }
 });
 
 lienzo.addEventListener("pointermove", (e) => {
-  if (!punt.has(e.pointerId) || !arr) return;
+  if (!punt.has(e.pointerId)) return;
   const p = pos(e);
   punt.set(e.pointerId, p);
+  if (pinch) {                                    // pellizco: zoom (y desplazamiento si se mueven los dos dedos juntos)
+    const [a, b] = [...punt.values()];
+    ponerZoom(pinch.z0 * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d0, (a.x + b.x) / 2, (a.y + b.y) / 2, pinch.w.x, pinch.w.y);
+    return;
+  }
+  if (!arr) {                                     // dedo en zona vacía: desplazar la vista (solo hay algo que desplazar con zoom)
+    if (vacio && Math.hypot(p.x - vacio.sx, p.y - vacio.sy) > TAP_PX) vacio.mov = true;
+    if (pan) {
+      cam.x = pan.cx - (p.x - pan.px) / cam.s;
+      cam.y = pan.cy - (p.y - pan.py) / cam.s;
+      limitarCam();
+      pedir();
+    }
+    return;
+  }
   const w = aMundo(p.x, p.y);                     // la pieza sigue al dedo desde el primer píxel (sin zona muerta)
   const dx = w.x - arr.lx, dy = w.y - arr.ly;
   arr.lx = w.x; arr.ly = w.y;
@@ -808,6 +868,17 @@ lienzo.addEventListener("pointermove", (e) => {
 function fin(e) {
   if (!punt.has(e.pointerId)) return;
   punt.delete(e.pointerId);
+  if (pinch) {                                    // se levantó un dedo del pellizco: el que queda sigue desplazando la vista
+    pinch = null;
+    const resto = [...punt.values()][0];
+    pan = resto && zoom > 1 ? { px: resto.x, py: resto.y, cx: cam.x, cy: cam.y } : null;
+    return;
+  }
+  if (!arr) {
+    if (vacio && !vacio.mov && e.type === "pointerup") dobleToque(vacio);
+    vacio = null; pan = null;
+    return;
+  }
   if (arr) {
     if (!arr.mov && rotacion && e.type === "pointerup") {   // un toque sin arrastrar gira la pieza 90°
       const { g: gr, pz, tx, ty } = arr;
@@ -822,8 +893,16 @@ lienzo.addEventListener("pointerup", fin);
 lienzo.addEventListener("pointercancel", fin);
 lienzo.addEventListener("contextmenu", (e) => e.preventDefault());
 
-// Sin zoom: la rueda del ratón (y Ctrl + rueda) no hace nada sobre el juego; en iPhone se bloquea también el pellizco
-lienzo.addEventListener("wheel", (e) => e.preventDefault(), { passive: false });
+// Rueda del ratón (o pellizco en el trackpad): acerca/aleja alrededor del cursor, sin pasar nunca de la vista inicial
+lienzo.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  if (!fuente || !piezas.length || pausado || terminado || arr || pinch) return;
+  rectL = null;
+  const p = pos(e);
+  const w = aMundo(p.x, p.y);
+  ponerZoom(zoom * Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015)), p.x, p.y, w.x, w.y);
+}, { passive: false });
+// En iPhone se bloquea el zoom de la página (el zoom del juego lo hace el código con el pellizco)
 for (const ev of ["gesturestart", "gesturechange", "gestureend"]) {
   document.addEventListener(ev, (e) => { if (!$("juego").hidden) e.preventDefault(); }, { passive: false });
 }
