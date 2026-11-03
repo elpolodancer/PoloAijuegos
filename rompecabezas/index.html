@@ -84,6 +84,9 @@
     #juego { position: fixed; inset: 0; background: #cbb68e var(--lino, none); }
     #lienzo { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
     .pausa { position: fixed; z-index: 5; top: calc(env(safe-area-inset-top, 0px) + var(--u) * 3); right: calc(var(--u) * 3.5); }
+    .guardarp { position: fixed; z-index: 5; top: calc(env(safe-area-inset-top, 0px) + var(--u) * 3); right: calc(var(--u) * 19); }
+    .marco { position: relative; }
+    .borrar { position: absolute; top: calc(var(--u) * 1); right: calc(var(--u) * 1); display: grid; place-items: center; width: calc(var(--u) * 8); height: calc(var(--u) * 8); border-radius: 50%; background: rgba(0, 0, 0, .6); color: #fff; font-size: calc(var(--u) * 4); line-height: 1; }
 
     /* Menús encima del juego */
     .velo { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: rgba(10, 28, 46, .72); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
@@ -147,6 +150,9 @@
     <button class="redondo pausa" id="pausa" aria-label="Pausa">
       <svg viewBox="0 0 24 24" fill="#2b6ea6"><rect x="5.5" y="4" width="4.6" height="16" rx="1"/><rect x="13.9" y="4" width="4.6" height="16" rx="1"/></svg>
     </button>
+    <button class="redondo guardarp" id="guardarPartida" aria-label="Guardar partida" title="Guardar partida">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#2b6ea6" stroke-width="2" stroke-linejoin="round"><path d="M5 3h11l4 4v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M8 3v5h7V3"/><rect x="7.5" y="13" width="9" height="8"/></svg>
+    </button>
   </section>
 
   <div class="velo" id="pausaMenu" hidden>
@@ -155,6 +161,7 @@
       <p id="pausaInfo"></p>
       <button class="b-lima" id="pContinuar">Continuar</button>
       <button class="b-blanco" id="pGuia">Ver imagen guía</button>
+      <button class="b-blanco" id="pGuardar">Guardar partida</button>
       <button class="b-blanco" id="pMezclar">Mezclar de nuevo</button>
       <button class="b-blanco" id="pPiezas">Cambiar piezas</button>
       <button class="b-blanco" id="pSalir">Salir</button>
@@ -168,6 +175,15 @@
       <button class="b-lima" id="fOtra">Jugar otra vez</button>
       <button class="b-blanco" id="fPiezas">Cambiar piezas</button>
       <button class="b-blanco" id="fSalir">Elegir otra imagen</button>
+    </div>
+  </div>
+
+  <div class="velo" id="loginMenu" hidden>
+    <div class="panel" role="dialog" aria-label="Iniciar sesión para guardar">
+      <h2>Inicia sesión</h2>
+      <p>Para guardar la partida, tu imagen se sube a tu galería y eso necesita que entres con Google.</p>
+      <button class="b-lima" id="lEntrar">Entrar con Google</button>
+      <button class="b-blanco" id="lCancelar">Ahora no</button>
     </div>
   </div>
 

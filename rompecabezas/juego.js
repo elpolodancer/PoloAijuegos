@@ -1,6 +1,6 @@
 // Ruta: rompecabezas/juego.js
 // Rompecabezas con 4 pantallas (menú → categoría → ajustes → juego), piezas con lengüetas,
-// número de piezas con deslizador, rotación opcional, pausa, zoom opcional (nunca se ve menos que la vista inicial) y subida segura a imgbb
+// número de piezas con deslizador, rotación opcional, pausa, zoom opcional (nunca se ve menos que la vista inicial), guardar/continuar partida y subida segura a imgbb
 // mediante un Apps Script (la API key NUNCA va aquí).
 
 import { URL_SUBIDA_IMAGENES } from "../compartido/configs.js";
@@ -18,7 +18,7 @@ const IMAN = 0.35;              // qué tan cerca (fracción de pieza) para que 
 const UNION = 0.35;             // qué tan cerca (fracción de pieza) para que dos piezas vecinas se peguen entre sí (en cualquier parte)
 const MARGEN_PX = 3;            // aire (px) entre el tablero y el borde de la pantalla, para que se vea su contorno
 const TABLERO_MAX = 0.72;       // el tablero nunca ocupa más de este % del otro lado de la pantalla (así siempre queda sitio para las piezas)
-const BOTON_PX = 64;            // zona (px) de la esquina superior derecha que tapa el botón de pausa: ahí no se reparten piezas
+const BOTON_PX = 130;           // zona (px) de la esquina superior derecha que tapan los botones de guardar y pausa: ahí no se reparten piezas
 const GUIA_TENUE = 0;           // transparencia de la imagen sobre el tablero (0 = vacío, como el original)
 const ZOOM_MAX = 8;             // acercamiento máximo (1 = vista inicial; no se puede alejar por debajo de 1)
 const ZOOM_DOBLE = 2.5;         // acercamiento del doble toque / doble clic sobre una zona vacía
@@ -30,12 +30,15 @@ const GUARDADAS_MAX = 60;       // cuántas imágenes se recuerdan en «Mis imá
 const CLAVE_GALERIA = "rompecabezas:imagenes";
 const CLAVE_HUELLAS = "rompecabezas:huellas";   // «huella» de cada imagen ya subida → su enlace (así la misma imagen no se sube dos veces)
 const HUELLAS_MAX = 200;
+const CLAVE_PARTIDAS = "rompecabezas:partidas";   // partidas guardadas (en este dispositivo); la imagen vive en imgbb
+const PARTIDAS_MAX = 12;        // cuántas partidas se recuerdan (las más viejas se olvidan)
 
 // Categorías del menú. Tipos: «galeria» (tus imágenes guardadas en imgbb), «archivo» (elegir del dispositivo)
 // y «urls» (imágenes fijas de ibb.co):  { id: "familia", nombre: "Familia", tipo: "urls", urls: ["https://i.ibb.co/..."] }
 const CATEGORIAS = [
   { id: "mias", nombre: "Mis imágenes", tipo: "galeria", emoji: "📷" },
   { id: "archivo", nombre: "Desde mi dispositivo", tipo: "archivo", emoji: "➕" },
+  { id: "partidas", nombre: "Partidas guardadas", tipo: "partidas", emoji: "💾" },
 ];
 
 // ---------- ESTADO ----------
@@ -177,6 +180,7 @@ function pintarMenu() {
   CATEGORIAS.forEach((c, i) => {
     let marco;
     if (c.tipo === "galeria" && leerGaleria()[0]) marco = marcoImg(leerGaleria()[0]);   // vista previa: la más reciente
+    else if (c.tipo === "partidas" && leerPartidas()[0]) marco = marcoImg(leerPartidas()[0].url);   // vista previa: la más reciente
     else if (c.tipo === "urls" && c.urls && c.urls[0] && urlValida(c.urls[0])) marco = marcoImg(c.urls[0]);
     else marco = marcoEmoji(c.emoji || "🧩", i + 3);
     cont.appendChild(carta(marco, c.nombre, () => abrirCategoria(c)));
@@ -193,6 +197,23 @@ function abrirCategoria(c) {
     const lista = leerGaleria();
     if (!lista.length) vacio("Aún no hay imágenes guardadas. Elige una desde tu dispositivo: al jugar se guarda aquí sola (necesitas haber entrado con Google en el portal).");
     for (const u of lista) cont.appendChild(carta(marcoImg(u), "", () => elegirUrl(u, "cat")));
+  } else if (c.tipo === "partidas") {
+    const lista = leerPartidas();
+    if (!lista.length) vacio("Aún no hay partidas guardadas. Dentro del juego toca el botón 💾 para guardar tu avance.");
+    for (const s of lista) {
+      const b = carta(marcoImg(s.url), s.cols * s.rows + " piezas · " + s.col + "/" + s.cols * s.rows + " · " + fmt(s.t), () => abrirPartida(s));
+      const x = document.createElement("span");
+      x.className = "borrar"; x.setAttribute("role", "button"); x.setAttribute("aria-label", "Borrar partida"); x.textContent = "✕";
+      x.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (!confirm("¿Borrar esta partida guardada?")) return;
+        borrarPartida(s.id);
+        pintarMenu();
+        abrirCategoria(c);
+      });
+      b.querySelector(".marco").appendChild(x);
+      cont.appendChild(b);
+    }
   } else if (c.tipo === "urls") {
     const lista = (c.urls || []).filter(urlValida);
     if (!lista.length) vacio("Esta categoría no tiene imágenes válidas de ibb.co.");
@@ -312,7 +333,7 @@ function abrirAjustes(desde) {
 $("rango").addEventListener("input", () => { idx = Number($("rango").value); aplicarOpcion(); });
 $("rot").addEventListener("click", () => ponerRotacion(!rotacion));
 $("cfgCerrar").addEventListener("click", () => pantalla(volverA));
-$("jugar").addEventListener("click", jugar);
+$("jugar").addEventListener("click", () => jugar());
 addEventListener("resize", () => { if (!$("cfg").hidden) dibujarPrev(); });
 
 // ---------- RESPONSIVE / DIBUJO DEL JUEGO ----------
@@ -484,7 +505,7 @@ function hacerPieza(r, c, w, h, t, pad, s) {
   return cv;
 }
 
-function iniciar() {
+function iniciar(guardada) {
   if (!fuente) return;
   ocultarFlota();
   acum = 0; t0 = 0; terminado = false; iniciado = false; pausado = false; colocadas = 0; guia = false;
@@ -506,7 +527,8 @@ function iniciar() {
       piezas.push({ r, c, x: 0, y: 0, rot: 0, ok: false, cv: hacerPieza(r, c, pwS, phS, t, pad, s) });
     }
   }
-  repartir();
+  if (guardada && !restaurar(guardada)) { aviso("La partida guardada estaba dañada: se repartieron las piezas de nuevo"); repartir(); }
+  else if (!guardada) repartir();
 }
 
 // ---------- VISTA FIJA Y REPARTO ----------
@@ -606,17 +628,17 @@ function repartir() {
   pedir();
 }
 
-function jugar() {
+function jugar(guardada) {   // guardada: partida a restaurar (si no, se reparte una nueva)
   if (!fuente) return;
   pantalla("juego");
   tamano();
   $("pausaMenu").hidden = true; $("finMenu").hidden = true;
-  if (opciones[idx].n > 300) {
+  if (cols * rows > 300) {
     aviso("Preparando piezas…", true);
-    setTimeout(() => { iniciar(); $("msg").hidden = true; }, 40);
+    setTimeout(() => { iniciar(guardada); if ($("msg").textContent === "Preparando piezas…") $("msg").hidden = true; }, 40);
   } else {
     $("msg").hidden = true;
-    iniciar();
+    iniciar(guardada);
   }
   // Una imagen elegida del dispositivo se guarda sola en imgbb (en segundo plano, ya con el juego en pantalla)
   if (origenImg === "archivo" && !urlNube) setTimeout(() => guardarEnNube(true), 500);
@@ -643,6 +665,8 @@ function continuar() {
 }
 $("pausa").addEventListener("click", pausar);
 $("pContinuar").addEventListener("click", continuar);
+$("pGuardar").addEventListener("click", () => guardarPartida());
+$("guardarPartida").addEventListener("click", () => guardarPartida());
 $("pGuia").addEventListener("click", () => { guia = !guia; if (arr) arr.fl = null; pedir(); continuar(); });
 $("pMezclar").addEventListener("click", () => {
   if (colocadas > 0 && !confirm("Se mezclarán de nuevo las piezas. ¿Continuar?")) return;
@@ -666,6 +690,7 @@ $("fSalir").addEventListener("click", () => { $("finMenu").hidden = true; pantal
 async function ganar() {
   if (t0) { acum += (Date.now() - t0) / 1000; t0 = 0; }
   terminado = true;
+  if (urlNube) borrarPartida(idPartida());          // ya está completo: la partida guardada deja de hacer falta
   const pts = Math.max(1, Math.round(piezas.length / PIEZAS_POR_PUNTO));
   $("finInfo").textContent = piezas.length + " piezas · " + fmt(tiempoActual()) + " · +" + pts + " pts (si tienes sesión)";
   $("finMenu").hidden = false;
@@ -909,7 +934,11 @@ for (const ev of ["gesturestart", "gesturechange", "gestureend"]) {
 
 addEventListener("keydown", (e) => {
   if ($("juego").hidden) return;
-  if (e.key === "Escape") { if (pausado) continuar(); else pausar(); }
+  if (e.key === "Escape") {
+    if (!$("loginMenu").hidden) cerrarLogin();
+    else if (pausado) continuar();
+    else pausar();
+  }
 });
 
 // ---------- IMAGEN: LOCAL Y NUBE ----------
@@ -1063,6 +1092,160 @@ $("enlace").addEventListener("click", async () => {
   const link = location.origin + location.pathname + "?img=" + encodeURIComponent(urlNube);
   try { await navigator.clipboard.writeText(link); aviso("Enlace copiado"); } catch (e) { prompt("Copia el enlace:", link); }
 });
+
+// ---------- GUARDAR Y CONTINUAR PARTIDA ----------
+// La partida (posición y giro de cada pieza, grupos, lengüetas, tiempo) se guarda en este dispositivo (localStorage).
+// La imagen no cabe ahí: se recuerda su enlace de imgbb. Si la imagen vino de un archivo y aún no está en imgbb,
+// al guardar se sube primero; eso necesita sesión de Google, así que desde aquí mismo se puede iniciar sesión.
+const idPartida = () => urlNube + "|" + cols + "x" + rows;
+const r1 = (v) => Math.round(v * 10) / 10;
+const codBordes = (m) => m.map((f) => f.map((v) => (v > 0 ? "+" : v < 0 ? "-" : "0")).join("")).join("|");
+const decBordes = (t) => t.split("|").map((f) => [...f].map((ch) => (ch === "+" ? 1 : ch === "-" ? -1 : 0)));
+
+function partidaValida(s) {
+  return !!s && typeof s.id === "string" && urlValida(s.url) && Number.isInteger(s.cols) && Number.isInteger(s.rows)
+    && s.cols >= 2 && s.rows >= 2 && s.cols <= 200 && s.rows <= 200 && Array.isArray(s.ps) && Array.isArray(s.g)
+    && s.bordes && typeof s.bordes.aba === "string" && typeof s.bordes.der === "string" && Number.isFinite(s.t) && Number.isFinite(s.col);
+}
+function leerPartidas() {
+  try { const l = JSON.parse(localStorage.getItem(CLAVE_PARTIDAS) || "[]"); return Array.isArray(l) ? l.filter(partidaValida) : []; } catch (e) { return []; }
+}
+function escribirPartidas(l) {
+  while (l.length) {
+    try { localStorage.setItem(CLAVE_PARTIDAS, JSON.stringify(l)); return true; } catch (e) { if (l.length === 1) break; l.pop(); }   // sin espacio: se olvida la más vieja
+  }
+  return false;
+}
+function borrarPartida(id) { escribirPartidas(leerPartidas().filter((s) => s.id !== id)); }
+
+function instantanea() {
+  return {
+    id: idPartida(), url: urlNube, cols, rows, rot: rotacion, hor: modoHor,
+    bordes: { aba: codBordes(bordes.aba), der: codBordes(bordes.der) },
+    ps: piezas.map((p) => (p.ok ? 1 : [r1(p.x), r1(p.y), p.rot])),          // 1 = ya está fija en el tablero
+    g: sueltas.map((gr) => gr.m.map((p) => p.r * cols + p.c)),                // grupos sueltos, de abajo hacia arriba
+    col: colocadas, t: tiempoActual(), f: Date.now(),
+  };
+}
+
+// Pone las piezas como estaban en la partida guardada (se llama desde iniciar() con las piezas ya creadas). false = datos dañados
+function restaurar(s) {
+  const n = piezas.length;
+  if (s.ps.length !== n) return false;
+  const fijas = { m: [], ok: true };
+  for (let i = 0; i < n; i++) {
+    const p = piezas[i], d = s.ps[i];
+    if (d === 1) { p.ok = true; p.x = p.c * pw; p.y = p.r * ph; p.rot = 0; p.g = fijas; fijas.m.push(p); continue; }
+    if (!Array.isArray(d) || !Number.isFinite(d[0]) || !Number.isFinite(d[1]) || !Number.isInteger(d[2]) || d[2] < 0 || d[2] > 3) return false;
+    p.ok = false; p.x = d[0]; p.y = d[1]; p.rot = rotacion ? d[2] : 0;
+  }
+  const vistos = new Set();
+  const grupos = [];
+  for (const ids of s.g) {
+    if (!Array.isArray(ids) || !ids.length) return false;
+    const gr = { m: [], ok: false };
+    for (const i of ids) {
+      if (!Number.isInteger(i) || i < 0 || i >= n || vistos.has(i) || piezas[i].ok) return false;
+      vistos.add(i); piezas[i].g = gr; gr.m.push(piezas[i]);
+    }
+    grupos.push(gr);
+  }
+  if (vistos.size + fijas.m.length !== n) return false;
+  sueltas = grupos;
+  colocadas = fijas.m.length;
+  acum = Math.max(0, s.t);
+  if (!ajustarCamara()) return false;
+  if (s.hor !== modoHor) dispersar(sueltas);       // se guardó con la pantalla en otra orientación: se reparten en las franjas de ésta
+  acomodarSueltas();
+  pedir();
+  return true;
+}
+
+async function abrirPartida(s) {
+  if (!partidaValida(s)) return aviso("Partida no válida");
+  try {
+    aviso("Cargando partida…", true);
+    const aba = decBordes(s.bordes.aba), der = decBordes(s.bordes.der);
+    if (aba.length !== s.rows || der.length !== s.rows || aba.some((f) => f.length !== s.cols) || der.some((f) => f.length !== s.cols)) throw new Error("La partida guardada está dañada");
+    fuente = reducir(await cargar(s.url));
+    origenImg = "nube"; urlNube = s.url; volverA = "menu";
+    cols = s.cols; rows = s.rows; bordes = { aba, der };
+    ponerRotacion(!!s.rot);
+    $("msg").hidden = true;
+    jugar(s);
+  } catch (e) {
+    aviso(e.message || "No se pudo cargar la partida");
+  }
+}
+
+// ----- Inicio de sesión desde el propio juego -----
+let pausaLogin = false;
+function abrirLogin() {
+  if (!pausado) {                                  // el reloj se detiene mientras se inicia sesión
+    pausaLogin = true; pausado = true;
+    if (t0) { acum += (Date.now() - t0) / 1000; t0 = 0; }
+  }
+  $("loginMenu").hidden = false;
+}
+function cerrarLogin() {
+  $("loginMenu").hidden = true;
+  if (pausaLogin) {
+    pausaLogin = false; pausado = false;
+    if (iniciado && !terminado) t0 = Date.now();
+  }
+}
+async function haySesion() {
+  try {
+    const fb = await import("../compartido/firebase.js");
+    if (fb.auth && fb.auth.authStateReady) await fb.auth.authStateReady();
+    return !!(fb.auth && fb.auth.currentUser);
+  } catch (e) { return false; }
+}
+$("lCancelar").addEventListener("click", cerrarLogin);
+$("lEntrar").addEventListener("click", async () => {
+  const b = $("lEntrar");
+  b.disabled = true;
+  try {
+    const mod = await import("../compartido/jugador.js");
+    await mod.entrar();
+    if (!(await haySesion())) return aviso("No se inició la sesión");
+    cerrarLogin();
+    avisoSesion = false;
+    guardarPartida();                              // ya con sesión: continúa guardando
+  } catch (e) {
+    aviso(e.message || "No se pudo iniciar sesión");
+  } finally {
+    b.disabled = false;
+  }
+});
+
+async function esperarSubida() {
+  const ini = Date.now();
+  while (subiendo && subiendo === fuente && Date.now() - ini < 60000) await new Promise((ok) => setTimeout(ok, 200));
+}
+
+let guardandoPartida = false;
+async function guardarPartida() {
+  if (guardandoPartida || !fuente || !piezas.length || terminado) return;
+  guardandoPartida = true;
+  try {
+    if (origenImg === "archivo" && !urlNube) {     // la imagen aún no está en imgbb: hay que subirla primero (requiere sesión)
+      if (subiendo && subiendo === fuente) { aviso("Subiendo la imagen…", true); await esperarSubida(); }
+      if (!urlNube) {
+        if (!(await haySesion())) { $("msg").hidden = true; abrirLogin(); return; }
+        await guardarEnNube(false);
+        if (!urlNube) return;                      // guardarEnNube ya explicó el motivo (sin conexión, error al subir…)
+      }
+    }
+    if (!urlValida(urlNube)) return aviso("Esta imagen no se puede guardar en una partida");
+    const lista = [instantanea(), ...leerPartidas().filter((x) => x.id !== idPartida())].slice(0, PARTIDAS_MAX);
+    if (!escribirPartidas(lista)) return aviso("No hay espacio para guardar la partida en este dispositivo");
+    pintarMenu();
+    aviso("Partida guardada 💾");
+  } finally {
+    guardandoPartida = false;
+  }
+}
 
 // ---------- ARRANQUE ----------
 texturas();
