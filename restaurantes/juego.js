@@ -18,7 +18,7 @@
 // TERRENOS: el restaurante ocupa la esquina inferior derecha de una cuadrícula de 3 × 3 manzanas; las otras 8 son pasto (sin carreteras entre ellas), a la izquierda y detrás.
 // Los terrenos se compran en la tienda («Ampliar terreno»): las 8 manzanas de pasto son los terrenos 2.º a 9.º y se compran de uno en uno, solo los que tocan tu terreno actual (el restaurante o uno ya comprado).
 // El precio sube con cada terreno (ver TERRENO_PRECIOS: $10,000 el 2.º ... $500,000 el 9.º). Las manzanas de pasto están en PASTO.
-// HABITACIONES: la cocina, el baño y las nuevas (cafetería, heladería, pastelería y oficina del jefe, $20,000 cada una en «🏗️ Construir»; la oficina es solo del jefe: los clientes no pasan por ahí) van en la pared del fondo y se pueden cambiar de lugar con «🛠️ Mover»
+// HABITACIONES: la cocina, el baño y las nuevas (cafetería, heladería, pastelería, oficina del jefe y cuarto de limpieza, $20,000 cada una en «🏗️ Construir»; la oficina y el cuarto de limpieza son solo para el personal: los clientes no pasan por ahí) van en la pared del fondo y se pueden cambiar de lugar con «🛠️ Mover»
 // (ver errorHab: no pueden tapar el pasillo del centro ni empalmarse entre sí). Al terminar de comer, cada cliente va a 0-4 de esos lugares (ver PESOS_VISITAS) y gasta en cada uno.
 // DECORACIONES: también en «🏗️ Construir»; cada una suma dinero a lo que paga cada cliente (ver DECORACIONES).
 const ID = "restaurantes";
@@ -190,8 +190,9 @@ const HAB_NUEVAS = {
   cafeteria: { nombre: "la cafetería", etiqueta: "Cafetería", ico: "☕", ancho: 150, precio: 20000, gasto: 10, piso: ["#fbe9d7", "#f3d9bd"], pared: "#c8a27a", colorTexto: "#5d4037", adornos: [[35, 70, "☕"], [115, 70, "🥐"]] },
   heladeria: { nombre: "la heladería", etiqueta: "Heladería", ico: "🍦", ancho: 150, precio: 20000, gasto: 8, piso: ["#fde4ef", "#f9c9de"], pared: "#e8a2c0", colorTexto: "#8e2a58", adornos: [[35, 70, "🍦"], [115, 70, "🍨"]] },
   pasteleria: { nombre: "la pastelería", etiqueta: "Pastelería", ico: "🍰", ancho: 150, precio: 20000, gasto: 12, piso: ["#fff4c2", "#ffe9a0"], pared: "#e6c96a", colorTexto: "#7a5c00", adornos: [[35, 70, "🍰"], [115, 70, "🎂"]] },
-  // sinVisitas: los clientes NO pasan por ahí (no está en ORDEN_VISITAS); es solo del jefe. Todavía no hace nada más (gasto 0).
-  oficina: { nombre: "la oficina del jefe", etiqueta: "Oficina del jefe", ico: "🕴️", ancho: 120, precio: 20000, gasto: 0, sinVisitas: true, piso: ["#e9dccb", "#d8c4a8"], pared: "#7b5b45", colorTexto: "#4e342e", adornos: [[25, 70, "🗄️"], [90, 70, "🕴️"]] },
+  // sinVisitas: los clientes NO pasan por ahí (no está en ORDEN_VISITAS); soloPara = quién la usa. Todavía no hacen nada más (gasto 0).
+  oficina: { nombre: "la oficina del jefe", etiqueta: "Oficina del jefe", ico: "🕴️", ancho: 120, precio: 20000, gasto: 0, sinVisitas: true, soloPara: "el jefe", piso: ["#e9dccb", "#d8c4a8"], pared: "#7b5b45", colorTexto: "#4e342e", adornos: [[25, 70, "🗄️"], [90, 70, "🕴️"]] },
+  limpieza: { nombre: "el cuarto de limpieza", etiqueta: "Limpieza", ico: "🧹", ancho: 110, precio: 20000, gasto: 0, sinVisitas: true, soloPara: "los empleados de limpieza", piso: ["#e0f2f1", "#c5e4e1"], pared: "#4f9a94", colorTexto: "#00544f", adornos: [[25, 70, "🧹"], [80, 70, "🧽"]] },
 };
 let habsExtra = {}; // habitaciones nuevas compradas: id → x de su esquina izquierda
 const x0Hab = (id) => (id === "cocina" ? COC_X0 + KX : id === "banio" ? BAN_X0 + BX : habsExtra[id]);
@@ -1229,7 +1230,7 @@ function comprarHab(id) {
   dinero -= h.precio;
   habsExtra[id] = x0;
   armarFondo();
-  info("🏗️ ¡Compraste " + h.nombre + "! " + (h.sinVisitas ? "Los clientes no pasan por ahí: es solo del jefe." : "Algunos clientes pasarán por ahí al terminar de comer y gastarán " + dolares(h.gasto) + " cada vez.") + (reacomodo ? " Reacomodé las habitaciones para que cupiera." : "") + " Puedes cambiarla de lugar con 🛠️ Mover.");
+  info("🏗️ ¡Compraste " + h.nombre + "! " + (h.sinVisitas ? "Los clientes no pasan por ahí: es solo para " + h.soloPara + "." : "Algunos clientes pasarán por ahí al terminar de comer y gastarán " + dolares(h.gasto) + " cada vez.") + (reacomodo ? " Reacomodé las habitaciones para que cupiera." : "") + " Puedes cambiarla de lugar con 🛠️ Mover.");
   actualizar();
 }
 function comprarDeco(id) {
@@ -1257,9 +1258,9 @@ function pintarConstruir(lista) {
   for (const id of Object.keys(HAB_NUEVAS)) {
     const h = HAB_NUEVAS[id], tengo = habsExtra[id] !== undefined, sinHueco = !tengo && lugarLibreHab(id) === null, sinLugar = sinHueco && !reacomodoHabs(id);
     lista.appendChild(filaSimple(h.ico, h.etiqueta,
-      tengo ? (h.sinVisitas ? "Comprada: es solo del jefe, los clientes no pasan por aquí." : "Comprada: cada cliente que pasa gasta " + dolares(h.gasto) + ".")
+      tengo ? (h.sinVisitas ? "Comprada: es solo para " + h.soloPara + ", los clientes no pasan por aquí." : "Comprada: cada cliente que pasa gasta " + dolares(h.gasto) + ".")
         : sinLugar ? "No hay espacio en la pared del fondo."
-        : (h.sinVisitas ? "Solo del jefe: los clientes no pasan por aquí." : "Cada cliente que pasa gasta " + dolares(h.gasto) + ".") + (sinHueco ? " No hay un hueco libre: al comprarla se reacomodan las habitaciones." : ""),
+        : (h.sinVisitas ? "Solo para " + h.soloPara + ": los clientes no pasan por aquí." : "Cada cliente que pasa gasta " + dolares(h.gasto) + ".") + (sinHueco ? " No hay un hueco libre: al comprarla se reacomodan las habitaciones." : ""),
       tengo ? "Comprada" : sinLugar ? "Sin espacio" : "Comprar " + dolares(h.precio), tengo || sinLugar || dinero < h.precio, () => comprarHab(id)));
   }
   lista.appendChild(seccion("🎨 Decoraciones", "Cada una que compres suma dinero a lo que paga CADA cliente, en todas las mesas."));
