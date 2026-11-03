@@ -6,7 +6,7 @@
 // los demás van directo a la recepción. Cada uno paga 5 pesos al salir (más lo que sumen las mejoras de SU mesa, que se tocan en la mesa; quien usó el baño paga además 1 peso).
 // TIENDA: tocando el mostrador de la recepción (🛒) se abre la zona de compras. Ahí se contrata (y se mejora) a la recepcionista y al mesero.
 // SEGUNDO COCINERO: se contrata en la tienda ($1500, sin otro requisito) y cocina junto con el primero: sus velocidades se suman (cada uno según su nivel).
-// COCINERO Y MESAS: en la tienda se mejora al cocinero (10 niveles: cada nivel cocina más rápido) y se compran mesas nuevas para el comedor (hasta 24 en total, precio creciente).
+// COCINERO Y MESAS: en la tienda se mejora al cocinero (10 niveles: cada nivel cocina más rápido) y se compran mesas nuevas para el comedor (hasta 16 en total, en filas y columnas de 4 × 4; precio creciente).
 // AMPLIACIÓN: en la tienda se compra «Ampliar terreno» (una plaza detrás del restaurante, sobre el pasto). Solo entonces se desbloquea la SEGUNDA PUERTA (el SEGUNDO MESERO ya no la necesita: se compra desde el principio, con el primer mesero contratado, por $500)
 // (entrada por atrás, con su propia fila de espera y su mostrador). La SEGUNDA RECEPCIONISTA solo se puede contratar cuando ya existe la segunda puerta.
 // Empiezan lentos: cada mejora los hace más rápidos. Lo gastado sale de «dinero»; los puntos y el récord cuentan lo «ganado».
@@ -69,9 +69,9 @@ const MESERO_VEL = [70, 95, 125, 160, 200, 230, 260, 295, 330, 370]; // por nive
 // Cocinero: siempre existe (nivel 1); cada mejora lo hace más rápido. COCINA_FACTOR multiplica el tiempo de cocina de cada pedido (nivel 1 = 1 = como antes).
 const COCINA_FACTOR = [1, 0.85, 0.72, 0.61, 0.52, 0.44, 0.38, 0.33, 0.29, 0.25];   // por nivel (10 niveles)
 const COCINERO_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230];            // costo de subir al nivel 2, 3, 4 ... 10
-// Mesas nuevas: se compran en la tienda en este orden (la 5.ª, la 6.ª...). Después de las 4 iniciales caben 20 más (hasta 24 en total).
+// Mesas nuevas: se compran en la tienda en este orden (la 5.ª, la 6.ª...). Después de las 4 iniciales caben 12 más (hasta 16 en total: 4 filas × 4 columnas).
 const PRECIO_COCINERO2 = 1500; // segundo cocinero (usa los mismos 10 niveles y precios de mejora que el primero)
-const MESA_PRECIOS = [30, 60, 100, 160, 240, 350, 500, 700, 900, 1150, 1450, 1800, 2200, 2700, 3300, 4000, 4800, 5700, 6800, 8000]; // una por cada mesa nueva (20)
+const MESA_PRECIOS = [30, 60, 100, 160, 240, 350, 500, 700, 900, 1150, 1450, 1800]; // una por cada mesa nueva (12)
 const RECEP_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230]; // costo de subir al nivel 2, 3, 4 ... 10 de la recepcionista
 const MESERO_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230]; // ídem para el mesero
 const PAUSA_MESERO_MS = 400;                             // ms que se detiene a tomar el platillo
@@ -229,14 +229,15 @@ const MESAS_BASE = [
   { id: 1, cx: 150 + DX, cy: 290 }, { id: 2, cx: 410 + DX, cy: 290 },   // las mesas empiezan junto al núcleo; el resto del comedor queda libre para más mesas
   { id: 3, cx: 150 + DX, cy: 440 }, { id: 4, cx: 410 + DX, cy: 440 },
 ];
-// Lugares de las mesas que se pueden comprar: siguen las dos columnas de las mesas base, una fila (150 de alto) más abajo cada vez. Se llenan en este orden.
-const MESAS_EXTRA = [590, 740, 890, 1040].flatMap((cy, f) => [
+// El comedor tiene 16 mesas en 4 filas × 4 columnas (filas en y = 290, 440, 590 y 740; columnas en x = 0, 150, 410 y 560 + DX).
+// Lugares de las mesas que se pueden comprar: primero las dos columnas de adentro (las de las mesas base), una fila (150 de alto) más abajo cada vez, y luego las dos de afuera. Se llenan en este orden.
+const MESAS_EXTRA = [590, 740].flatMap((cy, f) => [
   { id: 5 + f * 2, cx: 150 + DX, cy }, { id: 6 + f * 2, cx: 410 + DX, cy },
 ]);
-// Columnas de afuera (la 13.ª a la 24.ª): una a la izquierda de las mesas de la izquierda y otra a la derecha de las de la derecha, a 150 de las de adentro. «ext» = su camino
+// Columnas de afuera (la 9.ª a la 16.ª): una a la izquierda de las mesas de la izquierda y otra a la derecha de las de la derecha, a 150 de las de adentro. «ext» = su camino
 // pasa por los pasillos horizontales entre filas (y = fila - 70 y fila + 75), porque no pueden cruzar las mesas de adentro.
-const MESAS_EXT = [290, 440, 590, 740, 890, 1040].flatMap((cy, f) => [
-  { id: 13 + f * 2, cx: 0 + DX, cy, ext: true }, { id: 14 + f * 2, cx: 560 + DX, cy, ext: true },
+const MESAS_EXT = [290, 440, 590, 740].flatMap((cy, f) => [
+  { id: 9 + f * 2, cx: 0 + DX, cy, ext: true }, { id: 10 + f * 2, cx: 560 + DX, cy, ext: true },
 ]);
 const MESAS_TODAS = [...MESAS_BASE, ...MESAS_EXTRA, ...MESAS_EXT];
 const ORDEN_SILLAS = ["cerca", "arriba", "abajo", "lejos"]; // 4 sillas por mesa; se ocupan en este orden
