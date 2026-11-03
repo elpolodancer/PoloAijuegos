@@ -11,6 +11,7 @@
 // (entrada por atrás, con su propia fila de espera y su mostrador). La SEGUNDA RECEPCIONISTA solo se puede contratar cuando ya existe la segunda puerta.
 // Empiezan lentos: cada mejora los hace más rápidos. Lo gastado sale de «dinero»; los puntos y el récord cuentan lo «ganado».
 // CIUDAD Y VISTA: el restaurante está en una calle, rodeado de manzanas con edificios, parques y carreteras. La vista se acerca/aleja (➕ ➖, rueda o pellizco) con límites cortos y se mueve arrastrando.
+// ANUNCIOS: el botón «📢 Anuncios» vende anuncios temporales (periódico, radio, televisión, redes) y la página web (compra única) que suben el % de clientes que llegan (ver ANUNCIOS).
 // ESTACIONAMIENTO: alrededor de toda la cuadra hay 24 lugares posibles (adelante, a los lados y atrás), pero al empezar solo se ven y se usan 2.
 // Los demás se compran en la tienda (precio creciente: ver ESTAC_PRECIOS). Los autos llegan por la calle de enfrente; cada auto trae SIEMPRE 4 personas.
 // Si hay lugar, estaciona y las 4 personas van a la recepción como un grupo más; al terminar regresan al auto y se van. Si no hay lugar, el auto pasa de largo y no vuelve.
@@ -98,6 +99,18 @@ const ESTAC_INICIALES = 2;       // lugares visibles y disponibles al empezar
 // Precio de cada lugar nuevo, en orden (el 1.º cuesta 20, el 2.º 50, ...). Después del último se sigue con ESTAC_FACTOR (ver precioEstac)
 const ESTAC_PRECIOS = [20, 50, 80, 100, 130, 180, 250, 320, 400, 500, 620, 750, 900, 1500];
 const ESTAC_FACTOR = 1.25;       // pasado el último precio de la lista, cada lugar cuesta 25 % más que el anterior
+// ----- Anuncios (botón «📢 Anuncios») -----
+// Cada anuncio sube el porcentaje de clientes que llegan (grupos a pie y autos) durante ANUNCIO_DURACION_MS de juego; si lo compras otra vez, suma ese tiempo.
+// Los anuncios activos se suman entre sí. La página web es compra única y sube los clientes para siempre.
+const ANUNCIO_DURACION_MS = 5 * 60 * 1000; // cuánto dura cada anuncio (tiempo de juego; con la tienda abierta no corre)
+const ANUNCIOS = [
+  { id: "periodico", ico: "📰", nombre: "Anuncio en el periódico", precio: 300, bono: 0.02 },
+  { id: "radio", ico: "📻", nombre: "Anuncio en la radio", precio: 600, bono: 0.04 },
+  { id: "television", ico: "📺", nombre: "Anuncio en la televisión", precio: 8000, bono: 0.06 },
+  { id: "redes", ico: "📱", nombre: "Anuncio en redes sociales", precio: 1200, bono: 0.08 },
+];
+const PRECIO_WEB = 50000;  // página web (compra única)
+const BONO_WEB = 0.10;     // +10 % de clientes para siempre
 const PERSONAS_AUTO = 4;         // cada auto trae siempre 4 personas
 const AUTO_MIN_MS = 1500;        // los autos llegan al azar: entre uno y el siguiente pasan entre estos dos tiempos
 const AUTO_MAX_MS = 3000;
@@ -321,6 +334,7 @@ let llevando = null;                    // mesa cuyo platillo traes en la mano
 let receps = [null, null], meseros = [null, null]; // personal contratado (null = todavía no): { nivel, ... }; [0] el de siempre, [1] el de la ampliación
 let terreno2 = false, puerta2 = false;             // ampliación comprada / segunda puerta comprada
 let lotes = []; // terrenos comprados (claves «i,j» de PASTO), en el orden en que se compraron
+let anuncios = {}, paginaWeb = false, vistaAnuncios = false; // anuncios: { id: momento del reloj en que termina }; página web comprada; true = el panel abierto es el de «📢 Anuncios»
 let vistaConstruir = false; // true = el panel abierto es el de «🏗️ Construir» (habitaciones y decoraciones)
 let modoMover = false, habSel = null, btnMover = null; // modo «🛠️ Mover» (cocina y baño): activo / cuarto elegido ("cocina" o "banio") / el botón
 let puntosEnviados = 0, umbralPuntos = PUNTOS_LOTE, enviando = false; // puntos ya mandados al perfil, cuántos hacen falta para el siguiente envío, envío en curso
@@ -348,6 +362,8 @@ let esperas = []; // esperas pendientes: { fin, g, r }
 // Espera que no continúa si se reinició la partida mientras tanto
 const esp = (ms) => { const g = gen; return new Promise((r) => esperas.push({ fin: ahora() + ms, g, r })); };
 
+const anuncioActivo = (a) => (anuncios[a.id] || 0) > reloj;
+const bonoClientes = () => (paginaWeb ? BONO_WEB : 0) + ANUNCIOS.reduce((t, a) => t + (anuncioActivo(a) ? a.bono : 0), 0); // +X (0.06 = +6 %) de clientes que llegan
 const crearMesa = (m) => ({ ...m, ocupada: false, plato: false, barra: null, esperando: false, tomado: false, enojo: false, listoDesde: 0, res: null, clientes: [], mejoras: nuevasMejoras(), slot: -1 });
 function nuevaPartida(datos = null) { // datos: partida guardada que se carga (null = partida nueva)
   gen++; esperas = [];
@@ -358,6 +374,7 @@ function nuevaPartida(datos = null) { // datos: partida guardada que se carga (n
   dinero = 0; ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
   const habiaCambios = terreno2 || nEstac > ESTAC_INICIALES || KX !== 0 || BX !== 0 || Object.keys(habsExtra).length > 0; terreno2 = false; lotes = []; puerta2 = false; KX = 0; BX = 0; habsExtra = {}; decos = []; recalcHab(); salirMover();
   nEstac = ESTAC_INICIALES; autosPerdidos = 0; proxAuto = PRIMER_AUTO_MS;
+  anuncios = {}; paginaWeb = false;
   CAJONES.forEach((k) => { k.usado = false; k.coche = null; k.pendientes = 0; });
   reloj = 0; proxLlegada = PRIMERA_LLEGADA_MS; ultimoSeg = -1; puntosEnviados = 0; umbralPuntos = PUNTOS_LOTE;
   if (datos) aplicarGuardado(datos);
@@ -406,6 +423,7 @@ function instantanea() {
     receps: receps.map((r) => (r ? r.nivel : 0)),
     meseros: meseros.map((w) => (w ? w.nivel : 0)),
     terreno2, lotes: lotes.slice(), kx: KX, bx: BX, habs: { ...habsExtra }, decos: decos.slice(), puerta2, nEstac, cocinero, cocinero2, nMesas,
+    anuncios: { ...anuncios }, paginaWeb,
     fecha: Date.now(),
   };
 }
@@ -456,6 +474,8 @@ function aplicarGuardado(d) {
     decos = Array.isArray(d.decos) ? DECORACIONES.map((q) => q.id).filter((id) => d.decos.includes(id)) : [];
   }
   nEstac = Math.max(ESTAC_INICIALES, Math.min(CAJONES.length, Math.floor(num(d.nEstac)) || ESTAC_INICIALES));
+  paginaWeb = d.paginaWeb === true;
+  ANUNCIOS.forEach((a) => { const fin = d.anuncios && typeof d.anuncios === "object" ? Math.max(0, num(d.anuncios[a.id])) : 0; if (fin > reloj) anuncios[a.id] = fin; });
   const rs = Array.isArray(d.receps) ? d.receps : [], ms = Array.isArray(d.meseros) ? d.meseros : [];
   [0, 1].forEach((k) => {
     const nr = Math.min(RECEP_TIEMPOS_MS.length, Math.floor(num(rs[k])));
@@ -755,19 +775,20 @@ async function visitarHabs(c, ida, i, P = PUERTAS[0], ids = []) {
 }
 
 // ----- Tienda y personal -----
-function abrirTienda(mesa = null, empleados = false, construir = false) { // sin mesa: la tienda de la recepción; con mesa: el panel de mejoras de esa mesa; empleados: el panel de personal
+function abrirTienda(mesa = null, empleados = false, construir = false, anuncio = false) { // sin mesa: la tienda de la recepción; con mesa: el panel de mejoras de esa mesa; empleados: el panel de personal
   mesaMejora = mesa;
   vistaEmpleados = empleados;
   vistaConstruir = construir;
+  vistaAnuncios = anuncio;
   pintarTienda();
   $("tienda").hidden = false;
   ponerPausa(true);
-  info(mesa ? "⏸️ Juego en pausa mientras mejoras la mesa " + mesa.id + "." : empleados ? "⏸️ Juego en pausa mientras ves a tus empleados." : construir ? "⏸️ Juego en pausa mientras construyes." : "⏸️ Juego en pausa mientras estás en la tienda.");
+  info(mesa ? "⏸️ Juego en pausa mientras mejoras la mesa " + mesa.id + "." : empleados ? "⏸️ Juego en pausa mientras ves a tus empleados." : anuncio ? "⏸️ Juego en pausa mientras eliges tus anuncios." : construir ? "⏸️ Juego en pausa mientras construyes." : "⏸️ Juego en pausa mientras estás en la tienda.");
 }
 function abrirMejorasMesa(m) { abrirTienda(m); }
 function cerrarTienda() {
   const estabaEnPausa = pausado;
-  mesaMejora = null; vistaEmpleados = false; vistaConstruir = false;
+  mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false;
   $("tienda").hidden = true;
   ponerPausa(false);
   if (estabaEnPausa) info("▶️ Juego reanudado.");
@@ -863,6 +884,7 @@ function pintarTienda() {
   if (mesaMejora) { pintarMejorasMesa(mesaMejora, lista); return; }
   if (vistaEmpleados) { pintarEmpleados(lista); return; }
   if (vistaConstruir) { pintarConstruir(lista); return; }
+  if (vistaAnuncios) { pintarAnuncios(lista); return; }
   $("tiendaTitulo").textContent = "🛒 Tienda";
   const hint = document.createElement("small");
   hint.style.cssText = "display:block;margin:2px 0 6px;color:var(--suave)";
@@ -876,6 +898,39 @@ function pintarTienda() {
       puerta2 ? "Comprada" : terreno2 ? "Comprar " + pesos(PRECIO_PUERTA2) : "🔒 Bloqueado", puerta2 || !terreno2 || dinero < PRECIO_PUERTA2, comprarPuerta2),
     filaEstac()
   );
+}
+// Panel «📢 Anuncios»: anuncios temporales y página web (compra única)
+function pintarAnuncios(lista) {
+  $("tiendaTitulo").textContent = "📢 Anuncios";
+  const res = document.createElement("small");
+  res.style.cssText = "display:block;margin:2px 0 6px;color:var(--suave)";
+  const b = Math.round(bonoClientes() * 100);
+  res.textContent = (b ? "Ahora llegan " + b + " % más clientes." : "Todavía no tienes anuncios activos.") + " Cada anuncio dura " + fmtTiempo(ANUNCIO_DURACION_MS / 1000) + " de juego y se suma a los demás.";
+  lista.appendChild(res);
+  for (const a of ANUNCIOS) {
+    const activo = anuncioActivo(a);
+    lista.appendChild(filaSimple(a.ico, a.nombre,
+      "+" + Math.round(a.bono * 100) + " % de clientes durante " + fmtTiempo(ANUNCIO_DURACION_MS / 1000) + (activo ? " · activo, quedan " + fmtTiempo(Math.ceil((anuncios[a.id] - reloj) / 1000)) + " (si lo compras otra vez se suma)" : "") + ".",
+      (activo ? "Renovar " : "Comprar ") + pesos(a.precio), dinero < a.precio, () => comprarAnuncio(a.id)));
+  }
+  lista.appendChild(filaSimple("🌐", "Página web",
+    paginaWeb ? "Tu página web atrae +" + Math.round(BONO_WEB * 100) + " % de clientes para siempre." : "Compra única: +" + Math.round(BONO_WEB * 100) + " % de clientes para siempre.",
+    paginaWeb ? "Comprada" : "Comprar " + pesos(PRECIO_WEB), paginaWeb || dinero < PRECIO_WEB, comprarPaginaWeb));
+}
+function comprarAnuncio(id) {
+  const a = ANUNCIOS.find((x) => x.id === id);
+  if (!a || dinero < a.precio) return;
+  dinero -= a.precio;
+  anuncios[id] = Math.max(anuncios[id] || 0, reloj) + ANUNCIO_DURACION_MS;
+  info("📢 ¡" + a.nombre + "! +" + Math.round(a.bono * 100) + " % de clientes durante " + fmtTiempo(ANUNCIO_DURACION_MS / 1000) + ". Ahora llegan " + Math.round(bonoClientes() * 100) + " % más clientes.");
+  actualizar();
+}
+function comprarPaginaWeb() {
+  if (paginaWeb || dinero < PRECIO_WEB) return;
+  dinero -= PRECIO_WEB;
+  paginaWeb = true;
+  info("🌐 ¡Ya tienes página web! +" + Math.round(BONO_WEB * 100) + " % de clientes para siempre. Ahora llegan " + Math.round(bonoClientes() * 100) + " % más clientes.");
+  actualizar();
 }
 // Panel «Empleados»: primero los contratados (con su nivel y su botón de mejora) y luego los que todavía se pueden contratar
 // Panel «🏗️ Construir»: habitaciones nuevas y decoraciones
@@ -1681,8 +1736,8 @@ function cuadro() {
     if (vencidas.length) { esperas = esperas.filter((w) => hoy < w.fin); vencidas.forEach((w) => { if (w.g === gen) w.r(); }); }
   }
   reloj += dt * 1000; // (con la tienda abierta «dt» es 0: el reloj también se pausa)
-  if (reloj >= proxLlegada) { llegar(OPCIONES[Math.floor(Math.random() * OPCIONES.length)]); proxLlegada = reloj + azar(LLEGADA_MIN_MS, LLEGADA_MAX_MS); }
-  if (reloj >= proxAuto) { llegarAuto(); proxAuto = reloj + azar(AUTO_MIN_MS, AUTO_MAX_MS); }
+  if (reloj >= proxLlegada) { llegar(OPCIONES[Math.floor(Math.random() * OPCIONES.length)]); proxLlegada = reloj + azar(LLEGADA_MIN_MS, LLEGADA_MAX_MS) / (1 + bonoClientes()); }
+  if (reloj >= proxAuto) { llegarAuto(); proxAuto = reloj + azar(AUTO_MIN_MS, AUTO_MAX_MS) / (1 + bonoClientes()); }
   const seg = Math.floor(reloj / 1000);
   if (seg !== ultimoSeg) { ultimoSeg = seg; $("tiempo").textContent = fmtTiempo(seg); }
   for (const e of ents) {
@@ -1868,6 +1923,20 @@ if (!btnMover) {
   const rei = $("reiniciar");
   if (rei && rei.parentNode) rei.parentNode.insertBefore(btnMover, rei); else document.body.appendChild(btnMover);
 }
+let btnAnuncios = $("btnAnuncios"); // si index.html no lo trae, se crea aquí junto al botón Reiniciar
+if (!btnAnuncios) {
+  btnAnuncios = document.createElement("button");
+  btnAnuncios.id = "btnAnuncios";
+  btnAnuncios.className = "btn";
+  btnAnuncios.textContent = "📢 Anuncios";
+  const rei2 = $("reiniciar");
+  if (rei2 && rei2.parentNode) rei2.parentNode.insertBefore(btnAnuncios, rei2); else document.body.appendChild(btnAnuncios);
+}
+btnAnuncios.addEventListener("click", () => {
+  if ($("menu").hidden === false) return; // con el menú abierto no se usa
+  if (!$("tienda").hidden && vistaAnuncios) cerrarTienda();
+  else abrirTienda(null, false, false, true);
+});
 btnMover.addEventListener("click", () => {
   if ($("menu").hidden === false) return; // con el menú abierto no se usa
   if (modoMover) { salirMover(); info("Listo: las habitaciones quedaron donde las pusiste."); return; }
