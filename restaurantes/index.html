@@ -29,6 +29,7 @@
     .btn-perfil { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(8px + env(safe-area-inset-right, 0px)); display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; padding: 0; overflow: hidden; font-size: 1.2rem; border-radius: 50%; box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
     .btn-perfil img { display: block; width: 100%; height: 100%; object-fit: cover; }
     .btn-empleados { top: calc(54px + env(safe-area-inset-top, 0px)); right: calc(8px + env(safe-area-inset-right, 0px)); box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
+    .btn-cocina { top: calc(100px + env(safe-area-inset-top, 0px)); right: calc(8px + env(safe-area-inset-right, 0px)); box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
     .tienda { position: fixed; z-index: 100; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(92vw, 420px); padding: 14px; background: var(--tarjeta); border: 1px solid var(--acento); border-radius: 16px; box-shadow: 0 8px 30px rgba(0, 0, 0, .5); }
     .tienda-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
     .tienda-fila { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--borde); }
@@ -69,7 +70,8 @@
       </div>
       <button class="btn btn-perfil encima" id="btnPerfil" aria-label="Perfil del jugador" title="Perfil">👤</button>
       <button class="btn btn-empleados encima" id="btnEmpleados" aria-label="Empleados">👥 Empleados</button>
-      <p id="estado" class="encima">Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para comprar mesas, terreno y estacionamiento, una mesa para mejorarla, y 👥 Empleados (arriba a la derecha) para el personal.</p>
+      <button class="btn btn-cocina encima" id="btnCocina" aria-label="Cocina">🍳 Cocina</button>
+      <p id="estado" class="encima">Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para comprar mesas, terreno y estacionamiento, una mesa para mejorarla, y 👥 Empleados y 🍳 Cocina (arriba a la derecha) para el personal y las mejoras de la cocina.</p>
       <div class="acciones encima">
         <button class="btn" id="alejar" aria-label="Alejar" title="Alejar">➖</button>
         <button class="btn" id="acercar" aria-label="Acercar" title="Acercar">➕</button>

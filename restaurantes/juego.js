@@ -56,6 +56,21 @@ const T_COMER = 5000;             // ms que tardan en comer
 // Con los 4 lugares: 0 → 40 %, 1 → 35 %, 2 → 15 %, 3 → 7 %, 4 → 3 %. Con solo el baño: se mantiene casi como antes (≈ 47 % va al baño).
 const PESOS_VISITAS = [40, 35, 15, 7, 3];
 const ORDEN_VISITAS = ["banio", "cafeteria", "heladeria", "pasteleria"];
+// ----- Cocina: al tocarla (si no hay platillos listos) o con el botón «🍳 Cocina» se abre su menú de mejoras (el juego se pausa) -----
+// compra = lo que cuesta comprarlo (0 = ya lo tienes desde el principio). precios = lo que cuesta cada una de sus 5 mejoras.
+// tipo: "vel" = multiplica el tiempo de cocina (menos = más rápido) · "pago" = suma dólares a lo que paga CADA cliente de TODAS las mesas
+//       (solo múltiplos de 0.50: el dinero se reparte en monedas de 50 centavos) · "paciencia" = multiplica lo que aguantan esperando el platillo ya listo.
+// ef[n-1] = efecto acumulado en el nivel n (nivel 1 = recién comprado; nivel 6 = con las 5 mejoras). requiere = id que hay que tener antes.
+const MEJORAS_COCINA = [
+  { id: "estufa", ico: "🔥", nombre: "Estufa", compra: 0, precios: [100, 250, 600, 1400, 3000], tipo: "vel", ef: [1, 0.92, 0.85, 0.78, 0.72, 0.66], desc: "Una estufa mejor cocina los pedidos más rápido." },
+  { id: "horno", ico: "🍞", nombre: "Horno", compra: 500, precios: [200, 500, 1000, 2200, 4500], tipo: "vel", ef: [0.92, 0.86, 0.8, 0.74, 0.68, 0.62], desc: "Con horno se preparan más platillos al mismo tiempo: los pedidos salen antes." },
+  { id: "refri", ico: "🧊", nombre: "Refri", compra: 800, precios: [250, 600, 1200, 2500, 5000], tipo: "pago", ef: [0.5, 1, 1.5, 2, 2.5, 3], desc: "Ingredientes más frescos: cada cliente paga más." },
+  { id: "refri2", ico: "🧊", nombre: "Segundo refri", compra: 1500, precios: [400, 900, 1800, 3600, 7000], tipo: "pago", ef: [0.5, 1, 1.5, 2, 2.5, 3], requiere: "refri", desc: "Más variedad de ingredientes frescos: cada cliente paga más." },
+  { id: "lavaplatos", ico: "🧼", nombre: "Lavaplatos", compra: 1200, precios: [300, 700, 1400, 2800, 5500], tipo: "paciencia", ef: [1.1, 1.2, 1.3, 1.4, 1.5, 1.6], desc: "Siempre hay platos limpios y todo sale más ordenado: los clientes aguantan más esperando su platillo." },
+  { id: "fregadero", ico: "🚰", nombre: "Fregadero", compra: 600, precios: [200, 450, 900, 1800, 3600], tipo: "pago", ef: [0.5, 1, 1, 1.5, 1.5, 2], desc: "Una cocina más limpia da buena fama: cada cliente paga más." },
+  { id: "ventilacion", ico: "🌀", nombre: "Ventilación", compra: 1000, precios: [300, 700, 1400, 2800, 5500], tipo: "vel", ef: [0.95, 0.92, 0.89, 0.86, 0.83, 0.8], desc: "Una cocina fresca y sin humo: los cocineros trabajan más rápido." },
+  { id: "decoracion", ico: "🌿", nombre: "Decoración", compra: 2000, precios: [500, 1200, 2500, 5000, 9000], tipo: "pago", ef: [0.5, 1, 1.5, 2, 3, 4], desc: "Una cocina bonita se luce a la vista: cada cliente paga más." },
+];
 const KEY_RECORD = "restaurantes_record";
 const KEY_DINERO = "restaurantes_dinero"; // clave de la versión anterior (solo el saldo): se lee UNA vez para pasar ese dinero a la «Partida 1»
 // Partidas guardadas: 6 ranuras (cuadrícula) con autoguardado en el navegador (localStorage). Se guarda dinero, lo ganado, tiempo jugado, mejoras de cada mesa,
@@ -356,7 +371,15 @@ let vistaEmpleados = false; // true = el panel abierto es el de «Empleados» (b
 const nuevasMejoras = () => Object.fromEntries(MEJORAS_MESA.map((c) => [c.id, 0])); // cuántas mejoras tiene cada cosa de una mesa (0 a 5)
 const bonoAcum = (k) => BONO_MEJORAS.slice(0, k).reduce((t, b) => t + b, 0);        // lo que suman en total las primeras k mejoras
 const bonoMesa = (m) => MEJORAS_MESA.reduce((t, c) => t + bonoAcum(m.mejoras[c.id]), 0); // extra por cliente de esa mesa
-const pagoPorCliente = (m) => PAGO_POR_CLIENTE + bonoMesa(m) + bonoDeco();                        // lo que paga cada cliente que usa la mesa m
+let cocinaNiv = {};                                  // nivel de cada cosa de la cocina: id → 0 (sin comprar) a 6 (la estufa siempre es al menos 1)
+let vistaCocina = false, cosaCocina = "estufa";      // true = el menú abierto es el de la cocina; cosa elegida en él
+const nivCoc = (id) => Math.max(id === "estufa" ? 1 : 0, cocinaNiv[id] || 0);
+const efCoc = (c, n) => c.ef[Math.max(1, Math.min(c.ef.length, n)) - 1];
+const factorCocina = (tipo) => MEJORAS_COCINA.reduce((t, c) => (c.tipo === tipo && nivCoc(c.id) > 0 ? t * efCoc(c, nivCoc(c.id)) : t), 1); // «vel» y «paciencia» multiplican
+const bonoCocina = () => MEJORAS_COCINA.reduce((t, c) => (c.tipo === "pago" && nivCoc(c.id) > 0 ? t + efCoc(c, nivCoc(c.id)) : t), 0);      // «pago» suma
+const pacienciaMs = () => PACIENCIA_MS * factorCocina("paciencia"); // a estos ms sin recibir el platillo se van (con lavaplatos aguantan más)
+const enojoMs = () => ENOJO_MS * factorCocina("paciencia");
+const pagoPorCliente = (m) => PAGO_POR_CLIENTE + bonoMesa(m) + bonoDeco() + bonoCocina();                        // lo que paga cada cliente que usa la mesa m
 const totalMejoras = (m) => MEJORAS_MESA.reduce((t, c) => t + m.mejoras[c.id], 0);   // mejoras compradas en esa mesa (de 35 posibles: 7 cosas × 5)
 let nEstac = ESTAC_INICIALES, proxAuto = 0, autosPerdidos = 0; // lugares de estacionamiento disponibles, cuándo pasa el próximo auto, autos que no hallaron lugar
 let puntero = { x: -99, y: -99 };       // último punto tocado/señalado en el lienzo (para dibujar el platillo)
@@ -380,7 +403,7 @@ const crearMesa = (m) => ({ ...m, ocupada: false, plato: false, barra: null, esp
 function nuevaPartida(datos = null) { // datos: partida guardada que se carga (null = partida nueva)
   gen++; esperas = [];
   ents = []; globos = []; monedas = [];
-  cocinero = 1; cocinero2 = 0; nMesas = MESAS_BASE.length;
+  cocinero = 1; cocinero2 = 0; nMesas = MESAS_BASE.length; cocinaNiv = {};
   mesas = MESAS_BASE.map(crearMesa);
   recepcion = Array(SLOTS.length).fill(null);
   dinero = 0; ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
@@ -393,7 +416,7 @@ function nuevaPartida(datos = null) { // datos: partida guardada que se carga (n
   if (habiaCambios || datos) armarFondo(); // quita la plaza y los lugares de la partida anterior (o dibuja los de la partida cargada)
   cerrarTienda();
   $("tiempo").textContent = fmtTiempo(Math.floor(reloj / 1000));
-  info("Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para comprar mesas, terreno y estacionamiento, una mesa para mejorarla, y 👥 Empleados (arriba a la derecha) para el personal.");
+  info("Los clientes llegan solos: toca a la familia en la recepción para darles mesa. Toca el mostrador 🛒 para comprar mesas, terreno y estacionamiento, una mesa para mejorarla, y 👥 Empleados y 🍳 Cocina (arriba a la derecha) para el personal y las mejoras de la cocina.");
   actualizar();
 }
 
@@ -434,7 +457,7 @@ function instantanea() {
     mesas: mesas.map((m) => ({ id: m.id, mejoras: { ...m.mejoras } })),
     receps: receps.map((r) => (r ? r.nivel : 0)),
     meseros: meseros.map((w) => (w ? w.nivel : 0)),
-    terreno2, lotes: lotes.slice(), kx: KX, bx: BX, habs: { ...habsExtra }, decos: decos.slice(), puerta2, nEstac, cocinero, cocinero2, nMesas,
+    terreno2, lotes: lotes.slice(), kx: KX, bx: BX, habs: { ...habsExtra }, decos: decos.slice(), puerta2, nEstac, cocinero, cocinero2, nMesas, cocina: { ...cocinaNiv },
     anuncios: { ...anuncios }, paginaWeb,
     fecha: Date.now(),
   };
@@ -455,6 +478,9 @@ function aplicarGuardado(d) {
   puntosEnviados = Math.max(0, Math.min(Math.floor(num(d.puntosEnviados)), Math.floor(ganado / DOLARES_POR_PUNTO))); // así no se mandan dos veces los mismos puntos al perfil
   cocinero = Math.max(1, Math.min(COCINA_FACTOR.length, Math.floor(num(d.cocinero)) || 1));
   cocinero2 = Math.max(0, Math.min(COCINA_FACTOR.length, Math.floor(num(d.cocinero2)) || 0));
+  cocinaNiv = {}; // mejoras de la cocina: solo ids conocidos, niveles válidos y sin saltarse lo que hay que tener antes
+  if (d.cocina && typeof d.cocina === "object") MEJORAS_COCINA.forEach((c) => { const n = Math.max(0, Math.min(c.precios.length + 1, Math.floor(num(d.cocina[c.id])))); if (n > 0) cocinaNiv[c.id] = n; });
+  MEJORAS_COCINA.forEach((c) => { if (c.requiere && !cocinaNiv[c.requiere]) delete cocinaNiv[c.id]; });
   nMesas = Math.max(MESAS_BASE.length, Math.min(MESAS_TODAS.length, Math.floor(num(d.nMesas)) || MESAS_BASE.length));
   for (let i = MESAS_BASE.length; i < nMesas; i++) mesas.push(crearMesa(MESAS_TODAS[i]));
   (Array.isArray(d.mesas) ? d.mesas : []).forEach((s) => {
@@ -625,7 +651,7 @@ async function irseEnojados(g, motivo) {
 // ms que tarda la cocina en preparar un pedido de n personas con el cocinero actual
 // Los dos cocineros trabajan juntos: sus velocidades (1 / factor) se suman. Con uno solo queda igual que antes; con dos del mismo nivel el pedido tarda la mitad.
 const velCocina = () => 1 / COCINA_FACTOR[cocinero - 1] + (cocinero2 ? 1 / COCINA_FACTOR[cocinero2 - 1] : 0);
-const tiempoCocina = (n) => (T_COCINA_BASE + T_COCINA_POR_CLIENTE * n) / velCocina();
+const tiempoCocina = (n) => ((T_COCINA_BASE + T_COCINA_POR_CLIENTE * n) / velCocina()) * factorCocina("vel"); // estufa, horno y ventilación lo acortan
 
 // ----- Un grupo ya sentado, de principio a fin -----
 async function atender(n, clientes, mesa, pu = 0) {
@@ -755,7 +781,7 @@ function tocar(sx, sy) {
   if (!elegido && enCocina) elegido = listos.sort((a, b) => a.listoDesde - b.listoDesde)[0];
   if (elegido) { elegido.tomado = true; llevando = elegido; info("Llevas el platillo de la mesa " + elegido.id + ": toca esa mesa para entregarlo."); }
   else if (mesaTocada) abrirMejorasMesa(mesaTocada); // tocar una mesa (sin platillo en la mano) abre sus mejoras
-  else if (enCocina) info("Todavía no hay platillos listos.");
+  else if (enCocina) abrirCocina(); // sin platillos listos, tocar la cocina abre sus mejoras
 }
 function posEnLienzo(e) { const r = lienzo.getBoundingClientRect(); return [((e.clientX - r.left) * CW) / r.width, ((e.clientY - r.top) * CH) / r.height]; }
 
@@ -788,6 +814,7 @@ async function visitarHabs(c, ida, i, P = PUERTAS[0], ids = []) {
 // ----- Tienda y personal -----
 function abrirTienda(mesa = null, empleados = false, construir = false, anuncio = false, perfil = false) { // sin mesa: la tienda de la recepción; con mesa: el panel de mejoras de esa mesa; empleados: el panel de personal
   if (menuMesaEl) menuMesaEl.hidden = true;
+  vistaCocina = false;
   mesaMejora = mesa;
   vistaEmpleados = empleados;
   vistaConstruir = construir;
@@ -800,7 +827,7 @@ function abrirTienda(mesa = null, empleados = false, construir = false, anuncio 
   info(mesa ? "⏸️ Juego en pausa mientras mejoras la mesa " + mesa.id + "." : empleados ? "⏸️ Juego en pausa mientras ves a tus empleados." : anuncio ? "⏸️ Juego en pausa mientras eliges tus anuncios." : perfil ? "⏸️ Juego en pausa mientras ves tu perfil." : construir ? "⏸️ Juego en pausa mientras construyes." : "⏸️ Juego en pausa mientras estás en la tienda.");
 }
 function abrirMejorasMesa(m) { // tocar una mesa: menú con «Mejoras» y «Personal» (el juego se pausa)
-  mesaMejora = m; tabMesa = "mejoras"; cosaSel = MEJORAS_MESA[0].id;
+  mesaMejora = m; tabMesa = "mejoras"; cosaSel = MEJORAS_MESA[0].id; vistaCocina = false;
   vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false;
   $("tienda").hidden = true;
   pintarMenuMesa();
@@ -808,9 +835,18 @@ function abrirMejorasMesa(m) { // tocar una mesa: menú con «Mejoras» y «Pers
   ponerPausa(true);
   info("⏸️ Juego en pausa mientras mejoras la mesa " + m.id + ".");
 }
+function abrirCocina() { // tocar la cocina o el botón «🍳 Cocina»: menú de mejoras de la cocina (el juego se pausa)
+  mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false;
+  vistaCocina = true; cosaCocina = MEJORAS_COCINA[0].id;
+  $("tienda").hidden = true;
+  pintarMenuMesa();
+  menuMesa().hidden = false;
+  ponerPausa(true);
+  info("⏸️ Juego en pausa mientras mejoras la cocina.");
+}
 function cerrarTienda() {
   const estabaEnPausa = pausado;
-  mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false;
+  vistaCocina = false; mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false;
   $("tienda").hidden = true;
   if (menuMesaEl) menuMesaEl.hidden = true;
   ponerPausa(false);
@@ -927,6 +963,7 @@ function menuMesa() { // se crea la primera vez que se necesita (junto con su es
   return menuMesaEl;
 }
 function pintarMenuMesa() {
+  if (vistaCocina) { pintarMenuCocina(); return; }
   const m = mesaMejora;
   if (!m) return;
   const raiz = menuMesa(), previo = raiz.firstChild ? raiz.firstChild.scrollTop : 0;
@@ -992,6 +1029,77 @@ function pintarMenuMesa() {
   }
   raiz.appendChild(caja);
   caja.scrollTop = previo;
+}
+// Efecto de una cosa de la cocina en el nivel n, en texto corto
+function efTxtCocina(c, n) {
+  if (n <= 0) return "—";
+  const v = efCoc(c, n);
+  return c.tipo === "vel" ? "⚡ ×" + (1 / v).toFixed(2) : c.tipo === "pago" ? "💵 +" + dolares(v) : "⏳ +" + Math.round((v - 1) * 100) + " %";
+}
+function pintarMenuCocina() {
+  const raiz = menuMesa(), previo = raiz.firstChild ? raiz.firstChild.scrollTop : 0;
+  raiz.innerHTML = "";
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
+  const caja = el("div", "mm-caja");
+  const tabs = el("div", "mm-tabs");
+  const atras = el("button", "mm-tab mm-atras", "←");
+  atras.setAttribute("aria-label", "Cerrar");
+  atras.addEventListener("click", cerrarTienda);
+  tabs.append(atras, el("button", "mm-tab act", "🍳 Cocina"));
+  const cab = el("div", "mm-cab");
+  cab.append(el("h2", "mm-titulo", "Cocina"), el("span", "mm-pildora", "💵 +" + dolares(bonoCocina()) + " por cliente"));
+  caja.append(tabs, cab);
+
+  const c = MEJORAS_COCINA.find((x) => x.id === cosaCocina) || MEJORAS_COCINA[0];
+  const n = nivCoc(c.id), max = c.precios.length + 1, tiene = n > 0, tope = n >= max;
+  const falta = c.requiere && !nivCoc(c.requiere) ? MEJORAS_COCINA.find((x) => x.id === c.requiere) : null; // lo que hay que tener antes
+  const precio = tope ? 0 : tiene ? c.precios[n - 1] : c.compra;
+  const totalNiv = MEJORAS_COCINA.reduce((t, q) => t + q.precios.length + 1, 0) - 1, pct = ((MEJORAS_COCINA.reduce((t, q) => t + nivCoc(q.id), 0) - 1) / (totalNiv)) * 100;
+  const barra = el("div", "mm-barra"), rel = el("div", "mm-relleno");
+  rel.style.width = pct + "%";
+  barra.append(rel, el("span", "mm-pct", "⬆ " + pct.toFixed(2) + "%"));
+
+  const stats = el("div", "mm-stats");
+  stats.append(el("span", null, "💰 " + dolares(dinero)), el("span", null, "⏱️ " + (tiempoCocina(4) / 1000).toFixed(1) + " s"), el("span", null, "⏳ ×" + factorCocina("paciencia").toFixed(2)));
+
+  const tarj = el("div", "mm-card"), cab2 = el("div", "mm-card-cab");
+  cab2.append(el("b", "mm-card-nombre", c.nombre), el("span", "mm-nivel", !tiene ? "Sin comprar" : tope ? "Nivel: MÁX" : "Nivel: " + n));
+  const cuerpo = el("div", "mm-card-cuerpo"), txt = el("div", "mm-card-txt"), ing = el("div", "mm-ingreso");
+  if (!tiene) ing.append(el("span", null, "Al comprarlo:"), el("span", "mm-mas", efTxtCocina(c, 1)));
+  else ing.append(el("span", null, efTxtCocina(c, n)), el("span", "mm-mas", tope ? "MÁX" : "→ " + efTxtCocina(c, n + 1)));
+  txt.append(el("p", null, c.desc + (c.tipo === "vel" ? " (×2.00 = la mitad de tiempo)" : "")), ing);
+  if (falta) txt.append(el("p", null, "🔒 Primero compra: " + falta.nombre.toLowerCase() + "."));
+  const btn = el("button", "mm-mejorar");
+  btn.append(el("span", null, tope ? "MÁXIMO" : falta ? "🔒" : "💵 " + dolares(precio)), el("span", null, tope || falta ? "" : tiene ? "MEJORAR" : "COMPRAR"));
+  btn.disabled = tope || !!falta || dinero < precio;
+  btn.addEventListener("click", () => mejorarCocina(c.id));
+  cuerpo.append(el("div", "mm-card-ico", c.ico), txt, btn);
+  tarj.append(cab2, cuerpo);
+
+  const rej = el("div", "mm-rejilla");
+  for (const q of MEJORAS_COCINA) {
+    const nq = nivCoc(q.id), tq = nq >= q.precios.length + 1, bq = !!(q.requiere && !nivCoc(q.requiere)), pq = nq > 0 ? q.precios[nq - 1] : q.compra;
+    const puede = !tq && !bq && dinero >= pq;
+    const t = el("button", "mm-tile" + (q.id === c.id ? " sel" : ""));
+    t.title = q.nombre;
+    t.append(el("span", "mm-tile-ico", q.ico), el("span", "mm-tile-nom", q.nombre),
+      el("span", "mm-tile-niv" + (tq ? " max" : puede ? " ok" : ""), tq ? "MÁX" : bq ? "🔒" : nq === 0 ? (puede ? "⬆ " : "") + "Comprar" : (puede ? "⬆ " : "") + "Nivel: " + nq));
+    t.addEventListener("click", () => { cosaCocina = q.id; pintarMenuCocina(); });
+    rej.appendChild(t);
+  }
+  caja.append(barra, stats, tarj, rej);
+  raiz.appendChild(caja);
+  caja.scrollTop = previo;
+}
+function mejorarCocina(id) {
+  const c = MEJORAS_COCINA.find((x) => x.id === id), n = c ? nivCoc(id) : 0;
+  if (!c || n > c.precios.length || (c.requiere && !nivCoc(c.requiere))) return;
+  const precio = n === 0 ? c.compra : c.precios[n - 1];
+  if (dinero < precio) return;
+  dinero -= precio;
+  cocinaNiv[id] = n + 1;
+  info(n === 0 ? "🍳 ¡Compraste " + c.nombre.toLowerCase() + "! " + efTxtCocina(c, 1) : "🍳 Mejoraste " + c.nombre.toLowerCase() + " (nivel " + (n + 1) + "). " + efTxtCocina(c, n + 1));
+  actualizar();
 }
 function mejorarCosaMesa(m, id) {
   const c = MEJORAS_MESA.find((x) => x.id === id), k = m.mejoras[id], precio = c && c.precios[k];
@@ -1682,7 +1790,7 @@ function dibujarMesa(m) {
   if (m.plato) emoji("🍽️", sx, sy - 4 * ESCALA, 22 * ESCALA);
   const bw = 48 * ESC_UI, bh = 7 * ESC_UI, by = sy - 38 * ESC_UI; // barras de paciencia y de avance
   if (m.esperando) { // paciencia: verde, y roja desde que se enojan
-    const resta = Math.max(0, 1 - (ahora() - m.listoDesde) / PACIENCIA_MS);
+    const resta = Math.max(0, 1 - (ahora() - m.listoDesde) / pacienciaMs());
     ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(sx - bw / 2, by, bw, bh);
     ctx.fillStyle = m.enojo ? "#e74c3c" : "#6fcf97"; ctx.fillRect(sx - bw / 2, by, bw * resta, bh);
     emoji(m.enojo ? "😡" : "⏳", sx, sy - 52 * ESC_UI, 20 * ESC_UI);
@@ -1705,14 +1813,22 @@ function dibujarMostrador() {
   for (const m of mesas) { // platillos listos esperando que los tomes
     if (!m.esperando || m.tomado) continue;
     const [sx, sy] = iso(...slotXY(m.slot), 26);
-    const resta = Math.max(0, 1 - (ahora() - m.listoDesde) / PACIENCIA_MS), u = ESC_UI;
+    const resta = Math.max(0, 1 - (ahora() - m.listoDesde) / pacienciaMs()), u = ESC_UI;
     emoji("🍽️", sx, sy - 14 * ESCALA, 30 * ESCALA * (1 + Math.sin(ahora() / 180) * 0.08));
     texto(ESCALA < 0.8 ? String(m.id) : "Mesa " + m.id, sx, sy + 4 * u, 10, "#263238", "center");
     ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fillRect(sx - 16 * u, sy + 11 * u, 32 * u, 5 * u);
     ctx.fillStyle = m.enojo ? "#e74c3c" : "#2e9e5b"; ctx.fillRect(sx - 16 * u, sy + 11 * u, 32 * u * resta, 5 * u);
   }
 }
+function dibujarEquipoCocina() { // lo que compraste (y la estufa) se ve en el piso de la cocina, en dos filas de cuatro
+  MEJORAS_COCINA.forEach((c, i) => {
+    if (nivCoc(c.id) <= 0) return;
+    const [sx, sy] = iso(30 + DX + KX + (i % 4) * 48, i < 4 ? 130 : 150, 14);
+    emoji(c.ico, sx, sy, 26 * ESCALA);
+  });
+}
 function dibujarChef() {
+  dibujarEquipoCocina();
   persona("🧑‍🍳", 110 + DX + KX, 112, 20 + (cocinando > 0 ? Math.abs(Math.sin(ahora() / 120)) * 5 : 0), 34);
   if (cocinero2) persona("👩‍🍳", 190 + DX + KX, 112, 20 + (cocinando > 0 ? Math.abs(Math.sin(ahora() / 120 + 1.5)) * 5 : 0), 34); // segundo cocinero, a la derecha del primero
   if (cocinando > 0) { const [sx, sy] = iso(150 + DX + KX, 100, 44); emoji("♨️", sx, sy, 20 * ESCALA); }
@@ -1915,12 +2031,12 @@ function cuadro() {
   for (const m of mesas) {
     if (!m.esperando) continue;
     const espera = t - m.listoDesde;
-    if (espera >= ENOJO_MS && !m.enojo) {
+    if (espera >= enojoMs() && !m.enojo) {
       m.enojo = true;
       m.clientes.forEach((c) => (c.enojado = true));
       globo(m.cx, m.cy, "😡 ¡Y mi comida!", 2000);
     }
-    if (espera >= PACIENCIA_MS) { // se acabó la paciencia: se van
+    if (espera >= pacienciaMs()) { // se acabó la paciencia: se van
       m.esperando = false; m.enojo = false; m.tomado = false;
       if (llevando === m) llevando = null;
       const r = m.res; m.res = null;
@@ -2076,6 +2192,21 @@ if (!btnEmpleados) { // si index.html es una versión vieja sin el botón, se cr
   else abrirTienda(null, true);
   });
 }
+let btnCocina = $("btnCocina"); // botón anclado a la pantalla, debajo de «Empleados»: abre el menú de la cocina aunque haya platillos listos
+if (!btnCocina) { // si index.html es una versión vieja sin el botón, se crea desde aquí
+  btnCocina = document.createElement("button");
+  btnCocina.id = "btnCocina";
+  btnCocina.className = "btn";
+  btnCocina.textContent = "🍳 Cocina";
+  btnCocina.setAttribute("aria-label", "Cocina");
+  btnCocina.style.cssText = "position:fixed;z-index:90;top:calc(100px + env(safe-area-inset-top,0px));right:calc(8px + env(safe-area-inset-right,0px));box-shadow:0 4px 14px rgba(0,0,0,.45)";
+  (lienzo.parentNode || document.body).appendChild(btnCocina);
+}
+btnCocina.addEventListener("click", () => {
+  if ($("menu").hidden === false || modoMover) return; // con el menú abierto (o moviendo habitaciones) no se usa
+  if (vistaCocina && menuMesaEl && !menuMesaEl.hidden) cerrarTienda();
+  else abrirCocina();
+});
 btnMover = $("btnMover"); // si index.html no lo trae, se crea aquí junto al botón Reiniciar
 if (!btnMover) {
   btnMover = document.createElement("button");
