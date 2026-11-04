@@ -5,7 +5,7 @@
 // - SDK de Firebase (www.gstatic.com/firebasejs): se guarda la primera vez y se reutiliza.
 // - Login, Firestore y demás llamadas a Google NO se tocan.
 // Al agregar un juego: añádelo a «JUEGOS» de abajo. Para forzar que todos vuelvan a descargar todo, sube el número de VERSION.
-const VERSION = 13;
+const VERSION = 15;
 const CACHE = "juegos-v" + VERSION;
 const ESPERA_RED = 3000;
 
@@ -32,12 +32,13 @@ const JUEGOS = {
   defendercastillo: ["juego.js", "logica.js", "niveles.js"],
   guerrerodepuntos: ["juego.js", "niveles.js"],
   agario: ["juego.js"],
+  botellascolores: ["juego.js", "logica.js", "niveles.js"],
 };
 
 const ARCHIVOS = [
   "./", "index.html", "juegos.js", "manifest.webmanifest",
   "iconos/icono-180.png", "iconos/icono-192.png", "iconos/icono-512.png",
-  "compartido/estilos.css", "compartido/firebase.js", "compartido/jugador.js", "compartido/configs.js", "compartido/pantalla-completa.js",
+  "compartido/estilos.css", "imagenes/agario.webp", "imagenes/gominolas.webp", "imagenes/restaurante.webp", "imagenes/rompecabezas.webp", "imagenes/pradera.webp", "imagenes/ajedrez.webp", "imagenes/solitario.webp", "imagenes/botellascolores.webp", "imagenes/buscaminas.webp", "imagenes/corredor.webp", "imagenes/pantano.webp", "imagenes/piano.webp", "imagenes/dulces.webp", "compartido/firebase.js", "compartido/jugador.js", "compartido/configs.js", "compartido/pantalla-completa.js",
 ];
 for (const [carpeta, extra] of Object.entries(JUEGOS)) {
   ARCHIVOS.push(carpeta + "/", carpeta + "/index.html", ...extra.map((f) => carpeta + "/" + f));
