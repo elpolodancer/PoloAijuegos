@@ -22,6 +22,13 @@
     .it.sel { border-color: #ffd24a; background: rgba(60,50,10,.85); } .it.no { opacity: .45; }
     #fab { position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; width: min(92vw, 340px); padding: 12px; border-radius: 14px; background: rgba(15,18,32,.92); border: 1px solid var(--borde); }
     #fab h3 { margin: 0 0 8px; font-size: 1rem; } #fab .btn { display: block; width: 100%; margin: 6px 0; text-align: left; } #fab .btn:disabled { opacity: .45; }
+    #invp, #mesa { position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; padding: 12px; border-radius: 14px; background: rgba(15,18,32,.92); border: 1px solid var(--borde); }
+    #invp h3, #mesa h3 { margin: 0 0 8px; font-size: 1rem; } #invp h4, #mesa h4 { margin: 12px 0 6px; font-size: .8rem; color: var(--suave); font-weight: 600; } #invp small, #mesa small { display: block; margin-top: 8px; color: var(--suave); font-size: .7rem; }
+    .cuad { display: grid; gap: 6px; } .c4 { grid-template-columns: repeat(4, 50px); } .c2 { grid-template-columns: repeat(2, 50px); } .c3 { grid-template-columns: repeat(3, 50px); }
+    .craft { display: flex; align-items: center; gap: 12px; } .flecha { font-size: 1.4rem; color: var(--suave); }
+    .cas { position: relative; width: 50px; height: 50px; padding: 0; color: #fff; font: inherit; cursor: pointer; background: rgba(255,255,255,.07); border: 2px solid var(--borde); border-radius: 10px; }
+    .cas span { font-size: 1.5rem; line-height: 1; } .cas i { position: absolute; right: 4px; bottom: 2px; font-size: .7rem; font-style: normal; font-weight: 700; text-shadow: 0 0 3px #000; }
+    .cas.sel { border-color: #ffd24a; background: rgba(60,50,10,.85); }
   </style>
 </head>
 <body>
@@ -36,6 +43,8 @@
   </div>
   <div id="aviso"></div>
   <div id="fab" hidden></div>
+  <div id="invp" hidden></div>
+  <div id="mesa" hidden></div>
   <div id="barra"></div>
   <script type="module" src="juego.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
