@@ -4,7 +4,7 @@ const ID = "piano"; // el mismo id de juegos.js (colección de puntos en Firesto
 const $ = (id) => document.getElementById(id);
 const cv = $("lienzo"), cx = cv.getContext("2d"), W = cv.width, H = cv.height;
 const estado = $("estado"), jugar = $("jugar"), btnEntrar = $("entrar");
-const menu = $("menu"), listaCanc = $("canciones"), alMenu = $("alMenu");
+const menu = $("menu"), rejilla = $("rejilla"), alMenu = $("alMenu");
 const COLS = 4, CW = W / COLS, RH = H / 4; // 4 columnas y 4 filas visibles
 const TIEMPO = 60; // segundos de partida; el reloj arranca al acertar la primera tecla
 // Frecuencias (Hz) de las notas que usan las melodías. Para una nota nueva, añádela aquí (ej. "A4": 440)
@@ -69,9 +69,14 @@ const cargarLocal = () => { try { return JSON.parse(localStorage.getItem(CLAVE))
 const guardarLocal = () => { try { localStorage.setItem(CLAVE, JSON.stringify(progreso)); } catch (e) {} };
 let progreso = cargarLocal();
 const botones = [];
-function etiqueta(k) {
+// Cada canción es un cuadro del menú: nota, nombre corto (sin el autor entre paréntesis) y, si ya la jugaste, tu mejor puntaje (⭐ si la completaste)
+const corto = (k) => MELODIAS[k].nombre.replace(/\s*\([^)]*\)\s*$/, "");
+function pintarCuadro(b, k) {
   const p = progreso[MELODIAS[k].nombre];
-  return "🎵 " + MELODIAS[k].nombre + (p ? " · mejor " + p.mejor + (p.vueltas ? " ⭐" : "") : "");
+  b.innerHTML = "<span class=\"nota\">🎵</span><b></b><small></small>";
+  b.querySelector("b").textContent = corto(k);
+  b.querySelector("small").textContent = p ? (p.vueltas ? "⭐ " : "") + p.mejor : "";
+  b.title = MELODIAS[k].nombre + (p ? " · mejor " + p.mejor : "");
 }
 function registrar() {
   const nombre = MELODIAS[actual].nombre;
@@ -79,7 +84,7 @@ function registrar() {
   p.partidas++; p.vueltas += vueltas; p.mejor = Math.max(p.mejor, puntos);
   progreso[nombre] = p;
   guardarLocal();
-  botones.forEach((b, k) => { b.textContent = etiqueta(k); });
+  botones.forEach((b, k) => pintarCuadro(b, k));
   sincronizarNube();
 }
 function sincronizarNube() {} // gancho: aquí se respaldará el progreso en Firestore cuando haya sesión
@@ -109,7 +114,7 @@ function empezar() {
   filas = [];
   for (let i = 0; i < 6; i++) filas.push({ c: columna(), y: H - RH * (i + 2), hit: false });
   puntos = 0; avance = 0; inicio = 0; restante = TIEMPO; error = null; vivo = true; ultimo = performance.now();
-  jugar.hidden = true; alMenu.hidden = true; menu.hidden = true; listaCanc.hidden = true;
+  jugar.hidden = true; alMenu.hidden = true; menu.hidden = true; cv.hidden = false; scrollTo(0, 0);
   let k = modo; // canción elegida en el menú...
   if (k === null) { do { k = Math.floor(Math.random() * MELODIAS.length); } while (k === ultimaMelodia && MELODIAS.length > 1); } // ...o al azar, sin repetir la anterior
   ultimaMelodia = k;
@@ -117,27 +122,21 @@ function empezar() {
   estado.textContent = "🎼 " + MELODIAS[k].nombre;
   requestAnimationFrame(ciclo);
 }
-// Menú: «Modo aleatorio» o «Elegir canción» (lista con todas las melodías)
+// Menú principal: botón «Modo aleatorio» y una rejilla de 4 columnas con un cuadro cuadrado (1:1) por canción
 function mostrarMenu() {
-  menu.hidden = false; listaCanc.hidden = true; jugar.hidden = true; alMenu.hidden = true;
-  estado.textContent = "Elige cómo quieres jugar. Tienes 1 minuto; si tocas una tecla equivocada, pierdes.";
-}
-function mostrarLista() {
-  menu.hidden = true; listaCanc.hidden = false;
-  estado.textContent = "Elige una canción:";
+  menu.hidden = false; cv.hidden = true; jugar.hidden = true; alMenu.hidden = true;
+  estado.textContent = "Toca una canción para empezar, o juega al azar. Tienes 1 minuto; si tocas una tecla equivocada, pierdes.";
 }
 MELODIAS.forEach((m, k) => {
   const b = document.createElement("button");
-  b.className = "btn"; b.type = "button"; b.textContent = etiqueta(k);
+  b.className = "cuadro"; b.type = "button";
+  const h = (k * 47) % 360; // un color distinto por canción
+  b.style.setProperty("--c1", "hsl(" + h + ",55%,40%)"); b.style.setProperty("--c2", "hsl(" + ((h + 40) % 360) + ",55%,24%)");
+  pintarCuadro(b, k);
   b.addEventListener("click", () => { modo = k; empezar(); });
-  listaCanc.appendChild(b); botones.push(b);
+  rejilla.appendChild(b); botones.push(b);
 });
-const atras = document.createElement("button");
-atras.className = "btn"; atras.type = "button"; atras.textContent = "‹ Volver";
-atras.addEventListener("click", mostrarMenu);
-listaCanc.appendChild(atras);
 $("modoAzar").addEventListener("click", () => { modo = null; empezar(); });
-$("modoLista").addEventListener("click", mostrarLista);
 alMenu.addEventListener("click", mostrarMenu);
 function dibujar() {
   cx.fillStyle = "#fff";
