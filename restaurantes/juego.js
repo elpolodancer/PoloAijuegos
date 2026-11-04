@@ -5,21 +5,21 @@
 // Ya sentados, cada persona paga lo de SU silla (no la de la otra banca) y lo de la mesa (cubiertos, condimentos, bebidas, decoración). La cocina prepara y TÚ (o el mesero) llevas el platillo (clic en la cocina para tomarlo, clic en la mesa para entregarlo).
 // Nadie se va por tardar la comida. Al entregarla, cada uno paga $5 por la comida más lo que sumen las mejoras de la cocina. Al terminar de comer se levantan TODOS: el 100 % usa el baño (si ya lo compraste; cuesta 2 dólares y esperan su turno) y
 // algunos van además a otras habitaciones; todos pasan por la recepción y se van.
-// TIENDA: tocando el mostrador de la recepción (🛒) se abre la zona de compras. Ahí se contrata (y se mejora) a la recepcionista y al mesero.
+// RECEPCIÓN: tocando su mostrador se abre su panel (lo que cobra por su servicio; sus mejoras llegarán pronto). La recepcionista y el mesero se contratan y mejoran en 👥 Empleados.
 // SEGUNDO COCINERO: se contrata en la tienda ($1500, sin otro requisito) y cocina junto con el primero: sus velocidades se suman (cada uno según su nivel).
 // COCINERO Y MESAS: en la tienda se mejora al cocinero (10 niveles: cada nivel cocina más rápido) y se compran mesas nuevas para el comedor (hasta 16 en total, en filas y columnas de 4 × 4; precio creciente).
-// AMPLIACIÓN: en la tienda se compra «Ampliar terreno» (una plaza detrás del restaurante, sobre el pasto). Solo entonces se desbloquea la SEGUNDA PUERTA (el SEGUNDO MESERO ya no la necesita: se compra desde el principio, con el primer mesero contratado, por $500)
+// AMPLIACIÓN: tocando el precio del cartel «En venta» de un terreno se compra la ampliación (una plaza detrás del restaurante, sobre el pasto). Solo entonces se desbloquea la SEGUNDA PUERTA, que se compra en la oficina del jefe (el SEGUNDO MESERO ya no la necesita: se compra desde el principio, con el primer mesero contratado, por $500)
 // (entrada por atrás, con su propia fila de espera y su mostrador). La SEGUNDA RECEPCIONISTA solo se puede contratar cuando ya existe la segunda puerta.
 // Empiezan lentos: cada mejora los hace más rápidos. Lo gastado sale de «dinero»; los puntos y el récord cuentan lo «ganado».
 // CIUDAD Y VISTA: el restaurante está en una calle, rodeado de manzanas con edificios, parques y carreteras. La vista se acerca/aleja (➕ ➖, rueda o pellizco) con límites cortos y se mueve arrastrando.
 // ANUNCIOS: el botón «📢 Anuncios» vende anuncios temporales (periódico, radio, televisión, redes) y la página web (compra única) que suben el % de clientes que llegan (ver ANUNCIOS).
 // ESTACIONAMIENTO: alrededor de toda la cuadra hay 24 lugares posibles (adelante, a los lados y atrás), pero al empezar solo se ven y se usan 2.
-// Los demás se compran en la tienda (precio creciente: ver ESTAC_PRECIOS). Los autos llegan por la calle de enfrente; cada auto trae SIEMPRE 4 personas.
+// Los demás se compran en la caseta del estacionamiento (precio creciente: ver ESTAC_PRECIOS). Los autos llegan por la calle de enfrente; cada auto trae SIEMPRE 4 personas.
 // Si hay lugar, estaciona y las 4 personas van a la recepción como un grupo más; al terminar regresan al auto y se van. Si no hay lugar, el auto pasa de largo y no vuelve.
 // TERRENOS: el restaurante es largo y ocupa 2 de las 9 manzanas de una cuadrícula de 3 × 3: la de la esquina inferior derecha y la central derecha (la de arriba). Las otras 7 son pasto (sin carreteras entre ellas).
-// Los terrenos se compran en la tienda («Ampliar terreno»): las 7 manzanas de pasto son los terrenos 2.º a 8.º y se compran de uno en uno, solo los que tocan tu terreno actual (el restaurante o uno ya comprado).
+// Los terrenos se compran tocando el precio de su cartel «En venta»: las 7 manzanas de pasto son los terrenos 2.º a 8.º y se compran de uno en uno, solo los que tocan tu terreno actual (el restaurante o uno ya comprado).
 // El precio sube con cada terreno (ver TERRENO_PRECIOS: $10,000 el 2.º ... $500,000 el 9.º). Las manzanas de pasto están en PASTO.
-// HABITACIONES (lugares fijos, ver LUGARES): atrás generadores · cocina (centro) · oficina; debajo, el baño (izquierda) y la limpieza (derecha). La cafetería, la heladería y la pastelería van en las paredes de los lados. En la oficina (tócala) se compran las mesas, el baño y las habitaciones; la limpieza en «🏗️ Construir».
+// HABITACIONES (lugares fijos, ver LUGARES): atrás generadores · cocina (centro) · oficina; debajo, el baño (izquierda) y la limpieza (derecha). La cafetería, la heladería y la pastelería van en las paredes de los lados. En la oficina (tócala) se compran las mesas, el baño y las habitaciones; la limpieza ya viene construida.
 // Al terminar de comer, cada cliente va a 0-4 de esos lugares (ver PESOS_VISITAS) y gasta en cada uno.
 // ENERGÍA: la «⚡ sala de generadores» ya viene construida. Empiezas con 22/33 de energía (usada/disponible); tocando la sala compras un generador cuadrado ($10) que se ve dentro y sube la energía disponible de 33 a 48 (ver ENERGIA_*).
 // DECORACIONES: también en «🏗️ Construir»; cada una suma dinero a lo que paga cada cliente (ver DECORACIONES).
@@ -363,6 +363,8 @@ function crearCajones() {
   return out.map((c) => ({ ...c, usado: false, coche: null, pendientes: 0 }));
 }
 const CAJONES = crearCajones();
+// Caseta del estacionamiento: al frente, a la izquierda de la puerta, junto a los lugares. Se toca para comprar lugares (sus mejoras llegarán pronto).
+const CASETA = { x0: HALL_X - 190, y0: H + 48, x1: HALL_X - 154, y1: H + 84, alto: 30 };
 // Precio del siguiente lugar. k = cuántos lugares has comprado ya (0 = el primero). Pasada la lista: el último precio × ESTAC_FACTOR por cada lugar más
 function precioEstac(k) {
   if (k < ESTAC_PRECIOS.length) return ESTAC_PRECIOS[k];
@@ -408,6 +410,7 @@ let usuario = null, perfilDatos = null, vistaPerfil = false; // jugador con sesi
 let anuncios = {}, paginaWeb = false, vistaAnuncios = false; // anuncios: { id: momento del reloj en que termina }; página web comprada; true = el panel abierto es el de «📢 Anuncios»
 let vistaGeneradores = false; // true = el panel abierto es el de la «⚡ sala de generadores»
 let vistaOficina = false; // true = el panel abierto es el de la «🕴️ oficina del jefe» (compras de mesas y zonas)
+let vistaExtra = null; // panel extra abierto: "caseta" (estacionamiento) o "terreno:<clave>" (compra de un terreno en venta); null = ninguno (sin otra vista, el panel es el de la recepción)
 let vistaConstruir = false; // true = el panel abierto es el de «🏗️ Construir» (habitaciones y decoraciones)
 let puntosEnviados = 0, umbralPuntos = PUNTOS_LOTE, enviando = false; // puntos ya mandados al perfil, cuántos hacen falta para el siguiente envío, envío en curso
 let ranura = null; // partida activa (0, 1 o 2); null = estás en el menú y no se guarda nada
@@ -491,7 +494,7 @@ function nuevaPartida(datos = null) { // datos: partida guardada que se carga (n
   armarFondo(); // quita la plaza y los lugares de la partida anterior (o dibuja los de la partida cargada)
   cerrarTienda();
   $("tiempo").textContent = fmtTiempo(Math.floor(reloj / 1000));
-  info("Ya tienes cocinero, recepcionista, mesero y personal de limpieza. Los clientes llegan solos de 9:30 AM a 11:00 PM: la recepcionista tarda 10 s en atenderlos y, si hay mesa, cada cliente paga $10 de entrada. Toca el mostrador 🛒 para comprar terreno y estacionamiento, la 🕴️ oficina del jefe para comprar mesas y zonas, una mesa para mejorarla y 👥 Empleados (arriba a la derecha) para el personal.");
+  info("Ya tienes cocinero, recepcionista, mesero y personal de limpieza. Los clientes llegan solos de 9:30 AM a 11:00 PM: la recepcionista tarda 10 s en atenderlos y, si hay mesa, cada cliente paga $10 de entrada. Toca el precio de un terreno en venta para ampliar, la caseta 🅿️ para comprar lugares de estacionamiento, la 🕴️ oficina del jefe para comprar mesas, zonas y la segunda puerta, una mesa para mejorarla y 👥 Empleados (arriba a la derecha) para el personal.");
   actualizar();
 }
 
@@ -881,12 +884,26 @@ const dentro = (p, x0, y0, x1, y1) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && 
 // Del punto de pantalla al mapa plano, suponiendo que está a la altura z
 function aMundo(sx, sy, z) { const u = (sx - OX) / ISO, v = ((sy + z * ESCALA - OY) * 2) / ISO; return [(u + v) / 2, (v - u) / 2]; }
 
+// Carteles «En venta»: tocar el precio de un terreno abre su compra
+const medidorTexto = document.createElement("canvas").getContext("2d");
+function textoCartel(k) { return "🏷️ Terreno " + datosLote(k).etiqueta.toLowerCase() + " · " + dolares(precioTerreno()); }
+function cartelTocado(sx, sy) {
+  if (precioTerreno() === undefined) return false;
+  medidorTexto.font = "700 15px system-ui, sans-serif";
+  for (const k of lotesDisponibles()) {
+    const L = datosLote(k), [px, py] = iso(bx0(L.i) + W / 2, by0(L.j) + BH / 2);
+    if (Math.abs(sx - px) <= medidorTexto.measureText(textoCartel(k)).width / 2 + 16 && Math.abs(sy - py) <= 20) { abrirTienda(null, false, false, false, false, false, false, "terreno:" + k); return true; }
+  }
+  return false;
+}
 function tocar(sx, sy) {
   if (pausado) return; // con la tienda abierta el juego está en pausa
   puntero = { x: sx, y: sy };
   const [wx, wy] = aMundo(sx, sy, 20);
   if (dentro(aMundo(sx, sy, 26), 335 + DX - TOL, 560 + DY - TOL, 465 + DX + TOL, 625 + DY + TOL) || dentro(aMundo(sx, sy, 0), 335 + DX - TOL, 560 + DY - TOL, 465 + DX + TOL, 650 + DY + TOL)) { abrirTienda(); return; } // mostrador de la recepción
   if (puerta2 && (dentro(aMundo(sx, sy, 26), 335 + DX - TOL, -75 - TOL, 465 + DX + TOL, -30 + TOL) || dentro(aMundo(sx, sy, 0), 335 + DX - TOL, -75 - TOL, 465 + DX + TOL, -30 + TOL))) { abrirTienda(); return; } // mostrador de la recepción 2
+  if (cartelTocado(sx, sy)) return; // el precio de un terreno en venta
+  if ([0, CASETA.alto, CASETA.alto + 22].some((z) => dentro(aMundo(sx, sy, z), CASETA.x0 - 8, CASETA.y0 - 8, CASETA.x1 + 8, CASETA.y1 + 8))) { abrirTienda(null, false, false, false, false, false, false, "caseta"); return; } // caseta del estacionamiento
   const enCocina = dentro(aMundo(sx, sy, 0), ...RECT_COCINA) || dentro(aMundo(sx, sy, 30), ...RECT_COCINA);
   const RO = habsExtra.oficina === undefined ? null : rectHab("oficina");
   const enOficina = !!RO && (dentro(aMundo(sx, sy, 0), ...RO) || dentro(aMundo(sx, sy, 30), ...RO));
@@ -954,7 +971,7 @@ async function visitarHabs(c, ida, i, P = PUERTAS[0], ids = []) {
 }
 
 // ----- Tienda y personal -----
-function abrirTienda(mesa = null, empleados = false, construir = false, anuncio = false, perfil = false, oficina = false, generador = false) { // sin mesa: la tienda de la recepción; con mesa: el panel de mejoras de esa mesa; empleados: el panel de personal
+function abrirTienda(mesa = null, empleados = false, construir = false, anuncio = false, perfil = false, oficina = false, generador = false, extra = null) { // sin mesa: la tienda de la recepción; con mesa: el panel de mejoras de esa mesa; empleados: el panel de personal
   if (menuMesaEl) menuMesaEl.hidden = true;
   vistaCocina = false;
   mesaMejora = mesa;
@@ -962,17 +979,18 @@ function abrirTienda(mesa = null, empleados = false, construir = false, anuncio 
   vistaConstruir = construir;
   vistaOficina = oficina;
   vistaGeneradores = generador;
+  vistaExtra = extra;
   vistaAnuncios = anuncio;
   vistaPerfil = perfil;
   if (perfil) cargarPerfil();
   pintarTienda();
   $("tienda").hidden = false;
   ponerPausa(true);
-  info(mesa ? "⏸️ Juego en pausa mientras mejoras la mesa " + mesa.id + "." : empleados ? "⏸️ Juego en pausa mientras ves a tus empleados." : anuncio ? "⏸️ Juego en pausa mientras eliges tus anuncios." : perfil ? "⏸️ Juego en pausa mientras ves tu perfil." : generador ? "⏸️ Juego en pausa mientras estás en la sala de generadores." : oficina ? "⏸️ Juego en pausa mientras estás en la oficina del jefe." : construir ? "⏸️ Juego en pausa mientras construyes." : "⏸️ Juego en pausa mientras estás en la tienda.");
+  info(extra === "caseta" ? "⏸️ Juego en pausa mientras estás en la caseta del estacionamiento." : extra ? "⏸️ Juego en pausa mientras ves el terreno en venta." : mesa ? "⏸️ Juego en pausa mientras mejoras la mesa " + mesa.id + "." : empleados ? "⏸️ Juego en pausa mientras ves a tus empleados." : anuncio ? "⏸️ Juego en pausa mientras eliges tus anuncios." : perfil ? "⏸️ Juego en pausa mientras ves tu perfil." : generador ? "⏸️ Juego en pausa mientras estás en la sala de generadores." : oficina ? "⏸️ Juego en pausa mientras estás en la oficina del jefe." : construir ? "⏸️ Juego en pausa mientras construyes." : "⏸️ Juego en pausa mientras ves la recepción.");
 }
 function abrirMejorasMesa(m) { // tocar una mesa: menú con «Mejoras» y «Personal» (el juego se pausa)
   mesaMejora = m; tabMesa = "mejoras"; cosaSel = MEJORAS_MESA[0].id; vistaCocina = false;
-  vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false; vistaGeneradores = false;
+  vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false; vistaGeneradores = false; vistaExtra = null;
   $("tienda").hidden = true;
   pintarMenuMesa();
   menuMesa().hidden = false;
@@ -980,7 +998,7 @@ function abrirMejorasMesa(m) { // tocar una mesa: menú con «Mejoras» y «Pers
   info("⏸️ Juego en pausa mientras mejoras la mesa " + m.id + ".");
 }
 function abrirCocina() { // tocar la cocina: menú de mejoras de la cocina (el juego se pausa)
-  mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false; vistaGeneradores = false;
+  mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false; vistaGeneradores = false; vistaExtra = null;
   vistaCocina = true; cosaCocina = MEJORAS_COCINA[0].id;
   $("tienda").hidden = true;
   pintarMenuMesa();
@@ -990,7 +1008,7 @@ function abrirCocina() { // tocar la cocina: menú de mejoras de la cocina (el j
 }
 function cerrarTienda() {
   const estabaEnPausa = pausado;
-  vistaCocina = false; mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false; vistaGeneradores = false;
+  vistaCocina = false; mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false; vistaGeneradores = false; vistaExtra = null;
   $("tienda").hidden = true;
   if (menuMesaEl) menuMesaEl.hidden = true;
   ponerPausa(false);
@@ -1267,19 +1285,40 @@ function pintarTienda() {
   if (vistaGeneradores) { pintarGeneradores(lista); return; }
   if (vistaAnuncios) { pintarAnuncios(lista); return; }
   if (vistaPerfil) { pintarPerfil(lista); return; }
-  $("tiendaTitulo").textContent = "🛒 Tienda";
-  const hint = document.createElement("small");
-  hint.style.cssText = "display:block;margin:2px 0 6px;color:var(--suave)";
-  hint.textContent = "El personal (cocineros, meseros y recepcionistas) está en el botón 👥 Empleados, arriba a la derecha." + (habsExtra.oficina !== undefined ? " Las mesas, el baño, la heladería, la cafetería y la pastelería se compran en la 🕴️ oficina del jefe: tócala en el restaurante." : "");
-  lista.append(
-    hint,
-    ...(habsExtra.oficina === undefined ? [filaMesaNueva()] : []), // con oficina, las mesas se compran ahí
-    filaTerreno(),
-    filaSimple("🚪", "Segunda puerta",
-      puerta2 ? "Los clientes también llegan por la puerta de atrás, con su propia fila y mostrador." : terreno2 ? "Una entrada nueva en el terreno de atrás: doble de lugares de espera." : "Se desbloquea al ampliar el terreno.",
-      puerta2 ? "Comprada" : terreno2 ? "Comprar " + dolares(PRECIO_PUERTA2) : "🔒 Bloqueado", puerta2 || !terreno2 || dinero < PRECIO_PUERTA2, comprarPuerta2),
-    filaEstac()
-  );
+  if (vistaExtra) { pintarExtra(lista); return; }
+  pintarRecepcion(lista); // sin otra vista, el panel es el de la recepción (ya no hay «tienda»)
+}
+// Panel de la «🛎️ Recepción» (se abre tocando su mostrador): lo que cobra por su servicio. Como una mesa, tendrá mejoras (pronto).
+function pintarRecepcion(lista) {
+  $("tiendaTitulo").textContent = "🛎️ Recepción";
+  const nota = document.createElement("small");
+  nota.style.cssText = "display:block;margin:2px 0 6px;color:var(--suave)";
+  nota.textContent = "La recepcionista se contrata y mejora en 👥 Empleados. Los terrenos se compran tocando el precio de su cartel «En venta»; los lugares de estacionamiento, en la caseta 🅿️; y la segunda puerta, en la 🕴️ oficina del jefe.";
+  lista.append(nota,
+    filaPronto("🛎️", "Servicio de la recepción", "Cada cliente paga " + dolares(ENTRADA_POR_CLIENTE) + " por este servicio en cuanto se le da mesa. Sus mejoras (como las de una mesa) llegarán pronto.", "Próximamente"));
+}
+// Paneles extra: la caseta del estacionamiento y la compra de un terreno en venta
+function pintarExtra(lista) {
+  const nota = (t) => { const e = document.createElement("small"); e.style.cssText = "display:block;margin:2px 0 6px;color:var(--suave)"; e.textContent = t; return e; };
+  if (vistaExtra === "caseta") {
+    $("tiendaTitulo").textContent = "🅿️ Caseta del estacionamiento";
+    lista.append(nota("Aquí se compran los lugares de estacionamiento. Las mejoras de la caseta llegarán pronto."), filaEstac(),
+      filaPronto("⭐", "Mejoras de la caseta", "Pronto podrás mejorarla, como una mesa.", "Próximamente"));
+    return;
+  }
+  const k = vistaExtra.slice("terreno:".length), precio = precioTerreno(); // vistaExtra = «terreno:i,j»
+  $("tiendaTitulo").textContent = "🏷️ Terreno en venta";
+  if (precio === undefined || !lotesDisponibles().includes(k)) { lista.append(nota("Este terreno ya no está en venta.")); return; }
+  const L = datosLote(k), total = TERRENO_PRECIOS.length + 1;
+  lista.append(filaSimple("🌱", "Terreno " + L.etiqueta.toLowerCase(),
+    "Terrenos: " + (lotes.length + 1) + " de " + total + ". Este cuesta " + dolares(precio) + " y cada uno sale más caro. Solo puedes comprar los que tocan tu terreno actual." + (terreno2 ? "" : " El primero desbloquea la segunda puerta (se compra en la 🕴️ oficina del jefe)."),
+    L.flecha + " Comprar " + dolares(precio), dinero < precio, () => { cerrarTienda(); comprarTerreno(k); }));
+}
+// Fila de la segunda puerta (se compra en la oficina del jefe, en «Zonas»; necesita el terreno ampliado)
+function filaPuerta2() {
+  return filaSimple("🚪", "Segunda puerta",
+    puerta2 ? "Los clientes también llegan por la puerta de atrás, con su propia fila y mostrador." : terreno2 ? "Una entrada nueva en el terreno de atrás: doble de lugares de espera." : "Se desbloquea al ampliar el terreno (toca el precio de un terreno en venta).",
+    puerta2 ? "Comprada" : terreno2 ? "Comprar " + dolares(PRECIO_PUERTA2) : "🔒 Bloqueado", puerta2 || !terreno2 || dinero < PRECIO_PUERTA2, comprarPuerta2);
 }
 // Panel «👤 Perfil»: tu sesión de Google, tus puntos y cómo vas en esta partida
 async function cargarPerfil() {
@@ -1442,8 +1481,9 @@ function pintarOficina(lista) {
   lista.append(seccion("🏠 Zonas"),
     filaPronto("🥤", "Bar de malteadas", "¡No hay nada como una buena malteada después de una hamburguesa! Requiere ⚡10", dolares(10000)),
     filaBanio(),
+    filaPuerta2(),
     filaHab("heladeria"), filaHab("cafeteria"), filaHab("pasteleria"),
-    filaPronto("🅿️", "Estacionamiento", "Los clientes pueden dejar sus autos aquí mientras comen, ¡y tú ganas dinero! (Por ahora se compra en el mostrador 🛒.)", "Próximamente"),
+    filaPronto("🅿️", "Estacionamiento", "Los clientes pueden dejar sus autos aquí mientras comen, ¡y tú ganas dinero! (Los lugares se compran en la caseta 🅿️, al frente, a la izquierda de la puerta.)", "En la caseta"),
     filaPronto("🧹", "Limpieza", "Aquí es donde los limpiadores guardan sus elementos de trabajo. Ya está construida, debajo de la oficina del jefe.", "✓ Construida"),
     filaPronto("🍳", "Cocina", "Aquí es donde ocurre la magia; mejórala para aumentar la calidad de tu comida. Ya está construida: tócala en el restaurante para mejorarla.", "✓ Construida"));
 }
@@ -1488,7 +1528,7 @@ function pintarEmpleados(lista) {
     { existe: !!meseros[1], f: () => filaTienda("🤵‍♀️", "Segundo mesero", meseros[1], PRECIO_MESERO2, MESERO_PRECIOS_MEJORA, conH(txtMesero), () => contratarMesero(1), () => mejorarMesero(1),
       !meseros[0] ? "Primero contrata al mesero." : "") },
     { existe: !!receps[1], f: () => filaTienda("👩‍💼", "Segunda recepcionista", receps[1], PRECIO_RECEP2, RECEP_PRECIOS_MEJORA, conH(txtRecep), () => contratarRecep(1), () => mejorarRecep(1),
-      !receps[0] ? "Primero contrata a la recepcionista." : puerta2 ? "" : "Se desbloquea con la segunda puerta (se compra en la tienda, en el terreno nuevo).") },
+      !receps[0] ? "Primero contrata a la recepcionista." : puerta2 ? "" : "Se desbloquea con la segunda puerta (se compra en la 🕴️ oficina del jefe, en Zonas).") },
     { existe: limpiador, f: () => filaSimple("🧹", "Limpieza", "Horario: " + fmtHora(HORA_LIMPIEZA_LLEGA) + " a " + fmtHora(HORA_LIMPIEZA_SALE) + ". Deja todo limpio antes de que llegue el resto del personal.", "Contratado", true, () => {}) },
   ];
   const titulo = (t) => { const e = document.createElement("small"); e.style.cssText = "display:block;margin:6px 0 2px;color:var(--suave);font-weight:700"; e.textContent = t; return e; };
@@ -1544,43 +1584,6 @@ function comprarMesa() {
   info("¡Compraste la mesa " + nMesas + "! Ya pueden sentarse ahí. Tócala para mejorarla.");
   actualizar();
 }
-// Fila de la tienda para ampliar el terreno: un botón por cada terreno que se puede comprar ahora (los que tocan tu terreno actual)
-function filaTerreno() {
-  const fila = document.createElement("div");
-  fila.className = "tienda-fila";
-  const i = document.createElement("span");
-  i.className = "ico";
-  i.textContent = "🌱";
-  const t = document.createElement("div");
-  t.className = "txt";
-  const n = document.createElement("b");
-  n.textContent = "Ampliar terreno";
-  const d = document.createElement("small");
-  const col = document.createElement("div");
-  col.style.cssText = "display:flex;flex-direction:column;gap:4px";
-  const precio = precioTerreno(), total = TERRENO_PRECIOS.length + 1;
-  if (precio === undefined) {
-    d.textContent = "¡Ya tienes los " + total + " terrenos! Todo el pasto de alrededor es tuyo.";
-    const b = document.createElement("button");
-    b.className = "btn";
-    b.textContent = "Completo";
-    b.disabled = true;
-    col.appendChild(b);
-  } else {
-    d.textContent = "Terrenos: " + (lotes.length + 1) + " de " + total + ". El siguiente cuesta " + dolares(precio) + " y cada uno sale más caro. Solo puedes comprar los que tocan tu terreno actual." + (terreno2 ? "" : " El primero desbloquea la segunda puerta.");
-    for (const k of lotesDisponibles()) {
-      const L = datosLote(k), b = document.createElement("button");
-      b.className = "btn";
-      b.textContent = L.flecha + " " + L.etiqueta + " " + dolares(precio);
-      b.disabled = dinero < precio;
-      b.addEventListener("click", () => comprarTerreno(k));
-      col.appendChild(b);
-    }
-  }
-  t.append(n, d);
-  fila.append(i, t, col);
-  return fila;
-}
 function comprarTerreno(k) {
   const precio = precioTerreno();
   if (precio === undefined || !lotesDisponibles().includes(k) || dinero < precio) return;
@@ -1588,7 +1591,7 @@ function comprarTerreno(k) {
   lotes.push(k);
   terreno2 = true;
   armarFondo(); // dibuja la plaza en el terreno comprado y actualiza los carteles
-  info("¡Compraste el terreno " + (lotes.length + 1) + " de " + (TERRENO_PRECIOS.length + 1) + " (" + datosLote(k).etiqueta.toLowerCase() + ")!" + (lotes.length === 1 ? " Ya puedes comprar la segunda puerta." : ""));
+  info("¡Compraste el terreno " + (lotes.length + 1) + " de " + (TERRENO_PRECIOS.length + 1) + " (" + datosLote(k).etiqueta.toLowerCase() + ")!" + (lotes.length === 1 ? " Ya puedes comprar la segunda puerta en la 🕴️ oficina del jefe." : ""));
   actualizar();
 }
 function comprarPuerta2() {
@@ -1945,13 +1948,13 @@ function plazaLotes(c) {
     suelo(c, x0, y0, x1, y1, null, 0, "#a1887f");
   }
 }
-// Carteles «En venta» sobre los terrenos que se pueden comprar ahora (con el precio del siguiente)
+// Carteles «En venta» sobre los terrenos que se pueden comprar ahora (con el precio del siguiente); se tocan para comprarlos (ver cartelTocado)
 function carteles(c) {
   const precio = precioTerreno();
   if (precio === undefined) return;
   for (const k of lotesDisponibles()) {
     const L = datosLote(k), [sx, sy] = iso(bx0(L.i) + W / 2, by0(L.j) + BH / 2);
-    const t = "🏷️ Terreno " + L.etiqueta.toLowerCase() + " · " + dolares(precio);
+    const t = textoCartel(k);
     c.font = "700 15px system-ui, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.lineWidth = 4; c.strokeStyle = "rgba(0,0,0,.55)"; c.strokeText(t, sx, sy);
     texto(t, sx, sy, 15, "#fff", "center", c);
   }
@@ -1975,6 +1978,16 @@ function estacionamiento(c) {
     texto("P", px, py, Math.max(7, 13 * ESCALA), "rgba(255,255,255,.55)", "center", c);
   }
 }
+// Caseta del estacionamiento (se pinta después de las paredes para que nada la tape)
+function casetaEstac(c) {
+  const k = CASETA;
+  caja3d(c, k.x0, k.y0, k.x1, k.y1, k.alto, { tapa: "#eceff1", izq: "#cfd8dc", der: "#b0bec5" }, "#546e7a");
+  poly(c, [iso(k.x0 + 7, k.y1, 11), iso(k.x1 - 7, k.y1, 11), iso(k.x1 - 7, k.y1, 23), iso(k.x0 + 7, k.y1, 23)], "#90caf9", "#37474f"); // ventanilla
+  suelo(c, k.x0 - 5, k.y0 - 5, k.x1 + 5, k.y1 + 5, "#e53935", k.alto + 4, "#8e1b18"); // techo
+  const [tx, ty] = iso((k.x0 + k.x1) / 2, (k.y0 + k.y1) / 2, k.alto + 22), t = "🅿️ Caseta";
+  c.font = "700 13px system-ui, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.lineWidth = 3; c.strokeStyle = "rgba(0,0,0,.6)"; c.strokeText(t, tx, ty);
+  texto(t, tx, ty, 13, "#fff", "center", c);
+}
 function armarFondo() {
   fondo.width = FW; fondo.height = FH; // limpia el fondo (se vuelve a armar al ampliar el terreno)
   const c = fondo.getContext("2d");
@@ -1996,6 +2009,7 @@ function armarFondo() {
     caja3d(c, 0, H, HALL_X - 30, H + 6, 14, baja, "#90a4ae");          // pared del frente, con hueco para la puerta
     caja3d(c, HALL_X + 30, H, W, H + 6, 14, baja, "#90a4ae");
   }
+  casetaEstac(c); // caseta del estacionamiento
   cuarto(c, 10 + DXK + KX, HAB_Y0, 260 + DXK + KX, HAB_Y1, "#eceff1", "#cfd8dc", "#b0bec5", 200 + DXK + KX, 50);   // cocina (puerta al frente)
   const [kx, ky] = iso(135 + DXK + KX, 10, 70); texto("Cocina", kx, ky, 14, "#37474f", "center", c);
   const lado = (id) => LUGARES[id].puerta, hueco = (id) => pyHab(id) - PUERTA_ANCHO / 2;
@@ -2106,8 +2120,8 @@ function dibujarEspera(g) {
 function dibujarEscritorio() {
   caja3d(ctx, 340 + DX, 585 + DY, 460 + DX, 619 + DY, 26, MADERA_OSCURA, "#3e2c23");
   const [sx, sy] = iso(400 + DX, 602 + DY, 26); texto("Recepción", sx, sy, 11 * ESC_UI, "#fff", "center");
-  const [bx, by] = iso(400 + DX, 636 + DY, 0); // etiqueta que invita a abrir la tienda
-  const t = "🛒 Tienda", f = ESC_UI;
+  const [bx, by] = iso(400 + DX, 636 + DY, 0); // etiqueta que invita a abrir el panel de la recepción
+  const t = "🛎️ Mejoras", f = ESC_UI;
   ctx.font = "700 " + 13 * f + "px system-ui, sans-serif";
   const w = ctx.measureText(t).width + 16 * f;
   ctx.fillStyle = "#fff"; caja(bx - w / 2, by - 12 * f, w, 24 * f, 8 * f); ctx.fill();
