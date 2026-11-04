@@ -5,7 +5,7 @@
 // - SDK de Firebase (www.gstatic.com/firebasejs): se guarda la primera vez y se reutiliza.
 // - Login, Firestore y demás llamadas a Google NO se tocan.
 // Al agregar un juego: añádelo a «JUEGOS» de abajo. Para forzar que todos vuelvan a descargar todo, sube el número de VERSION.
-const VERSION = 21;
+const VERSION = 22;
 const CACHE = "juegos-v" + VERSION;
 const ESPERA_RED = 3000;
 
@@ -44,6 +44,7 @@ const JUEGOS = {
   rana: ["juego.js"],
   deslizante: ["juego.js"],
   isla: ["juego.js"],
+  minas: ["juego.js", "logica.js"],
 };
 
 const ARCHIVOS = [

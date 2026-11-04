@@ -37,4 +37,5 @@ export const JUEGOS = [
   { id: "rana", nombre: "Rana", icono: "🐸", descripcion: "Cruza carreteras y ríos saltando entre coches, camiones y troncos: 50 niveles cada vez más difíciles.", carpeta: "rana" },
   { id: "deslizante", nombre: "Puzle deslizante", icono: "🔢", descripcion: "Desliza las fichas numeradas hasta ponerlas en orden: empieza en 3×3 y sube hasta 8×8, con movimientos, tiempo y tu mejor marca por tamaño.", carpeta: "deslizante" },
   { id: "isla", nombre: "Isla", icono: "🏝️", descripcion: "Isla en vista isométrica: tala árboles, mina rocas, fabrica hacha y pico y construye pisos y paredes. Tu isla se guarda sola.", carpeta: "isla" },
+  { id: "minas", nombre: "Minero Tycoon", icono: "⛏️", descripcion: "Compra pozos, sube de nivel a tus mineros, el ascensor y el almacén, contrata gerentes para que trabajen solos (también sin conexión) y haz prestigio para ganar estrellas.", carpeta: "minas" },
 ];
