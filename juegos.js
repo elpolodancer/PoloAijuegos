@@ -28,4 +28,6 @@ export const JUEGOS = [
   { id: "botellascolores", nombre: "Botellas de colores", icono: "🍾", descripcion: "Vierte los colores de una botella a otra hasta que cada botella tenga un solo color: 50 niveles, con deshacer y reinicio.", carpeta: "botellascolores", imagen: "imagenes/botellascolores.webp" },
   { id: "pantano", nombre: "Ataque al pantano", icono: "🐊", descripcion: "Defiende tu cabaña de los bichos del pantano: apunta, dispara y mejora tus armas (estilo Swamp Attack).", carpeta: "pantano", imagen: "imagenes/pantano.webp" },
   { id: "jardin", nombre: "Jardín contra zombis", icono: "🌻", descripcion: "Planta girasoles, lanzaguisantes, petardos y nueces para frenar a los zombis antes de que lleguen a tu casa: 15 niveles (estilo Plants vs. Zombies).", carpeta: "plantasvszombies" },
+  { id: "ladrillos", nombre: "Ladrillos numerados", icono: "🧱", descripcion: "Lanza pelotas infinitas contra ladrillos con números hasta los miles: cada uno aguanta tantos golpes como su número. Consigue ×2, ×3 y ×10 pelotas, acelera o ralentiza y nunca pierdes.", carpeta: "ladrillosnumerados" },
+  { id: "estacionamiento", nombre: "Estacionamiento", icono: "🚗", descripcion: "Saca todos los autos de un estacionamiento de 25×25 tocándolos: cada uno avanza hacia donde apunta su flecha y sale por las esquinas. 5 niveles en vista isométrica.", carpeta: "estacionamiento" },
 ];
