@@ -63,7 +63,7 @@ const GENERADOR_PRECIOS = [10];    // precio de cada generador, en orden. Para p
 const GEN_LUGARES = [[20, 50], [70, 50], [20, 100], [70, 100]]; // dónde va cada generador dentro de la sala: [x relativo al cuarto, y]
 const GEN_LADO = 30;               // los generadores son cuadrados de este lado
 const GEN_COLOR = { tapa: "#ffe082", izq: "#ffb300", der: "#e08e00" };
-const PRECIO_BANIO = 10;          // dólares que cuesta COMPRAR el baño (al empezar no hay; se compra en la oficina del jefe)
+const PRECIO_BANIO = 20;          // dólares que cuesta CONSTRUIR el baño (al empezar no hay; se construye debajo de la sala de generadores, en 🏗️ Construir o en la oficina del jefe)
 const DOLARES_POR_PUNTO = 1;        // al perfil se envía 1 punto por cada dólar ganado
 const PUNTOS_LOTE = 25;           // como no hay final, los puntos se mandan al perfil de 25 en 25 mientras juegas (y al reiniciar o salir de la página)
 const VEL = 150;                  // velocidad de la gente (px por segundo EN PANTALLA: con otra ESCALA se ajusta sola; igual MESERO_VEL y AUTO_VEL)
@@ -121,17 +121,20 @@ const PAUSA_MESERO_MS = 400;                             // ms que se detiene a 
 // «viejo» = nombre que tenía en partidas guardadas antes del cambio.
 const CAPACIDAD_MESA = 2;
 const MEJORAS_MESA = [
-  { id: "mesa", ico: "🪑", nombre: "Mesa", inicial: 1, ingresos: [3, 3.5, 4], precios: [450, 750] },                                      // nivel 1 = $3, nivel 2 = $3.50 (+0.50)...
-  { id: "silla1", ico: "💺", nombre: "Silla 1", inicial: 1, ingresos: [2, 3, 4, 5], precios: [80, 150, 300], viejo: "sillas" },             // nivel 1 = $2 (+1 por cada mejora)
-  { id: "silla2", ico: "💺", nombre: "Silla 2", inicial: 1, ingresos: [2, 3, 4, 5], precios: [80, 150, 300], viejo: "sillas" },
-  { id: "cubiertos", ico: "🍴", nombre: "Cubiertos", inicial: 1, ingresos: [1, 1.5, 2, 3], precios: [10, 15, 25] },
-  { id: "condimentos", ico: "🧂", nombre: "Condimentos", inicial: 0, ingresos: [0.5, 1, 2, 3], precios: [10, 15, 25, 40], viejo: "servilletas" },  // empiezan en nivel 0 (sin comprar)
-  { id: "bebidas", ico: "🥤", nombre: "Bebidas", inicial: 0, ingresos: [0.5, 1, 2, 3], precios: [10, 15, 25, 40] },
-  { id: "decoracion", ico: "🪴", nombre: "Decoración", inicial: 0, ingresos: [0.5, 1, 2, 3], precios: [10, 15, 25, 40] },                   // decoración de la propia mesa
+  { id: "mesa", ico: "🪑", nombre: "Mesa", inicial: 1, ingresos: [3, 3.5, 4, 4.5, 5], precios: [450, 750, 1200, 1800] },                                      // nivel 1 = $3, nivel 2 = $3.50 (+0.50)...
+  { id: "silla1", ico: "💺", nombre: "Silla 1", inicial: 1, ingresos: [2, 3, 4, 5, 6], precios: [80, 120, 190, 300], viejo: "sillas" },             // nivel 1 = $2 (+1 por cada mejora)
+  { id: "silla2", ico: "💺", nombre: "Silla 2", inicial: 1, ingresos: [2, 3, 4, 5, 6], precios: [80, 120, 190, 300], viejo: "sillas" },
+  { id: "cubiertos", ico: "🍴", nombre: "Cubiertos", inicial: 1, ingresos: [1, 1.5, 2, 3], precios: [50, 100, 160] },
+  { id: "condimentos", ico: "🧂", nombre: "Condimentos", inicial: 0, ingresos: [1], precios: [50], viejo: "servilletas" },  // empiezan en nivel 0 (sin comprar)
+  { id: "bebidas", ico: "🥤", nombre: "Bebidas", inicial: 0, ingresos: [1, 2, 2.5, 3], precios: [50, 100, 220, 380] },
+  { id: "decoracion", ico: "🪴", nombre: "Decoración", inicial: 0, ingresos: [1, 2, 3], precios: [30, 100, 500] },                   // decoración de la propia mesa
 ];
 const nivMax = (c) => c.inicial + c.precios.length;                          // nivel más alto de ese elemento
 const TOTAL_NIVELES = MEJORAS_MESA.reduce((t, c) => t + nivMax(c), 0);       // suma de los niveles máximos (la barra de la mesa = suma de niveles actuales ÷ este total; con estos valores es 27)
 const ingresoNivel = (c, n) => (n > 0 ? c.ingresos[Math.min(n, c.ingresos.length) - 1] : 0);
+// PREMIOS: cada mesa regala dinero al llegar a cada 20 % de su barra (5 premios repartidos en el 100 %). Se cobran una sola vez por mesa.
+const PREMIOS_MESA = [100, 250, 500, 1000, 2500];
+const premiosLogrados = (m) => PREMIOS_MESA.filter((_, j) => sumaNiveles(m) * PREMIOS_MESA.length >= TOTAL_NIVELES * (j + 1)).length; // cuántos premios ya le tocan por su avance
 const MESA_NV = 2;                                                           // versión del formato de guardado de las mejoras (2 = se guarda el NIVEL, no las compras)
 // Ampliación (segundo terreno): cada cosa se desbloquea con la anterior
 // Precio de cada terreno nuevo, en el orden en que se compran (el restaurante es el 1.º): 2.º, 3.º, 4.º ... 9.º. El primero que compres desbloquea la segunda puerta.
@@ -231,7 +234,7 @@ const HAB_NUEVAS = {
   // sinVisitas: los clientes NO pasan por ahí (no está en ORDEN_VISITAS); soloPara = quién la usa. Todavía no hacen nada más (gasto 0).
   oficina: { nombre: "la oficina del jefe", etiqueta: "Oficina del jefe", ico: "🕴️", ancho: LADO_ANCHO, precio: 20000, inicial: true, gasto: 0, sinVisitas: true, soloPara: "el jefe", piso: ["#e9dccb", "#d8c4a8"], pared: "#7b5b45", colorTexto: "#4e342e", adornos: [[110, 50, "🗄️"], [180, 50, "🕴️"]] },
   generadores: { nombre: "la sala de generadores", etiqueta: "Generadores", ico: "⚡", ancho: LADO_ANCHO, precio: 20000, inicial: true, gasto: 0, sinVisitas: true, soloPara: "la energía del restaurante", piso: ["#eceff1", "#cfd8dc"], pared: "#78909c", colorTexto: "#37474f", adornos: [] },
-  limpieza: { nombre: "el cuarto de limpieza", etiqueta: "Limpieza", ico: "🧹", ancho: LADO_ANCHO, precio: 20000, gasto: 0, sinVisitas: true, soloPara: "los empleados de limpieza", piso: ["#e0f2f1", "#c5e4e1"], pared: "#4f9a94", colorTexto: "#00544f", adornos: [[110, 50, "🧹"], [180, 50, "🧽"]] },
+  limpieza: { nombre: "el cuarto de limpieza", etiqueta: "Limpieza", ico: "🧹", ancho: LADO_ANCHO, precio: 20000, inicial: true, gasto: 0, sinVisitas: true, soloPara: "los empleados de limpieza", piso: ["#e0f2f1", "#c5e4e1"], pared: "#4f9a94", colorTexto: "#00544f", adornos: [[110, 50, "🧹"], [180, 50, "🧽"]] },
 };
 let habsExtra = {}; // habitaciones nuevas compradas: id → x de su esquina izquierda
 let banioComprado = false; // el baño ya no viene hecho: se compra (PRECIO_BANIO) en la oficina del jefe
@@ -283,9 +286,9 @@ function dentroHab(id, i) {
   if (id === "banio") return [x1 - 55 - k * 22, y0 + 100];
   return L.puerta === "der" ? [x1 - 40 - k * 26, y0 + 110] : [x0 + 40 + k * 26, y0 + 110];
 }
-// Las habitaciones ya vienen en su lugar: «comprar» una solo la construye (ver comprarHab). La oficina y la sala de generadores vienen construidas.
+// Las habitaciones ya vienen en su lugar: «comprar» una solo la construye (ver comprarHab). La oficina, la sala de generadores y el cuarto de limpieza (debajo de la oficina) vienen construidos.
 function ponerHabsIniciales() {
-  for (const id of ["oficina", "generadores"]) if (habsExtra[id] === undefined) habsExtra[id] = LUGARES[id].x0;
+  for (const id of ["oficina", "generadores", "limpieza"]) if (habsExtra[id] === undefined) habsExtra[id] = LUGARES[id].x0;
 }
 // Decoraciones: cada una que compras suma «bono» dólares a lo que paga CADA cliente (se ven en los costados del comedor)
 const DECORACIONES = [
@@ -463,7 +466,7 @@ function oscuridad() { // 0 = pleno día, hasta 0.45 = noche cerrada: anochece d
 const anuncioActivo = (a) => (anuncios[a.id] || 0) > reloj;
 const bonoClientes = () => (paginaWeb ? BONO_WEB : 0) + ANUNCIOS.reduce((t, a) => t + (anuncioActivo(a) ? a.bono : 0), 0); // +X (0.06 = +6 %) de clientes que llegan
 const ritmoLlegadas = () => RAMPA_INICIO + (1 - RAMPA_INICIO) * Math.min(1, reloj / RAMPA_MS); // 0.2 al empezar → 1 pasada la rampa (se calcula con el tiempo jugado, así que una partida guardada no vuelve a empezar de cero)
-const crearMesa = (m) => ({ ...m, ocupada: false, plato: false, barra: null, esperando: false, tomado: false, enojo: false, listoDesde: 0, res: null, clientes: [], mejoras: nuevasMejoras(), slot: -1 });
+const crearMesa = (m) => ({ ...m, ocupada: false, plato: false, barra: null, esperando: false, tomado: false, enojo: false, listoDesde: 0, res: null, clientes: [], mejoras: nuevasMejoras(), premios: 0, slot: -1 });
 function nuevaPartida(datos = null) { // datos: partida guardada que se carga (null = partida nueva)
   gen++; esperas = []; retretes = Array(RETRETES).fill(false);
   ents = []; globos = []; monedas = [];
@@ -526,7 +529,7 @@ function escribirTodo(t) {
 function instantanea() {
   return {
     dinero, ganado, atendidos, perdidos, reloj: Math.floor(reloj), puntosEnviados,
-    mesas: mesas.map((m) => ({ id: m.id, nv: MESA_NV, mejoras: { ...m.mejoras } })),
+    mesas: mesas.map((m) => ({ id: m.id, nv: MESA_NV, premios: m.premios, mejoras: { ...m.mejoras } })),
     receps: receps.map((r) => (r ? r.nivel : 0)),
     meseros: meseros.map((w) => (w ? w.nivel : 0)),
     terreno2, lotes: lotes.slice(), kx: KX, bx: BX, habs: { ...habsExtra }, decos: decos.slice(), puerta2, nEstac, cocinero, cocinero2, limpiador, nMesas, cocina: { ...cocinaNiv }, banio: banioComprado, generadores,
@@ -563,6 +566,7 @@ function aplicarGuardado(d) {
       // formato nuevo: ya es el nivel; formato viejo: era el número de mejoras (los elementos que ya venían puestos suman 1 nivel)
       m.mejoras[c.id] = Math.max(c.inicial, Math.min(nivMax(c), s.nv === MESA_NV ? v : v + c.inicial));
     });
+    if (m && s.mejoras) m.premios = s.premios === undefined ? premiosLogrados(m) : Math.max(0, Math.min(PREMIOS_MESA.length, Math.floor(num(s.premios)))); // partidas sin este dato: no se regalan premios de golpe
   });
   // Terrenos: solo manzanas de pasto, sin repetir y pegadas a lo que ya es tuyo (un dato raro no deja terrenos «flotando»). Las partidas viejas guardaban un solo «lote».
   const pedidos = Array.isArray(d.lotes) ? d.lotes.filter((k) => typeof k === "string") : [];
@@ -1141,7 +1145,7 @@ function pintarMenuMesa() {
     barra.append(rel, el("span", "mm-pct", "⬆ " + pct.toFixed(2) + "%"));
 
     const stats = el("div", "mm-stats");
-    stats.append(el("span", null, "💰 " + dolares(dinero)), el("span", null, "💵 " + dolares(pagoPorCliente(m))), el("span", null, "👥 " + CAPACIDAD_MESA));
+    stats.append(el("span", null, "💰 " + dolares(dinero)), el("span", null, "💵 " + dolares(pagoPorCliente(m))), el("span", null, "👥 " + CAPACIDAD_MESA), el("span", null, m.premios >= PREMIOS_MESA.length ? "🎁 Todos los premios" : "🎁 " + dolares(PREMIOS_MESA[m.premios]) + " al " + Math.round(((m.premios + 1) / PREMIOS_MESA.length) * 100) + " %"));
 
     const tarj = el("div", "mm-card"), cab2 = el("div", "mm-card-cab");
     cab2.append(el("b", "mm-card-nombre", c.nombre), el("span", "mm-nivel", k >= max ? "Nivel: MÁX" : "Nivel: " + k));
@@ -1246,7 +1250,10 @@ function mejorarCosaMesa(m, id) {
   if (!c || precio === undefined || dinero < precio) return;
   dinero -= precio;
   m.mejoras[id]++;
-  info("Mesa " + m.id + ": " + (k === 0 ? "compraste " : "mejoraste ") + c.nombre.toLowerCase() + " (nivel " + m.mejoras[id] + " de " + nivMax(c) + "). Ahora cada cliente de esa mesa paga " + dolares(pagoPorCliente(m)) + ".");
+  let regalo = 0;
+  while (m.premios < premiosLogrados(m)) regalo += PREMIOS_MESA[m.premios++]; // regalo(s) por llegar a un nuevo 20 %
+  if (regalo) { dinero += regalo; globo(m.cx, m.cy, "🎁 +" + dolares(regalo), 2500); }
+  info("Mesa " + m.id + ": " + (k === 0 ? "compraste " : "mejoraste ") + c.nombre.toLowerCase() + " (nivel " + m.mejoras[id] + " de " + nivMax(c) + "). Ahora cada cliente de esa mesa paga " + dolares(pagoPorCliente(m)) + "." + (regalo ? " 🎁 ¡Premio de " + dolares(regalo) + " por avanzar en la mesa!" : ""));
   actualizar();
 }
 function pintarTienda() {
@@ -1437,7 +1444,7 @@ function pintarOficina(lista) {
     filaBanio(),
     filaHab("heladeria"), filaHab("cafeteria"), filaHab("pasteleria"),
     filaPronto("🅿️", "Estacionamiento", "Los clientes pueden dejar sus autos aquí mientras comen, ¡y tú ganas dinero! (Por ahora se compra en el mostrador 🛒.)", "Próximamente"),
-    filaPronto("🧹", "Limpieza", "Aquí es donde los limpiadores guardan sus elementos de trabajo. (Por ahora se compra en 🏗️ Construir.)", "Próximamente"),
+    filaPronto("🧹", "Limpieza", "Aquí es donde los limpiadores guardan sus elementos de trabajo. Ya está construida, debajo de la oficina del jefe.", "✓ Construida"),
     filaPronto("🍳", "Cocina", "Aquí es donde ocurre la magia; mejórala para aumentar la calidad de tu comida. Ya está construida: tócala en el restaurante para mejorarla.", "✓ Construida"));
 }
 function pintarConstruir(lista) {
@@ -1453,7 +1460,8 @@ function pintarConstruir(lista) {
     d.append(b, s);
     return d;
   };
-  lista.appendChild(seccion("🏠 Habitaciones", "Cada una tiene su lugar fijo en el restaurante. La heladería, la cafetería, la pastelería y el baño se compran en la 🕴️ oficina del jefe (tócala en el restaurante)."));
+  lista.appendChild(seccion("🏠 Habitaciones", "Cada una tiene su lugar fijo en el restaurante. El baño se construye aquí (debajo de la sala de generadores); la heladería, la cafetería y la pastelería se compran en la 🕴️ oficina del jefe (tócala en el restaurante)."));
+  lista.appendChild(filaBanio());
   for (const id of Object.keys(HAB_NUEVAS)) {
     const h = HAB_NUEVAS[id];
     if (h.inicial || (h.enOficina && habsExtra.oficina !== undefined)) continue; // esas se compran (o ya vienen hechas) en la oficina del jefe
