@@ -5,8 +5,8 @@ export const AJ = {
   DIG: 6, WALK: 1.5, ASC: 1.6, WH_CAM: 2.5,              // segundos base de cada fase (el ascensor tarda ASC por cada pozo)
   CAP_M: 6, CAP_A: 15, CAP_W: 15,                        // unidades que carga cada trabajador por nivel
   VALOR: 4, VALOR_X: 3.8,                                // valor de una unidad en el pozo 1 y cuánto sube por pozo
-  POZO0: 300, POZO_X: 4.6, MAX_POZOS: 40,                // precio del pozo 2 y su crecimiento
-  NIV_M: 120, NIV_A: 150, NIV_W: 150, G_M: 1.1, G_A: 1.1, G_W: 1.1, NIV_MAX: 2000,
+  POZO0: 300, POZO_X: 4.6, MAX_POZOS: 30,                // precio del pozo 2 y su crecimiento
+  NIV_M: 120, NIV_A: 150, NIV_W: 150, G_M: 1.1, G_A: 1.1, G_W: 1.1, NIV_MAX_M: 800, NIV_MAX_AW: 2400,
   GER: [2, 60, 2500], GER_A: 400, GER_W: 400, VEL_GER: [1, 1.5, 2.5, 4], // gerentes: 3 rangos (el 1.º automatiza)
   DIN0: 30, BONO_ESTRELLA: 0.15, PRESTIGIO: 1e8, OFFLINE_MAX: 6 * 3600,
 };
@@ -21,6 +21,12 @@ export function nuevoEstado(estrellas = 0) {
 }
 
 // ----- Niveles -----
+// Mineros por pozo (como en el juego original): uno más en los niveles 10, 50, 100, 200 y 400 (máximo 6).
+export const trabajadores = (n) => 1 + (n >= 10) + (n >= 50) + (n >= 100) + (n >= 200) + (n >= 400);
+export const proxTrab = (n) => [10, 50, 100, 200, 400].find((x) => x > n) || 0;
+export const cargaPozo = (w) => capM(w) * trabajadores(w.n);
+export const nivMax = (tipo) => (tipo === "m" ? AJ.NIV_MAX_M : AJ.NIV_MAX_AW);
+export const RANGOS = ["", "Junior", "Sénior", "Ejecutivo"];
 export const hitos = (n) => (n >= 10) + (n >= 25) + (n >= 50) + (n >= 100 ? 1 + Math.floor((n - 100) / 100) : 0);
 export const mult = (n) => Math.pow(2, hitos(n));
 export const proxHito = (n) => (n < 10 ? 10 : n < 25 ? 25 : n < 50 ? 50 : n < 100 ? 100 : (Math.floor(n / 100) + 1) * 100);
@@ -37,13 +43,13 @@ export const trab = (E, tipo, i) => (tipo === "m" ? E.pozos[i] : tipo === "a" ? 
 export const costoNiv = (tipo, i, n, k) => { const g = G[tipo]; return BASE[tipo](i) * Math.pow(g, n) * (Math.pow(g, k) - 1) / (g - 1); };
 export function maxNiv(tipo, i, n, din) {
   const g = G[tipo], b = BASE[tipo](i) * Math.pow(g, n);
-  let k = Math.max(0, Math.min(AJ.NIV_MAX - n, Math.floor(Math.log(1 + din * (g - 1) / b) / Math.log(g))));
+  let k = Math.max(0, Math.min(nivMax(tipo) - n, Math.floor(Math.log(1 + din * (g - 1) / b) / Math.log(g))));
   while (k > 0 && costoNiv(tipo, i, n, k) > din) k--;
   return k;
 }
 export function subir(E, tipo, i, k) {
   const w = trab(E, tipo, i);
-  if (k < 1 || w.n + k > AJ.NIV_MAX) return false;
+  if (k < 1 || w.n + k > nivMax(tipo)) return false;
   const c = costoNiv(tipo, i, w.n, k);
   if (c > E.din) return false;
   E.din -= c; w.n += k; return true;
@@ -87,7 +93,7 @@ function tomar(dep, cap, dest) {
 function fin(E, tipo, i, ev) {
   const w = trab(E, tipo, i);
   if (tipo === "m") {
-    if (w.f === 2) { const c = capM(w); w.dep.u += c; w.dep.w += c * valorPozo(i); }
+    if (w.f === 2) { const c = cargaPozo(w); w.dep.u += c; w.dep.w += c * valorPozo(i); }
     w.f = w.f === 3 ? (auto(w) ? 1 : 0) : w.f + 1;
   } else if (tipo === "a") {
     if (w.f === 2) { let cap = capA(w); for (const p of E.pozos) cap -= tomar(p.dep, cap, w.c); }
@@ -122,7 +128,7 @@ export function paso(E, dt, ev) {
 export function ingreso(E) {
   if (!auto(E.asc) || !auto(E.alm)) return 0;
   let U = 0, V = 0;
-  E.pozos.forEach((p, i) => { if (!auto(p)) return; const r = capM(p) / ((AJ.DIG + 2 * AJ.WALK) / vel(p)); U += r; V += r * valorPozo(i); });
+  E.pozos.forEach((p, i) => { if (!auto(p)) return; const r = cargaPozo(p) / ((AJ.DIG + 2 * AJ.WALK) / vel(p)); U += r; V += r * valorPozo(i); });
   if (U <= 0) return 0;
   const Ra = capA(E.asc) / ((2 * AJ.ASC * E.pozos.length + 2) / vel(E.asc)), Rw = capW(E.alm) / ((1 + 2 * AJ.WH_CAM) / vel(E.alm));
   return V * Math.min(1, Ra / U, Rw / U) * mejoraGlobal(E);
@@ -135,4 +141,14 @@ export const estrellasGanables = (E) => Math.floor(Math.sqrt(E.run / AJ.PRESTIGI
 export function prestigio(E) {
   const g = estrellasGanables(E);
   return g < 1 ? null : nuevoEstado(E.estrellas + g);
+}
+
+// Ejecutivo (3.er rango): sube solo el nivel de su trabajador cuando una subida cuesta menos del 10 % de tu dinero. Devuelve cuántas subidas hizo.
+export function ejecutivos(E) {
+  let n = 0;
+  for (const [tipo, i] of [["a", 0], ["w", 0], ...E.pozos.map((_, k) => ["m", k])]) {
+    const w = trab(E, tipo, i);
+    for (let r = 0; w.ger >= 3 && w.n < nivMax(tipo) && costoNiv(tipo, i, w.n, 1) <= E.din * 0.1 && r < 25; r++) { subir(E, tipo, i, 1); n++; }
+  }
+  return n;
 }

@@ -41,11 +41,13 @@ let filas = [];
 function crearFila(tipo, i) {
   const el = document.createElement("div"), sup = tipo === "w";
   el.className = "fila" + (sup ? " sup" : "");
-  el.innerHTML = '<div class="esc"><span class="dep"></span><span class="pj"></span><span class="roca"></span><span class="toca" hidden>👆 toca</span></div><div class="inf"><b></b><small></small><button class="s"></button><button class="g"></button></div>';
-  const q = (c) => el.querySelector(c), r = { tipo, i, el, dep: q(".dep"), pj: q(".pj"), roca: q(".roca"), toca: q(".toca"), nom: q("b"), niv: q("small"), s: q(".s"), g: q(".g") };
+  el.innerHTML = '<div class="esc"><span class="dep"></span><span class="roca"></span><span class="toca" hidden>👆 toca</span></div><div class="inf"><b></b><small></small><button class="s"></button><button class="g"></button></div>';
+  const q = (c) => el.querySelector(c), r = { tipo, i, el, pjs: [], dep: q(".dep"), roca: q(".roca"), toca: q(".toca"), nom: q("b"), niv: q("small"), s: q(".s"), g: q(".g") };
   r.roca.textContent = tipo === "m" ? MINERAL[i % MINERAL.length] : tipo === "w" ? "🏦" : "🏗️";
   if (tipo === "w") r.roca.className = "banco";
-  r.pj.textContent = tipo === "m" ? "👷" : tipo === "w" ? "🚚" : "";
+  for (let k = 0; k < (tipo === "m" ? 6 : tipo === "w" ? 1 : 0); k++) {   // un pozo puede tener hasta 6 mineros
+    const e = document.createElement("span"); e.className = "pj"; e.textContent = tipo === "m" ? "👷" : "🚚"; e.hidden = k > 0; q(".esc").appendChild(e); r.pjs.push(e);
+  }
   r.nom.textContent = tipo === "m" ? "Pozo " + (i + 1) : tipo === "w" ? "Almacén" : "Ascensor";
   q(".esc").onclick = () => { if (L.tocar(E, tipo, i)) pintar(); };
   r.s.onclick = () => comprarNiv(r);
@@ -62,7 +64,7 @@ function armar() {
 }
 
 function cantidad(r, w) {
-  if (modo) return Math.max(1, Math.min(modo, L.AJ.NIV_MAX - w.n));
+  if (modo) return Math.max(1, Math.min(modo, L.nivMax(r.tipo) - w.n));
   return Math.max(1, L.maxNiv(r.tipo, r.i, w.n, E.din));
 }
 function comprarNiv(r) {
@@ -75,7 +77,7 @@ function comprarGer(r) {
   const w = L.trab(E, r.tipo, r.i);
   if (w.ger >= 3) return;
   if (!L.comprarGer(E, r.tipo, r.i)) { aviso("Te falta dinero"); return; }
-  if (w.ger === 1) { pend += 5; enviar(PUNTOS_LOTE); aviso("Gerente contratado: ahora trabaja solo"); } else aviso("Gerente mejorado: ×" + L.vel(w));
+  if (w.ger === 1) { pend += 5; enviar(PUNTOS_LOTE); aviso("Gerente Junior: ahora trabaja solo"); } else if (w.ger === 3) aviso("¡Ejecutivo! Además sube solo el nivel de este trabajador (si cuesta menos del 10 % de tu dinero)"); else aviso("Gerente " + L.RANGOS[w.ger] + ": ×" + L.vel(w));
   pintar();
 }
 
@@ -108,11 +110,13 @@ function pintar() {
   nuevo.classList.toggle("no", N < L.AJ.MAX_POZOS && L.costoPozo(N) > E.din);
   for (const r of filas) {
     const w = L.trab(E, r.tipo, r.i), k = cantidad(r, w), c = L.costoNiv(r.tipo, r.i, w.n, k);
-    r.niv.textContent = "Nv " + w.n + " · ×" + L.mult(w.n) + " (→" + L.proxHito(w.n) + ")" + (w.ger ? " · ⚡" + L.vel(w) : "");
-    r.s.textContent = w.n >= L.AJ.NIV_MAX ? "Nivel máx." : "▲ +" + k + " · $" + fmt(c);
+    const nt = r.tipo === "m" ? L.trabajadores(w.n) : 1, pt = r.tipo === "m" ? L.proxTrab(w.n) : 0;
+    r.niv.textContent = "Nv " + w.n + " · ×" + L.mult(w.n) + (nt > 1 ? " · 👷" + nt : "") + " (→" + L.proxHito(w.n) + (pt && pt !== L.proxHito(w.n) ? " 👷" + pt : "") + ")" + (w.ger ? " · ⚡" + L.vel(w) : "");
+    for (let k = 0; k < r.pjs.length && r.tipo === "m"; k++) r.pjs[k].hidden = k >= nt;
+    r.s.textContent = w.n >= L.nivMax(r.tipo) ? "Nivel máx." : "▲ +" + k + " · $" + fmt(c);
     r.s.classList.toggle("no", c > E.din);
     const gc = L.costoGer(r.tipo, r.i, w);
-    r.g.textContent = w.ger >= 3 ? "👔 Máx" : "👔 " + (w.ger ? "Mejorar" : "Contratar") + " · $" + fmt(gc);
+    r.g.textContent = w.ger >= 3 ? "👔 Ejecutivo ✔" : "👔 " + L.RANGOS[w.ger + 1] + " · $" + fmt(gc);
     r.g.classList.toggle("no", gc > E.din);
     const dep = r.tipo === "m" ? w.dep : r.tipo === "w" ? w.dep : null;
     r.dep.hidden = !dep || dep.u < 1e-9;
@@ -123,9 +127,8 @@ function mover() {                                // posiciones (cada cuadro)
   const N = E.pozos.length, a = E.asc;
   for (const r of filas) {
     const w = L.trab(E, r.tipo, r.i), p = w.f ? Math.min(1, w.t / L.dur(E, r.tipo, r.i)) : 0;
-    if (r.tipo === "m") r.pj.style.left = (w.f === 2 ? x(1 - p) : w.f === 3 ? x(p) : x(1)) + "%";
-    else if (r.tipo === "w") r.pj.style.left = (w.f === 2 ? x(p) : w.f === 3 ? x(1 - p) : x(0)) + "%";
-    if (r.tipo === "m") r.pj.classList.toggle("dig", w.f === 1);
+    if (r.tipo === "m") r.pjs.forEach((e, k) => { e.style.left = (w.f === 2 ? x(1 - p) : w.f === 3 ? x(p) : x(1)) - k * 4.5 + "%"; e.classList.toggle("dig", w.f === 1); });
+    else if (r.tipo === "w") r.pjs[0].style.left = (w.f === 2 ? x(p) : w.f === 3 ? x(1 - p) : x(0)) + "%";
     r.toca.hidden = !(w.f === 0 && !L.auto(w) && L.hayTrabajo(E, r.tipo));
   }
   const pa = a.f ? Math.min(1, a.t / L.dur(E, "a", 0)) : 0, q = a.f === 1 ? pa : a.f === 2 ? 1 : a.f === 3 ? 1 - pa : 0;
@@ -134,12 +137,13 @@ function mover() {                                // posiciones (cada cuadro)
 }
 
 // ----- Bucle -----
-let antes = performance.now(), acum = 0, textos = 0;
+let antes = performance.now(), acum = 0, textos = 0, ejec = 0;
 function bucle(ahora) {
   let dt = (ahora - antes) / 1000; antes = ahora;
   if (dt > 2) { const g = L.fuera(E, dt); if (g > 0) aviso("Mientras no estabas ganaste $" + fmt(g)); dt = 0; }
   acum += Math.min(dt, 0.25);
   while (acum >= 1 / 30) { L.paso(E, 1 / 30); acum -= 1 / 30; }
+  if ((ejec += dt) > 0.5) { ejec = 0; if (L.ejecutivos(E)) pintar(); }
   if ((textos += dt) > 0.15) { textos = 0; pintar(); }
   mover();
   requestAnimationFrame(bucle);
