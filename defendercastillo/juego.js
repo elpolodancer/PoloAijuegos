@@ -189,6 +189,7 @@ for (const [tipo, d] of Object.entries(TORRES)) {
   b.className = "btn tor";
   b.dataset.tipo = tipo;
   const ico = document.createElement("span"); ico.className = "ico"; ico.textContent = d.icono;
+  ico.style.setProperty("--c", COLOR_TORRE[tipo]);
   const nom = document.createElement("span"); nom.textContent = d.nombre;
   const pr = document.createElement("small"); pr.textContent = d.precio + "🪙";
   b.title = d.desc;
@@ -459,6 +460,8 @@ function ui() {
   const bm = $("btnMeteoro");
   bm.disabled = p.meteoroEspera > 0;
   bm.classList.toggle("sel", modoMeteoro);
+  const carga = Math.round((1 - p.meteoroEspera / METEORO.espera) * 100);
+  if (memo.carga !== carga) { memo.carga = carga; bm.style.setProperty("--carga", carga + "%"); }
   poner("btnMeteoro", p.meteoroEspera > 0 ? "☄️ " + Math.ceil(p.meteoroEspera) + " s" : "☄️ Meteoro");
 
   // panel de la torre elegida
@@ -472,8 +475,25 @@ function ui() {
       memo.panel = clave;
       panel.hidden = false;
       panel.textContent = "";
-      const info = document.createElement("div");
-      info.textContent = def.icono + " " + def.nombre + " · nivel " + (torreSel.nivel + 1) + "/3 · daño " + d.dano + (d.radio ? " (área)" : "") + " · alcance " + d.alcance + " · cada " + d.cadencia + " s" + (d.lento ? " · frena" : "") + (d.cadena ? " · salta a " + d.cadena + " más" : "");
+      const el = (tag, cls, txt) => { const x = document.createElement(tag); if (cls) x.className = cls; if (txt !== undefined) x.textContent = txt; return x; };
+      const sig = def.niveles[torreSel.nivel + 1];           // datos del siguiente nivel (si lo hay) para mostrar la mejora
+      const info = el("div");
+      const cab = el("div", "cab");
+      const ic = el("span", "ico", def.icono); ic.style.setProperty("--c", COLOR_TORRE[torreSel.tipo]);
+      cab.append(ic, el("span", "nom", def.nombre), el("span", "pips", "●".repeat(torreSel.nivel + 1) + "○".repeat(2 - torreSel.nivel)));
+      const chips = el("div", "chips");
+      const chip = (ico, v, s, suf = "") => {
+        const c = el("span", "chip", ico + " " + v + suf);
+        if (s !== undefined && s !== v) c.append(" → ", el("em", "", s + suf));
+        chips.appendChild(c);
+      };
+      chip("💥 daño", d.dano, sig && sig.dano);
+      if (d.radio) chips.appendChild(el("span", "chip", "💣 área"));
+      chip("🎯 alcance", d.alcance, sig && sig.alcance);
+      chip("⏱️ cada", d.cadencia, sig && sig.cadencia, " s");
+      if (d.lento) chips.appendChild(el("span", "chip", "🐌 frena"));
+      if (d.cadena) chip("⚡ saltos", d.cadena, sig && sig.cadena);
+      info.append(cab, chips);
       const fila = document.createElement("div"); fila.className = "fila";
       const bu = document.createElement("button"); bu.className = "btn";
       bu.textContent = sube ? "⬆️ Mejorar · " + sube + " 🪙" : "Nivel máximo";
