@@ -40,7 +40,7 @@ const JUEGOS = {
 const ARCHIVOS = [
   "./", "index.html", "juegos.js", "manifest.webmanifest",
   "iconos/icono-180.png", "iconos/icono-192.png", "iconos/icono-512.png",
-  "compartido/estilos.css", "imagenes/agario.webp", "imagenes/gominolas.webp", "imagenes/restaurante.webp", "imagenes/rompecabezas.webp", "imagenes/pradera.webp", "imagenes/ajedrez.webp", "imagenes/solitario.webp", "imagenes/botellascolores.webp", "imagenes/buscaminas.webp", "imagenes/corredor.webp", "imagenes/pantano.webp", "imagenes/piano.webp", "imagenes/dulces.webp", "compartido/firebase.js", "compartido/jugador.js", "compartido/configs.js", "compartido/pantalla-completa.js",
+  "compartido/estilos.css", "imagenes/agario.webp", "imagenes/gominolas.webp", "imagenes/restaurante.webp", "imagenes/rompecabezas.webp", "imagenes/pradera.webp", "imagenes/ajedrez.webp", "imagenes/solitario.webp", "imagenes/botellascolores.webp", "imagenes/buscaminas.webp", "imagenes/corredor.webp", "imagenes/pantano.webp", "imagenes/piano.webp", "imagenes/saltarin.webp", "imagenes/dulces.webp", "compartido/firebase.js", "compartido/jugador.js", "compartido/configs.js", "compartido/pantalla-completa.js",
 ];
 for (const [carpeta, extra] of Object.entries(JUEGOS)) {
   ARCHIVOS.push(carpeta + "/", carpeta + "/index.html", ...extra.map((f) => carpeta + "/" + f));
