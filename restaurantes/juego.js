@@ -1,6 +1,7 @@
 // Ruta: restaurantes/juego.js
 // «Restaurantes» (vista isométrica estilo Clash of Clans): los grupos de clientes (1, 2 o 4) llegan SOLOS y al azar durante la jornada.
 // Esperan frente a la recepción: la recepcionista tarda 10 s en atenderlos y ver si hay mesa (nadie se enoja ni se va por esperar). Si hay mesa libre (y cocinero en turno) se sientan y pagan $10 de entrada cada uno; si no hay mesa, se van.
+// MESAS PEQUEÑAS: caben 2 personas (un grupo de 4 se sienta en 2 mesas). Cada elemento de la mesa tiene niveles con ingresos propios (ver MEJORAS_MESA).
 // Ya sentados, cada persona paga lo de SU silla (no la de la otra banca) y lo de la mesa (cubiertos, condimentos, bebidas, decoración). La cocina prepara y TÚ (o el mesero) llevas el platillo (clic en la cocina para tomarlo, clic en la mesa para entregarlo).
 // Nadie se va por tardar la comida. Al entregarla, cada uno paga $5 por la comida más lo que sumen las mejoras de la cocina. Al terminar de comer se levantan TODOS: el 100 % usa el baño (si ya lo compraste; cuesta 2 dólares y esperan su turno) y
 // algunos van además a otras habitaciones; todos pasan por la recepción y se van.
@@ -113,21 +114,25 @@ const MESA_PRECIOS = [30, 60, 100, 160, 240, 350, 500, 700, 900, 1150, 1450, 180
 const RECEP_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230]; // costo de subir al nivel 2, 3, 4 ... 10 de la recepcionista
 const MESERO_PRECIOS_MEJORA = [10, 20, 30, 45, 65, 90, 125, 170, 230]; // ídem para el mesero
 const PAUSA_MESERO_MS = 400;                             // ms que se detiene a tomar el platillo
-// Mejoras de cada mesa: se tocan en la mesa misma (se abre su menú con las pestañas «Mejoras» y «Personal») y cada mesa se mejora POR SEPARADO.
-// «viejo» = nombre que tenía la mejora en las partidas guardadas antes del cambio (así no se pierde lo ya comprado).
-// Cada cosa se puede mejorar 5 veces; cada mejora suma a lo que paga cada cliente que use ESA mesa: 50 centavos las dos primeras, 1 dólar la 3.ª y la 4.ª, y 1.50 dólares la 5.ª.
-const BONO_MEJORAS = [0.5, 0.5, 1, 1, 1.5];   // lo que suma la 1.ª, 2.ª, 3.ª, 4.ª y 5.ª mejora de cada cosa (por cliente)
-const PRECIOS_MEJORA = [10, 15, 25, 40, 60];  // lo que cuesta cada una de esas 5 mejoras
-const PRECIOS_SILLA = [80, ...PRECIOS_MEJORA.slice(1)]; // las dos sillas: la 1.ª mejora cuesta $80 y las demás igual que las otras cosas
+// Mesas PEQUEÑAS: caben CAPACIDAD_MESA clientes (un grupo de 4 ocupa 2 mesas). Se mejoran tocando la mesa (menú con «Mejoras» y «Personal»); cada mesa se mejora POR SEPARADO.
+// Cada elemento tiene NIVELES. «inicial» = nivel con el que viene la mesa (1 = ya lo tiene; 0 = sin comprar: la primera compra lo deja en nivel 1).
+// ingresos[n-1] = dólares por cliente que da ese elemento estando en el nivel n (el 0 no da nada).  precios[j] = lo que cuesta la compra número j+1 (subir de nivel).
+// Cada cliente paga solo LA SILLA que usa (silla 1 = banca de arriba, silla 2 = banca de abajo) más todo lo demás de su mesa.
+// «viejo» = nombre que tenía en partidas guardadas antes del cambio.
+const CAPACIDAD_MESA = 2;
 const MEJORAS_MESA = [
-  { id: "mesa", ico: "🪑", nombre: "Mesa", precios: PRECIOS_MEJORA },
-  { id: "silla1", ico: "💺", nombre: "Silla 1", precios: PRECIOS_SILLA, viejo: "sillas" },       // banca de arriba (en las partidas viejas «Sillas» valía para las dos)
-  { id: "silla2", ico: "💺", nombre: "Silla 2", precios: PRECIOS_SILLA, viejo: "sillas" },       // banca de abajo
-  { id: "cubiertos", ico: "🍴", nombre: "Cubiertos", precios: PRECIOS_MEJORA },
-  { id: "condimentos", ico: "🧂", nombre: "Condimentos", precios: PRECIOS_MEJORA, viejo: "servilletas" },
-  { id: "bebidas", ico: "🥤", nombre: "Bebidas", precios: PRECIOS_MEJORA },
-  { id: "decoracion", ico: "🪴", nombre: "Decoración", precios: PRECIOS_MEJORA },               // decoración de la propia mesa
+  { id: "mesa", ico: "🪑", nombre: "Mesa", inicial: 1, ingresos: [3, 3.5, 4], precios: [450, 750] },                                      // nivel 1 = $3, nivel 2 = $3.50 (+0.50)...
+  { id: "silla1", ico: "💺", nombre: "Silla 1", inicial: 1, ingresos: [2, 3, 4, 5], precios: [80, 150, 300], viejo: "sillas" },             // nivel 1 = $2 (+1 por cada mejora)
+  { id: "silla2", ico: "💺", nombre: "Silla 2", inicial: 1, ingresos: [2, 3, 4, 5], precios: [80, 150, 300], viejo: "sillas" },
+  { id: "cubiertos", ico: "🍴", nombre: "Cubiertos", inicial: 1, ingresos: [1, 1.5, 2, 3], precios: [10, 15, 25] },
+  { id: "condimentos", ico: "🧂", nombre: "Condimentos", inicial: 0, ingresos: [0.5, 1, 2, 3], precios: [10, 15, 25, 40], viejo: "servilletas" },  // empiezan en nivel 0 (sin comprar)
+  { id: "bebidas", ico: "🥤", nombre: "Bebidas", inicial: 0, ingresos: [0.5, 1, 2, 3], precios: [10, 15, 25, 40] },
+  { id: "decoracion", ico: "🪴", nombre: "Decoración", inicial: 0, ingresos: [0.5, 1, 2, 3], precios: [10, 15, 25, 40] },                   // decoración de la propia mesa
 ];
+const nivMax = (c) => c.inicial + c.precios.length;                          // nivel más alto de ese elemento
+const TOTAL_NIVELES = MEJORAS_MESA.reduce((t, c) => t + nivMax(c), 0);       // suma de los niveles máximos (la barra de la mesa = suma de niveles actuales ÷ este total; con estos valores es 27)
+const ingresoNivel = (c, n) => (n > 0 ? c.ingresos[Math.min(n, c.ingresos.length) - 1] : 0);
+const MESA_NV = 2;                                                           // versión del formato de guardado de las mejoras (2 = se guarda el NIVEL, no las compras)
 // Ampliación (segundo terreno): cada cosa se desbloquea con la anterior
 // Precio de cada terreno nuevo, en el orden en que se compran (el restaurante es el 1.º): 2.º, 3.º, 4.º ... 9.º. El primero que compres desbloquea la segunda puerta.
 const TERRENO_PRECIOS = [10000, 20000, 40000, 70000, 100000, 150000, 300000, 500000];
@@ -407,9 +412,7 @@ let cocinero = 0, cocinero2 = 0, nMesas = MESAS_BASE.length; // nivel del cocine
 let menuMesaEl = null, tabMesa = "mejoras", cosaSel = "mesa"; // menú de la mesa: su elemento, pestaña abierta (mejoras / personal) y cosa elegida
 let mesaMejora = null; // mesa cuyo panel de mejoras está abierto (null = la tienda de la recepción)
 let vistaEmpleados = false; // true = el panel abierto es el de «Empleados» (botón fijo en la esquina de la pantalla)
-const nuevasMejoras = () => Object.fromEntries(MEJORAS_MESA.map((c) => [c.id, 0])); // cuántas mejoras tiene cada cosa de una mesa (0 a 5)
-const bonoAcum = (k) => BONO_MEJORAS.slice(0, k).reduce((t, b) => t + b, 0);        // lo que suman en total las primeras k mejoras
-const bonoMesa = (m) => MEJORAS_MESA.reduce((t, c) => t + bonoAcum(m.mejoras[c.id]), 0); // extra por cliente de esa mesa
+const nuevasMejoras = () => Object.fromEntries(MEJORAS_MESA.map((c) => [c.id, c.inicial])); // nivel de cada cosa de una mesa (0 = sin comprar)
 let cocinaNiv = {};                                  // nivel de cada cosa de la cocina: id → 0 (sin comprar) a 6 (la estufa siempre es al menos 1)
 let vistaCocina = false, cosaCocina = "estufa";      // true = el menú abierto es el de la cocina; cosa elegida en él
 const nivCoc = (id) => Math.max(id === "estufa" ? 1 : 0, cocinaNiv[id] || 0);
@@ -417,11 +420,12 @@ const efCoc = (c, n) => c.ef[Math.max(1, Math.min(c.ef.length, n)) - 1];
 const factorCocina = (tipo) => MEJORAS_COCINA.reduce((t, c) => (c.tipo === tipo && nivCoc(c.id) > 0 ? t * efCoc(c, nivCoc(c.id)) : t), 1); // «vel» y «paciencia» multiplican
 const bonoCocina = () => MEJORAS_COCINA.reduce((t, c) => (c.tipo === "pago" && nivCoc(c.id) > 0 ? t + efCoc(c, nivCoc(c.id)) : t), 0);      // «pago» suma
 // Cada persona paga SOLO la silla que usa: la 0 y la 2 se sientan en la banca de arriba (silla1) y la 1 y la 3 en la de abajo (silla2)
-const bonoMesaPersona = (m, i) => MEJORAS_MESA.reduce((t, c) => (c.id === "silla1" || c.id === "silla2" ? t : t + bonoAcum(m.mejoras[c.id])), 0) + bonoAcum(m.mejoras[ORDEN_SILLAS[i] === "arriba" ? "silla1" : "silla2"]);
+const bonoMesaPersona = (m, i) => { const sa = ORDEN_SILLAS[i] === "arriba" ? "silla1" : "silla2"; return MEJORAS_MESA.reduce((t, c) => (c.id === "silla1" || c.id === "silla2") && c.id !== sa ? t : t + ingresoNivel(c, m.mejoras[c.id]), 0); }; // mesa, cubiertos, etc. + SOLO la silla de esa persona
 const pagoSentado = (m, i) => bonoMesaPersona(m, i) + bonoDeco();      // lo que paga la persona i al sentarse (mesa, SU silla, cubiertos, etc. y decoraciones)
 const pagoComida = () => PAGO_POR_CLIENTE + bonoCocina();             // lo que paga cada uno al recibir su comida (comida + mejoras de la cocina)
 const pagoPorCliente = (m) => ENTRADA_POR_CLIENTE + pagoComida() + (pagoSentado(m, 0) + pagoSentado(m, 1)) / 2; // total que deja cada cliente de la mesa m (promedio de sus dos sillas)
-const totalMejoras = (m) => MEJORAS_MESA.reduce((t, c) => t + m.mejoras[c.id], 0);   // mejoras compradas en esa mesa (de 35 posibles: 7 cosas × 5)
+const totalMejoras = (m) => MEJORAS_MESA.reduce((t, c) => t + Math.max(0, m.mejoras[c.id] - c.inicial), 0);   // compras hechas en esa mesa
+const sumaNiveles = (m) => MEJORAS_MESA.reduce((t, c) => t + m.mejoras[c.id], 0);                             // suma de los niveles actuales (para la barra)
 let nEstac = ESTAC_INICIALES, proxAuto = 0, autosPerdidos = 0; // lugares de estacionamiento disponibles, cuándo pasa el próximo auto, autos que no hallaron lugar
 let puntero = { x: -99, y: -99 };       // último punto tocado/señalado en el lienzo (para dibujar el platillo)
 
@@ -522,7 +526,7 @@ function escribirTodo(t) {
 function instantanea() {
   return {
     dinero, ganado, atendidos, perdidos, reloj: Math.floor(reloj), puntosEnviados,
-    mesas: mesas.map((m) => ({ id: m.id, mejoras: { ...m.mejoras } })),
+    mesas: mesas.map((m) => ({ id: m.id, nv: MESA_NV, mejoras: { ...m.mejoras } })),
     receps: receps.map((r) => (r ? r.nivel : 0)),
     meseros: meseros.map((w) => (w ? w.nivel : 0)),
     terreno2, lotes: lotes.slice(), kx: KX, bx: BX, habs: { ...habsExtra }, decos: decos.slice(), puerta2, nEstac, cocinero, cocinero2, limpiador, nMesas, cocina: { ...cocinaNiv }, banio: banioComprado, generadores,
@@ -554,7 +558,11 @@ function aplicarGuardado(d) {
   for (let i = MESAS_BASE.length; i < nMesas; i++) mesas.push(crearMesa(MESAS_TODAS[i]));
   (Array.isArray(d.mesas) ? d.mesas : []).forEach((s) => {
     const m = s && mesas.find((x) => x.id === s.id);
-    if (m && s.mejoras) MEJORAS_MESA.forEach((c) => (m.mejoras[c.id] = Math.max(0, Math.min(c.precios.length, Math.floor(num(s.mejoras[c.id] !== undefined ? s.mejoras[c.id] : s.mejoras[c.viejo]))))));
+    if (m && s.mejoras) MEJORAS_MESA.forEach((c) => {
+      const v = Math.max(0, Math.floor(num(s.mejoras[c.id] !== undefined ? s.mejoras[c.id] : s.mejoras[c.viejo])));
+      // formato nuevo: ya es el nivel; formato viejo: era el número de mejoras (los elementos que ya venían puestos suman 1 nivel)
+      m.mejoras[c.id] = Math.max(c.inicial, Math.min(nivMax(c), s.nv === MESA_NV ? v : v + c.inicial));
+    });
   });
   // Terrenos: solo manzanas de pasto, sin repetir y pegadas a lo que ya es tuyo (un dato raro no deja terrenos «flotando»). Las partidas viejas guardaban un solo «lote».
   const pedidos = Array.isArray(d.lotes) ? d.lotes.filter((k) => typeof k === "string") : [];
@@ -669,7 +677,7 @@ function rutaIda(m, i, P = PUERTAS[0]) {
 const azar = (a, b) => a + Math.random() * (b - a);
 const posEspera = (n, i, y) => [HALL_X + (i - (n - 1) / 2) * 34, y];
 
-// Un grupo llega a la recepción. Hay que tocarlo para darle mesa; si no hay mesa o tardas, se va enojado
+// Un grupo llega a la recepción: la recepcionista tarda 10 s en atenderlo y, si no hay mesa, se va
 async function llegar(n, cajon = null) { // cajon: lugar de estacionamiento si vienen en auto (esos ya se contaron en activos al reservar el lugar)
   if (!cajon) activos++;
   // Puerta por la que llegan: al azar entre las abiertas que tengan lugar de espera (la de atrás solo existe si la compraste)
@@ -697,35 +705,44 @@ async function llegar(n, cajon = null) { // cajon: lugar de estacionamiento si v
   await Promise.all(clientes.map(async (c, i) => { await esp(i * 300); await ir(c, [...(desdeFuera ? [] : camino), posEspera(n, i, g.y)]); }));
 
   // La recepcionista tarda TIEMPO_RECEP_MS en atenderlos y ver si hay mesa (se resuelve en cuadro())
-  const mesa = await esperarAtencion(g);
-  if (!mesa) { await irseEnojados(g, "¡No hay mesa!"); return; }
+  const asignadas = await esperarAtencion(g);
+  if (!asignadas) { await irseEnojados(g, "¡No hay mesa!"); return; }
 
   recepcion[slot] = null;
-  await Promise.all(clientes.map(async (c, i) => { await esp(i * 350); await ir(c, rutaIda(mesa, i, P)); }));
-  await atender(n, clientes, mesa, pu);
+  if (asignadas.length > 1) activos += asignadas.length - 1; // cada mesa atiende a su parte del grupo y descuenta 1 al terminar
+  await Promise.all(asignadas.map(async ({ mesa, clientes: cs }) => {
+    await Promise.all(cs.map(async (c, i) => { await esp(i * 350); await ir(c, rutaIda(mesa, i, P)); }));
+    await atender(cs.length, cs, mesa, pu);
+  }));
 }
 
-// Se resuelve con la mesa asignada (o con null si no hay) cuando la recepcionista termina de atender al grupo (se revisa en cuadro())
+// Se resuelve con las mesas asignadas (o con null si no hay) cuando la recepcionista termina de atender al grupo (se revisa en cuadro())
 function esperarAtencion(g) {
   return new Promise((res) => { g.desde = reloj; g.esperando = true; g.res = res; });
 }
-// Pasaron TIEMPO_RECEP_MS: si hay cocinero en turno y mesa libre, les da mesa al azar y cobra la entrada a cada uno; si no, se van
+// Pasaron TIEMPO_RECEP_MS: si hay cocinero en turno y mesas libres para todos (cada mesa pequeña admite CAPACIDAD_MESA personas: un grupo de 4 necesita 2 mesas),
+// les da mesa al azar y cobra la entrada a cada uno; si no, se van. Se resuelve con una lista [{ mesa, clientes }] (una por mesa) o con null.
 function resolverRecepcion(g) {
   g.esperando = false;
   const r = g.res; g.res = null;
-  const cocina = hayCocinero(), libres = cocina ? mesas.filter((m) => !m.ocupada) : [];
-  if (!libres.length) {
+  const cocina = hayCocinero(), libres = cocina ? mesas.filter((m) => !m.ocupada) : [], necesarias = Math.ceil(g.n / CAPACIDAD_MESA);
+  if (libres.length < necesarias) {
     if (!cocina) info(cocineroContratado() ? "🍳 El cocinero ya se retiró: vuelve a las " + fmtHora(HORA_PERSONAL_LLEGA) + "." : "🍳 No hay cocinero: contrata uno en 👥 Empleados (" + dolares(PRECIO_COCINERO) + ") para poder dar mesa.");
     if (r) r(null);
     return;
   }
-  const mesa = libres[Math.floor(Math.random() * libres.length)];
-  mesa.ocupada = true;
-  mesa.clientes = g.clientes;
-  globo(HALL_X, g.y, "Mesa " + mesa.id + " 👍", 1500);
+  for (let k = libres.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [libres[k], libres[j]] = [libres[j], libres[k]]; }
+  const asignadas = libres.slice(0, necesarias).map((mesa, j) => {
+    const clientes = g.clientes.slice(j * CAPACIDAD_MESA, (j + 1) * CAPACIDAD_MESA);
+    mesa.ocupada = true;
+    mesa.clientes = clientes;
+    return { mesa, clientes };
+  });
+  const ids = asignadas.map((a) => a.mesa.id).join(" y ");
+  globo(HALL_X, g.y, (asignadas.length > 1 ? "Mesas " : "Mesa ") + ids + " 👍", 1500);
   cobrar(g.n * ENTRADA_POR_CLIENTE, HALL_X, g.y, gen);
-  info("La recepcionista les dio la mesa " + mesa.id + ": pagaron " + dolares(g.n * ENTRADA_POR_CLIENTE) + " de entrada.");
-  if (r) r(mesa);
+  info("La recepcionista les dio " + (asignadas.length > 1 ? "las mesas " : "la mesa ") + ids + ": pagaron " + dolares(g.n * ENTRADA_POR_CLIENTE) + " de entrada.");
+  if (r) r(asignadas);
 }
 // Cobra «monto» (entra a tu dinero, a lo ganado y al récord) y muestra la moneda flotando en (x, y). Si la partida ya cambió (miGen), no cobra nada.
 function cobrar(monto, x, y, miGen) {
@@ -1117,22 +1134,22 @@ function pintarMenuMesa() {
     pintarEmpleados(lista);
     caja.append(stats, lista);
   } else {
-    const c = MEJORAS_MESA.find((x) => x.id === cosaSel) || MEJORAS_MESA[0], k = m.mejoras[c.id], max = c.precios.length, precio = c.precios[k];
-    const total = MEJORAS_MESA.length * BONO_MEJORAS.length, pct = (totalMejoras(m) / total) * 100;
+    const c = MEJORAS_MESA.find((x) => x.id === cosaSel) || MEJORAS_MESA[0], k = m.mejoras[c.id], max = nivMax(c), precio = c.precios[k - c.inicial];
+    const pct = (sumaNiveles(m) / TOTAL_NIVELES) * 100;
     const barra = el("div", "mm-barra"), rel = el("div", "mm-relleno");
     rel.style.width = pct + "%";
     barra.append(rel, el("span", "mm-pct", "⬆ " + pct.toFixed(2) + "%"));
 
     const stats = el("div", "mm-stats");
-    stats.append(el("span", null, "💰 " + dolares(dinero)), el("span", null, "💵 " + dolares(pagoPorCliente(m))), el("span", null, "👥 4"));
+    stats.append(el("span", null, "💰 " + dolares(dinero)), el("span", null, "💵 " + dolares(pagoPorCliente(m))), el("span", null, "👥 " + CAPACIDAD_MESA));
 
     const tarj = el("div", "mm-card"), cab2 = el("div", "mm-card-cab");
-    cab2.append(el("b", "mm-card-nombre", c.nombre), el("span", "mm-nivel", k >= max ? "Nivel: MÁX" : "Nivel: " + (k + 1)));
+    cab2.append(el("b", "mm-card-nombre", c.nombre), el("span", "mm-nivel", k >= max ? "Nivel: MÁX" : "Nivel: " + k));
     const cuerpo = el("div", "mm-card-cuerpo"), txt = el("div", "mm-card-txt"), ing = el("div", "mm-ingreso");
-    ing.append(el("span", null, "💵 " + dolares(bonoAcum(k))), el("span", "mm-mas", k < max ? "+" + dolares(BONO_MEJORAS[k]) : "MÁX"));
-    txt.append(el("p", null, c.nombre + ": mejora este elemento para aumentar el dinero recaudado en esta mesa."), ing);
+    ing.append(el("span", null, "💵 " + dolares(ingresoNivel(c, k))), el("span", "mm-mas", k < max ? "+" + dolares(ingresoNivel(c, k + 1) - ingresoNivel(c, k)) : "MÁX"));
+    txt.append(el("p", null, k === 0 ? c.nombre + ": cómpralo para que cada cliente de esta mesa pague más." : c.nombre + ": mejora este elemento para aumentar el dinero recaudado en esta mesa."), ing);
     const btn = el("button", "mm-mejorar");
-    btn.append(el("span", null, k >= max ? "MÁXIMO" : "💵 " + dolares(precio)), el("span", null, k >= max ? "" : "MEJORAR"));
+    btn.append(el("span", null, k >= max ? "MÁXIMO" : "💵 " + dolares(precio)), el("span", null, k >= max ? "" : k === 0 ? "COMPRAR" : "MEJORAR"));
     btn.disabled = k >= max || dinero < precio;
     btn.addEventListener("click", () => mejorarCosaMesa(m, c.id));
     cuerpo.append(el("div", "mm-card-ico", c.ico), txt, btn);
@@ -1140,11 +1157,11 @@ function pintarMenuMesa() {
 
     const rej = el("div", "mm-rejilla");
     for (const q of MEJORAS_MESA) {
-      const kk = m.mejoras[q.id], mx = q.precios.length, puede = kk < mx && dinero >= q.precios[kk];
+      const kk = m.mejoras[q.id], mx = nivMax(q), puede = kk < mx && dinero >= q.precios[kk - q.inicial];
       const t = el("button", "mm-tile" + (q.id === c.id ? " sel" : ""));
       t.title = q.nombre;
       t.append(el("span", "mm-tile-ico", q.ico), el("span", "mm-tile-nom", q.nombre),
-        el("span", "mm-tile-niv" + (kk >= mx ? " max" : puede ? " ok" : ""), kk >= mx ? "MÁX" : (puede ? "⬆ " : "") + "Nivel: " + (kk + 1)));
+        el("span", "mm-tile-niv" + (kk >= mx ? " max" : puede ? " ok" : ""), kk >= mx ? "MÁX" : (puede ? "⬆ " : "") + "Nivel: " + kk));
       t.addEventListener("click", () => { cosaSel = q.id; pintarMenuMesa(); });
       rej.appendChild(t);
     }
@@ -1225,11 +1242,11 @@ function mejorarCocina(id) {
   actualizar();
 }
 function mejorarCosaMesa(m, id) {
-  const c = MEJORAS_MESA.find((x) => x.id === id), k = m.mejoras[id], precio = c && c.precios[k];
+  const c = MEJORAS_MESA.find((x) => x.id === id), k = c && m.mejoras[id], precio = c && c.precios[k - c.inicial];
   if (!c || precio === undefined || dinero < precio) return;
   dinero -= precio;
   m.mejoras[id]++;
-  info("Mesa " + m.id + ": mejoraste " + c.nombre.toLowerCase() + " (" + m.mejoras[id] + " de " + BONO_MEJORAS.length + "). Ahora cada cliente de esa mesa paga " + dolares(pagoPorCliente(m)) + ".");
+  info("Mesa " + m.id + ": " + (k === 0 ? "compraste " : "mejoraste ") + c.nombre.toLowerCase() + " (nivel " + m.mejoras[id] + " de " + nivMax(c) + "). Ahora cada cliente de esa mesa paga " + dolares(pagoPorCliente(m)) + ".");
   actualizar();
 }
 function pintarTienda() {
@@ -2037,8 +2054,8 @@ function dibujarSilla(s, m, tipo) { // banca roja con respaldo para 2 personas: 
   }
   caja3d(ctx, s.x - L, arriba ? s.y - 17 : s.y + 10, s.x + L, arriba ? s.y - 10 : s.y + 17, 24, SILLA_RESP, borde); // respaldo (del lado de afuera)
   caja3d(ctx, s.x - L, s.y - 10, s.x + L, s.y + 10, 10, SILLA, borde);
-  const k = arriba ? m.mejoras.silla1 : m.mejoras.silla2, cojin = SILLA_COJINES[k];
-  if (cojin) caja3d(ctx, s.x - L + 2, s.y - 8, s.x + L - 2, s.y + 8, 10 + k, cojin, borde); // cada nivel la hace un poco más alta
+  const k = arriba ? m.mejoras.silla1 : m.mejoras.silla2, cojin = SILLA_COJINES[Math.max(0, k - 1)]; // nivel 1 = sin cojín
+  if (cojin && k > 1) caja3d(ctx, s.x - L + 2, s.y - 8, s.x + L - 2, s.y + 8, 10 + k - 1, cojin, borde); // cada nivel la hace un poco más alta
 }
 function dibujarMostrador() {
   caja3d(ctx, 20 + DXK + KX, 40, 250 + DXK + KX, 70, 26, ACERO, "#546e7a");
@@ -2501,7 +2518,7 @@ function pintarPartidas() {
       boton("➕ Crear aquí", () => crearEn(i));
     } else {
       const mes = Array.isArray(d.mesas) ? d.mesas : [];
-      const mejoras = mes.reduce((tot, m) => tot + MEJORAS_MESA.reduce((s2, c) => s2 + Math.max(0, Math.min(5, Math.floor(num(m.mejoras && (m.mejoras[c.id] !== undefined ? m.mejoras[c.id] : m.mejoras[c.viejo]))))), 0), 0);
+      const mejoras = mes.reduce((tot, m) => tot + MEJORAS_MESA.reduce((s2, c) => s2 + Math.max(0, Math.min(nivMax(c), Math.floor(num(m.mejoras && (m.mejoras[c.id] !== undefined ? m.mejoras[c.id] : m.mejoras[c.viejo])))) - (m.nv === MESA_NV ? c.inicial : 0)), 0), 0);
       const rec = (Array.isArray(d.receps) ? d.receps : []).filter((n) => num(n) > 0).length;
       const mer = (Array.isArray(d.meseros) ? d.meseros : []).filter((n) => num(n) > 0).length;
       const nLotes = Array.isArray(d.lotes) ? d.lotes.length : d.lote ? 1 : 0;
