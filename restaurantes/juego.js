@@ -5,7 +5,7 @@
 // Ya sentados, cada persona paga lo de SU silla (no la de la otra banca) y lo de la mesa (cubiertos, condimentos, bebidas, decoración). La cocina prepara y TÚ (o el mesero) llevas el platillo (clic en la cocina para tomarlo, clic en la mesa para entregarlo).
 // Nadie se va por tardar la comida. Al entregarla, cada uno paga $5 por la comida más lo que sumen las mejoras de la cocina. Al terminar de comer se levantan TODOS: el 100 % usa el baño (si ya lo compraste; cuesta 2 dólares y esperan su turno) y
 // algunos van además a otras habitaciones; todos pasan por la recepción y se van.
-// RECEPCIÓN: tocando su mostrador se abre su panel (lo que cobra por su servicio; sus mejoras llegarán pronto). La recepcionista y el mesero se contratan y mejoran en 👥 Empleados.
+// RECEPCIÓN: tocando su mostrador se abre su menú de mejoras (como el de la cocina; ver MEJORAS_RECEP: mostrador, 4 computadoras, 2 teléfonos, decoración, tele y rocola; PRECIOS PROVISIONALES). La recepcionista y el mesero se contratan y mejoran en 👥 Empleados.
 // SEGUNDO COCINERO: se contrata en la tienda ($1500, sin otro requisito) y cocina junto con el primero: sus velocidades se suman (cada uno según su nivel).
 // COCINERO Y MESAS: en la tienda se mejora al cocinero (10 niveles: cada nivel cocina más rápido) y se compran mesas nuevas para el comedor (hasta 16 en total, en filas y columnas de 4 × 4; precio creciente).
 // AMPLIACIÓN: tocando el precio del cartel «En venta» de un terreno se compra la ampliación (una plaza detrás del restaurante, sobre el pasto). Solo entonces se desbloquea la SEGUNDA PUERTA, que se compra en la oficina del jefe (el SEGUNDO MESERO ya no la necesita: se compra desde el principio, con el primer mesero contratado, por $500)
@@ -89,6 +89,25 @@ const MEJORAS_COCINA = [
   { id: "fregadero", ico: "🚰", nombre: "Fregadero", compra: 600, precios: [200, 450, 900, 1800, 3600], tipo: "pago", ef: [0.5, 1, 1, 1.5, 1.5, 2], desc: "Una cocina más limpia da buena fama: cada cliente paga más." },
   { id: "ventilacion", ico: "🌀", nombre: "Ventilación", compra: 1000, precios: [300, 700, 1400, 2800, 5500], tipo: "vel", ef: [0.95, 0.92, 0.89, 0.86, 0.83, 0.8], desc: "Una cocina fresca y sin humo: los cocineros trabajan más rápido." },
   { id: "decoracion", ico: "🌿", nombre: "Decoración", compra: 2000, precios: [500, 1200, 2500, 5000, 9000], tipo: "pago", ef: [0.5, 1, 1.5, 2, 3, 4], desc: "Una cocina bonita se luce a la vista: cada cliente paga más." },
+];
+// ----- Mejoras de la RECEPCIÓN (se abren tocando su mostrador; funcionan como las de la cocina y son de todo el restaurante) -----
+// ⚠️ PRECIOS Y EFECTOS PROVISIONALES: están puestos «más o menos como en las mesas y la cocina» y quedan PENDIENTES DE CONFIRMAR con el dueño del juego
+//    (solo se sabe seguro: cuántas cosas hay y cuántos niveles tiene cada una; la tele da +6 % y la rocola +7.5 % de velocidad a los trabajadores).
+// inicial = nivel con el que ya viene (1 = el mostrador ya existe; 0 = no existe hasta comprarlo). compra = lo que cuesta comprarla (pasar del nivel 0 al 1).
+// precios[j] = lo que cuesta subir del nivel j+1 al j+2. Niveles totales = precios.length + 1 (mostrador 6 · computadoras 4 · teléfonos 7 · decoración 7 · tele 1 · rocola 1).
+// tipo: "pago" = suma dólares a lo que paga CADA cliente por el servicio de la recepción (solo múltiplos de 0.50) · "trabajo" = los trabajadores trabajan más rápido (0.06 = +6 %; se suman).
+// ef[n-1] = efecto acumulado en el nivel n.
+const MEJORAS_RECEP = [
+  { id: "mostrador", ico: "🛎️", nombre: "Mostrador", inicial: 1, compra: 0, precios: [200, 500, 1200, 2500, 5000], tipo: "pago", ef: [0, 0.5, 1, 1.5, 2, 3], desc: "Un mostrador mejor da más buena imagen: cada cliente paga más por el servicio." },
+  { id: "compu1", ico: "💻", nombre: "Computadora 1", inicial: 0, compra: 300, precios: [150, 400, 900], tipo: "pago", ef: [0.5, 1, 1.5, 2], desc: "Con una computadora en la recepción el servicio mejora: cada cliente paga más." },
+  { id: "compu2", ico: "💻", nombre: "Computadora 2", inicial: 0, compra: 600, precios: [250, 600, 1200], tipo: "pago", ef: [0.5, 1, 1.5, 2], desc: "Otra computadora en la recepción: cada cliente paga más por el servicio." },
+  { id: "compu3", ico: "💻", nombre: "Computadora 3", inicial: 0, compra: 1000, precios: [400, 900, 1800], tipo: "pago", ef: [0.5, 1, 1.5, 2], desc: "Una tercera computadora para atender mejor: cada cliente paga más." },
+  { id: "compu4", ico: "💻", nombre: "Computadora 4", inicial: 0, compra: 1600, precios: [600, 1300, 2500], tipo: "pago", ef: [0.5, 1, 1.5, 2], desc: "La cuarta computadora completa la oficina de la recepción: cada cliente paga más." },
+  { id: "tel1", ico: "☎️", nombre: "Teléfono 1", inicial: 0, compra: 100, precios: [50, 100, 200, 400, 700, 1200], tipo: "pago", ef: [0.5, 1, 1, 1.5, 1.5, 2, 2.5], desc: "Atender llamadas y reservaciones mejora el servicio: cada cliente paga más." },
+  { id: "tel2", ico: "☎️", nombre: "Teléfono 2", inicial: 0, compra: 250, precios: [80, 160, 300, 550, 900, 1500], tipo: "pago", ef: [0.5, 1, 1, 1.5, 1.5, 2, 2.5], desc: "Una segunda línea para más reservaciones: cada cliente paga más." },
+  { id: "decoracion", ico: "🪴", nombre: "Decoración", inicial: 0, compra: 400, precios: [100, 250, 600, 1200, 2400, 4000], tipo: "pago", ef: [0.5, 1, 1.5, 2, 2.5, 3, 4], desc: "Una recepción bonita da buena primera impresión: cada cliente paga más." },
+  { id: "tv", ico: "📺", nombre: "Televisión", inicial: 0, compra: 2000, precios: [], tipo: "trabajo", ef: [0.06], desc: "Una tele en la recepción hace más amena la espera: todos los trabajadores trabajan un 6 % más rápido." },
+  { id: "rocola", ico: "🎵", nombre: "Rocola", inicial: 0, compra: 3500, precios: [], tipo: "trabajo", ef: [0.075], desc: "Con música de fondo todos trabajan con más ánimo: todos los trabajadores trabajan un 7.5 % más rápido." },
 ];
 const KEY_RECORD = "restaurantes_record";
 const KEY_DINERO = "restaurantes_dinero"; // clave de la versión anterior (solo el saldo): se lee UNA vez para pasar ese dinero a la «Partida 1»
@@ -420,16 +439,23 @@ let mesaMejora = null; // mesa cuyo panel de mejoras está abierto (null = la ti
 let vistaEmpleados = false; // true = el panel abierto es el de «Empleados» (botón fijo en la esquina de la pantalla)
 const nuevasMejoras = () => Object.fromEntries(MEJORAS_MESA.map((c) => [c.id, c.inicial])); // nivel de cada cosa de una mesa (0 = sin comprar)
 let cocinaNiv = {};                                  // nivel de cada cosa de la cocina: id → 0 (sin comprar) a 6 (la estufa siempre es al menos 1)
+let recepNiv = {}, vistaRecep = false, cosaRecep = "mostrador"; // nivel de cada cosa de la recepción (id → nivel; ver MEJORAS_RECEP); true = el menú abierto es el de la recepción; cosa elegida en él
 let vistaCocina = false, cosaCocina = "estufa";      // true = el menú abierto es el de la cocina; cosa elegida en él
 const nivCoc = (id) => Math.max(id === "estufa" ? 1 : 0, cocinaNiv[id] || 0);
 const efCoc = (c, n) => c.ef[Math.max(1, Math.min(c.ef.length, n)) - 1];
 const factorCocina = (tipo) => MEJORAS_COCINA.reduce((t, c) => (c.tipo === tipo && nivCoc(c.id) > 0 ? t * efCoc(c, nivCoc(c.id)) : t), 1); // «vel» y «paciencia» multiplican
 const bonoCocina = () => MEJORAS_COCINA.reduce((t, c) => (c.tipo === "pago" && nivCoc(c.id) > 0 ? t + efCoc(c, nivCoc(c.id)) : t), 0);      // «pago» suma
+const nivRecep = (id) => { const c = MEJORAS_RECEP.find((x) => x.id === id); return Math.max(c && c.inicial ? c.inicial : 0, recepNiv[id] || 0); };
+const efRecep = (c, n) => c.ef[Math.max(1, Math.min(c.ef.length, n)) - 1];
+const bonoRecep = () => MEJORAS_RECEP.reduce((t, c) => (c.tipo === "pago" && nivRecep(c.id) > 0 ? t + efRecep(c, nivRecep(c.id)) : t), 0);       // dólares extra por cliente (el servicio de la recepción)
+const velTrabajo = () => MEJORAS_RECEP.reduce((t, c) => (c.tipo === "trabajo" && nivRecep(c.id) > 0 ? t + efRecep(c, nivRecep(c.id)) : t), 1); // 1 = normal; tele y rocola lo suben (1.135 con las dos)
+const entradaPorCliente = () => ENTRADA_POR_CLIENTE + bonoRecep();   // lo que paga cada cliente al darle mesa (servicio de la recepción)
+const tiempoRecep = () => TIEMPO_RECEP_MS / velTrabajo();            // lo que tarda la recepcionista en atender a un grupo
 // Cada persona paga SOLO la silla que usa: la 0 y la 2 se sientan en la banca de arriba (silla1) y la 1 y la 3 en la de abajo (silla2)
 const bonoMesaPersona = (m, i) => { const sa = ORDEN_SILLAS[i] === "arriba" ? "silla1" : "silla2"; return MEJORAS_MESA.reduce((t, c) => (c.id === "silla1" || c.id === "silla2") && c.id !== sa ? t : t + ingresoNivel(c, m.mejoras[c.id]), 0); }; // mesa, cubiertos, etc. + SOLO la silla de esa persona
 const pagoSentado = (m, i) => bonoMesaPersona(m, i) + bonoDeco();      // lo que paga la persona i al sentarse (mesa, SU silla, cubiertos, etc. y decoraciones)
 const pagoComida = () => PAGO_POR_CLIENTE + bonoCocina();             // lo que paga cada uno al recibir su comida (comida + mejoras de la cocina)
-const pagoPorCliente = (m) => ENTRADA_POR_CLIENTE + pagoComida() + (pagoSentado(m, 0) + pagoSentado(m, 1)) / 2; // total que deja cada cliente de la mesa m (promedio de sus dos sillas)
+const pagoPorCliente = (m) => entradaPorCliente() + pagoComida() + (pagoSentado(m, 0) + pagoSentado(m, 1)) / 2; // total que deja cada cliente de la mesa m (promedio de sus dos sillas)
 const totalMejoras = (m) => MEJORAS_MESA.reduce((t, c) => t + Math.max(0, m.mejoras[c.id] - c.inicial), 0);   // compras hechas en esa mesa
 const sumaNiveles = (m) => MEJORAS_MESA.reduce((t, c) => t + m.mejoras[c.id], 0);                             // suma de los niveles actuales (para la barra)
 let nEstac = ESTAC_INICIALES, proxAuto = 0, autosPerdidos = 0; // lugares de estacionamiento disponibles, cuándo pasa el próximo auto, autos que no hallaron lugar
@@ -473,7 +499,7 @@ const crearMesa = (m) => ({ ...m, ocupada: false, plato: false, barra: null, esp
 function nuevaPartida(datos = null) { // datos: partida guardada que se carga (null = partida nueva)
   gen++; esperas = []; retretes = Array(RETRETES).fill(false);
   ents = []; globos = []; monedas = [];
-  cocinero = 0; cocinero2 = 0; limpiador = false; limpEnt = null; nMesas = MESAS_BASE.length; cocinaNiv = {};
+  cocinero = 0; cocinero2 = 0; limpiador = false; limpEnt = null; nMesas = MESAS_BASE.length; cocinaNiv = {}; recepNiv = {};
   mesas = MESAS_BASE.map(crearMesa);
   recepcion = Array(SLOTS.length).fill(null);
   dinero = DINERO_INICIAL; ganado = 0; atendidos = 0; perdidos = 0; cocinando = 0; llevando = null; activos = 0; receps = [null, null]; meseros = [null, null];
@@ -487,14 +513,14 @@ function nuevaPartida(datos = null) { // datos: partida guardada que se carga (n
     cocinero = 1; limpiador = true;
     receps[0] = { nivel: 1, g: null, t0: 0, emoji: "🧑‍💼" };
     const ent = nuevaEnt("🤵", MESERO_POST[0], MESERO_POST[1]);
-    ent.vel = MESERO_VEL[0];
+    ent.vel = MESERO_VEL[0]; ent.trab = true;
     meseros[0] = { nivel: 1, ocupado: false, ent, post: MESERO_POST };
     ponerHabsIniciales(); // la oficina del jefe ya viene construida
   }
   armarFondo(); // quita la plaza y los lugares de la partida anterior (o dibuja los de la partida cargada)
   cerrarTienda();
   $("tiempo").textContent = fmtTiempo(Math.floor(reloj / 1000));
-  info("Ya tienes cocinero, recepcionista, mesero y personal de limpieza. Los clientes llegan solos de 9:30 AM a 11:00 PM: la recepcionista tarda 10 s en atenderlos y, si hay mesa, cada cliente paga $10 de entrada. Toca el precio de un terreno en venta para ampliar, la caseta 🅿️ para comprar lugares de estacionamiento, la 🕴️ oficina del jefe para comprar mesas, zonas y la segunda puerta, una mesa para mejorarla y 👥 Empleados (arriba a la derecha) para el personal.");
+  info("Ya tienes cocinero, recepcionista, mesero y personal de limpieza. Los clientes llegan solos de 9:30 AM a 11:00 PM: la recepcionista tarda 10 s en atenderlos y, si hay mesa, cada cliente paga $10 de entrada. Toca el precio de un terreno en venta para ampliar, la caseta 🅿️ para comprar lugares de estacionamiento, la 🕴️ oficina del jefe para comprar mesas, zonas y la segunda puerta, el mostrador de la recepción para mejorarla, una mesa para mejorarla y 👥 Empleados (arriba a la derecha) para el personal.");
   actualizar();
 }
 
@@ -535,7 +561,7 @@ function instantanea() {
     mesas: mesas.map((m) => ({ id: m.id, nv: MESA_NV, premios: m.premios, mejoras: { ...m.mejoras } })),
     receps: receps.map((r) => (r ? r.nivel : 0)),
     meseros: meseros.map((w) => (w ? w.nivel : 0)),
-    terreno2, lotes: lotes.slice(), kx: KX, bx: BX, habs: { ...habsExtra }, decos: decos.slice(), puerta2, nEstac, cocinero, cocinero2, limpiador, nMesas, cocina: { ...cocinaNiv }, banio: banioComprado, generadores,
+    terreno2, lotes: lotes.slice(), kx: KX, bx: BX, habs: { ...habsExtra }, decos: decos.slice(), puerta2, nEstac, cocinero, cocinero2, limpiador, nMesas, cocina: { ...cocinaNiv }, recepMejoras: { ...recepNiv }, banio: banioComprado, generadores,
     anuncios: { ...anuncios }, paginaWeb,
     fecha: Date.now(),
   };
@@ -560,6 +586,8 @@ function aplicarGuardado(d) {
   cocinaNiv = {}; // mejoras de la cocina: solo ids conocidos, niveles válidos y sin saltarse lo que hay que tener antes
   if (d.cocina && typeof d.cocina === "object") MEJORAS_COCINA.forEach((c) => { const n = Math.max(0, Math.min(c.precios.length + 1, Math.floor(num(d.cocina[c.id])))); if (n > 0) cocinaNiv[c.id] = n; });
   MEJORAS_COCINA.forEach((c) => { if (c.requiere && !cocinaNiv[c.requiere]) delete cocinaNiv[c.id]; });
+  recepNiv = {}; // mejoras de la recepción: solo ids conocidos y niveles válidos
+  if (d.recepMejoras && typeof d.recepMejoras === "object") MEJORAS_RECEP.forEach((c) => { const n = Math.max(0, Math.min(c.precios.length + 1, Math.floor(num(d.recepMejoras[c.id])))); if (n > 0) recepNiv[c.id] = n; });
   nMesas = Math.max(MESAS_BASE.length, Math.min(MESAS_TODAS.length, Math.floor(num(d.nMesas)) || MESAS_BASE.length));
   for (let i = MESAS_BASE.length; i < nMesas; i++) mesas.push(crearMesa(MESAS_TODAS[i]));
   (Array.isArray(d.mesas) ? d.mesas : []).forEach((s) => {
@@ -605,7 +633,7 @@ function aplicarGuardado(d) {
     if (nm > 0 && (k === 0 || meseros[0])) {
       const post = k ? MESERO_POST2 : MESERO_POST;
       const ent = nuevaEnt(k ? "🤵‍♀️" : "🤵", post[0], post[1]);
-      ent.vel = MESERO_VEL[nm - 1];
+      ent.vel = MESERO_VEL[nm - 1]; ent.trab = true;
       meseros[k] = { nivel: nm, ocupado: false, ent, post };
     }
   });
@@ -628,7 +656,7 @@ function turnoLimpieza() {
   const P = PUERTAS[0];
   if (turno && !limpEnt) {
     const e = nuevaEnt("🧑‍🔧", P.salida[P.salida.length - 1][0], P.salida[P.salida.length - 1][1]);
-    limpEnt = e;
+    limpEnt = e; e.trab = true;
     const g = gen;
     (async () => {
       await ir(e, [...P.salida.slice().reverse(), P.entrada, [HALL_X, 185]]);
@@ -747,8 +775,8 @@ function resolverRecepcion(g) {
   });
   const ids = asignadas.map((a) => a.mesa.id).join(" y ");
   globo(HALL_X, g.y, (asignadas.length > 1 ? "Mesas " : "Mesa ") + ids + " 👍", 1500);
-  cobrar(g.n * ENTRADA_POR_CLIENTE, HALL_X, g.y, gen);
-  info("La recepcionista les dio " + (asignadas.length > 1 ? "las mesas " : "la mesa ") + ids + ": pagaron " + dolares(g.n * ENTRADA_POR_CLIENTE) + " de entrada.");
+  cobrar(g.n * entradaPorCliente(), HALL_X, g.y, gen);
+  info("La recepcionista les dio " + (asignadas.length > 1 ? "las mesas " : "la mesa ") + ids + ": pagaron " + dolares(g.n * entradaPorCliente()) + " de entrada.");
   if (r) r(asignadas);
 }
 // Cobra «monto» (entra a tu dinero, a lo ganado y al récord) y muestra la moneda flotando en (x, y). Si la partida ya cambió (miGen), no cobra nada.
@@ -779,7 +807,8 @@ async function irseEnojados(g, motivo) {
 
 // ms que tarda la cocina en preparar un pedido de n personas con el cocinero actual
 // Los dos cocineros trabajan juntos: sus velocidades (1 / factor) se suman. Con uno solo queda igual que antes; con dos del mismo nivel el pedido tarda la mitad.
-const velCocina = () => (cocinero ? 1 / COCINA_FACTOR[cocinero - 1] : 0) + (cocinero2 ? 1 / COCINA_FACTOR[cocinero2 - 1] : 0); // 0 = no hay cocineros: no se cocina nada
+const velCocinerosBase = () => (cocinero ? 1 / COCINA_FACTOR[cocinero - 1] : 0) + (cocinero2 ? 1 / COCINA_FACTOR[cocinero2 - 1] : 0); // 0 = no hay cocineros: no se cocina nada
+const velCocina = () => velCocinerosBase() * velTrabajo(); // la tele y la rocola de la recepción aceleran a los cocineros
 const cocineroContratado = () => cocinero > 0 || cocinero2 > 0;
 const hayCocinero = () => cocineroContratado() && enTurno("cocina"); // contratado y en su horario
 const tiempoCocina = (n) => ((T_COCINA_BASE + T_COCINA_POR_CLIENTE * n) / velCocina()) * factorCocina("vel"); // estufa, horno y ventilación lo acortan
@@ -900,8 +929,8 @@ function tocar(sx, sy) {
   if (pausado) return; // con la tienda abierta el juego está en pausa
   puntero = { x: sx, y: sy };
   const [wx, wy] = aMundo(sx, sy, 20);
-  if (dentro(aMundo(sx, sy, 26), 335 + DX - TOL, 560 + DY - TOL, 465 + DX + TOL, 625 + DY + TOL) || dentro(aMundo(sx, sy, 0), 335 + DX - TOL, 560 + DY - TOL, 465 + DX + TOL, 650 + DY + TOL)) { abrirTienda(); return; } // mostrador de la recepción
-  if (puerta2 && (dentro(aMundo(sx, sy, 26), 335 + DX - TOL, -75 - TOL, 465 + DX + TOL, -30 + TOL) || dentro(aMundo(sx, sy, 0), 335 + DX - TOL, -75 - TOL, 465 + DX + TOL, -30 + TOL))) { abrirTienda(); return; } // mostrador de la recepción 2
+  if (dentro(aMundo(sx, sy, 26), 335 + DX - TOL, 560 + DY - TOL, 465 + DX + TOL, 625 + DY + TOL) || dentro(aMundo(sx, sy, 0), 335 + DX - TOL, 560 + DY - TOL, 465 + DX + TOL, 650 + DY + TOL)) { abrirRecepcion(); return; } // mostrador de la recepción
+  if (puerta2 && (dentro(aMundo(sx, sy, 26), 335 + DX - TOL, -75 - TOL, 465 + DX + TOL, -30 + TOL) || dentro(aMundo(sx, sy, 0), 335 + DX - TOL, -75 - TOL, 465 + DX + TOL, -30 + TOL))) { abrirRecepcion(); return; } // mostrador de la recepción 2
   if (cartelTocado(sx, sy)) return; // el precio de un terreno en venta
   if ([0, CASETA.alto, CASETA.alto + 22].some((z) => dentro(aMundo(sx, sy, z), CASETA.x0 - 8, CASETA.y0 - 8, CASETA.x1 + 8, CASETA.y1 + 8))) { abrirTienda(null, false, false, false, false, false, false, "caseta"); return; } // caseta del estacionamiento
   const enCocina = dentro(aMundo(sx, sy, 0), ...RECT_COCINA) || dentro(aMundo(sx, sy, 30), ...RECT_COCINA);
@@ -973,7 +1002,7 @@ async function visitarHabs(c, ida, i, P = PUERTAS[0], ids = []) {
 // ----- Tienda y personal -----
 function abrirTienda(mesa = null, empleados = false, construir = false, anuncio = false, perfil = false, oficina = false, generador = false, extra = null) { // sin mesa: la tienda de la recepción; con mesa: el panel de mejoras de esa mesa; empleados: el panel de personal
   if (menuMesaEl) menuMesaEl.hidden = true;
-  vistaCocina = false;
+  vistaCocina = false; vistaRecep = false;
   mesaMejora = mesa;
   vistaEmpleados = empleados;
   vistaConstruir = construir;
@@ -989,7 +1018,7 @@ function abrirTienda(mesa = null, empleados = false, construir = false, anuncio 
   info(extra === "caseta" ? "⏸️ Juego en pausa mientras estás en la caseta del estacionamiento." : extra ? "⏸️ Juego en pausa mientras ves el terreno en venta." : mesa ? "⏸️ Juego en pausa mientras mejoras la mesa " + mesa.id + "." : empleados ? "⏸️ Juego en pausa mientras ves a tus empleados." : anuncio ? "⏸️ Juego en pausa mientras eliges tus anuncios." : perfil ? "⏸️ Juego en pausa mientras ves tu perfil." : generador ? "⏸️ Juego en pausa mientras estás en la sala de generadores." : oficina ? "⏸️ Juego en pausa mientras estás en la oficina del jefe." : construir ? "⏸️ Juego en pausa mientras construyes." : "⏸️ Juego en pausa mientras ves la recepción.");
 }
 function abrirMejorasMesa(m) { // tocar una mesa: menú con «Mejoras» y «Personal» (el juego se pausa)
-  mesaMejora = m; tabMesa = "mejoras"; cosaSel = MEJORAS_MESA[0].id; vistaCocina = false;
+  mesaMejora = m; tabMesa = "mejoras"; cosaSel = MEJORAS_MESA[0].id; vistaCocina = false; vistaRecep = false;
   vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false; vistaGeneradores = false; vistaExtra = null;
   $("tienda").hidden = true;
   pintarMenuMesa();
@@ -999,16 +1028,25 @@ function abrirMejorasMesa(m) { // tocar una mesa: menú con «Mejoras» y «Pers
 }
 function abrirCocina() { // tocar la cocina: menú de mejoras de la cocina (el juego se pausa)
   mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false; vistaGeneradores = false; vistaExtra = null;
-  vistaCocina = true; cosaCocina = MEJORAS_COCINA[0].id;
+  vistaCocina = true; vistaRecep = false; cosaCocina = MEJORAS_COCINA[0].id;
   $("tienda").hidden = true;
   pintarMenuMesa();
   menuMesa().hidden = false;
   ponerPausa(true);
   info("⏸️ Juego en pausa mientras mejoras la cocina.");
 }
+function abrirRecepcion() { // tocar el mostrador de la recepción: menú de sus mejoras (el juego se pausa)
+  mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false; vistaGeneradores = false; vistaExtra = null; vistaCocina = false;
+  vistaRecep = true; cosaRecep = MEJORAS_RECEP[0].id;
+  $("tienda").hidden = true;
+  pintarMenuMesa();
+  menuMesa().hidden = false;
+  ponerPausa(true);
+  info("⏸️ Juego en pausa mientras mejoras la recepción.");
+}
 function cerrarTienda() {
   const estabaEnPausa = pausado;
-  vistaCocina = false; mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false; vistaGeneradores = false; vistaExtra = null;
+  vistaCocina = false; vistaRecep = false; mesaMejora = null; vistaEmpleados = false; vistaConstruir = false; vistaAnuncios = false; vistaPerfil = false; vistaOficina = false; vistaGeneradores = false; vistaExtra = null;
   $("tienda").hidden = true;
   if (menuMesaEl) menuMesaEl.hidden = true;
   ponerPausa(false);
@@ -1125,6 +1163,7 @@ function menuMesa() { // se crea la primera vez que se necesita (junto con su es
   return menuMesaEl;
 }
 function pintarMenuMesa() {
+  if (vistaRecep) { pintarMenuRecepcion(); return; }
   if (vistaCocina) { pintarMenuCocina(); return; }
   const m = mesaMejora;
   if (!m) return;
@@ -1263,6 +1302,77 @@ function mejorarCocina(id) {
   info(n === 0 ? "🍳 ¡Compraste " + c.nombre.toLowerCase() + "! " + efTxtCocina(c, 1) : "🍳 Mejoraste " + c.nombre.toLowerCase() + " (nivel " + (n + 1) + "). " + efTxtCocina(c, n + 1));
   actualizar();
 }
+// Efecto de una cosa de la recepción en el nivel n, en texto corto
+function efTxtRecep(c, n) {
+  if (n <= 0) return "—";
+  const v = efRecep(c, n);
+  return c.tipo === "pago" ? "💵 +" + dolares(v) : "⚡ +" + Number((v * 100).toFixed(1)) + " % de velocidad";
+}
+// Menú de la recepción (al tocar su mostrador): mismo estilo que el de la cocina
+function pintarMenuRecepcion() {
+  const raiz = menuMesa(), previo = raiz.firstChild ? raiz.firstChild.scrollTop : 0;
+  raiz.innerHTML = "";
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
+  const caja = el("div", "mm-caja");
+  const tabs = el("div", "mm-tabs");
+  const atras = el("button", "mm-tab mm-atras", "←");
+  atras.setAttribute("aria-label", "Cerrar");
+  atras.addEventListener("click", cerrarTienda);
+  tabs.append(atras, el("button", "mm-tab act", "🛎️ Recepción"));
+  const cab = el("div", "mm-cab");
+  cab.append(el("h2", "mm-titulo", "Recepción"), el("span", "mm-pildora", "💵 Cobra " + dolares(entradaPorCliente()) + " por cliente"));
+  caja.append(tabs, cab);
+
+  const c = MEJORAS_RECEP.find((x) => x.id === cosaRecep) || MEJORAS_RECEP[0];
+  const n = nivRecep(c.id), max = c.precios.length + 1, tiene = n > 0, tope = n >= max;
+  const precio = tope ? 0 : tiene ? c.precios[n - 1] : c.compra;
+  const inicial = MEJORAS_RECEP.reduce((t, q) => t + (q.inicial || 0), 0), totalNiv = MEJORAS_RECEP.reduce((t, q) => t + q.precios.length + 1, 0) - inicial;
+  const pct = ((MEJORAS_RECEP.reduce((t, q) => t + nivRecep(q.id), 0) - inicial) / totalNiv) * 100;
+  const barra = el("div", "mm-barra"), rel = el("div", "mm-relleno");
+  rel.style.width = pct + "%";
+  barra.append(rel, el("span", "mm-pct", "⬆ " + pct.toFixed(2) + "%"));
+
+  const stats = el("div", "mm-stats");
+  stats.append(el("span", null, "💰 " + dolares(dinero)), el("span", null, "⚡ ×" + velTrabajo().toFixed(3) + " trabajadores"), el("span", null, "🛎️ " + (tiempoRecep() / 1000).toFixed(1) + " s por grupo"));
+
+  const tarj = el("div", "mm-card"), cab2 = el("div", "mm-card-cab");
+  cab2.append(el("b", "mm-card-nombre", c.nombre), el("span", "mm-nivel", !tiene ? "Sin comprar" : tope ? "Nivel: MÁX" : "Nivel: " + n + " de " + max));
+  const cuerpo = el("div", "mm-card-cuerpo"), txt = el("div", "mm-card-txt"), ing = el("div", "mm-ingreso");
+  if (!tiene) ing.append(el("span", null, "Al comprarlo:"), el("span", "mm-mas", efTxtRecep(c, 1)));
+  else ing.append(el("span", null, efTxtRecep(c, n)), el("span", "mm-mas", tope ? "MÁX" : "→ " + efTxtRecep(c, n + 1)));
+  txt.append(el("p", null, c.desc), ing);
+  const btn = el("button", "mm-mejorar");
+  btn.append(el("span", null, tope ? "MÁXIMO" : "💵 " + dolares(precio)), el("span", null, tope ? "" : tiene ? "MEJORAR" : "COMPRAR"));
+  btn.disabled = tope || dinero < precio;
+  btn.addEventListener("click", () => mejorarRecepcion(c.id));
+  cuerpo.append(el("div", "mm-card-ico", c.ico), txt, btn);
+  tarj.append(cab2, cuerpo);
+
+  const rej = el("div", "mm-rejilla");
+  for (const q of MEJORAS_RECEP) {
+    const nq = nivRecep(q.id), tq = nq >= q.precios.length + 1, pq = nq > 0 ? q.precios[nq - 1] : q.compra;
+    const puede = !tq && dinero >= pq;
+    const t = el("button", "mm-tile" + (q.id === c.id ? " sel" : ""));
+    t.title = q.nombre;
+    t.append(el("span", "mm-tile-ico", q.ico), el("span", "mm-tile-nom", q.nombre),
+      el("span", "mm-tile-niv" + (tq ? " max" : puede ? " ok" : ""), tq ? "MÁX" : nq === 0 ? (puede ? "⬆ " : "") + "Comprar" : (puede ? "⬆ " : "") + "Nivel: " + nq));
+    t.addEventListener("click", () => { cosaRecep = q.id; pintarMenuRecepcion(); });
+    rej.appendChild(t);
+  }
+  caja.append(barra, stats, tarj, rej);
+  raiz.appendChild(caja);
+  caja.scrollTop = previo;
+}
+function mejorarRecepcion(id) {
+  const c = MEJORAS_RECEP.find((x) => x.id === id), n = c ? nivRecep(id) : 0;
+  if (!c || n > c.precios.length) return;
+  const precio = n === 0 ? c.compra : c.precios[n - 1];
+  if (dinero < precio) return;
+  dinero -= precio;
+  recepNiv[id] = n + 1;
+  info(n === 0 ? "🛎️ ¡Compraste " + c.nombre.toLowerCase() + "! " + efTxtRecep(c, 1) : "🛎️ Mejoraste " + c.nombre.toLowerCase() + " (nivel " + (n + 1) + "). " + efTxtRecep(c, n + 1));
+  actualizar();
+}
 function mejorarCosaMesa(m, id) {
   const c = MEJORAS_MESA.find((x) => x.id === id), k = c && m.mejoras[id], precio = c && c.precios[k - c.inicial];
   if (!c || precio === undefined || dinero < precio) return;
@@ -1286,16 +1396,6 @@ function pintarTienda() {
   if (vistaAnuncios) { pintarAnuncios(lista); return; }
   if (vistaPerfil) { pintarPerfil(lista); return; }
   if (vistaExtra) { pintarExtra(lista); return; }
-  pintarRecepcion(lista); // sin otra vista, el panel es el de la recepción (ya no hay «tienda»)
-}
-// Panel de la «🛎️ Recepción» (se abre tocando su mostrador): lo que cobra por su servicio. Como una mesa, tendrá mejoras (pronto).
-function pintarRecepcion(lista) {
-  $("tiendaTitulo").textContent = "🛎️ Recepción";
-  const nota = document.createElement("small");
-  nota.style.cssText = "display:block;margin:2px 0 6px;color:var(--suave)";
-  nota.textContent = "La recepcionista se contrata y mejora en 👥 Empleados. Los terrenos se compran tocando el precio de su cartel «En venta»; los lugares de estacionamiento, en la caseta 🅿️; y la segunda puerta, en la 🕴️ oficina del jefe.";
-  lista.append(nota,
-    filaPronto("🛎️", "Servicio de la recepción", "Cada cliente paga " + dolares(ENTRADA_POR_CLIENTE) + " por este servicio en cuanto se le da mesa. Sus mejoras (como las de una mesa) llegarán pronto.", "Próximamente"));
 }
 // Paneles extra: la caseta del estacionamiento y la compra de un terreno en venta
 function pintarExtra(lista) {
@@ -1515,7 +1615,7 @@ function pintarConstruir(lista) {
 }
 function pintarEmpleados(lista) {
   $("tiendaTitulo").textContent = "👥 Empleados";
-  const txtRecep = (n) => "Nivel " + n + " de " + (RECEP_PRECIOS_MEJORA.length + 1) + " · atiende a cada grupo en " + (TIEMPO_RECEP_MS / 1000) + " s";
+  const txtRecep = (n) => "Nivel " + n + " de " + (RECEP_PRECIOS_MEJORA.length + 1) + " · atiende a cada grupo en " + (tiempoRecep() / 1000).toFixed(1) + " s";
   const txtCocinero = (n) => "Nivel " + n + " de " + (COCINERO_PRECIOS_MEJORA.length + 1) + " · un pedido para 4 personas tarda " + (tiempoCocina(4) / 1000).toFixed(1) + " s (con todos los cocineros)";
   const txtMesero = (n) => "Nivel " + n + " de " + (MESERO_PRECIOS_MEJORA.length + 1) + " · lleva los platillos a su paso";
   const conH = (f) => (n) => f(n) + " · Horario: " + fmtHora(HORA_PERSONAL_LLEGA) + " a " + fmtHora(HORA_CIERRA); // agrega el horario a cada fila
@@ -1625,7 +1725,7 @@ function contratarMesero(k) {
   dinero -= precio;
   const post = k ? MESERO_POST2 : MESERO_POST;
   const ent = nuevaEnt(k ? "🤵‍♀️" : "🤵", post[0], post[1]);
-  ent.vel = MESERO_VEL[0];
+  ent.vel = MESERO_VEL[0]; ent.trab = true;
   meseros[k] = { nivel: 1, ocupado: false, ent, post };
   info((k ? "Contrataste al segundo mesero" : "Contrataste al mesero") + ": lleva solo los platillos, pero camina despacio. Mejóralo en 👥 Empleados.");
   actualizar();
@@ -2113,13 +2213,23 @@ function dibujarEspera(g) {
   ctx.fillStyle = "#fff"; caja(sx - w / 2, sy - 12 * f, w, 24 * f, 8 * f); ctx.fill();
   ctx.strokeStyle = "#7c5cff"; ctx.lineWidth = 2; ctx.stroke();
   texto(t, sx, sy, 13 * f, "#3b2a1a", "center");
-  const av = Math.min(1, Math.max(0, (reloj - g.desde) / TIEMPO_RECEP_MS));
+  const av = Math.min(1, Math.max(0, (reloj - g.desde) / tiempoRecep()));
   ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(sx - 30 * f, sy + 16 * f, 60 * f, 6 * f);
   ctx.fillStyle = "#7c5cff"; ctx.fillRect(sx - 30 * f, sy + 16 * f, 60 * f * av, 6 * f);
+}
+// Lo que compraste para la recepción se ve sobre el mostrador (y la tele y la rocola a sus lados)
+function dibujarEquipoRecepcion() {
+  const pos = { compu1: [350, 592, 30], compu2: [372, 592, 30], compu3: [428, 592, 30], compu4: [450, 592, 30], tel1: [352, 612, 30], tel2: [448, 612, 30], decoracion: [400, 614, 30], tv: [322, 602, 24], rocola: [478, 602, 24] };
+  MEJORAS_RECEP.forEach((c) => {
+    if (nivRecep(c.id) <= 0 || !pos[c.id]) return;
+    const [x, y, z] = pos[c.id], [sx, sy] = iso(x + DX, y + DY, z);
+    emoji(c.ico, sx, sy, (c.id === "tv" || c.id === "rocola" ? 26 : 17) * ESCALA);
+  });
 }
 function dibujarEscritorio() {
   caja3d(ctx, 340 + DX, 585 + DY, 460 + DX, 619 + DY, 26, MADERA_OSCURA, "#3e2c23");
   const [sx, sy] = iso(400 + DX, 602 + DY, 26); texto("Recepción", sx, sy, 11 * ESC_UI, "#fff", "center");
+  dibujarEquipoRecepcion();
   const [bx, by] = iso(400 + DX, 636 + DY, 0); // etiqueta que invita a abrir el panel de la recepción
   const t = "🛎️ Mejoras", f = ESC_UI;
   ctx.font = "700 " + 13 * f + "px system-ui, sans-serif";
@@ -2132,7 +2242,7 @@ function dibujarEscritorio() {
 function dibujarRecepcionista(r, x, y) {
   persona(r.emoji, x, y, 38, 34);
   if (!r.g) return;
-  const f = Math.min(1, (reloj - r.t0) / TIEMPO_RECEP_MS);
+  const f = Math.min(1, (reloj - r.t0) / tiempoRecep());
   const [sx, sy] = iso(x, y, 78);
   const bw = 48 * ESC_UI, bh = 7 * ESC_UI;
   ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(sx - bw / 2, sy, bw, bh);
@@ -2265,7 +2375,7 @@ function cuadro() {
   for (const e of ents) {
     if (!e.ruta.length) continue;
     const [tx, ty] = e.ruta[0];
-    const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy), paso = ((e.vel || VEL) * dt) / ESCALA;
+    const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy), paso = ((e.vel || VEL) * (e.trab ? velTrabajo() : 1) * dt) / ESCALA;
     if (e.coche && d > 0) e.eje = Math.abs(dx) >= Math.abs(dy) ? "x" : "y"; // el auto apunta hacia donde avanza
     if (d <= paso) {
       e.x = tx; e.y = ty; e.ruta.shift();
@@ -2273,7 +2383,7 @@ function cuadro() {
     } else { e.x += (dx / d) * paso; e.y += (dy / d) * paso; }
   }
   for (const g of recepcion) { // la recepcionista tarda TIEMPO_RECEP_MS en atender a cada grupo y ver si hay mesa; nadie se enoja ni se va por esperar
-    if (g && g.esperando && reloj - g.desde >= TIEMPO_RECEP_MS) resolverRecepcion(g);
+    if (g && g.esperando && reloj - g.desde >= tiempoRecep()) resolverRecepcion(g);
   }
   receps.forEach((r, k) => { // la recepcionista de cada puerta se ve atendiendo al grupo que más lleva esperando (solo es visual: el tiempo lo lleva cada grupo)
     if (!r) return;
