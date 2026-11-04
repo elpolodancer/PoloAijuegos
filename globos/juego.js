@@ -1,37 +1,45 @@
 // Ruta: globos/juego.js
-// Juego «Lluvia de globos»: revienta los globos antes de que toquen el suelo. Los ajustes están aquí arriba.
+// Juego «Lluvia de globos»: globos de agua (sin lazo) que caen como si vaciaran una cubeta y se amontonan.
+// Para reventarlos, desliza el dedo por 3 o más globos del mismo color que se estén tocando. Los ajustes están aquí arriba.
+// Trofeos: n globos reventados = n × (n + 30). Niveles por trofeos. Artefactos: 6 = bomba, 7+ = eliminador de color, 10+ = elimina todo.
+// Globos con número: bajan 1 en cada jugada que no los revienta; si uno llega a 0, pierdes.
 
 const ID = "globos";
 
 // ---------- AJUSTES ----------
 const ANCHO = 460, ALTO = 760;     // tamaño lógico del lienzo
-const SUELO = ALTO - 36;           // y donde se cuenta un globo como perdido
-const VIDAS_INICIO = 3;
-const VIDAS_MAX = 5;
-const VEL_INICIO = 1.0;            // velocidad de caída al empezar (píxeles por cuadro)
-const VEL_FINAL = 3.3;             // velocidad máxima (se llega poco a poco)
-const INTERVALO_INICIO = 62;       // cuadros entre globos al empezar (60 cuadros = 1 s)
-const INTERVALO_FINAL = 22;        // ...y al final
-const RAMPA = 60 * 150;            // en cuántos cuadros se llega a la dificultad máxima (2 min 30 s)
-const CADA_LLUVIA = 60 * 25;       // cada cuántos cuadros llega una «lluvia» (ráfaga de globos)
-const GLOBOS_LLUVIA = 8;
-const SEGUNDOS_HIELO = 3;
-const COMBO_PARA_SUBIR = 5;        // cada 5 seguidos sube el multiplicador
-const MULT_MAX = 5;
+const SUELO = ALTO - 36;           // y donde se apoyan los globos
+const R = 23;                      // radio de cada globo (en la cubeta caben ~10 por fila)
+const LINEA = 150;                 // línea roja: si la pila se queda quieta por encima de ella, pierdes
+const SEG_DESBORDE = 2;            // segundos que aguanta un globo quieto arriba de la línea antes de perder
+const MIN_CADENA = 3;              // globos mínimos en la línea para reventarlos
+const TOLERANCIA = 10;             // píxeles extra para considerar que dos globos «se tocan»
+const GRAVEDAD = 0.35;             // píxeles por cuadro al cuadrado
+const SUB = 2;                     // subpasos de física por cuadro (más = más estable)
+const ITER = 5;                    // repeticiones de choques por subpaso
+const INICIAL = 80;                // globos de la primera «cubetada»
+const MINIMO_EN_JUEGO = 20;        // si entre los que hay y los que van a caer quedan menos que esto, cae un puñado más
+// -- Trofeos y niveles (calculados con tus jugadas de prueba) --
+const BASE_TROFEOS = 30;           // una jugada de n globos vale n × (n + BASE_TROFEOS)
+const NIVEL1_TROFEOS = 1800;       // trofeos para terminar el nivel 1
+const POTENCIA_NIVEL = 1.3;        // PROVISIONAL: nivel n termina en 1800 × n^1.3 (redondeado a centenas). Calibrar con la lista del nivel 2
+// -- Artefactos (según los globos de la línea) --
+const GLOBOS_BOMBA = 6;            // 6 = bomba (revienta los 6 globos más cercanos y da 1 moneda)
+const GLOBOS_COLOR = 7;            // 7 o más = eliminador de color
+const GLOBOS_TODO = 10;            // 10 o más = elimina todo
+const MAX_GLOBOS_TODO = 30;        // PROVISIONAL: «elimina todo» cuenta como máximo estos globos para los trofeos
+// -- Globos con número --
+const PROB_NUMERO = 0.08;          // probabilidad de que un globo nuevo traiga número (nivel 1)
+const PROB_NUMERO_NIVEL = 0.02;    // +esto por cada nivel...
+const PROB_NUMERO_MAX = 0.2;       // ...hasta este tope
+const NUMERO_MIN_N1 = 9, NUMERO_MAX_N1 = 14;   // rango de números en el nivel 1
+const NUMERO_BAJA_NIVEL = 3;       // cada nivel baja el rango en esto (nivel 2: 6–11)
+const NUMERO_PISO_MIN = 3, NUMERO_PISO_MAX = 4; // el rango nunca baja de aquí
+const COLORES_NIVEL1 = 5;          // colores en el nivel 1 (rojo, amarillo, verde, azul, morado)
+const NIVEL_TODOS_COLORES = 3;     // desde este nivel entra el sexto color (naranja)
 const PUNTOS_POR_PERFIL = 25;      // 1 punto al perfil por cada 25 del juego
 
-// Probabilidades de cada tipo (el resto son globos normales). Algunos aparecen más tarde.
-const PROB = { bomba: 0.09, dorado: 0.06, hielo: 0.035, corazon: 0.03 };
-const DESDE = { bomba: 0.06, dorado: 0.02, hielo: 0.1, corazon: 0.1 };   // fracción de RAMPA a partir de la cual salen
-
-const TIPOS = {
-  normal: { puntos: 10, penaliza: true },
-  dorado: { puntos: 50, penaliza: false, emoji: "⭐", c: ["#fff3a8", "#ffc800", "#b88400"] },
-  corazon: { puntos: 5, penaliza: false, emoji: "❤️", c: ["#ffc2d4", "#ff5d8a", "#b01848"] },
-  hielo: { puntos: 5, penaliza: false, emoji: "❄️", c: ["#e2f6ff", "#7fd0ff", "#2f86c0"] },
-  bomba: { puntos: 0, penaliza: false, emoji: "💣", c: ["#8a8a8a", "#2d2d2d", "#050505"] },
-};
-const COLORES = [                  // globos normales [luz, base, sombra]
+const COLORES = [                  // globos [luz, base, sombra]
   ["#ff9fb8", "#ff4f7b", "#b8184a"],
   ["#ffe98a", "#ffc20e", "#b88400"],
   ["#a5f0a0", "#3fcf5a", "#16883a"],
@@ -89,19 +97,18 @@ function ruido(dur, vol = 0.2, corte = 900, retraso = 0) {
 }
 const ESCALA = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.5, 1568];
 function sonido(tipo, n = 0) {
+  const nota = ESCALA[Math.min(n, ESCALA.length - 1)];
   switch (tipo) {
-    case "pop":   // sube de tono mientras más seguidos
-      ruido(0.07, 0.22, 4000);
-      tono(ESCALA[Math.min(n, ESCALA.length - 1)], 0.1, { tipo: "triangle", hasta: ESCALA[Math.min(n, ESCALA.length - 1)] * 1.5, vol: 0.12 }); break;
-    case "dorado": [784, 988, 1175, 1568].forEach((f, i) => tono(f, 0.15, { tipo: "square", vol: 0.07, retraso: i * 0.06 })); break;
-    case "vida": [523, 659, 784].forEach((f, i) => tono(f, 0.2, { tipo: "sine", vol: 0.15, retraso: i * 0.09 })); break;
-    case "hielo": tono(1500, 0.5, { tipo: "sine", hasta: 400, vol: 0.12 }); tono(2200, 0.4, { tipo: "triangle", hasta: 800, vol: 0.06, retraso: 0.05 }); break;
-    case "bomba": ruido(0.5, 0.45, 700); tono(110, 0.4, { tipo: "sawtooth", hasta: 40, vol: 0.18 }); break;
-    case "perdido": tono(300, 0.25, { tipo: "sawtooth", hasta: 110, vol: 0.12 }); break;
-    case "fallo": tono(200, 0.06, { tipo: "sine", hasta: 150, vol: 0.05 }); break;
+    case "seleccion": tono(nota, 0.08, { tipo: "sine", vol: 0.08 }); break;   // sube de tono con cada globo de la línea
+    case "pop":       // chapoteo de agua: sube de tono según el globo de la línea
+      ruido(0.12, 0.22, 3000);
+      tono(nota, 0.12, { tipo: "triangle", hasta: nota * 1.5, vol: 0.12 }); break;
+    case "fallo": tono(200, 0.1, { tipo: "sine", hasta: 150, vol: 0.06 }); break;
     case "lluvia": [392, 523, 659].forEach((f, i) => tono(f, 0.15, { tipo: "triangle", vol: 0.1, retraso: i * 0.07 })); break;
     case "fin": [440, 392, 349, 262].forEach((f, i) => tono(f, 0.35, { tipo: "triangle", vol: 0.15, retraso: i * 0.2 })); break;
     case "cambiar": tono(660, 0.06, { tipo: "square", vol: 0.06 }); break;
+    case "nivel": [523, 659, 784, 1046].forEach((f, i) => tono(f, 0.18, { tipo: "triangle", vol: 0.12, retraso: i * 0.09 })); break;
+    case "bomba": ruido(0.35, 0.35, 600); tono(120, 0.3, { tipo: "sawtooth", hasta: 50, vol: 0.14 }); break;
   }
 }
 
@@ -112,7 +119,7 @@ lienzo.width = ANCHO * 2; lienzo.height = ALTO * 2;   // el doble para que se ve
 ctx.scale(2, 2);
 
 const $ = (id) => document.getElementById(id);
-const elVidas = $("vidas"), elPuntos = $("puntos"), elRecord = $("record"), elSonido = $("sonido");
+const elVidas = $("vidas"), elPuntos = $("puntos"), elRecord = $("record"), elSonido = $("sonido");   // «vidas» ahora muestra qué tan llena está la cubeta
 function pintarBotonSonido() { elSonido.textContent = silencio ? "🔇" : "🔊"; elSonido.setAttribute("aria-label", silencio ? "Activar sonido" : "Silenciar"); }
 pintarBotonSonido();
 elSonido.addEventListener("click", () => {
@@ -121,105 +128,246 @@ elSonido.addEventListener("click", () => {
   pintarBotonSonido(); sonido("cambiar");
 });
 
+// ---------- Dibujo de los globos de agua (se pintan una vez por color y luego se reutilizan) ----------
+const SPR = 2 * R + 10;   // tamaño lógico de cada imagen
+const sprites = COLORES.map(([luz, base, sombra]) => {
+  const c = document.createElement("canvas");
+  c.width = c.height = SPR * 2;
+  const x = c.getContext("2d");
+  x.scale(2, 2);
+  const cx = SPR / 2, cy = SPR / 2, TAU = Math.PI * 2;
+  // cuerpo translúcido
+  const gr = x.createRadialGradient(cx - R * 0.35, cy - R * 0.4, R * 0.1, cx, cy, R * 1.05);
+  gr.addColorStop(0, luz); gr.addColorStop(0.55, base); gr.addColorStop(1, sombra);
+  x.globalAlpha = 0.95; x.fillStyle = gr;
+  x.beginPath(); x.arc(cx, cy, R, 0, TAU); x.fill();
+  x.globalAlpha = 1;
+  // el agua de adentro: reflejo claro abajo
+  x.fillStyle = "rgba(255,255,255,.18)";
+  x.beginPath(); x.ellipse(cx + R * 0.1, cy + R * 0.45, R * 0.6, R * 0.32, 0, 0, TAU); x.fill();
+  // borde de hule
+  x.strokeStyle = "rgba(255,255,255,.35)"; x.lineWidth = 1.5;
+  x.beginPath(); x.arc(cx, cy, R - 0.75, 0, TAU); x.stroke();
+  // brillos
+  x.fillStyle = "rgba(255,255,255,.75)";
+  x.beginPath(); x.ellipse(cx - R * 0.38, cy - R * 0.42, R * 0.2, R * 0.3, -0.5, 0, TAU); x.fill();
+  x.fillStyle = "rgba(255,255,255,.35)";
+  x.beginPath(); x.ellipse(cx + R * 0.45, cy + R * 0.5, R * 0.1, R * 0.06, -0.6, 0, TAU); x.fill();
+  return c;
+});
+
 // ---------- Estado ----------
 let estado = "inicio";   // "inicio" | "jugando" | "fin"
 let globos = [], chispas = [], anillos = [], textos = [], nubes = [];
-let puntos = 0, record = 0, vidas = VIDAS_INICIO, combo = 0, mejorCombo = 0, reventados = 0;
-let t = 0, proxGlobo = 0, pendientesLluvia = 0, siguienteLluvia = CADA_LLUVIA, hielo = 0, temblor = 0, destello = 0, aviso = 0, avisoTexto = "";
-try { record = Number(localStorage.getItem("globos_record")) || 0; } catch (e) {}
+let cadena = [], punteroId = null, ultimoP = null;
+let puntos = 0, record = 0, reventados = 0, mejorCadena = 0;
+let nivel = 1, monedas = 0, numerosActivos = false;   // numerosActivos: los globos con número empiezan a caer tras la primera jugada
+let t = 0, tic = 0, pendientes = 0, destello = 0, aviso = 0, avisoTexto = "", llenado = 0, peligro = 0;
+try { record = Number(localStorage.getItem("globos_record")) || 0; monedas = Number(localStorage.getItem("globos_monedas")) || 0; } catch (e) {}
 elRecord.textContent = record;
 
-const dificultad = () => Math.min(1, t / RAMPA);
+const umbral = (n) => (n < 1 ? 0 : n === 1 ? NIVEL1_TROFEOS : Math.round(NIVEL1_TROFEOS * Math.pow(n, POTENCIA_NIVEL) / 100) * 100);   // trofeos acumulados para terminar el nivel n
+const dificultad = () => Math.min(1, (nivel - 1) / 6);   // solo para el color del cielo
+const trofeosPor = (n) => n * (n + BASE_TROFEOS);
+const probNumero = () => Math.min(PROB_NUMERO_MAX, PROB_NUMERO + PROB_NUMERO_NIVEL * (nivel - 1));
+function rangoNumero() {
+  const baja = NUMERO_BAJA_NIVEL * (nivel - 1);
+  return [Math.max(NUMERO_PISO_MIN, NUMERO_MIN_N1 - baja), Math.max(NUMERO_PISO_MAX, NUMERO_MAX_N1 - baja)];
+}
 const lerp = (a, b, k) => a + (b - a) * k;
-const multiplicador = () => Math.min(MULT_MAX, 1 + Math.floor(combo / COMBO_PARA_SUBIR));
+const numColores = () => (nivel >= NIVEL_TODOS_COLORES ? COLORES.length : Math.min(COLORES.length, COLORES_NIVEL1));
 
-function pintarVidas() { elVidas.textContent = vidas > 0 ? "❤️".repeat(vidas) : "💔"; }
+function pintarCubeta() {
+  elVidas.textContent = Math.round(llenado * 100) + "%";
+}
+function pintarNivel() {
+  const base = umbral(nivel - 1), meta = umbral(nivel);
+  const k = Math.max(0, Math.min(1, (puntos - base) / (meta - base)));
+  $("nivelTxt").textContent = "Nivel " + nivel;
+  $("nivelRelleno").style.width = Math.round(k * 100) + "%";
+  $("monedas").textContent = "🪙 " + monedas;
+}
+function guardarMonedas() { try { localStorage.setItem("globos_monedas", String(monedas)); } catch (e) {} }
+function subirNivel() {
+  let subio = false;
+  while (puntos >= umbral(nivel)) { nivel++; subio = true; }
+  if (subio) { avisoTexto = "¡Nivel " + nivel + "!"; aviso = 90; sonido("nivel"); }
+}
 
 function iniciar() {
   ac();
-  globos = []; chispas = []; anillos = []; textos = [];
-  puntos = 0; vidas = VIDAS_INICIO; combo = 0; mejorCombo = 0; reventados = 0; enviadosPerfil = 0;
-  t = 0; proxGlobo = 30; pendientesLluvia = 0; siguienteLluvia = CADA_LLUVIA; hielo = 0; temblor = 0; destello = 0; aviso = 0;
-  elPuntos.textContent = 0; pintarVidas();
+  globos = []; chispas = []; anillos = []; textos = []; cadena = []; punteroId = null;
+  puntos = 0; reventados = 0; mejorCadena = 0; enviadosPerfil = 0;
+  nivel = 1; numerosActivos = false;
+  t = 0; pendientes = INICIAL; destello = 0; aviso = 0; llenado = 0; peligro = 0;
+  elPuntos.textContent = 0; pintarCubeta(); pintarNivel();
   estado = "jugando";
   $("inicio").classList.remove("activo");
   $("fin").classList.remove("activo");
 }
 
 // ---------- Globos ----------
-function elegirTipo() {
-  const d = dificultad();
-  let x = Math.random(), acum = 0;
-  for (const k of Object.keys(PROB)) {
-    if (d < DESDE[k]) continue;
-    if (k === "corazon" && vidas >= VIDAS_MAX) continue;
-    acum += PROB[k];
-    if (x < acum) return k;
-  }
-  return "normal";
-}
-
 function nuevoGlobo() {
-  const d = dificultad();
-  const rx = 26 + Math.random() * 10;
-  const margen = rx + 16;
-  const tipo = elegirTipo();
-  const x0 = margen + Math.random() * (ANCHO - 2 * margen);
-  globos.push({
-    x0, x: x0, rx, ry: rx * 1.22, y: -rx * 1.6,
-    vy: lerp(VEL_INICIO, VEL_FINAL, d) * (0.8 + Math.random() * 0.5) * (tipo === "dorado" ? 1.35 : 1),
-    fase: Math.random() * 6.28, amp: 6 + Math.random() * 16, freq: 0.02 + Math.random() * 0.02,
-    tipo, color: Math.floor(Math.random() * COLORES.length),
-  });
+  const x = R + Math.random() * (ANCHO - 2 * R);
+  const y = -R - Math.random() * 30;
+  const vx = (Math.random() - 0.5) * 1.2 / SUB;       // velocidad inicial (Verlet: posición anterior = posición - velocidad)
+  const vy = (1.5 + Math.random() * 2) / SUB;
+  const g = { x, y, px: x - vx, py: y - vy, c: Math.floor(Math.random() * numColores()), reposo: 0, toca: false };
+  if (numerosActivos && Math.random() < probNumero()) {
+    const [lo, hi] = rangoNumero();
+    g.num = lo + Math.floor(Math.random() * (hi - lo + 1));
+  }
+  globos.push(g);
 }
 
-function reventarGlobo(g) {
-  globos.splice(globos.indexOf(g), 1);
-  const info = TIPOS[g.tipo];
-  const pal = info.c || COLORES[g.color];
-  for (let i = 0; i < 12; i++) {
-    const a = Math.random() * Math.PI * 2, v = 2 + Math.random() * 4;
-    chispas.push({ x: g.x, y: g.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, vida: 1, col: pal[1] });
+// Física tipo Verlet: los globos se empujan unos a otros, se apoyan en el suelo y en las paredes.
+function fisica() {
+  const g = GRAVEDAD / (SUB * SUB);
+  const D = 2 * R, D2 = D * D;
+  for (let s = 0; s < SUB; s++) {
+    for (const b of globos) {
+      const vx = (b.x - b.px) * 0.999, vy = (b.y - b.py) * 0.999;
+      b.px = b.x; b.py = b.y;
+      b.x += vx; b.y += vy + g;
+      b.toca = false;
+    }
+    for (let k = 0; k < ITER; k++) {
+      for (let i = 0; i < globos.length; i++) {
+        const a = globos[i];
+        for (let j = i + 1; j < globos.length; j++) {
+          const b = globos[j];
+          let dx = b.x - a.x + (Math.random() - 0.5) * 0.04;   // micro-ruido: evita torres perfectas en las paredes
+          if (dx > D || dx < -D) continue;
+          let dy = b.y - a.y;
+          let d2 = dx * dx + dy * dy;
+          if (d2 >= D2) continue;
+          if (d2 < 1e-6) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = dx * dx + dy * dy; }
+          const d = Math.sqrt(d2);
+          const m = (D - d) / 2 / d;
+          a.x -= dx * m; a.y -= dy * m;
+          b.x += dx * m; b.y += dy * m;
+          a.toca = b.toca = true;
+        }
+      }
+      for (const b of globos) {
+        if (b.x < R) b.x = R;
+        else if (b.x > ANCHO - R) b.x = ANCHO - R;
+        if (b.y > SUELO - R) { b.y = SUELO - R; b.toca = true; b.suelo = true; }
+      }
+    }
+    for (const b of globos) {
+      if (b.suelo) { b.px = b.x - (b.x - b.px) * 0.6; b.suelo = false; }          // fricción con el suelo
+      if (b.toca) {
+        b.px = b.x - (b.x - b.px) * 0.97; b.py = b.y - (b.y - b.py) * 0.97;         // fricción entre globos
+      }
+    }
   }
-  anillos.push({ x: g.x, y: g.y, r: g.rx * 0.6, vida: 1, col: pal[0] });
-
-  if (g.tipo === "bomba") {
-    vidas--; combo = 0; temblor = 22; destello = 14;
-    pintarVidas(); sonido("bomba");
-    textos.push({ x: g.x, y: g.y, txt: "💥 -1", vida: 1 });
-    try { navigator.vibrate && navigator.vibrate(120); } catch (e) {}
-    if (vidas <= 0) perder();
-    return;
-  }
-
-  reventados++; combo++;
-  mejorCombo = Math.max(mejorCombo, combo);
-  const ganado = info.puntos * multiplicador();
-  puntos += ganado;
-  textos.push({ x: g.x, y: g.y, txt: "+" + ganado, vida: 1 });
-  if (g.tipo === "normal") sonido("pop", Math.min(combo - 1, 8));
-  if (g.tipo === "dorado") sonido("dorado");
-  if (g.tipo === "corazon") {
-    vidas = Math.min(VIDAS_MAX, vidas + 1); pintarVidas(); sonido("vida");
-    textos.push({ x: g.x, y: g.y - 26, txt: "❤️ +1", vida: 1 });
-  }
-  if (g.tipo === "hielo") {
-    hielo = SEGUNDOS_HIELO * 60; sonido("hielo");
-    avisoTexto = "¡Congelados!"; aviso = 70;
-  }
-  if (combo > 0 && combo % COMBO_PARA_SUBIR === 0 && multiplicador() > 1) {
-    avisoTexto = "¡Combo x" + multiplicador() + "!"; aviso = 70;
-  }
-  try { navigator.vibrate && navigator.vibrate(12); } catch (e) {}
-  actualizarMarcador();
 }
 
-function globoPerdido(g) {
-  globos.splice(globos.indexOf(g), 1);
-  if (!TIPOS[g.tipo].penaliza) return;
-  vidas--; combo = 0; destello = 10;
-  pintarVidas(); sonido("perdido");
-  if (vidas <= 0) perder();
+// ¿Qué globo está bajo el dedo? (el más cercano al punto)
+function globoEn(p) {
+  let mejor = null, md = (R + 2) * (R + 2);
+  for (const g of globos) {
+    if (g.y < 0) continue;
+    const dx = p.x - g.x, dy = p.y - g.y, d = dx * dx + dy * dy;
+    if (d <= md) { md = d; mejor = g; }
+  }
+  return mejor;
+}
+
+// Intenta añadir a la línea el globo que hay en el punto p (o quitar el último si regresas sobre el anterior)
+function probar(p) {
+  const ult = cadena[cadena.length - 1];
+  const g = globoEn(p);
+  if (!g || g === ult || g.art) return;
+  if (cadena.length > 1 && g === cadena[cadena.length - 2]) {
+    cadena.pop(); sonido("seleccion", cadena.length - 1); return;
+  }
+  if (g.c !== ult.c || cadena.includes(g)) return;
+  if (Math.hypot(g.x - ult.x, g.y - ult.y) > 2 * R + TOLERANCIA) return;   // tienen que estar pegados
+  cadena.push(g); sonido("seleccion", cadena.length - 1);
+}
+
+function arrastrar(p) {
+  const dx = p.x - ultimoP.x, dy = p.y - ultimoP.y;
+  const pasos = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 8));   // se revisa el camino completo para no saltarse globos
+  for (let i = 1; i <= pasos; i++) probar({ x: ultimoP.x + dx * i / pasos, y: ultimoP.y + dy * i / pasos });
+  ultimoP = p;
+}
+
+// ---------- Jugadas y artefactos ----------
+const ICONO_ARTE = { bomba: "💣", color: "🎨", todo: "💥" };
+const NOMBRE_ARTE = { bomba: "¡Bomba!", color: "¡Elimina un color!", todo: "¡Elimina todo!" };
+function paleta(g) {
+  if (g.art === "bomba") return ["#aab2c8", "#3a4258", "#1b2030"];
+  if (g.art === "todo") return ["#fff3b0", "#ffd54a", "#b88400"];
+  return COLORES[g.c];
+}
+// Quita globos del juego con su salpicadura
+function quitar(lista) {
+  for (const g of lista) {
+    const pal = paleta(g);
+    for (let i = 0; i < 14; i++) {
+      const a = Math.random() * Math.PI * 2, v = 2 + Math.random() * 5;
+      chispas.push({ x: g.x, y: g.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 1.5, vida: 1, col: Math.random() < 0.5 ? pal[1] : pal[0], r: 2.5 + Math.random() * 3.5 });
+    }
+    anillos.push({ x: g.x, y: g.y, r: R * 0.6, vida: 1, col: pal[0] });
+  }
+  const fuera = new Set(lista);
+  globos = globos.filter((g) => !fuera.has(g));
+}
+// Cierra una jugada: n globos reventados (ya quitados). «contar» = cuántos cuentan para los trofeos.
+function jugada(n, x, y, contar = n) {
+  const ganado = trofeosPor(contar);
+  puntos += ganado; reventados += n;
+  if (ganado > 0) textos.push({ x, y, txt: "+" + ganado, vida: 1 });
+  let cero = false;
+  for (const g of globos) if (g.num != null && --g.num <= 0) cero = true;   // los globos con número que siguen en juego bajan 1
+  numerosActivos = true;
+  pendientes += n;                                                          // caen tantos globos nuevos como reventaste
+  for (let i = 0; i < Math.min(n, 8); i++) setTimeout(() => sonido("pop", i), i * 45);
+  try { navigator.vibrate && navigator.vibrate(15); } catch (e) {}
+  subirNivel(); actualizarMarcador(); pintarNivel();
+  if (cero) perder("numero");
+}
+
+function crearArtefacto(tipo, x, y) {
+  let c = -1;
+  if (tipo === "color") {   // el eliminador lleva el color de un globo que haya en el tablero
+    const hay = [...new Set(globos.filter((g) => !g.art && g.y > 0).map((g) => g.c))];
+    c = hay.length ? hay[Math.floor(Math.random() * hay.length)] : Math.floor(Math.random() * numColores());
+  }
+  globos.push({ x, y, px: x, py: y, c, art: tipo, reposo: 0, toca: false });
+  textos.push({ x, y: y - 34, txt: NOMBRE_ARTE[tipo], vida: 1 });
+}
+
+function activarArtefacto(a) {
+  const vivos = globos.filter((g) => !g.art && g.y > 0);
+  let lista;
+  if (a.art === "bomba") {
+    lista = vivos.sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y)).slice(0, GLOBOS_BOMBA);
+    monedas++; guardarMonedas();
+    textos.push({ x: a.x, y: a.y - 34, txt: "+1 🪙", vida: 1 });
+  } else if (a.art === "color") {
+    lista = vivos.filter((g) => g.c === a.c);
+  } else {
+    lista = vivos;
+  }
+  anillos.push({ x: a.x, y: a.y, r: R, vida: 1.4, col: "#ffd54a" });
+  quitar([a, ...lista]);
+  sonido(a.art === "color" ? "lluvia" : "bomba");
+  jugada(lista.length, a.x, a.y, a.art === "todo" ? Math.min(lista.length, MAX_GLOBOS_TODO) : lista.length);
+}
+
+function reventarCadena() {
+  const lista = cadena, n = lista.length, ultimo = lista[n - 1];
+  cadena = [];
+  quitar(lista);
+  mejorCadena = Math.max(mejorCadena, n);
+  if (n >= 6) { avisoTexto = "¡Línea de " + n + "!"; aviso = 60; }
+  jugada(n, ultimo.x, ultimo.y);
+  const tipo = n >= GLOBOS_TODO ? "todo" : n >= GLOBOS_COLOR ? "color" : n >= GLOBOS_BOMBA ? "bomba" : null;
+  if (tipo && estado === "jugando") crearArtefacto(tipo, ultimo.x, ultimo.y);
 }
 
 function actualizarMarcador() {
@@ -230,13 +378,13 @@ function actualizarMarcador() {
   }
 }
 
-function perder() {
+function perder(motivo) {
   if (estado === "fin") return;
-  estado = "fin";
+  estado = "fin"; cadena = []; punteroId = null;
   actualizarMarcador();
   sonido("fin");
   enviarPerfil();
-  $("finTexto").textContent = "Reventaste " + reventados + " globos con " + puntos + " puntos. Mejor racha: " + mejorCombo + (puntos >= record && puntos > 0 ? ". ¡Nuevo récord!" : ".");
+  $("finTexto").textContent = (motivo === "numero" ? "Un globo con número llegó a 0." : "La cubeta se desbordó.") + " Llegaste al nivel " + nivel + " con " + puntos + " trofeos y reventaste " + reventados + " globos. Mejor línea: " + mejorCadena + (puntos >= record && puntos > 0 ? ". ¡Nuevo récord!" : ".");
   $("fin").classList.add("activo");
 }
 
@@ -247,16 +395,32 @@ function posicion(e) {
 }
 lienzo.addEventListener("pointerdown", (e) => {
   ac();
-  if (estado !== "jugando") return;
+  if (estado !== "jugando" || punteroId !== null) return;
   const p = posicion(e);
-  // el globo de más arriba en pantalla (el último dibujado) tiene prioridad; se da un margen para dedos gruesos
-  for (let i = globos.length - 1; i >= 0; i--) {
-    const g = globos[i];
-    const dx = (p.x - g.x) / (g.rx + 10), dy = (p.y - g.y) / (g.ry + 10);
-    if (dx * dx + dy * dy <= 1) { reventarGlobo(g); return; }
-  }
-  if (combo > 0) { combo = 0; sonido("fallo"); }   // tocar en vacío rompe la racha
+  const g = globoEn(p);
+  if (!g) return;
+  if (g.art) { activarArtefacto(g); return; }   // los artefactos se usan con un toque
+  punteroId = e.pointerId;
+  try { lienzo.setPointerCapture(e.pointerId); } catch (err) {}
+  cadena = [g]; ultimoP = p; sonido("seleccion", 0);
 });
+lienzo.addEventListener("pointermove", (e) => {
+  if (e.pointerId !== punteroId || estado !== "jugando" || !cadena.length) return;
+  arrastrar(posicion(e));
+});
+function soltar(e) {
+  if (e.pointerId !== punteroId) return;
+  punteroId = null;
+  if (estado !== "jugando") { cadena = []; return; }
+  if (cadena.length >= MIN_CADENA) reventarCadena();
+  else if (cadena.length > 0) {
+    const u = cadena[cadena.length - 1];
+    if (cadena.length > 1) textos.push({ x: u.x, y: u.y, txt: "Junta " + MIN_CADENA + " o más", vida: 1 });
+    cadena = []; sonido("fallo");
+  }
+}
+lienzo.addEventListener("pointerup", soltar);
+lienzo.addEventListener("pointercancel", (e) => { if (e.pointerId === punteroId) { punteroId = null; cadena = []; } });
 document.addEventListener("visibilitychange", () => { if (document.hidden && estado === "jugando") enviarPerfil(); });
 $("jugar").addEventListener("click", iniciar);
 $("otra").addEventListener("click", iniciar);
@@ -266,80 +430,72 @@ for (let i = 0; i < 5; i++) nubes.push({ x: Math.random() * ANCHO, y: 40 + Math.
 
 function paso() {
   for (const n of nubes) { n.x += n.v; if (n.x > ANCHO + 80) n.x = -80; }
-  for (const s of chispas) { s.x += s.vx; s.y += s.vy; s.vy += 0.18; s.vida -= 0.04; }
+  for (const s of chispas) { s.x += s.vx; s.y += s.vy; s.vy += 0.22; s.vida -= 0.035; }
   chispas = chispas.filter((s) => s.vida > 0);
   for (const a of anillos) { a.r += 3; a.vida -= 0.08; }
   anillos = anillos.filter((a) => a.vida > 0);
   for (const x of textos) { x.y -= 1.1; x.vida -= 0.022; }
   textos = textos.filter((x) => x.vida > 0);
-  if (temblor > 0) temblor--;
   if (destello > 0) destello--;
   if (aviso > 0) aviso--;
   tic++;
 
   if (estado !== "jugando") return;
   t++;
-  const congelado = hielo > 0;
-  if (congelado) hielo--;
-
-  // aparición
-  if (!congelado) {
-    if (pendientesLluvia > 0) {
-      if (t % 9 === 0) { nuevoGlobo(); pendientesLluvia--; }
-    } else if (--proxGlobo <= 0) {
-      nuevoGlobo();
-      proxGlobo = lerp(INTERVALO_INICIO, INTERVALO_FINAL, dificultad()) * (0.7 + Math.random() * 0.6);
-    }
-    if (t >= siguienteLluvia) {
-      pendientesLluvia = GLOBOS_LLUVIA; siguienteLluvia += CADA_LLUVIA;
-      avisoTexto = "¡Lluvia de globos!"; aviso = 80; sonido("lluvia");
-    }
+  // los globos reventados se reponen en «jugada»; si quedan muy pocos, cae un puñado más
+  const total = globos.length + pendientes;
+  if (total < MINIMO_EN_JUEGO) pendientes += MINIMO_EN_JUEGO - total;
+  if (pendientes > 0 && t % 2 === 0) {
+    const cuantos = Math.min(pendientes, pendientes > 30 ? 2 : 1);
+    for (let i = 0; i < cuantos; i++) nuevoGlobo();
+    pendientes -= cuantos;
   }
 
-  const freno = congelado ? 0.08 : 1;
-  for (const g of [...globos]) {
-    g.y += g.vy * freno;
-    g.x = Math.max(g.rx + 4, Math.min(ANCHO - g.rx - 4, g.x0 + Math.sin(tic * g.freq + g.fase) * g.amp));
-    if (g.y - g.ry > SUELO) globoPerdido(g);
-    if (estado !== "jugando") return;
+  fisica();
+
+  // cubeta llena: se mide el globo más alto que ya está asentado
+  let tope = SUELO, maxReposo = 0;
+  for (const g of globos) {
+    const quieto = Math.abs(g.x - g.px) + Math.abs(g.y - g.py) < 0.3;
+    if (quieto && g.y > 0) tope = Math.min(tope, g.y - R);
+    if (g.y - R < LINEA && quieto) g.reposo++; else g.reposo = 0;
+    if (g.reposo > maxReposo) maxReposo = g.reposo;
   }
+  llenado = Math.max(0, Math.min(1, (SUELO - tope) / (SUELO - LINEA)));
+  peligro = maxReposo;
+  if (t % 6 === 0) pintarCubeta();
+  if (maxReposo > SEG_DESBORDE * 60) perder();
 }
-let tic = 0;
 
 // ---------- Dibujo ----------
-function dibujarGlobo(g) {
-  const info = TIPOS[g.tipo];
-  const [luz, base, sombra] = info.c || COLORES[g.color];
-  // cuerda
-  ctx.strokeStyle = "rgba(255,255,255,.7)"; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(g.x, g.y + g.ry + 5);
-  ctx.quadraticCurveTo(g.x + Math.sin(tic * 0.08 + g.fase) * 9, g.y + g.ry + 26, g.x, g.y + g.ry + 48);
-  ctx.stroke();
-  // nudo
-  ctx.fillStyle = sombra;
-  ctx.beginPath(); ctx.moveTo(g.x, g.y + g.ry - 2); ctx.lineTo(g.x - 6, g.y + g.ry + 8); ctx.lineTo(g.x + 6, g.y + g.ry + 8); ctx.closePath(); ctx.fill();
-  // cuerpo
-  const gr = ctx.createRadialGradient(g.x - g.rx * 0.35, g.y - g.ry * 0.4, g.rx * 0.1, g.x, g.y, g.ry * 1.05);
-  gr.addColorStop(0, luz); gr.addColorStop(0.55, base); gr.addColorStop(1, sombra);
-  ctx.fillStyle = gr;
-  ctx.beginPath(); ctx.ellipse(g.x, g.y, g.rx, g.ry, 0, 0, Math.PI * 2); ctx.fill();
-  if (info.emoji) {
-    ctx.font = Math.round(g.rx * 1.05) + "px system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif";
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(info.emoji, g.x, g.y + 1);
-    if (g.tipo === "bomba") {   // aviso extra: aro rojo intermitente
-      ctx.strokeStyle = Math.floor(tic / 8) % 2 ? "#ff3b3b" : "#fff"; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.ellipse(g.x, g.y, g.rx, g.ry, 0, 0, Math.PI * 2); ctx.stroke();
-    }
-  } else {
-    ctx.fillStyle = "rgba(255,255,255,.7)";
-    ctx.beginPath(); ctx.ellipse(g.x - g.rx * 0.38, g.y - g.ry * 0.45, g.rx * 0.2, g.ry * 0.3, -0.5, 0, Math.PI * 2); ctx.fill();
+function dibujarGlobo(g, elegido) {
+  if (g.art) {
+    const r = R * (1 + Math.sin(tic / 8) * 0.06);   // los artefactos laten para distinguirse
+    const pal = paleta(g);
+    ctx.fillStyle = pal[1];
+    ctx.beginPath(); ctx.arc(g.x, g.y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 3.5; ctx.stroke();
+    ctx.font = "24px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "#fff"; ctx.fillText(ICONO_ARTE[g.art], g.x, g.y + 1);
+    return;
+  }
+  const e = Math.min(0.12, Math.abs(g.y - g.py) * SUB * 0.015);   // al caer rápido se estira un poco (agua)
+  const w = SPR * (1 - e), h = SPR * (1 + e);
+  ctx.drawImage(sprites[g.c], g.x - w / 2, g.y - h / 2, w, h);
+  if (g.num != null) {   // cuenta regresiva: parpadea en rojo cuando quedan 3 o menos
+    ctx.font = "800 21px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.lineJoin = "round"; ctx.lineWidth = 4.5; ctx.strokeStyle = "rgba(20,40,80,.85)";
+    ctx.fillStyle = g.num <= 3 && Math.floor(tic / 6) % 2 === 0 ? "#ff6a6a" : "#fff";
+    ctx.strokeText(g.num, g.x, g.y + 1); ctx.fillText(g.num, g.x, g.y + 1);
+  }
+  if (elegido) {
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(g.x, g.y, R + 1, 0, Math.PI * 2); ctx.stroke();
   }
 }
 
 function dibujar() {
   ctx.save();
-  if (temblor > 0) ctx.translate((Math.random() - 0.5) * temblor * 0.6, (Math.random() - 0.5) * temblor * 0.6);
 
   // cielo: de día a atardecer según la dificultad
   const d = dificultad();
@@ -362,7 +518,31 @@ function dibujar() {
   ctx.fillStyle = "#3f9a4a"; ctx.fillRect(-20, SUELO, ANCHO + 40, ALTO - SUELO + 20);
   ctx.fillStyle = "#2e7a39"; ctx.fillRect(-20, SUELO, ANCHO + 40, 6);
 
-  for (const g of globos) dibujarGlobo(g);
+  // línea roja de desborde (parpadea si hay globos quietos arriba de ella)
+  const alerta = peligro > 20 && Math.floor(tic / 6) % 2 === 0;
+  ctx.setLineDash([10, 8]); ctx.lineWidth = 3;
+  ctx.strokeStyle = alerta ? "#ffffff" : "rgba(255,70,70,.8)";
+  ctx.beginPath(); ctx.moveTo(0, LINEA); ctx.lineTo(ANCHO, LINEA); ctx.stroke();
+  ctx.setLineDash([]);
+
+  const elegidos = new Set(cadena);
+  for (const g of globos) dibujarGlobo(g, elegidos.has(g));
+
+  // línea que va trazando el dedo por los globos
+  if (cadena.length > 1) {
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
+    ctx.strokeStyle = "rgba(20,40,80,.55)"; ctx.lineWidth = 11;
+    ctx.beginPath(); cadena.forEach((g, i) => (i ? ctx.lineTo(g.x, g.y) : ctx.moveTo(g.x, g.y))); ctx.stroke();
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 6;
+    ctx.beginPath(); cadena.forEach((g, i) => (i ? ctx.lineTo(g.x, g.y) : ctx.moveTo(g.x, g.y))); ctx.stroke();
+  }
+  if (cadena.length > 0) {   // contador sobre el último globo de la línea
+    const u = cadena[cadena.length - 1];
+    ctx.font = "800 22px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+    ctx.lineJoin = "round"; ctx.lineWidth = 5; ctx.strokeStyle = "rgba(20,40,80,.75)";
+    ctx.fillStyle = cadena.length >= MIN_CADENA ? "#ffe27a" : "#fff";
+    ctx.strokeText(cadena.length, u.x, u.y - R - 6); ctx.fillText(cadena.length, u.x, u.y - R - 6);
+  }
 
   for (const a of anillos) {
     ctx.globalAlpha = Math.max(0, a.vida); ctx.strokeStyle = a.col; ctx.lineWidth = 4;
@@ -370,7 +550,7 @@ function dibujar() {
   }
   for (const s of chispas) {
     ctx.globalAlpha = Math.max(0, s.vida); ctx.fillStyle = s.col;
-    ctx.beginPath(); ctx.arc(s.x, s.y, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
   }
   ctx.globalAlpha = 1;
 
@@ -382,16 +562,6 @@ function dibujar() {
   }
   ctx.globalAlpha = 1;
 
-  // congelado: velo azul claro
-  if (hielo > 0) { ctx.fillStyle = "rgba(160,220,255," + Math.min(0.28, hielo / 60) + ")"; ctx.fillRect(0, 0, ANCHO, ALTO); }
-
-  // multiplicador
-  if (estado === "jugando" && multiplicador() > 1) {
-    ctx.font = "800 20px system-ui, sans-serif"; ctx.textAlign = "right";
-    ctx.strokeText("x" + multiplicador() + " · racha " + combo, ANCHO - 12, 28);
-    ctx.fillText("x" + multiplicador() + " · racha " + combo, ANCHO - 12, 28);
-  }
-
   if (aviso > 0) {
     ctx.globalAlpha = Math.min(1, aviso / 25);
     ctx.font = "800 32px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.lineWidth = 7;
@@ -399,8 +569,6 @@ function dibujar() {
     ctx.globalAlpha = 1;
   }
 
-  // destello rojo al perder una vida
-  if (destello > 0) { ctx.fillStyle = "rgba(255,40,40," + destello * 0.02 + ")"; ctx.fillRect(0, 0, ANCHO, ALTO); }
   ctx.restore();
 }
 

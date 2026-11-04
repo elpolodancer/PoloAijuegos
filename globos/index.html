@@ -22,14 +22,18 @@
     .velo button { font: inherit; font-weight: 700; font-size: 18px; padding: 12px 32px; border: 0; border-radius: 999px; color: #5a1230; background: linear-gradient(#ffe27a, #ffb347); box-shadow: 0 4px 0 #b86b00; cursor: pointer; }
     .velo button:active { transform: translateY(3px); box-shadow: 0 1px 0 #b86b00; }
     .sonido { font-size: 20px; background: #ffffff22; border: 0; border-radius: 50%; width: 38px; height: 38px; color: #fff; cursor: pointer; }
+    .nivel { width: 100%; max-width: 480px; display: flex; align-items: center; gap: 10px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); font-weight: 700; font-size: 14px; }
+    .nivelbarra { flex: 1; height: 14px; overflow: hidden; background: #ffffff26; border: 1px solid #ffffff40; border-radius: 999px; }
+    .nivelbarra i { display: block; width: 0; height: 100%; background: linear-gradient(#ffe27a, #ffb347); border-radius: 999px; transition: width .35s ease; }
+    @media (prefers-reduced-motion: reduce) { .nivelbarra i { transition: none; } }
     button:focus-visible, a:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
   </style>
 </head>
 <body>
   <div class="hud">
     <a href="../index.html">← Juegos</a>
-    <div class="dato">Vidas<b id="vidas">❤️❤️❤️</b></div>
-    <div class="dato">Puntos<b id="puntos">0</b></div>
+    <div class="dato">Cubeta<b id="vidas">0%</b></div>
+    <div class="dato">Trofeos<b id="puntos">0</b></div>
     <div class="dato">Récord<b id="record">0</b></div>
     <button id="sonido" class="sonido" aria-label="Silenciar">🔊</button>
   </div>
@@ -37,8 +41,8 @@
     <canvas id="lienzo"></canvas>
     <div id="inicio" class="velo activo">
       <h2>🎈 Lluvia de globos</h2>
-      <p>Toca los globos para reventarlos antes de que lleguen al suelo. Si revientas varios seguidos sin fallar, ganas más puntos.</p>
-      <p>⭐ vale mucho · ❤️ te da una vida · ❄️ frena la lluvia · 💣 ¡no lo toques!</p>
+      <p>Desliza el dedo por 3 o más globos del mismo color que se estén tocando para reventarlos: mientras más larga la línea, más trofeos. Con 6 sale una bomba, con 7 un eliminador de color y con 10 uno que elimina todo. Tócalos para usarlos.</p>
+      <p>Los globos con número bajan 1 en cada jugada. Si alguno llega a 0, pierdes.</p>
       <button id="jugar">Jugar</button>
     </div>
     <div id="fin" class="velo">
@@ -46,6 +50,11 @@
       <p id="finTexto"></p>
       <button id="otra">Jugar otra vez</button>
     </div>
+  </div>
+  <div class="nivel">
+    <span id="nivelTxt">Nivel 1</span>
+    <div class="nivelbarra"><i id="nivelRelleno"></i></div>
+    <span id="monedas">🪙 0</span>
   </div>
   <script type="module" src="juego.js"></script>
 </body>
