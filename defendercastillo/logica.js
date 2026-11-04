@@ -234,6 +234,29 @@ export function meteoro(p, x, y) {
   return true;
 }
 
+// ----- A quién apunta cada torre -----
+// PEGAJOSO = false: en cada momento apunta al mejor enemigo según su «prioridad» (así se calibraron los mapas).
+// PEGAJOSO = true:  se queda con el mismo enemigo hasta que muera o salga de su alcance, y solo entonces elige otro.
+// Para que un tipo de torre use otra regla, agrega «prioridad: "fuerte"» (o "cercano") en su definición de TORRES.
+export const PEGAJOSO = false;
+const PRIORIDAD = {
+  primero: (e) => e.d,                                       // el que va más adelante en el camino (por defecto)
+  fuerte: (e) => e.hp,                                       // el que más vida tiene
+  cercano: (e, t) => -Math.hypot(e.x - t.x, e.y - t.y),      // el más cercano a la torre
+};
+function elegirObjetivo(p, t, r) {
+  const enAlcance = (e) => e.vivo && Math.hypot(e.x - t.x, e.y - t.y) <= r;
+  if (PEGAJOSO && t.obj && enAlcance(t.obj)) return t.obj;
+  const puntaje = PRIORIDAD[TORRES[t.tipo].prioridad || "primero"];
+  let mejor = null, mp = -Infinity;
+  for (const e of p.enemigos) {
+    if (!enAlcance(e)) continue;
+    const s = puntaje(e, t);
+    if (s > mp) { mp = s; mejor = e; }
+  }
+  return mejor;
+}
+
 // Avanza el juego dt segundos (juego.js lo llama con pasos fijos de 1/60)
 export function paso(p, dt) {
   if (p.estado === "ganado" || p.estado === "perdido") return;
@@ -269,13 +292,14 @@ export function paso(p, dt) {
   // torres disparan al enemigo que va más adelante dentro de su alcance
   for (const t of p.torres) {
     t.cd -= dt;
-    if (t.cd > 0) continue;
     const dt_ = datosTorre(t), r = dt_.alcance * CELDA;
-    let mejor = null;
-    for (const e of p.enemigos) if (e.vivo && Math.hypot(e.x - t.x, e.y - t.y) <= r && (!mejor || e.d > mejor.d)) mejor = e;
+    // la torre apunta (y juego.js dibuja la flecha) todo el tiempo, también mientras recarga
+    const mejor = elegirObjetivo(p, t, r);
+    t.obj = mejor;
+    if (mejor) t.ang = Math.atan2(mejor.y - t.y, mejor.x - t.x);
+    if (t.cd > 0) continue;
     if (!mejor) { t.cd = 0; continue; }
     t.cd = dt_.cadencia;
-    t.ang = Math.atan2(mejor.y - t.y, mejor.x - t.x);
     if (dt_.cadena !== undefined) {
       // rayo instantáneo: pega al primero y salta al más cercano que no haya sido golpeado
       const golpeados = [mejor], pts = [{ x: t.x, y: t.y }, { x: mejor.x, y: mejor.y }];

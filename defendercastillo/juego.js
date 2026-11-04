@@ -354,6 +354,16 @@ function dibujar() {
     ctx.fillStyle = "#ffd34d";
     for (let i = 0; i <= t.nivel; i++) { ctx.beginPath(); ctx.arc(t.x - t.nivel * 4 + i * 8, t.y + 20, 2.5, 0, Math.PI * 2); ctx.fill(); }
     if (modoQuitar) etiqueta("+" + Math.floor(t.invertido * REEMBOLSO), t.x, t.y - 22, "#9dff9d");
+    // flecha direccional: rodea la torre y apunta al enemigo que tiene fijado (lo sigue mientras se mueve)
+    if (t.obj && t.obj.vivo && t.ang !== undefined) {
+      const ux = Math.cos(t.ang), uy = Math.sin(t.ang), rx = t.x + ux * 25, ry = t.y + uy * 25;
+      ctx.fillStyle = "#fff"; ctx.strokeStyle = "rgba(0,0,0,.75)"; ctx.lineWidth = 2; ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(rx + ux * 7, ry + uy * 7);
+      ctx.lineTo(rx - ux * 4 - uy * 5, ry - uy * 4 + ux * 5);
+      ctx.lineTo(rx - ux * 4 + uy * 5, ry - uy * 4 - ux * 5);
+      ctx.closePath(); ctx.stroke(); ctx.fill();
+    }
   }
 
   // enemigos (los de más abajo se dibujan encima)
