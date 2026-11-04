@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- Ruta: isla/index.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Isla</title>
+  <meta name="theme-color" content="#123564" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    html, body { height: 100%; overflow: hidden; background: #123564; overscroll-behavior: none; }
+    #mundo { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+    .pildora { background: rgba(15,18,32,.72); border: 1px solid var(--borde); border-radius: 999px; padding: 5px 12px; font-weight: 700; backdrop-filter: blur(4px); }
+    #arriba { position: fixed; top: calc(8px + env(safe-area-inset-top, 0px)); left: 8px; right: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; pointer-events: none; }
+    #arriba > * { pointer-events: auto; }
+    #arriba .sep { flex: 1; pointer-events: none; }
+    #arriba button { color: #fff; font: inherit; cursor: pointer; }
+    #aviso { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 10px; background: rgba(15,18,32,.85); opacity: 0; transition: opacity .3s; pointer-events: none; text-align: center; max-width: 90vw; }
+    #barra { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); }
+    .it { display: flex; flex-direction: column; align-items: center; min-width: 56px; padding: 5px 6px; color: #fff; font: inherit; cursor: pointer; background: rgba(15,18,32,.78); border: 2px solid var(--borde); border-radius: 12px; }
+    .it span { font-size: 1.4rem; line-height: 1.1; } .it small { font-size: .68rem; color: var(--suave); }
+    .it.sel { border-color: #ffd24a; background: rgba(60,50,10,.85); } .it.no { opacity: .45; }
+    #fab { position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; width: min(92vw, 340px); padding: 12px; border-radius: 14px; background: rgba(15,18,32,.92); border: 1px solid var(--borde); }
+    #fab h3 { margin: 0 0 8px; font-size: 1rem; } #fab .btn { display: block; width: 100%; margin: 6px 0; text-align: left; } #fab .btn:disabled { opacity: .45; }
+  </style>
+</head>
+<body>
+  <canvas id="mundo"></canvas>
+  <div id="arriba">
+    <a class="volver pildora" href="../">← Juegos</a>
+    <span class="pildora" id="rec"></span>
+    <span class="sep"></span>
+    <button class="pildora" id="mas" aria-label="Acercar">＋</button>
+    <button class="pildora" id="menos" aria-label="Alejar">－</button>
+    <button class="pildora" id="nueva" aria-label="Nueva isla" title="Nueva isla">🔄</button>
+  </div>
+  <div id="aviso"></div>
+  <div id="fab" hidden></div>
+  <div id="barra"></div>
+  <script type="module" src="juego.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>

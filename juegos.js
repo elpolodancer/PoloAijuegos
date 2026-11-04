@@ -35,4 +35,6 @@ export const JUEGOS = [
   { id: "hoyo", nombre: "Hoyo", icono: "🕳️", descripcion: "Mueve tu hoyo por la ciudad o por una playa con islas y traga todo lo que quepa: crece, devora a los hoyos más chicos y termina en primer lugar (estilo Hole.io, en vista isométrica).", carpeta: "hoyo" },
   { id: "pelota", nombre: "Pelota", icono: "🔴", descripcion: "Rueda, brinca, empuja cajas y aplasta monstruos para llegar a la bandera: 5 niveles.", carpeta: "pelota" },
   { id: "rana", nombre: "Rana", icono: "🐸", descripcion: "Cruza carreteras y ríos saltando entre coches, camiones y troncos: 50 niveles cada vez más difíciles.", carpeta: "rana" },
+  { id: "deslizante", nombre: "Puzle deslizante", icono: "🔢", descripcion: "Desliza las fichas numeradas hasta ponerlas en orden: empieza en 3×3 y sube hasta 8×8, con movimientos, tiempo y tu mejor marca por tamaño.", carpeta: "deslizante" },
+  { id: "isla", nombre: "Isla", icono: "🏝️", descripcion: "Isla en vista isométrica: tala árboles, mina rocas, fabrica hacha y pico y construye pisos y paredes. Tu isla se guarda sola.", carpeta: "isla" },
 ];
