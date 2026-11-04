@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
   <title>Piano</title>
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>#canciones:not([hidden]) { display: flex; flex-direction: column; gap: 8px; }</style>
 </head>
 <body>
   <header class="barra">
@@ -14,8 +15,14 @@
   </header>
   <main>
     <canvas id="lienzo" class="lienzo" width="320" height="520"></canvas>
-    <p id="estado">Toca las teclas negras de abajo hacia arriba. Si fallas una, pierdes.</p>
-    <button id="jugar" class="btn" type="button">Jugar</button>
+    <p id="estado"></p>
+    <div id="menu">
+      <button id="modoAzar" class="btn" type="button">🎲 Modo aleatorio</button>
+      <button id="modoLista" class="btn" type="button">🎼 Elegir canción</button>
+    </div>
+    <div id="canciones" hidden></div>
+    <button id="jugar" class="btn" type="button" hidden>Jugar otra vez</button>
+    <button id="alMenu" class="btn" type="button" hidden>‹ Menú</button>
     <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
   </main>
   <script type="module" src="juego.js"></script>

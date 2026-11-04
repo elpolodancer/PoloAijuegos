@@ -1,5 +1,4 @@
 // Ruta: piano/juego.js (lógica del juego «piano»: tocar las teclas negras que bajan, estilo Piano Tiles)
-import { alCambiarSesion, entrar, sumarPuntos } from "../compartido/jugador.js";
 
 const ID = "piano"; // el mismo id de juegos.js (colección de puntos en Firestore)
 const $ = (id) => document.getElementById(id);
@@ -85,8 +84,13 @@ function registrar() {
 }
 function sincronizarNube() {} // gancho: aquí se respaldará el progreso en Firestore cuando haya sesión
 
-alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; });
-btnEntrar.addEventListener("click", () => entrar().catch((e) => { estado.textContent = e.message; }));
+// La sesión y los puntos (Firebase) se cargan aparte: si no hay conexión o Firebase falla, el juego igual funciona (solo sin puntos en el perfil)
+let entrarGoogle = null, guardarPuntos = null;
+import("../compartido/jugador.js").then((m) => {
+  entrarGoogle = m.entrar; guardarPuntos = m.sumarPuntos;
+  m.alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; });
+}).catch((e) => { console.warn("Piano: sesión no disponible", e); });
+btnEntrar.addEventListener("click", () => { if (entrarGoogle) entrarGoogle().catch((e) => { estado.textContent = e.message; }); });
 
 function nota() {
   try {
@@ -188,8 +192,8 @@ async function fin(motivo) {
   jugar.textContent = "Jugar otra vez"; // repite el mismo modo (aleatorio o la misma canción)
   registrar();
   estado.textContent = motivo + " Hiciste " + puntos + " puntos" + (vueltas ? " (" + vueltas + " vuelta" + (vueltas > 1 ? "s" : "") + " completa" + (vueltas > 1 ? "s" : "") + " 🔁)" : "") + ". Tu mejor en esta canción: " + progreso[MELODIAS[actual].nombre].mejor + ".";
-  if (!usuario || !puntos) return;
-  try { await sumarPuntos(ID, puntos); estado.textContent += " Guardados ✓"; }
+  if (!usuario || !puntos || !guardarPuntos) return;
+  try { await guardarPuntos(ID, puntos); estado.textContent += " Guardados ✓"; }
   catch (e) { estado.textContent += " No se pudieron guardar (" + e.message + ")"; }
 }
 cv.addEventListener("pointerdown", tocar);
