@@ -1,0 +1,59 @@
+<!doctype html>
+<!-- Ruta: estacionamiento/index.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Estacionamiento</title>
+  <meta name="theme-color" content="#1b2330" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    main { padding: 8px 10px; max-width: 1000px; }
+    .fila { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; margin: 4px 0; font-size: .9rem; color: var(--suave); }
+    .fila b { color: var(--texto); }
+    .btn.sec { background: var(--tarjeta); border: 1px solid var(--borde); padding: 6px 12px; }
+    .btn.sec.on { background: var(--acento); border-color: var(--acento); }
+    .btn.sec:disabled { opacity: .35; }
+    #caja { position: relative; }
+    #lienzo { width: 100%; max-width: none; height: calc(100dvh - 210px); min-height: 320px; margin: 6px 0; background: #1a1d26; border-radius: 12px; cursor: grab; }
+    #msg { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); padding: 6px 14px; background: rgba(0,0,0,.75); border-radius: 999px; font-size: .9rem; pointer-events: none; opacity: 0; transition: opacity .2s; white-space: nowrap; }
+    #msg.ver { opacity: 1; }
+    #victoria { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(10,12,20,.8); border-radius: 12px; text-align: center; }
+    #victoria h2 { margin: 0; font-size: 1.6rem; }
+    .ayuda { text-align: center; font-size: .8rem; color: var(--suave); margin: 2px 0 8px; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <a class="volver" href="../">← Juegos</a>
+    <h1>🚗 Estacionamiento</h1>
+    <div>Movimientos: <b id="movs">0</b></div>
+  </header>
+  <main>
+    <div class="fila">
+      <span>Nivel:</span>
+      <span id="niveles"></span>
+      <span>Autos: <b id="autos">0</b></span>
+    </div>
+    <div class="fila">
+      <button class="btn sec" id="reiniciar">↺ Reiniciar</button>
+      <button class="btn sec" id="menos">−</button>
+      <button class="btn sec" id="mas">+</button>
+      <button class="btn sec" id="centrar">⌖ Centrar</button>
+    </div>
+    <div id="caja">
+      <canvas id="lienzo" class="lienzo"></canvas>
+      <div id="msg"></div>
+      <div id="victoria" hidden>
+        <h2 id="vtitulo">¡Nivel completado!</h2>
+        <div id="vtexto"></div>
+        <button class="btn" id="siguiente">Siguiente nivel ▶</button>
+        <button class="btn sec" id="repetir">Repetir nivel</button>
+      </div>
+    </div>
+    <p class="ayuda">Toca un auto para sacarlo hacia donde apunta su flecha. Arrastra para mover la vista y pellizca (o usa la rueda) para acercar.</p>
+  </main>
+  <script type="module" src="juego.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
