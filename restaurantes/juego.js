@@ -1736,10 +1736,11 @@ function caja3d(c, x0, y0, x1, y1, h, col, borde) {
 const MADERA = { tapa: "#c58b4e", izq: "#a06a35", der: "#85542a" };
 const MADERA_OSCURA = { tapa: "#8d6e63", izq: "#6d4c41", der: "#5a3d33" };
 const ACERO = { tapa: "#cfd8dc", izq: "#90a4ae", der: "#78909c" };
-const SILLA = { tapa: "#bc9a8c", izq: "#8d6e63", der: "#6d4c41" };
+const SILLA = { tapa: "#d6453d", izq: "#a82a26", der: "#7d1d1a" }; // bancas rojas, como en el mapa de referencia
+const SILLA_RESP = { tapa: "#b53630", izq: "#8f2420", der: "#6a1815" };
 // Aspecto según las mejoras de «Mesa» y de «Sillas» (0 a 5): las mesas pasan de madera a mesa con mantel, talavera azul y dorada; las sillas ganan un cojín de color
 const MESA_ESTILOS = [
-  MADERA,
+  { tapa: "#46a39a", izq: "#2f7f77", der: "#216059" }, // mesa verde azulado (nivel 0)
   { tapa: "#d9a066", izq: "#b97a3d", der: "#9a6130" }, // madera barnizada
   { tapa: "#f4ecd8", izq: "#c9b99a", der: "#a8977a" }, // mantel crema
   { tapa: "#4f8fd6", izq: "#2f6db3", der: "#1f5590" }, // talavera azul
@@ -1959,13 +1960,23 @@ function armarFondo() {
   carteles(c);   // carteles «En venta» en los que se pueden comprar
   estacionamiento(c);
   // piso del comedor
-  for (let i = 0; i < W / 40; i++) for (let j = 0; j < H / 40; j++) suelo(c, i * 40, j * 40, i * 40 + 40, j * 40 + 40, (i + j) % 2 ? "#e4cfa9" : "#ecd9b8");
+  for (let i = 0; i < W / 40; i++) for (let j = 0; j < H / 40; j++) suelo(c, i * 40, j * 40, i * 40 + 40, j * 40 + 40, (i + j) % 2 ? "#d9c3a0" : "#f6f0e4");
+  suelo(c, HALL_X - 40, 430 + TY - 190 + 40, HALL_X + 40, 980, "#b7313a", 0, "#8c1f28"); // alfombra roja por el pasillo del comedor
+  { // paredes de afuera: altas y beige atrás y a la izquierda, bajas y blancas al frente y a la derecha
+    const alta = { tapa: "#ffffff", izq: "#f2d89c", der: "#e2bf78" }, baja = { tapa: "#ffffff", izq: "#e6ebee", der: "#cfd8dc" }, ha = 64;
+    caja3d(c, 0, -7, W, 0, ha, alta, "#a98a4a");                       // pared de atrás
+    caja3d(c, -7, 0, 0, H, ha, alta, "#a98a4a");                       // pared de la izquierda
+    for (let y = 340; y + 70 < H - 200; y += 170) poly(c, [iso(0, y, 24), iso(0, y + 70, 24), iso(0, y + 70, 52), iso(0, y, 52)], "#37474f", "#ffffff"); // ventanas
+    caja3d(c, W, 0, W + 6, H, 14, baja, "#90a4ae");                    // pared de la derecha (baja)
+    caja3d(c, 0, H, HALL_X - 30, H + 6, 14, baja, "#90a4ae");          // pared del frente, con hueco para la puerta
+    caja3d(c, HALL_X + 30, H, W, H + 6, 14, baja, "#90a4ae");
+  }
   cuarto(c, 10 + DXK + KX, HAB_Y0, 260 + DXK + KX, HAB_Y1, "#eceff1", "#cfd8dc", "#b0bec5", 200 + DXK + KX, 50);   // cocina (puerta al frente)
   const [kx, ky] = iso(135 + DXK + KX, 10, 70); texto("Cocina", kx, ky, 14, "#37474f", "center", c);
   const lado = (id) => LUGARES[id].puerta, hueco = (id) => pyHab(id) - PUERTA_ANCHO / 2;
   if (banioComprado) {
     const [x0, y0, x1, y1] = rectHab("banio");
-    cuarto(c, x0, y0, x1, y1, "#e1f5fa", "#b6e0ea", "#80c4d3", hueco("banio"), PUERTA_ANCHO, lado("banio"));   // baño (puerta hacia el pasillo)
+    cuarto(c, x0, y0, x1, y1, "#e3e8eb", "#c4ced4", "#1f7a90", hueco("banio"), PUERTA_ANCHO, lado("banio"));   // baño (puerta hacia el pasillo)
     const [bx, by] = iso((x0 + x1) / 2, y0, 70); texto("Baño", bx, by, 14, "#1f5d70", "center", c);
   }
   for (const id of Object.keys(HAB_NUEVAS)) { // habitaciones nuevas (si ya las compraste o ya vienen hechas)
@@ -1997,7 +2008,8 @@ function dibujarGenerador(x, y) { // generador cuadrado: una caja amarilla con u
 function persona(e, x, y, z, tam) { sombra(x, y, 13); const [sx, sy] = iso(x, y, z); emoji(e, sx, sy, tam * ESCALA); }
 
 function dibujarMesa(m) {
-  caja3d(ctx, m.cx - 32, m.cy - 32, m.cx + 32, m.cy + 32, 22, MESA_ESTILOS[m.mejoras.mesa], "#5b4636");
+  caja3d(ctx, m.cx - 32, m.cy - 32, m.cx + 32, m.cy + 32, 22, MESA_ESTILOS[m.mejoras.mesa], "#1b4a45");
+  suelo(ctx, m.cx - 24, m.cy - 24, m.cx - 12, m.cy - 14, "#f4f6f6", 22); suelo(ctx, m.cx + 12, m.cy + 14, m.cx + 24, m.cy + 24, "#f4f6f6", 22); // platos
   if (m.ocupada) suelo(ctx, m.cx - 32, m.cy - 32, m.cx + 32, m.cy + 32, null, 22, "#7c5cff");
   if (llevando === m) { suelo(ctx, m.cx - 32, m.cy - 32, m.cx + 32, m.cy + 32, null, 22, "#ffd54a"); suelo(ctx, m.cx - 34, m.cy - 34, m.cx + 34, m.cy + 34, null, 22, "#ffd54a"); }
   const [sx, sy] = iso(m.cx, m.cy, 22);
@@ -2022,11 +2034,16 @@ function dibujarMesa(m) {
     ctx.fillStyle = m.barra.color; ctx.fillRect(sx - bw / 2, by, bw * f, bh);
   }
 }
-function dibujarSilla(s, m, tipo) { // banca larga para 2 personas: la de arriba es la «Silla 1» y la de abajo la «Silla 2»
-  const L = BANCA_LARGO / 2;
-  caja3d(ctx, s.x - L, s.y - 10, s.x + L, s.y + 10, 10, SILLA, "#5b4636");
-  const k = tipo === "arriba" ? m.mejoras.silla1 : m.mejoras.silla2, cojin = SILLA_COJINES[k];
-  if (cojin) caja3d(ctx, s.x - L + 2, s.y - 8, s.x + L - 2, s.y + 8, 10 + k, cojin, "#5b4636"); // cada nivel la hace un poco más alta
+function dibujarSilla(s, m, tipo) { // banca roja con respaldo para 2 personas: la de arriba es la «Silla 1» y la de abajo la «Silla 2»; la de arriba también dibuja el tope del extremo (la mesa queda en forma de «U»)
+  const L = BANCA_LARGO / 2, arriba = tipo === "arriba", borde = "#4a1512";
+  if (arriba) {
+    const lado = m.cx < HALL_X ? 1 : -1, ex = m.cx - lado * (L + 4); // el extremo cerrado queda lejos del pasillo
+    caja3d(ctx, ex - 4, m.cy - 58, ex + 4, m.cy + 58, 20, SILLA_RESP, borde);
+  }
+  caja3d(ctx, s.x - L, arriba ? s.y - 17 : s.y + 10, s.x + L, arriba ? s.y - 10 : s.y + 17, 24, SILLA_RESP, borde); // respaldo (del lado de afuera)
+  caja3d(ctx, s.x - L, s.y - 10, s.x + L, s.y + 10, 10, SILLA, borde);
+  const k = arriba ? m.mejoras.silla1 : m.mejoras.silla2, cojin = SILLA_COJINES[k];
+  if (cojin) caja3d(ctx, s.x - L + 2, s.y - 8, s.x + L - 2, s.y + 8, 10 + k, cojin, borde); // cada nivel la hace un poco más alta
 }
 function dibujarMostrador() {
   caja3d(ctx, 20 + DXK + KX, 40, 250 + DXK + KX, 70, 26, ACERO, "#546e7a");
@@ -2163,7 +2180,13 @@ function dibujar() {
   DECORACIONES.filter((q) => decos.includes(q.id)).forEach((q) => q.lugares.forEach(([x, y]) => cola.push({ d: x + y, f: () => persona(q.ico, x, y, 18, 36) })));
   if (banioComprado) { // retretes y lavabo del baño (el lavabo va al fondo, lejos de la puerta)
     const [bx0, by0] = rectHab("banio");
-    [[35, 75, "🚽"], [35, 115, "🚽"], [185, 25, "🚰"]].forEach(([dx, dy, em]) => { const x = bx0 + dx, y = by0 + dy; cola.push({ d: x + y, f: () => persona(em, x, y, 16, 30) }); });
+    const CAB = { tapa: "#b0bec5", izq: "#78909c", der: "#546e7a" }; // cubículos grises
+    [75, 115].forEach((dy) => { const x = bx0 + 12, y = by0 + dy; cola.push({ d: x + y + 40, f: () => {
+      caja3d(ctx, x, y - 18, x + 38, y + 18, 44, CAB, "#37474f");
+      const [p1x, p1y] = iso(x + 38, y - 12, 8), [p2x, p2y] = iso(x + 38, y + 12, 8), [p3x, p3y] = iso(x + 38, y + 12, 38), [p4x, p4y] = iso(x + 38, y - 12, 38);
+      poly(ctx, [[p1x, p1y], [p2x, p2y], [p3x, p3y], [p4x, p4y]], "#90a4ae", "#37474f"); // puerta del cubículo
+    } }); });
+    cola.push({ d: bx0 + 160 + by0 + 30, f: () => { caja3d(ctx, bx0 + 150, by0 + 8, bx0 + 215, by0 + 30, 20, { tapa: "#eceff1", izq: "#b0bec5", der: "#90a4ae" }, "#546e7a"); const [lx, ly] = iso(bx0 + 182, by0 + 19, 22); emoji("🚰", lx, ly, 16 * ESCALA * 2); } });
   }
   for (const e of ents) cola.push({ d: e.x + e.y + 0.1, f: () => dibujarEnt(e) });
   cola.sort((a, b) => a.d - b.d).forEach((o) => o.f());
