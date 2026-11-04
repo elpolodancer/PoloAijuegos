@@ -40,7 +40,30 @@ export const TORRES = {
       { dano: 34, alcance: 2.8, cadencia: 0.8, lento: 0.35, tlento: 2.2, sube: 0 },
     ],
   },
+  // Dispara lejos y fuerte pero lento: ideal contra orcos y trolls (poco útil contra montones de goblins)
+  ballesta: {
+    nombre: "Ballesta", icono: "🎯", precio: 230, desc: "Gran daño y alcance",
+    niveles: [
+      { dano: 95, alcance: 3.5, cadencia: 2.2, sube: 170 },
+      { dano: 160, alcance: 3.8, cadencia: 2.0, sube: 260 },
+      { dano: 260, alcance: 4.1, cadencia: 1.8, sube: 0 },
+    ],
+  },
+  // Rayo instantáneo que salta a enemigos cercanos (cada salto pega 20 % menos): ideal contra montones.
+  // cadena = cuántos saltos da; salto = distancia máxima de cada salto (celdas)
+  rayos: {
+    nombre: "Rayos", icono: "⚡", precio: 300, desc: "Salta entre enemigos",
+    niveles: [
+      { dano: 24, alcance: 2.5, cadencia: 1.15, cadena: 2, salto: 1.3, sube: 230 },
+      { dano: 38, alcance: 2.7, cadencia: 1.05, cadena: 3, salto: 1.4, sube: 330 },
+      { dano: 58, alcance: 2.9, cadencia: 0.95, cadena: 4, salto: 1.5, sube: 0 },
+    ],
+  },
 };
+
+// Talar: quitar un árbol o roca cuesta monedas y deja el lugar libre para construir
+export const COSTE_TALAR = { arbol: 20, roca: 40 };
+export const costeTalar = (o) => (o.e === "🪨" ? COSTE_TALAR.roca : COSTE_TALAR.arbol);
 
 // vel en px/s; dano = golpe al castillo si llega; oro = monedas al matarlo
 export const ENEMIGOS = {
@@ -50,30 +73,37 @@ export const ENEMIGOS = {
   troll: { nombre: "Troll", icono: "🧌", vida: 2200, vel: 24, dano: 30, oro: 100, tam: 40 },
 };
 
+// Un nivel tiene «camino» (una ruta) o «caminos» (varias entradas; los enemigos se reparten entre ellas)
 function prepararMapa(nivel) {
-  const pts = nivel.camino.map(([c, f]) => ({ x: c * CELDA, y: f * CELDA }));
-  const segs = [];
-  let largo = 0;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const a = pts[i], b = pts[i + 1], l = Math.hypot(b.x - a.x, b.y - a.y);
-    segs.push({ a, b, l, ini: largo });
-    largo += l;
-  }
+  const lista = nivel.caminos || [nivel.camino];
+  const rutas = lista.map((cam) => {
+    const pts = cam.map(([c, f]) => ({ x: c * CELDA, y: f * CELDA }));
+    const segs = [];
+    let largo = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1], l = Math.hypot(b.x - a.x, b.y - a.y);
+      segs.push({ a, b, l, ini: largo });
+      largo += l;
+    }
+    return { segs, largo };
+  });
   const bloq = Array.from({ length: FILAS }, () => Array(COLS).fill(false));
-  for (let i = 0; i < nivel.camino.length - 1; i++) {
-    const [c1, f1] = nivel.camino[i], [c2, f2] = nivel.camino[i + 1];
-    for (let f = Math.max(0, Math.floor(Math.min(f1, f2))); f <= Math.min(FILAS - 1, Math.floor(Math.max(f1, f2))); f++)
-      for (let c = Math.max(0, Math.floor(Math.min(c1, c2))); c <= Math.min(COLS - 1, Math.floor(Math.max(c1, c2))); c++) bloq[f][c] = true;
+  for (const cam of lista) {
+    for (let i = 0; i < cam.length - 1; i++) {
+      const [c1, f1] = cam[i], [c2, f2] = cam[i + 1];
+      for (let f = Math.max(0, Math.floor(Math.min(f1, f2))); f <= Math.min(FILAS - 1, Math.floor(Math.max(f1, f2))); f++)
+        for (let c = Math.max(0, Math.floor(Math.min(c1, c2))); c <= Math.min(COLS - 1, Math.floor(Math.max(c1, c2))); c++) bloq[f][c] = true;
+    }
   }
   const k = nivel.castillo;
   for (let f = k.f; f < k.f + k.h; f++) for (let c = k.c; c < k.c + k.w; c++) bloq[f][c] = true;
-  const camino = bloq.map((fila) => fila.slice()); // solo camino + castillo (para dibujar)
   (nivel.obstaculos || []).forEach(([c, f]) => (bloq[f][c] = true));
-  return { segs, largo, bloq, camino };
+  return { rutas, bloq };
 }
 
-export function posicionEnCamino(mapa, d) {
-  const s = mapa.segs;
+// ruta = una de mapa.rutas; d = distancia recorrida en px
+export function posicionEnCamino(ruta, d) {
+  const s = ruta.segs;
   for (let i = 0; i < s.length; i++) {
     if (d <= s[i].ini + s[i].l || i === s.length - 1) {
       const t = Math.min(1, Math.max(0, (d - s[i].ini) / s[i].l));
@@ -93,6 +123,7 @@ export function nuevaPartida(nivel) {
     activa: false,        // hay una oleada en curso
     t: 0,                 // segundos de la oleada en curso
     cola: [],             // enemigos por salir: { t, tipo }
+    obstaculos: (nivel.obstaculos || []).map(([c, f, e]) => ({ c, f, e })), // se pueden talar
     torres: [],
     enemigos: [],
     proyectiles: [],
@@ -138,11 +169,25 @@ export function vender(p, t) {
   return gana;
 }
 
+export const obstaculoEn = (p, c, f) => p.obstaculos.find((o) => o.c === c && o.f === f) || null;
+export function talar(p, c, f) {
+  const o = obstaculoEn(p, c, f);
+  if (!o || p.estado === "ganado" || p.estado === "perdido") return false;
+  const coste = costeTalar(o);
+  if (p.oro < coste) return false;
+  p.oro -= coste;
+  p.obstaculos.splice(p.obstaculos.indexOf(o), 1);
+  p.mapa.bloq[f][c] = false;
+  p.ev.push({ t: "talar", x: (c + 0.5) * CELDA, y: (f + 0.5) * CELDA, coste });
+  return true;
+}
+
 export function iniciarOleada(p) {
   if (p.activa || p.estado !== "preparando") return false;
   const o = p.nivel.oleadas[p.oleada];
   p.cola = [];
-  for (const [tipo, n, cada, ini] of o.grupos) for (let i = 0; i < n; i++) p.cola.push({ t: ini + i * cada, tipo });
+  const nr = p.mapa.rutas.length;
+  for (const [tipo, n, cada, ini, ruta] of o.grupos) for (let i = 0; i < n; i++) p.cola.push({ t: ini + i * cada, tipo, r: ruta !== undefined ? ruta : i % nr });
   p.cola.sort((a, b) => a.t - b.t);
   p.t = 0;
   p.activa = true;
@@ -200,7 +245,7 @@ export function paso(p, dt) {
     const o = p.nivel.oleadas[p.oleada];
     while (p.cola.length && p.cola[0].t <= p.t) {
       const q = p.cola.shift(), def = ENEMIGOS[q.tipo], hp = Math.round(def.vida * o.vida);
-      p.enemigos.push({ id: p.id++, tipo: q.tipo, hp, hpMax: hp, d: 0, x: 0, y: 0, vivo: true, lentoT: 0, lentoF: 1 });
+      p.enemigos.push({ id: p.id++, tipo: q.tipo, r: q.r, hp, hpMax: hp, d: 0, x: 0, y: 0, vivo: true, lentoT: 0, lentoF: 1 });
     }
   }
 
@@ -209,14 +254,15 @@ export function paso(p, dt) {
     if (!e.vivo) continue;
     if (e.lentoT > 0) { e.lentoT -= dt; if (e.lentoT <= 0) e.lentoF = 1; }
     e.d += ENEMIGOS[e.tipo].vel * e.lentoF * dt;
-    if (e.d >= p.mapa.largo) {
+    const ruta = p.mapa.rutas[e.r];
+    if (e.d >= ruta.largo) {
       e.vivo = false;
       p.vida = Math.max(0, p.vida - ENEMIGOS[e.tipo].dano);
       p.ev.push({ t: "castillo", dano: ENEMIGOS[e.tipo].dano });
       if (p.vida <= 0) { p.estado = "perdido"; p.activa = false; p.ev.push({ t: "fin", ganado: false }); }
       continue;
     }
-    const pos = posicionEnCamino(p.mapa, e.d);
+    const pos = posicionEnCamino(ruta, e.d);
     e.x = pos.x; e.y = pos.y;
   }
 
@@ -230,6 +276,28 @@ export function paso(p, dt) {
     if (!mejor) { t.cd = 0; continue; }
     t.cd = dt_.cadencia;
     t.ang = Math.atan2(mejor.y - t.y, mejor.x - t.x);
+    if (dt_.cadena !== undefined) {
+      // rayo instantáneo: pega al primero y salta al más cercano que no haya sido golpeado
+      const golpeados = [mejor], pts = [{ x: t.x, y: t.y }, { x: mejor.x, y: mejor.y }];
+      let lx = mejor.x, ly = mejor.y, da = dt_.dano;
+      danar(p, mejor, da);
+      for (let j = 0; j < dt_.cadena; j++) {
+        da *= 0.8;
+        let sig = null, md = dt_.salto * CELDA;
+        for (const e of p.enemigos) {
+          if (!e.vivo || golpeados.includes(e)) continue;
+          const dd = Math.hypot(e.x - lx, e.y - ly);
+          if (dd <= md) { md = dd; sig = e; }
+        }
+        if (!sig) break;
+        golpeados.push(sig);
+        lx = sig.x; ly = sig.y;
+        pts.push({ x: lx, y: ly });
+        danar(p, sig, da);
+      }
+      p.ev.push({ t: "rayo", pts });
+      continue;
+    }
     p.proyectiles.push({ x: t.x, y: t.y, obj: mejor, tx: mejor.x, ty: mejor.y, dano: dt_.dano, radio: dt_.radio || 0, lento: dt_.lento || 0, tlento: dt_.tlento || 0, tipo: t.tipo });
     p.ev.push({ t: "disparo", tipo: t.tipo });
   }

@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="../compartido/estilos.css" />
   <style>
     .titulo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    #mapaNombre { text-align: center; color: var(--suave); font-size: .85rem; margin-top: 6px; }
     #hud { display: flex; justify-content: center; gap: 18px; margin: 4px 0 8px; font-size: 1.05rem; }
     .marco { position: relative; max-width: 420px; margin: 0 auto; }
     .marco .lienzo { margin: 0; background: #2f5d34; }
@@ -17,8 +18,8 @@
     #fin p { margin: 0; color: var(--suave); }
     #estrellas { font-size: 2rem; letter-spacing: 4px; }
     #estado { max-width: 420px; min-height: 2.6em; margin: 8px auto; text-align: center; font-size: .9rem; }
-    #tienda { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 420px; margin: 0 auto; }
-    .tor { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; background: var(--tarjeta); border: 2px solid var(--borde); }
+    #tienda { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; max-width: 420px; margin: 0 auto; }
+    .tor { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; font-size: .78rem; background: var(--tarjeta); border: 2px solid var(--borde); }
     .tor .ico { font-size: 1.7rem; line-height: 1; }
     .tor small { color: var(--suave); font-weight: 400; font-size: .72rem; }
     .tor.sel { border-color: #ffd34d; background: #2b3157; }
@@ -31,7 +32,12 @@
     #controles .btn { flex: 1 1 auto; }
     #btnOleada { flex-basis: 100%; padding: 12px; font-size: 1.05rem; background: #1f9d55; }
     #btnOleada:disabled { background: #4a5070; }
-    #btnMeteoro.sel { outline: 2px solid #ffd34d; }
+    #btnMeteoro.sel, #btnQuitar.sel { outline: 2px solid #ffd34d; }
+    #menu { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; gap: 10px; padding: 14px; background: rgba(15, 18, 32, .96); border-radius: 16px; overflow-y: auto; }
+    #menu h2 { margin: 0; text-align: center; font-size: 1.3rem; }
+    #menuLista { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .mapa { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 10px; text-align: left; background: var(--tarjeta); border: 1px solid var(--borde); }
+    .mapa small { color: var(--suave); font-weight: 400; }
   </style>
 </head>
 <body>
@@ -43,6 +49,7 @@
     <span id="record" style="color:var(--suave);font-size:.85rem"></span>
   </header>
   <main>
+    <div id="mapaNombre"></div>
     <div id="hud">
       <span>🪙 <b id="oro">0</b></span>
       <span>❤️ <b id="vida">0</b></span>
@@ -50,12 +57,17 @@
     </div>
     <div class="marco">
       <canvas id="lienzo" class="lienzo" width="360" height="540"></canvas>
+      <div id="menu">
+        <h2>🗺️ Elige un mapa</h2>
+        <div id="menuLista"></div>
+      </div>
       <div id="fin" hidden>
         <h2 id="finTitulo"></h2>
         <div id="estrellas"></div>
         <p id="finTexto"></p>
         <button class="btn" id="finReintentar">Jugar de nuevo</button>
-        <button class="btn" id="finSiguiente" hidden>Siguiente nivel ▶</button>
+        <button class="btn" id="finSiguiente" hidden>Siguiente mapa ▶</button>
+        <button class="btn sec" id="finMapas">🗺️ Mapas</button>
       </div>
     </div>
     <p id="estado"></p>
@@ -64,6 +76,8 @@
     <div id="controles">
       <button class="btn" id="btnOleada">▶ Empezar oleada</button>
       <button class="btn sec" id="btnMeteoro">☄️ Meteoro</button>
+      <button class="btn sec" id="btnQuitar">🪓 Quitar</button>
+      <button class="btn sec" id="btnMapas">🗺️ Mapas</button>
       <button class="btn sec" id="btnVel">⏩ x1</button>
       <button class="btn sec" id="btnPausa">⏸ Pausa</button>
       <button class="btn sec" id="btnSonido">🔊</button>

@@ -1,11 +1,12 @@
 // Ruta: defendercastillo/juego.js
-// «Defensa del castillo»: pantalla, controles y sonido. Las reglas viven en logica.js y los niveles en niveles.js.
-// Cómo se juega: elige una torre abajo y toca un lugar libre del pasto para construirla; toca una torre para mejorarla o
-// venderla; ☄️ lanza un meteoro (se recarga solo). Los enemigos caminan por el camino café; si llegan al castillo le quitan vida.
+// «Defensa del castillo»: pantalla, controles y sonido. Las reglas viven en logica.js y los mapas en niveles.js.
+// Cómo se juega: elige un mapa; elige una torre abajo y toca un lugar libre del pasto para construirla; toca una torre para
+// mejorarla o venderla; 🪓 Quitar sirve para talar árboles/rocas (cuesta monedas) o vender torres con un toque; ☄️ lanza un
+// meteoro (se recarga solo). Los enemigos caminan por el camino café; si llegan al castillo le quitan vida.
 import { NIVELES } from "./niveles.js";
 import {
   CELDA, COLS, FILAS, ANCHO, ALTO, TORRES, ENEMIGOS, METEORO, REEMBOLSO,
-  nuevaPartida, celdaLibre, torreEn, datosTorre, colocar, mejorar, vender, iniciarOleada, meteoro, paso, estrellas,
+  nuevaPartida, celdaLibre, torreEn, obstaculoEn, costeTalar, datosTorre, colocar, mejorar, vender, talar, iniciarOleada, meteoro, paso, estrellas,
 } from "./logica.js";
 
 // ----- Ajustes -----
@@ -14,8 +15,9 @@ const PUNTOS_POR_PERFIL = 25;    // 1 punto al perfil por cada 25 del juego
 const PASO = 1 / 60;             // paso fijo de la simulación (se ve igual en pantallas de 90/120 Hz)
 const CLAVE_PROGRESO = "defensa_progreso";
 const CLAVE_SONIDO = "defensa_sonido";
+const CLAVE_ULTIMO = "defensa_ultimo";   // último mapa jugado
 const FUENTE = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",system-ui,sans-serif';
-const COLOR_TORRE = { arquero: "#8b5a2b", canon: "#555b6b", mago: "#5b3f9e" };
+const COLOR_TORRE = { arquero: "#8b5a2b", canon: "#555b6b", mago: "#5b3f9e", ballesta: "#2f6f6a", rayos: "#2d4a8a" };
 
 const $ = (id) => document.getElementById(id);
 const leer = (k, def) => { try { const v = localStorage.getItem(k); return v == null ? def : JSON.parse(v); } catch (e) { return def; } };
@@ -38,9 +40,9 @@ fondo.height = ALTO * DPR;
 
 // ----- Estado -----
 let nivelIdx = 0, p = null;
-let tipoSel = null, torreSel = null, modoMeteoro = false;
+let tipoSel = null, torreSel = null, modoMeteoro = false, modoQuitar = false;
 let pausa = false, vel = 1, acum = 0, ultimo = 0, anim = 0;
-let finalizado = false, fantasma = null, flash = 0;
+let finalizado = false, fantasma = null, flash = 0, menuAbierto = true;
 let efectos = [];
 let msgTexto = "", msgHasta = 0;
 let progreso = leer(CLAVE_PROGRESO, {});
@@ -84,14 +86,37 @@ function resumenOleada() {
 function empezarNivel(i) {
   nivelIdx = i;
   p = nuevaPartida(NIVELES[i]);
-  tipoSel = null; torreSel = null; modoMeteoro = false;
+  tipoSel = null; torreSel = null; modoMeteoro = false; modoQuitar = false;
   finalizado = false; efectos = []; flash = 0; acum = 0; pausa = false; vel = 1;
+  $("btnPausa").textContent = "⏸ Pausa"; $("btnVel").textContent = "⏩ x1";
   $("fin").hidden = true;
+  cerrarMenu();
+  guardar(CLAVE_ULTIMO, i);
   armarFondo();
   const r = progreso[p.nivel.id];
   $("record").textContent = r ? "Récord: " + r.record + " " + "⭐".repeat(r.estrellas) : "";
-  mensaje("Nivel " + p.nivel.id + ": " + p.nivel.nombre, 3000);
+  poner("mapaNombre", "Mapa " + p.nivel.id + ": " + p.nivel.nombre + " · " + (p.nivel.dificultad || ""));
+  mensaje("Mapa " + p.nivel.id + ": " + p.nivel.nombre, 3000);
 }
+
+// ----- Menú de mapas -----
+function abrirMenu() {
+  const m = $("menu"), lista = $("menuLista");
+  lista.textContent = "";
+  NIVELES.forEach((n, i) => {
+    const r = progreso[n.id];
+    const b = document.createElement("button");
+    b.className = "btn mapa";
+    const t = document.createElement("b"); t.textContent = n.id + " · " + n.nombre;
+    const d = document.createElement("small"); d.textContent = (n.dificultad || "") + (r ? " · " + "⭐".repeat(r.estrellas) + " " + r.record : " · sin jugar");
+    b.append(t, d);
+    b.addEventListener("click", () => empezarNivel(i));
+    lista.appendChild(b);
+  });
+  m.hidden = false;
+  menuAbierto = true;
+}
+function cerrarMenu() { $("menu").hidden = true; menuAbierto = false; }
 
 function armarFondo() {
   const g = fondo.getContext("2d"), n = p.nivel;
@@ -101,11 +126,11 @@ function armarFondo() {
     g.fillRect(c * CELDA, f * CELDA, CELDA, CELDA);
   }
   g.lineCap = "round"; g.lineJoin = "round";
-  g.beginPath();
-  n.camino.forEach(([c, f], i) => (i ? g.lineTo(c * CELDA, f * CELDA) : g.moveTo(c * CELDA, f * CELDA)));
-  g.strokeStyle = "#7d5f33"; g.lineWidth = CELDA * 0.98; g.stroke();
-  g.strokeStyle = "#c9a66b"; g.lineWidth = CELDA * 0.86; g.stroke();
-  g.strokeStyle = "rgba(255,255,255,.07)"; g.lineWidth = 3; g.setLineDash([8, 12]); g.stroke(); g.setLineDash([]);
+  const caminos = n.caminos || [n.camino];
+  const trazar = () => { g.beginPath(); for (const cam of caminos) cam.forEach(([c, f], i) => (i ? g.lineTo(c * CELDA, f * CELDA) : g.moveTo(c * CELDA, f * CELDA))); };
+  trazar(); g.strokeStyle = "#7d5f33"; g.lineWidth = CELDA * 0.98; g.stroke();
+  trazar(); g.strokeStyle = "#c9a66b"; g.lineWidth = CELDA * 0.86; g.stroke();
+  trazar(); g.strokeStyle = "rgba(255,255,255,.07)"; g.lineWidth = 3; g.setLineDash([8, 12]); g.stroke(); g.setLineDash([]);
   // castillo
   const k = n.castillo;
   g.fillStyle = "#59606e";
@@ -113,12 +138,16 @@ function armarFondo() {
   g.roundRect ? g.roundRect(k.c * CELDA + 2, k.f * CELDA + 2, k.w * CELDA - 4, k.h * CELDA - 4, 10) : g.rect(k.c * CELDA + 2, k.f * CELDA + 2, k.w * CELDA - 4, k.h * CELDA - 4);
   g.fill();
   g.textAlign = "center"; g.textBaseline = "middle";
-  g.font = "78px " + FUENTE;
+  g.font = Math.round(Math.min(k.w, k.h) * CELDA * 0.85) + "px " + FUENTE;
   g.fillText("🏰", (k.c + k.w / 2) * CELDA, (k.f + k.h / 2) * CELDA + 4);
-  g.font = "26px " + FUENTE;
-  for (const [c, f, e] of n.obstaculos || []) g.fillText(e, (c + 0.5) * CELDA, (f + 0.5) * CELDA + 2);
+  // flechas de entrada de los enemigos
   g.font = "18px " + FUENTE;
-  g.fillText("➡️", 14, n.camino[0][1] * CELDA + CELDA * 0.0 + 0);
+  for (const cam of caminos) {
+    const [c, f] = cam[0];
+    if (c < 0) g.fillText("➡️", 14, f * CELDA);
+    else if (c > COLS) g.fillText("⬅️", ANCHO - 14, f * CELDA);
+    else if (f < 0) g.fillText("⬇️", c * CELDA, 14);
+  }
 }
 
 // ----- Entrada -----
@@ -130,9 +159,15 @@ function celdaDe(ev) {
 cv.addEventListener("pointermove", (ev) => { const q = celdaDe(ev); fantasma = { c: q.c, f: q.f }; });
 cv.addEventListener("pointerleave", () => (fantasma = null));
 cv.addEventListener("pointerdown", (ev) => {
-  if (pausa || p.estado === "ganado" || p.estado === "perdido") return;
+  if (menuAbierto || pausa || p.estado === "ganado" || p.estado === "perdido") return;
   const q = celdaDe(ev);
   fantasma = { c: q.c, f: q.f };
+  if (modoQuitar) {
+    const t = torreEn(p, q.c, q.f), o = obstaculoEn(p, q.c, q.f);
+    if (t) { const gana = vender(p, t); torreSel = null; efectos.push({ k: "texto", x: t.x, y: t.y, t: 0, dur: 0.8, txt: "+" + gana + " 🪙" }); tono("v", 400, 700, 0.12, "triangle", 0.05); }
+    else if (o) { if (!talar(p, q.c, q.f)) mensaje("Te faltan monedas: talar cuesta " + costeTalar(o) + " 🪙", 1800); }
+    return;
+  }
   if (modoMeteoro) {
     if (meteoro(p, q.x, q.y)) modoMeteoro = false;
     return;
@@ -155,16 +190,26 @@ for (const [tipo, d] of Object.entries(TORRES)) {
   b.dataset.tipo = tipo;
   const ico = document.createElement("span"); ico.className = "ico"; ico.textContent = d.icono;
   const nom = document.createElement("span"); nom.textContent = d.nombre;
-  const pr = document.createElement("small"); pr.textContent = d.precio + " 🪙";
-  const de = document.createElement("small"); de.textContent = d.desc;
-  b.append(ico, nom, pr, de);
-  b.addEventListener("click", () => { tipoSel = tipoSel === tipo ? null : tipo; torreSel = null; modoMeteoro = false; });
+  const pr = document.createElement("small"); pr.textContent = d.precio + "🪙";
+  b.title = d.desc;
+  b.append(ico, nom, pr);
+  b.addEventListener("click", () => { tipoSel = tipoSel === tipo ? null : tipo; torreSel = null; modoMeteoro = false; modoQuitar = false; });
   tienda.appendChild(b);
 }
-$("btnOleada").addEventListener("click", () => { if (iniciarOleada(p)) { tipoSel = null; modoMeteoro = false; } });
+$("btnOleada").addEventListener("click", () => { if (iniciarOleada(p)) { tipoSel = null; modoMeteoro = false; modoQuitar = false; } });
+$("btnQuitar").addEventListener("click", () => {
+  modoQuitar = !modoQuitar; tipoSel = null; torreSel = null; modoMeteoro = false;
+  if (modoQuitar) mensaje("🪓 Toca un árbol o roca para talarlo (cuesta monedas) o una torre para venderla", 4000);
+});
+$("btnMapas").addEventListener("click", () => {
+  if ((p.estado === "oleada" || p.torres.length) && p.estado !== "ganado" && p.estado !== "perdido" && !confirm("¿Salir de este mapa? Se pierde la partida en curso.")) return;
+  $("fin").hidden = true;
+  abrirMenu();
+});
+$("finMapas").addEventListener("click", abrirMenu);
 $("btnMeteoro").addEventListener("click", () => {
   if (p.meteoroEspera > 0 || p.estado === "ganado" || p.estado === "perdido") return;
-  modoMeteoro = !modoMeteoro; tipoSel = null; torreSel = null;
+  modoMeteoro = !modoMeteoro; tipoSel = null; torreSel = null; modoQuitar = false;
   if (modoMeteoro) mensaje("☄️ Toca el mapa donde quieres que caiga", 3000);
 });
 $("btnVel").addEventListener("click", () => { vel = vel === 1 ? 2 : 1; $("btnVel").textContent = "⏩ x" + vel; });
@@ -182,6 +227,7 @@ function eventos() {
     if (e.t === "disparo") {
       if (e.tipo === "arquero") tono("a", 900, 500, 0.07, "square", 0.02, 70);
       else if (e.tipo === "canon") tono("c", 170, 60, 0.2, "sawtooth", 0.05, 80);
+      else if (e.tipo === "ballesta") tono("bb", 260, 90, 0.16, "square", 0.04, 80);
       else tono("m", 600, 1200, 0.12, "sine", 0.04, 80);
     } else if (e.t === "muerte") {
       efectos.push({ k: "texto", x: e.x, y: e.y, t: 0, dur: 0.8, txt: "+" + e.oro + " 🪙" });
@@ -191,6 +237,20 @@ function eventos() {
       tono("e", 130, 40, 0.25, "sawtooth", 0.05, 60);
     } else if (e.t === "flecha") {
       efectos.push({ k: "chispa", x: e.x, y: e.y, t: 0, dur: 0.15 });
+    } else if (e.t === "rayo") {
+      const linea = [];
+      for (let i = 0; i < e.pts.length - 1; i++) {
+        const a = e.pts[i], b = e.pts[i + 1];
+        linea.push(a);
+        for (let j = 1; j < 4; j++) linea.push({ x: a.x + ((b.x - a.x) * j) / 4 + (Math.random() - 0.5) * 10, y: a.y + ((b.y - a.y) * j) / 4 + (Math.random() - 0.5) * 10 });
+      }
+      linea.push(e.pts[e.pts.length - 1]);
+      efectos.push({ k: "rayo", linea, t: 0, dur: 0.2 });
+      tono("r", 1400, 250, 0.14, "sawtooth", 0.035, 90);
+    } else if (e.t === "talar") {
+      efectos.push({ k: "texto", x: e.x, y: e.y, t: 0, dur: 0.8, txt: "-" + e.coste + " 🪙", rojo: true });
+      efectos.push({ k: "chispa", x: e.x, y: e.y, t: 0, dur: 0.25 });
+      tono("t", 220, 90, 0.15, "sawtooth", 0.05);
     } else if (e.t === "meteoro") {
       efectos.push({ k: "explosion", x: e.x, y: e.y, t: 0, dur: 0.5, r: METEORO.radio * CELDA, fuego: true });
       tono("mt", 90, 30, 0.5, "sawtooth", 0.09);
@@ -220,7 +280,7 @@ function eventos() {
 async function terminar(ganado) {
   if (finalizado) return;
   finalizado = true;
-  tipoSel = null; torreSel = null; modoMeteoro = false;
+  tipoSel = null; torreSel = null; modoMeteoro = false; modoQuitar = false;
   const est = estrellas(p), pts = p.puntos;
   melodia(ganado ? [523, 659, 784, 1047] : [330, 262, 196, 130], ganado ? "triangle" : "sawtooth");
   const r = progreso[p.nivel.id] || { estrellas: 0, record: 0 };
@@ -234,6 +294,7 @@ async function terminar(ganado) {
     " · Monstruos derrotados: " + p.matados + " · Puntos: " + pts;
   $("finTexto").textContent = txt;
   $("finSiguiente").hidden = !(ganado && nivelIdx + 1 < NIVELES.length);
+  $("finSiguiente").textContent = "Siguiente mapa ▶";
   $("fin").hidden = false;
   if (jugador && usuario && ganados > 0) {
     try {
@@ -250,6 +311,13 @@ function circulo(x, y, r, relleno, borde) {
   ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
   if (relleno) { ctx.fillStyle = relleno; ctx.fill(); }
   if (borde) { ctx.strokeStyle = borde; ctx.lineWidth = 1.5; ctx.stroke(); }
+}
+function etiqueta(txt, x, y, color) {
+  ctx.font = "bold 11px " + FUENTE;
+  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.75)";
+  ctx.strokeText(txt, x, y);
+  ctx.fillStyle = color;
+  ctx.fillText(txt, x, y);
 }
 function dibujar() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -270,12 +338,22 @@ function dibujar() {
     }
   }
 
+  // árboles y rocas (se pueden talar)
+  ctx.font = "26px " + FUENTE;
+  for (const o of p.obstaculos) {
+    if (modoQuitar) circulo((o.c + 0.5) * CELDA, (o.f + 0.5) * CELDA, 19, "rgba(255,210,80,.18)", "rgba(255,210,80,.7)");
+    ctx.font = "26px " + FUENTE;
+    ctx.fillText(o.e, (o.c + 0.5) * CELDA, (o.f + 0.5) * CELDA + 2);
+    if (modoQuitar) etiqueta(costeTalar(o) + "🪙", (o.c + 0.5) * CELDA, (o.f + 1) * CELDA - 5, p.oro >= costeTalar(o) ? "#ffe27a" : "#ff8a8a");
+  }
+
   // torres
   for (const t of p.torres) {
     circulo(t.x, t.y, 18, COLOR_TORRE[t.tipo], torreSel === t ? "#ffd34d" : "rgba(0,0,0,.45)");
     emoji(TORRES[t.tipo].icono, t.x, t.y + 1, 24);
     ctx.fillStyle = "#ffd34d";
     for (let i = 0; i <= t.nivel; i++) { ctx.beginPath(); ctx.arc(t.x - t.nivel * 4 + i * 8, t.y + 20, 2.5, 0, Math.PI * 2); ctx.fill(); }
+    if (modoQuitar) etiqueta("+" + Math.floor(t.invertido * REEMBOLSO), t.x, t.y - 22, "#9dff9d");
   }
 
   // enemigos (los de más abajo se dibujan encima)
@@ -300,6 +378,14 @@ function dibujar() {
       const a = py.ang || 0;
       ctx.strokeStyle = "#f3e2b3"; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(py.x - Math.cos(a) * 7, py.y - Math.sin(a) * 7); ctx.lineTo(py.x + Math.cos(a) * 4, py.y + Math.sin(a) * 4); ctx.stroke();
+    } else if (py.tipo === "ballesta") {
+      const a = py.ang || 0;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "#1c2430"; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(py.x - Math.cos(a) * 9, py.y - Math.sin(a) * 9); ctx.lineTo(py.x + Math.cos(a) * 6, py.y + Math.sin(a) * 6); ctx.stroke();
+      ctx.strokeStyle = "#dfe8f5"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(py.x - Math.cos(a) * 9, py.y - Math.sin(a) * 9); ctx.lineTo(py.x + Math.cos(a) * 6, py.y + Math.sin(a) * 6); ctx.stroke();
+      ctx.lineCap = "butt";
     } else if (py.tipo === "canon") circulo(py.x, py.y, 5, "#222", "#888");
     else { circulo(py.x, py.y, 7, "rgba(190,140,255,.35)"); circulo(py.x, py.y, 4, "#d9b8ff"); }
   }
@@ -309,6 +395,14 @@ function dibujar() {
     const k = e.t / e.dur;
     if (e.k === "explosion") {
       circulo(e.x, e.y, e.r * (0.4 + 0.6 * k), (e.fuego ? "rgba(255,120,30," : "rgba(255,190,60,") + (0.55 * (1 - k)).toFixed(2) + ")", "rgba(255,255,255," + (0.6 * (1 - k)).toFixed(2) + ")");
+    } else if (e.k === "rayo") {
+      ctx.globalAlpha = 1 - k;
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(120,170,255,.8)"; ctx.lineWidth = 6;
+      ctx.beginPath(); e.linea.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.stroke();
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
+      ctx.beginPath(); e.linea.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.stroke();
+      ctx.globalAlpha = 1;
     } else if (e.k === "chispa") {
       circulo(e.x, e.y, 4 + 8 * k, "rgba(255,255,255," + (0.7 * (1 - k)).toFixed(2) + ")");
     } else if (e.k === "texto") {
@@ -341,6 +435,7 @@ function poner(id, valor, prop = "textContent") { if (memo[id + prop] !== valor)
 function ui() {
   const total = p.nivel.oleadas.length;
   poner("oro", String(Math.floor(p.oro)));
+  $("btnQuitar").classList.toggle("sel", modoQuitar);
   poner("vida", String(Math.ceil(p.vida)));
   poner("oleada", Math.min(total, p.oleada + 1) + "/" + total);
   for (const b of tienda.children) {
@@ -368,7 +463,7 @@ function ui() {
       panel.hidden = false;
       panel.textContent = "";
       const info = document.createElement("div");
-      info.textContent = def.icono + " " + def.nombre + " · nivel " + (torreSel.nivel + 1) + "/3 · daño " + d.dano + (d.radio ? " (área)" : "") + " · alcance " + d.alcance + " · cada " + d.cadencia + " s" + (d.lento ? " · frena" : "");
+      info.textContent = def.icono + " " + def.nombre + " · nivel " + (torreSel.nivel + 1) + "/3 · daño " + d.dano + (d.radio ? " (área)" : "") + " · alcance " + d.alcance + " · cada " + d.cadencia + " s" + (d.lento ? " · frena" : "") + (d.cadena ? " · salta a " + d.cadena + " más" : "");
       const fila = document.createElement("div"); fila.className = "fila";
       const bu = document.createElement("button"); bu.className = "btn";
       bu.textContent = sube ? "⬆️ Mejorar · " + sube + " 🪙" : "Nivel máximo";
@@ -388,7 +483,8 @@ function ui() {
   if (performance.now() > msgHasta) {
     texto = p.estado === "preparando" ? "Prepara tu defensa. Viene: " + resumenOleada()
       : p.estado === "oleada" ? "🌊 Oleada en curso…" : "";
-    if (tipoSel) texto = "Toca un lugar libre del pasto para poner: " + TORRES[tipoSel].icono + " " + TORRES[tipoSel].nombre;
+    if (modoQuitar) texto = "🪓 Toca un árbol o roca para talarlo (cuesta monedas) o una torre para venderla";
+    else if (tipoSel) texto = TORRES[tipoSel].icono + " " + TORRES[tipoSel].nombre + ": " + TORRES[tipoSel].desc + ". Toca un lugar libre del pasto para ponerla";
     else if (p.estado === "preparando" && p.oleada === 0 && !p.torres.length) texto = "Elige una torre abajo y colócala junto al camino café. Viene: " + resumenOleada();
   }
   poner("estado", texto);
@@ -400,7 +496,7 @@ function bucle(ts) {
   const dt = Math.min(0.1, (ts - ultimo) / 1000 || 0);
   ultimo = ts;
   anim += dt;
-  if (!pausa) {
+  if (!pausa && !menuAbierto) {
     acum += dt * vel;
     let n = 0;
     while (acum >= PASO && n < 12) { paso(p, PASO); acum -= PASO; n++; }
@@ -414,5 +510,7 @@ function bucle(ts) {
   ui();
 }
 
-empezarNivel(0);
+// Arranca con el último mapa jugado y muestra el menú de mapas
+empezarNivel(Math.min(NIVELES.length - 1, Math.max(0, +leer(CLAVE_ULTIMO, 0) || 0)));
+abrirMenu();
 requestAnimationFrame(bucle);
