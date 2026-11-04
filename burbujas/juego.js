@@ -8,13 +8,21 @@ const R = 22;                    // radio de cada burbuja
 const COLS = 10;                 // burbujas por fila (las formas de FORMAS deben medir esto)
 const ALTO = 760;                // alto lógico del lienzo
 const LIMITE_FILA = 13;          // si una burbuja llega a esta fila, pierdes
-const TIROS_POR_FILA_INICIO = 6; // tiros sin reventar para que baje el techo (nivel 1)
-const TIROS_POR_FILA_MIN = 4;    // ...y lo mínimo al que llega en niveles altos
+const TIROS_POR_FILA_INICIO = 5; // tiros sin reventar para que baje el techo (nivel 1)
+const TIROS_POR_FILA_MIN = 3;    // ...y lo mínimo al que llega en niveles altos (baja 1 cada 3 niveles)
 const VELOCIDAD = 17;            // píxeles por cuadro del disparo
 const MIN_GRADOS = 12;           // ángulo mínimo respecto a la horizontal
 const PUNTOS_BASE = 10;          // por burbuja reventada
 const PUNTOS_CAIDA = 30;         // por burbuja que cae
 const PUNTOS_POR_PERFIL = 25;    // 1 punto al perfil por cada 25 del juego
+
+// Dificultad por nivel
+const COLORES_INICIO = 4;        // colores en el nivel 1 (sube 1 cada 2 niveles hasta 6)
+const MAX_FILAS_INICIO = 10;     // filas máximas con las que puede empezar un tablero
+const FILAS_EXTRA_MAX = 5;       // al subir de nivel se agregan filas llenas arriba de la forma (desde 1 en el nivel 1, +1 cada 2 niveles, hasta este máximo)
+const PIEDRAS_DESDE = 3;         // desde este nivel hay piedras 🪨: no se revientan, solo caen cuando se quedan sin apoyo (o con bomba/rayo)
+const MAX_PIEDRAS = 16;          // piedras máximas al empezar un nivel
+const PROB_PIEDRA_FILA = 0.08;   // probabilidad de que una celda de las filas nuevas del techo sea piedra (desde PIEDRAS_DESDE)
 
 // Especiales: cómo se ganan
 const REVENTAR_PARA_BOMBA = 6;   // reventar 6 o más de un tiro → bomba
@@ -47,6 +55,8 @@ const FONDOS = [                 // [arriba, abajo] por nivel, en ciclo
   ["#5b2a9e", "#d0589a"], ["#1b4fa0", "#4cc3d9"], ["#0f6b4a", "#9be37a"],
   ["#a0391b", "#ffb24c"], ["#2a2a7a", "#c35cff"], ["#7a1b4f", "#ff7a8a"],
 ];
+const PIEDRA = -1;                // valor de una piedra en la rejilla (los colores son 0..5)
+const GRIS_PIEDRA = ["#d6d9df", "#8a8f99", "#454953"];
 const ESPECIALES = {
   bomba: { emoji: "💣", c: ["#8a8a8a", "#2d2d2d", "#050505"], texto: "¡Bomba!" },
   arcoiris: { emoji: "🌈", c: null, texto: "¡Arcoíris!" },
@@ -168,21 +178,35 @@ function vecinos(r, c) {
 
 function coloresPresentes() {
   const s = new Set();
-  for (const fila of grid) for (const v of fila) if (v !== null) s.add(v);
+  for (const fila of grid) for (const v of fila) if (v !== null && v >= 0) s.add(v);
   return [...s];
 }
 const colorAlAzar = () => { const p = coloresPresentes(); return p.length ? p[Math.floor(Math.random() * p.length)] : 0; };
 
 function filaNueva() {
-  return Array.from({ length: COLS }, () => Math.floor(Math.random() * ncol));
+  return Array.from({ length: COLS }, () =>
+    nivel >= PIEDRAS_DESDE && Math.random() < PROB_PIEDRA_FILA ? PIEDRA : Math.floor(Math.random() * ncol));
 }
+
+const hayColores = () => grid.some((f) => f.some((v) => v !== null && v >= 0));
 
 function nuevoNivel() {
   par = 0;
   const forma = FORMAS[(nivel - 1) % FORMAS.length];
-  ncol = Math.min(3 + Math.floor((nivel - 1) / 2), COLORES.length);
-  tirosPorFila = Math.max(TIROS_POR_FILA_MIN, TIROS_POR_FILA_INICIO - Math.floor((nivel - 1) / 4));
-  grid = forma.filas.map((s) => [...s].map((ch) => (ch === "#" ? Math.floor(Math.random() * ncol) : null)));
+  ncol = Math.min(COLORES_INICIO + Math.floor((nivel - 1) / 2), COLORES.length);
+  tirosPorFila = Math.max(TIROS_POR_FILA_MIN, TIROS_POR_FILA_INICIO - Math.floor((nivel - 1) / 3));
+  // filas llenas extra ARRIBA de la forma (cuelgan del techo): más burbujas conforme subes de nivel
+  const extra = Math.max(0, Math.min(Math.ceil(nivel / 2), FILAS_EXTRA_MAX, MAX_FILAS_INICIO - forma.filas.length));
+  const filas = [...Array(extra).fill("#".repeat(COLS)), ...forma.filas];
+  grid = filas.map((s) => [...s].map((ch) => (ch === "#" ? Math.floor(Math.random() * ncol) : null)));
+  // piedras en lugares al azar
+  if (nivel >= PIEDRAS_DESDE) {
+    const celdas = [];
+    grid.forEach((fila, r) => fila.forEach((v, c) => { if (v !== null) celdas.push([r, c]); }));
+    for (let i = celdas.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [celdas[i], celdas[j]] = [celdas[j], celdas[i]]; }
+    const n = Math.min(MAX_PIEDRAS, 2 + (nivel - PIEDRAS_DESDE) * 2, Math.floor(celdas.length / 3));
+    celdas.slice(0, n).forEach(([r, c]) => { grid[r][c] = PIEDRA; });
+  }
   soltarFlotantes(true);   // por si alguna forma quedó sin tocar el techo
   tiros = 0; racha = 0; disparo = null; caen = []; chispas = [];
   actual = colorAlAzar(); siguiente = colorAlAzar();
@@ -309,7 +333,7 @@ function usarEspecial(tipo, r, c) {
     const cuenta = {};
     for (const [vr, vc] of vecinos(r, c)) {
       const v = grid[vr][vc];
-      if (v !== null) cuenta[v] = (cuenta[v] || 0) + 1;
+      if (v !== null && v >= 0) cuenta[v] = (cuenta[v] || 0) + 1;
     }
     const claves = Object.keys(cuenta);
     const objetivo = claves.length ? Number(claves.sort((a, b) => cuenta[b] - cuenta[a])[0]) : colorAlAzar();
@@ -380,7 +404,7 @@ function terminarTiro(b) {
   } else { tiros++; racha = 0; }
   recortarFilasVacias();
 
-  if (grid.every((f) => f.every((v) => v === null))) {   // nivel limpio
+  if (!hayColores()) {   // nivel limpio (las piedras que queden no cuentan)
     puntos += 200 + nivel * 50;
     actualizarMarcador();
     sonido("nivel");
@@ -474,7 +498,7 @@ function burbuja(x, y, color, escala = 1) {
     g = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
     ["#ff4f7b", "#ffc20e", "#3fcf5a", "#2f9bff", "#a455ff"].forEach((col, i) => g.addColorStop(i / 4, col));
   } else {
-    const [luz, base, sombra] = esp ? ESPECIALES[color].c : COLORES[color];
+    const [luz, base, sombra] = esp ? ESPECIALES[color].c : color === PIEDRA ? GRIS_PIEDRA : COLORES[color];
     g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
     g.addColorStop(0, luz); g.addColorStop(0.55, base); g.addColorStop(1, sombra);
   }
@@ -485,6 +509,14 @@ function burbuja(x, y, color, escala = 1) {
     ctx.font = Math.round(r * 1.15) + "px system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText(ESPECIALES[color].emoji, x, y + 1);
+    return;
+  }
+  if (color === PIEDRA) {   // grietas
+    ctx.strokeStyle = "rgba(20,20,30,.55)"; ctx.lineWidth = 2; ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.5, y - r * 0.3); ctx.lineTo(x - r * 0.1, y); ctx.lineTo(x - r * 0.25, y + r * 0.45);
+    ctx.moveTo(x - r * 0.1, y); ctx.lineTo(x + r * 0.5, y + r * 0.15);
+    ctx.stroke();
     return;
   }
   ctx.fillStyle = "rgba(255,255,255,.75)";
@@ -524,7 +556,7 @@ function dibujar() {
   for (const b of caen) burbuja(b.x, b.y, b.color);
   for (const s of chispas) {
     ctx.globalAlpha = Math.max(0, s.vida);
-    ctx.fillStyle = COLORES[s.color][0];
+    ctx.fillStyle = (s.color === PIEDRA ? GRIS_PIEDRA : COLORES[s.color])[0];
     ctx.beginPath(); ctx.arc(s.x, s.y, 3.5, 0, Math.PI * 2); ctx.fill();
   }
   ctx.globalAlpha = 1;
