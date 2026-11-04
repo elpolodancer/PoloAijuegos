@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- Ruta: cadenanumeros/index.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Cadena de números</title>
+  <meta name="theme-color" content="#1b2330" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    main { padding: 8px 12px; }
+    .hud { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; font-size: .9rem; color: var(--suave); }
+    .hud b { color: var(--texto); }
+    .btn.sec { background: var(--tarjeta); border: 1px solid var(--borde); }
+    #caja { width: min(100%, calc((100dvh - 150px) * 0.75), 480px); margin: 8px auto; }
+    #lienzo { width: 100%; max-width: none; aspect-ratio: 360 / 480; height: auto; margin: 0; background: #0f1220; touch-action: none; }
+    .ayuda { text-align: center; font-size: .8rem; color: var(--suave); margin: 2px 0 8px; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <a class="volver" href="../">← Juegos</a>
+    <h1>🔗 Cadena de números</h1>
+    <div>
+      <button class="btn sec" id="mezclar">🔀 Mezclar</button>
+      <button class="btn" id="reiniciar">↺ Reiniciar</button>
+    </div>
+  </header>
+  <main>
+    <div class="hud">
+      <span>Puntos: <b id="puntos">0</b></span>
+      <span>Bloque más alto: <b id="maximo">2</b></span>
+      <span>Récord: <b id="record">2</b></span>
+    </div>
+    <div id="caja">
+      <canvas id="lienzo" class="lienzo" width="360" height="480"></canvas>
+    </div>
+    <p class="ayuda">Desliza el dedo por números pegados (también en diagonal): empieza con dos iguales y sigue con uno igual o el doble del anterior. Al soltar se fusionan en uno solo.</p>
+  </main>
+  <script type="module" src="juego.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
