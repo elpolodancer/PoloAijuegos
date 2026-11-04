@@ -33,6 +33,7 @@ const JUEGOS = {
   guerrerodepuntos: ["juego.js", "niveles.js"],
   agario: ["juego.js"],
   pantano: ["juego.js"],
+  plantasvszombies: ["juego.js", "niveles.js"],
   botellascolores: ["juego.js", "logica.js", "niveles.js"],
 };
 

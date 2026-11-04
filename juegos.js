@@ -27,4 +27,5 @@ export const JUEGOS = [
   { id: "agario", nombre: "Agario", icono: "🟣", descripcion: "Come puntitos y células más chicas para crecer en un mapa enorme con 45 bots; divídete para atrapar a otros y huye de los más grandes.", carpeta: "agario", imagen: "imagenes/agario.webp" },
   { id: "botellascolores", nombre: "Botellas de colores", icono: "🍾", descripcion: "Vierte los colores de una botella a otra hasta que cada botella tenga un solo color: 50 niveles, con deshacer y reinicio.", carpeta: "botellascolores", imagen: "imagenes/botellascolores.webp" },
   { id: "pantano", nombre: "Ataque al pantano", icono: "🐊", descripcion: "Defiende tu cabaña de los bichos del pantano: apunta, dispara y mejora tus armas (estilo Swamp Attack).", carpeta: "pantano", imagen: "imagenes/pantano.webp" },
+  { id: "jardin", nombre: "Jardín contra zombis", icono: "🌻", descripcion: "Planta girasoles, lanzaguisantes, petardos y nueces para frenar a los zombis antes de que lleguen a tu casa: 15 niveles (estilo Plants vs. Zombies).", carpeta: "plantasvszombies" },
 ];
