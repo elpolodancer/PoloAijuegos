@@ -8,6 +8,9 @@ const R_INICIAL = 22;
 const CRECIMIENTO = 0.35;  // cuánto crece el hoyo al tragar (más = más rápido)
 const OBJETOS = 620;       // objetos por defecto (cada mapa puede traer los suyos con «objetos»)
 let totalObjetos = OBJETOS, duracionMapa = DURACION;
+const R_PEQUENO = 15;      // los objetos con radio hasta este valor cuentan como «pequeños» (los que come el hoyo inicial)
+const PEQUENOS = 0.4;      // cuántos objetos pequeños quedan respecto a antes (0.4 = 60 % menos; 1 = como antes)
+const pesoTipo = (t) => t.w * (t.r <= R_PEQUENO ? PEQUENOS : 1);
 
 // ----- Ajustes de los bots (más tontos) -----
 const BOT_COMER = 0.2;            // cuánto crecen y puntúan los bots al comer (0.2 = 80 % menos)
@@ -125,7 +128,7 @@ const MAPAS = {
       return null;
     },
     spawn() { const s = islas[Math.floor(Math.random() * islas.length)], a = rnd(0, 6.2832), d = rnd(0, s.R * 0.5); return [s.x + Math.cos(a) * d, s.y + Math.sin(a) * d]; },
-    factor: (x, y) => (islas.some((s) => Math.hypot(s.x - x, s.y - y) < s.R) ? 1 : 0.45), // en el agua vas más lento
+    factor: () => 1, // misma velocidad en el agua que en la isla (antes: 0.45 en el agua)
     suelo() {
       ctx.fillStyle = "#1f9cc4"; ctx.fillRect(0, 0, MUNDO, MUNDO);
       for (const [dr, col] of [[70, "#3fc0d8"], [38, "#7fe0e6"], [0, "#f0d78c"]]) {
@@ -185,9 +188,9 @@ const COLORES = ["#ff5c7a", "#ffb347", "#4ad6a7", "#5cb8ff", "#c77dff", "#ffe066
 let mapaId = "ciudad", mapa = MAPAS.ciudad;
 
 function nuevoObjeto() {
-  const tipos = mapa.tipos, total = tipos.reduce((s, t) => s + t.w, 0);
+  const tipos = mapa.tipos, total = tipos.reduce((s, t) => s + pesoTipo(t), 0);
   let k = Math.random() * total, t = tipos[0];
-  for (const x of tipos) { if ((k -= x.w) < 0) { t = x; break; } }
+  for (const x of tipos) { if ((k -= pesoTipo(x)) < 0) { t = x; break; } }
   const p = mapa.colocar(t);
   return p ? { e: t.e, r: t.r, x: p[0], y: p[1] } : null;
 }
@@ -198,7 +201,8 @@ const cam = { x: MUNDO / 2, y: MUNDO / 2, z: 0.3 };
 
 function cargarMapa(id) {
   mapaId = id; mapa = MAPAS[id];
-  MUNDO = mapa.mundo || 3000; totalObjetos = mapa.objetos || OBJETOS; duracionMapa = mapa.duracion || DURACION;
+  MUNDO = mapa.mundo || 3000; const base = mapa.objetos || OBJETOS, wTodos = mapa.tipos.reduce((a, t) => a + t.w, 0), wPeq = mapa.tipos.reduce((a, t) => a + (t.r <= R_PEQUENO ? t.w : 0), 0);
+  totalObjetos = Math.round(base * (1 - (wPeq / wTodos) * (1 - PEQUENOS))); duracionMapa = mapa.duracion || DURACION;
   mapa.preparar();
   objetos = []; caidas = []; hoyos = []; yo = null;
   while (objetos.length < totalObjetos) { const o = nuevoObjeto(); if (o) objetos.push(o); }
