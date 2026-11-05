@@ -11,6 +11,8 @@ const ID = "paperio";
 const RADIO = 300;                    // radio del mapa circular, en casillas finas
 const VEL = 38;                       // velocidad (casillas por segundo)
 const GIRO = 3.4;                     // qué tan rápido gira (radianes por segundo): más alto = giros más cerrados
+const ANGULO_CHOQUE = 15;             // grados: si llegas al borde con menos de esto respecto a ir «de frente», mueres; si no, te deslizas
+const COS_CHOQUE = Math.cos(ANGULO_CHOQUE * Math.PI / 180);
 const R_CABEZA = 3;                   // tamaño de la cabeza (para choques)
 const R_RASTRO = 2;                   // grosor de la estela
 const R_INICIO = 9;                   // radio del territorio inicial
@@ -320,8 +322,14 @@ function paso() {
     e.x += Math.cos(e.ang) * VEL * SIM;
     e.y += Math.sin(e.ang) * VEL * SIM;
 
-    const dx = e.x - C, dy = e.y - C;
-    if (dx * dx + dy * dy > (RADIO - 2.5) * (RADIO - 2.5)) { matar(e, null); continue; } // tocó el borde
+    const dx = e.x - C, dy = e.y - C, dist = Math.hypot(dx, dy), tope = RADIO - 2.5;
+    if (dist > tope) { // tocó el borde
+      const nx = dx / dist, ny = dy / dist, hx = Math.cos(e.ang), hy = Math.sin(e.ang);
+      const dot = hx * nx + hy * ny;                       // 1 = de frente contra la pared, 0 = paralelo
+      if (dot > COS_CHOQUE) { matar(e, null); continue; }  // muy de frente: muere
+      e.x = C + nx * tope; e.y = C + ny * tope;            // si no, se queda en el borde y se desliza
+      e.ang = Math.atan2(hy - dot * ny, hx - dot * nx);    // su rumbo se alinea con la pared
+    }
 
     const i = (e.y | 0) * G + (e.x | 0), r = rastro[i];
     if (r) {
