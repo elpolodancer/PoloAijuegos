@@ -56,4 +56,5 @@ export const JUEGOS = [
   { id: "jetpack", nombre: "Jetpack", icono: "🚀", descripcion: "Vuela con tu jetpack: mantén pulsado para subir y suelta para bajar; esquiva zappers y misiles, junta monedas y llega lo más lejos que puedas (estilo Jetpack Joyride).", carpeta: "jetpack" },
   { id: "2048", nombre: "2048", icono: "🔢", descripcion: "Desliza el dedo para juntar números iguales y llegar al 2048 (y más allá): tablero de 4×4, 5×5 o 6×6, con deshacer y tu mejor puntaje por tamaño.", carpeta: "2048" },
   { id: "ajedrez", nombre: "Ajedrez", icono: "♟️", descripcion: "Ajedrez completo contra la computadora: 5 niveles, enroque, al paso, coronación y tablas; juega con blancas o negras y gana puntos la primera vez que vences cada nivel.", carpeta: "ajedrez" },
+  { id: "imperio", nombre: "Imperio", icono: "🏛️", descripcion: "Estrategia isométrica estilo Age of Empires: explora un mapa con llanuras, bosques, zonas rocosas, mar y lagos; compra constructores, guerreros y recolectores, junta recursos, caza animales y defiéndete de las oleadas de bandidos. Puedes guardar varias partidas.", carpeta: "imperio" },
 ];
