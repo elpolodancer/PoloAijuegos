@@ -88,6 +88,7 @@
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 3px 6px rgba(40, 18, 4, 0.35), inset 0 0 0 1px rgba(39, 64, 143, 0.55);
 }
 
+.fantasma .carta { box-shadow: 0 2px 3px rgba(0, 0, 0, 0.35), 0 10px 18px rgba(40, 18, 4, 0.5); }
 .carta.sel { outline: 3px solid #ffd54f; outline-offset: -3px; background: #fff8dc; }
 
 /* Las pilas van siempre por encima de la luz y la sombra de la mesa */

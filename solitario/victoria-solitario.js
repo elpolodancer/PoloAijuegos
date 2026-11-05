@@ -9,6 +9,8 @@ const REBOTE = 0.82;           // fuerza del rebote (1 = rebota igual de alto)
 const ROJO = "#d02a3c", NEGRO = "#1c1c1f";
 const PASO = 1000 / 60;
 const ACIERTO_MIN_MS = 300;    // ignora toques durante los primeros 300 ms (el del último movimiento)
+const RESPETAR_MOVIMIENTO_REDUCIDO = false; // true = no mostrar la animación si el sistema pide «reducir movimiento» (en algunos celulares viene activado y la animación nunca salía)
+const CAMBIO_ANCHO_PARA_CERRAR = 60;        // la animación solo se cierra si el ANCHO cambia más de esto (girar el celular); la barra del navegador solo cambia el alto
 
 function rectRedondo(g, x, y, w, h, r) {
   g.beginPath();
@@ -61,7 +63,7 @@ function crearSprite(c, w, h, relleno, dpr, VALS, PALOS) {
 // alTerminar(): se llama al cerrar la animación (aquí se redibuja el tablero normal)
 export function animarVictoria({ base, VALS, PALOS, pintarBase, alTerminar }) {
   const pilas = [0, 1, 2, 3].map((i) => document.querySelector('.pila[data-t="base"][data-i="' + i + '"]'));
-  const reducir = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reducir = RESPETAR_MOVIMIENTO_REDUCIDO && matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (reducir || pilas.some((p) => !p) || base.length !== 4) { alTerminar(); return; }
 
   const rects = pilas.map((p) => p.getBoundingClientRect());
@@ -72,7 +74,7 @@ export function animarVictoria({ base, VALS, PALOS, pintarBase, alTerminar }) {
 
   const cv = document.createElement("canvas");
   cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
-  cv.style.cssText = "position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:2147482000;touch-action:none;cursor:pointer;";
+  cv.style.cssText = "position:fixed;left:0;top:0;width:100%;height:100%;z-index:2147482000;touch-action:none;cursor:pointer;";
   const g = cv.getContext("2d");
   g.scale(dpr, dpr);
   const aviso = document.createElement("div");
@@ -133,14 +135,15 @@ export function animarVictoria({ base, VALS, PALOS, pintarBase, alTerminar }) {
     if (cerrado) return;
     cerrado = true;
     cancelAnimationFrame(raf);
-    removeEventListener("resize", cerrar);
+    removeEventListener("resize", alRedimensionar);
     removeEventListener("keydown", alTeclado);
     cv.remove(); aviso.remove();
     alTerminar();
   }
+  function alRedimensionar() { if (Math.abs(innerWidth - W) > CAMBIO_ANCHO_PARA_CERRAR) cerrar(); }
   function alTeclado(e) { if (e.key === "Escape" || e.key === " " || e.key === "Enter") cerrar(); }
   cv.addEventListener("click", () => { if (performance.now() - inicio > ACIERTO_MIN_MS) cerrar(); });
-  addEventListener("resize", cerrar);
+  addEventListener("resize", alRedimensionar);
   addEventListener("keydown", alTeclado);
   raf = requestAnimationFrame(cuadro);
 }

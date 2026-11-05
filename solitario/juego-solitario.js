@@ -15,7 +15,12 @@ const CLAVE_TIEMPOS = "solitario-tiempos";  // localStorage: { [nivel]: mejor ti
 const PREMIO_RAPIDA = 25; // monedas por ganar una partida rápida
 const PREMIO_NIVEL = 50;  // monedas por ganar un nivel
 const COSTO_BOOST = 10;   // precio del boost «deshacer»
-const AYUDA = "Toca una carta y luego el lugar donde quieres ponerla. Toca una carta seleccionada otra vez para subirla a la base.";
+const AYUDA = "Arrastra una carta, o tócala y luego toca el lugar donde quieres ponerla. Toca una carta seleccionada otra vez para subirla a la base.";
+const DURACION_VUELO = 170; // «Rellenar todo»: ms que tarda cada carta en volar a su base
+const PAUSA_CARTA = 45;     // «Rellenar todo»: ms de pausa entre una carta y la siguiente
+const PAUSA_ROBAR = 60;     // «Rellenar todo»: ms de pausa al robar del mazo
+const UMBRAL_ARRASTRE = 6;  // píxeles que hay que mover una carta para que cuente como arrastre (menos = toque normal)
+const CLIC_FANTASMA_MS = 120; // tras soltar una carta se ignora el «click» automático del navegador durante este tiempo
 
 const PALOS = ["♠", "♥", "♦", "♣"];
 const VALS = ["", "A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
@@ -27,6 +32,8 @@ let mazo, descarte, base, tab, puntos, movs, sel, historial, inicioT, reloj, ter
 let cfg = { robar: 1, reciclajes: Infinity }, reciclados = 0, actual = null, pagina = 0;
 let boost = false;          // boost «deshacer» activo en el nivel actual
 let deshechoSeguido = false; // true si ya se deshizo y aún no hay un movimiento nuevo
+let llenando = false, llenadoId = 0; // «Rellenar todo» en marcha / número de la tanda (si cambia, la tanda se cancela)
+let bloqueaClicHasta = 0;            // tras un arrastre se ignora el «click» que el navegador manda al soltar
 
 alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; });
 btnEntrar.addEventListener("click", () => entrar().catch((e) => { estado.textContent = e.message; }));
@@ -82,6 +89,7 @@ $("ir-niveles").addEventListener("click", () => mostrar("niveles"));
 document.querySelectorAll("[data-dif]").forEach((b) =>
   b.addEventListener("click", () => nueva({ dificultad: b.dataset.dif })));
 $("menu").addEventListener("click", async () => {
+  llenadoId++; llenando = false;
   await abandonar();
   clearInterval(reloj);
   mostrar("menu");
@@ -140,6 +148,7 @@ async function abandonar() {
 }
 // opc: { dificultad } para partida rápida, o { nivel: n } para un nivel
 async function nueva(opc) {
+  llenadoId++; llenando = false;
   await abandonar();
   actual = opc = opc || actual || { dificultad: "facil" };
   let semilla, dif;
@@ -290,7 +299,7 @@ $("siguiente").addEventListener("click", () => nueva({ nivel: actual.nivel + 1 }
 
 // ---- Toques ----
 tablero.addEventListener("click", (e) => {
-  if (terminado) return;
+  if (terminado || llenando || performance.now() < bloqueaClicHasta) return;
   const pe = e.target.closest(".pila");
   if (!pe) return;
   const t = pe.dataset.t, i = +pe.dataset.i;
@@ -311,6 +320,166 @@ tablero.addEventListener("click", (e) => {
 $("nueva").addEventListener("click", () => nueva(actual));
 $("deshacer").addEventListener("click", deshacer);
 $("boost").addEventListener("click", comprarBoost);
+
+// ---- Rellenar todo ----
+// Cuando no queda ninguna carta boca abajo, las cartas suben solas a las bases, una por una y en orden (A, 2, 3…).
+// planRelleno() simula la partida SIN tocarla y devuelve la lista de pasos, o null si todavía no se puede terminar sola
+// (hay cartas boca abajo, o el mazo no alcanza con los reciclajes que quedan). Con eso se decide si se muestra el botón.
+function planRelleno() {
+  if (terminado || llenando || !tab || tab.some((p) => p.some((c) => !c.up))) return null;
+  const copia = (c) => ({ v: c.v, s: c.s });
+  const cols = tab.map((p) => p.map(copia));
+  let mz = mazo.map(copia), ds = descarte.map(copia), rec = reciclados;
+  const h = [0, 0, 0, 0]; // cartas ya en la base de cada palo
+  base.forEach((p) => { if (p.length) h[p[p.length - 1].s] = p.length; });
+  const pasos = [];
+  let sinAvance = 0;
+  while (h[0] + h[1] + h[2] + h[3] < 52) {
+    // De las cartas a la vista que ya caben en una base, sube la de menor valor (así sale todo en orden)
+    let mejor = null;
+    cols.forEach((p, i) => {
+      const c = p[p.length - 1];
+      if (c && h[c.s] === c.v - 1 && (!mejor || c.v < mejor.c.v)) mejor = { c, paso: { t: "tab", i } };
+    });
+    const w = ds[ds.length - 1];
+    if (w && h[w.s] === w.v - 1 && (!mejor || w.v < mejor.c.v)) mejor = { c: w, paso: { t: "descarte", i: 0 } };
+    if (mejor) {
+      if (mejor.paso.t === "tab") cols[mejor.paso.i].pop(); else ds.pop();
+      h[mejor.c.s]++; pasos.push(mejor.paso); sinAvance = 0;
+      continue;
+    }
+    // Si no hay ninguna, se roba del mazo (con las mismas reglas de la dificultad)
+    if (mz.length) { for (let n = 0; n < cfg.robar && mz.length; n++) ds.push(mz.pop()); }
+    else if (ds.length && rec < cfg.reciclajes) { rec++; mz = ds.reverse(); ds = []; }
+    else return null;
+    pasos.push({ t: "robar" });
+    if (++sinAvance > 60) return null; // dio la vuelta al mazo sin poder subir nada
+  }
+  return pasos;
+}
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+// Una copia de la carta vuela desde su lugar hasta la base (si el sistema pide «reducir movimiento», no vuela)
+async function volar(o, d) {
+  const pe = tablero.querySelector('.pila[data-t="' + o.t + '"][data-i="' + o.i + '"]');
+  const dest = tablero.querySelector('.pila[data-t="base"][data-i="' + d + '"]');
+  const ce = pe && pe.querySelector('.carta[data-k="' + o.k + '"]');
+  if (!ce || !dest || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const rt = tablero.getBoundingClientRect(), rc = ce.getBoundingClientRect(), rd = dest.getBoundingClientRect();
+  const v = ce.cloneNode(true);
+  v.classList.remove("sel");
+  v.style.top = rc.top - rt.top - tablero.clientTop + "px";
+  v.style.left = rc.left - rt.left - tablero.clientLeft + "px";
+  v.style.zIndex = "50"; v.style.pointerEvents = "none";
+  ce.style.visibility = "hidden";
+  tablero.appendChild(v);
+  const anim = v.animate(
+    [{ transform: "translate(0, 0)" }, { transform: "translate(" + (rd.left - rc.left) + "px, " + (rd.top - rc.top) + "px)" }],
+    { duration: DURACION_VUELO, easing: "ease-in-out" });
+  await anim.finished.catch(() => {});
+  v.remove();
+}
+async function rellenar() {
+  const pasos = planRelleno();
+  if (!pasos) return;
+  const id = ++llenadoId;
+  llenando = true; sel = null;
+  estado.textContent = "Rellenando…";
+  dibujar();
+  for (const p of pasos) {
+    if (id !== llenadoId || terminado) break;
+    if (p.t === "robar") { robar(); await esperar(PAUSA_ROBAR); continue; }
+    const o = p.t === "tab" ? { t: "tab", i: p.i, k: tab[p.i].length - 1 } : { t: "descarte", i: 0, k: descarte.length - 1 };
+    const c = pila(o.t, o.i)[o.k];
+    const d = c ? base.findIndex((_, n) => puede("base", n, [c])) : -1;
+    if (d < 0) break;
+    await volar(o, d);
+    if (id !== llenadoId) break;
+    mover(o, { t: "base", i: d }); // si es la última carta, mover() llama a ganar() y sale la cascada
+    await esperar(PAUSA_CARTA);
+  }
+  if (id === llenadoId) {
+    llenando = false;
+    if (!terminado) { estado.textContent = AYUDA; dibujar(); }
+  }
+}
+$("rellenar").addEventListener("click", rellenar);
+
+// ---- Arrastrar cartas ----
+// Se puede arrastrar cualquier carta boca arriba del tablero (con las que van encima), la de arriba del descarte y la de arriba de una base.
+// Mover menos de UMBRAL_ARRASTRE píxeles sigue siendo un toque normal (el «click» de arriba).
+let arr = null; // arrastre en curso: { o: {t, i, k}, pe, x0, y0, pid, activo, fantasma }
+tablero.addEventListener("pointerdown", (e) => {
+  if (terminado || llenando || arr || (e.pointerType === "mouse" && e.button !== 0)) return;
+  const ce = e.target.closest(".carta"), pe = e.target.closest(".pila");
+  if (!ce || !pe) return;
+  const t = pe.dataset.t, i = +pe.dataset.i;
+  if (t === "mazo") return;
+  const p = pila(t, i), k = +ce.dataset.k;
+  if (!p[k] || !p[k].up || !(t === "tab" || k === p.length - 1)) return;
+  arr = { o: { t, i, k }, pe, x0: e.clientX, y0: e.clientY, pid: e.pointerId, activo: false, fantasma: null };
+});
+function empezarArrastre() {
+  const originales = [...arr.pe.querySelectorAll(".carta")].filter((c) => +c.dataset.k >= arr.o.k);
+  const rt = tablero.getBoundingClientRect(), r0 = originales[0].getBoundingClientRect();
+  const f = document.createElement("div");
+  f.className = "fantasma";
+  f.style.left = r0.left - rt.left - tablero.clientLeft + "px";
+  f.style.top = r0.top - rt.top - tablero.clientTop + "px";
+  originales.forEach((c) => {
+    const r = c.getBoundingClientRect(), n = c.cloneNode(true);
+    n.classList.remove("sel");
+    n.style.top = r.top - r0.top + "px";
+    n.style.left = r.left - r0.left + "px";
+    f.appendChild(n);
+    c.classList.add("arrastrando"); // la original se esconde mientras se arrastra su copia
+  });
+  tablero.appendChild(f);
+  arr.fantasma = f; arr.activo = true; sel = null;
+}
+// A qué pila se puede soltar: primero la que más se solape con la carta arrastrada; si no hay, la que está bajo el dedo
+function destinoDe(a, e) {
+  const cartas = pila(a.o.t, a.o.i).slice(a.o.k);
+  const legal = (el) => {
+    if (!el) return null;
+    const t = el.dataset.t, i = +el.dataset.i;
+    if (t === "mazo" || t === "descarte" || (t === a.o.t && i === a.o.i) || (a.o.t === "base" && t === "base")) return null;
+    return puede(t, i, cartas) ? { t, i } : null;
+  };
+  const rf = a.fantasma.firstElementChild.getBoundingClientRect();
+  let mejor = null, mejorArea = 0;
+  tablero.querySelectorAll(".pila").forEach((el) => {
+    const d = legal(el);
+    if (!d) return;
+    const r = el.getBoundingClientRect();
+    const w = Math.min(r.right, rf.right) - Math.max(r.left, rf.left), h = Math.min(r.bottom, rf.bottom) - Math.max(r.top, rf.top);
+    if (w > 0 && h > 0 && w * h > mejorArea) { mejorArea = w * h; mejor = d; }
+  });
+  if (mejor) return mejor;
+  const bajo = document.elementsFromPoint(e.clientX, e.clientY).map((n) => n.closest(".pila")).find((n) => n && tablero.contains(n));
+  return legal(bajo);
+}
+addEventListener("pointermove", (e) => {
+  if (!arr || e.pointerId !== arr.pid) return;
+  const dx = e.clientX - arr.x0, dy = e.clientY - arr.y0;
+  if (!arr.activo) {
+    if (Math.hypot(dx, dy) < UMBRAL_ARRASTRE) return;
+    empezarArrastre();
+  }
+  arr.fantasma.style.transform = "translate(" + dx + "px, " + dy + "px)";
+});
+function soltar(e, cancelado) {
+  if (!arr || e.pointerId !== arr.pid) return;
+  const a = arr;
+  arr = null;
+  if (!a.activo) return; // fue un toque: lo atiende el «click» de siempre
+  bloqueaClicHasta = performance.now() + CLIC_FANTASMA_MS;
+  const destino = cancelado ? null : destinoDe(a, e);
+  a.fantasma.remove();
+  if (destino) mover(a.o, destino); else dibujar(); // si no cabe en ningún lado, la carta vuelve a su lugar
+  bloqueaClicHasta = performance.now() + CLIC_FANTASMA_MS; // el «click» sale justo al soltar; pasado ese instante, los toques vuelven a contar
+}
+addEventListener("pointerup", (e) => soltar(e, false));
+addEventListener("pointercancel", (e) => soltar(e, true));
 
 // ---- Dibujo ----
 function carta(c, k, top, left, marcada) {
@@ -374,9 +543,10 @@ function dibujar() {
   pintarTiempo();
   // Botones de deshacer y boost
   const enNivel = !!(actual && actual.nivel);
-  $("deshacer").disabled = !historial.length || terminado || (enNivel && !boost && deshechoSeguido);
+  $("deshacer").disabled = !historial.length || terminado || llenando || (enNivel && !boost && deshechoSeguido);
   $("boost").textContent = boost ? "Boost activo ✓" : "Boost: deshacer (" + COSTO_BOOST + " 🪙)";
-  $("boost").disabled = boost || terminado;
+  $("boost").disabled = boost || terminado || llenando;
+  $("rellenar").hidden = !planRelleno(); // aparece cuando ya no queda ninguna carta bloqueada y la partida se puede terminar sola
   pintarMonedas();
 }
 

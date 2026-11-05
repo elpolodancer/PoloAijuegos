@@ -13,6 +13,10 @@
 .tablero { --w: min(11vw, 76px); display: grid; grid-template-columns: repeat(7, var(--w)); gap: calc(var(--w) * 0.2) calc(var(--w) * 0.1); justify-content: center; align-items: start; padding: 10px 10px calc(var(--w) * 1.2); user-select: none; touch-action: manipulation; }
 .pila { position: relative; width: var(--w); height: calc(var(--w) * 1.4); cursor: pointer; }
 .carta { position: absolute; left: 0; width: var(--w); height: calc(var(--w) * 1.4); box-sizing: border-box; font-weight: 700; font-size: calc(var(--w) * 0.3); overflow: hidden; }
+/* Arrastre: las cartas no deben hacer scroll de la página al tocarlas; la original se esconde y su copia (.fantasma) sigue al dedo */
+.carta { touch-action: none; }
+.carta.arrastrando { visibility: hidden; }
+.fantasma { position: absolute; z-index: 60; width: var(--w); height: calc(var(--w) * 1.4); pointer-events: none; }
 .reciclar { position: absolute; top: 0; left: 0; width: var(--w); height: calc(var(--w) * 1.4); display: flex; align-items: center; justify-content: center; font-size: calc(var(--w) * 0.6); }
 
 /* Esquinas (.e arriba, .f abajo girada): número arriba y palo debajo. .c = símbolo del centro */
