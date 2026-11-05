@@ -7,7 +7,17 @@
 // Los contornos están MUY simplificados (listas de [longitud, latitud]): es un dibujo decorativo, no un mapa exacto.
 // Para desbloquear otro estado: pon «listo: true» en ESTADOS (y añade lo que deba pasar al tocarlo).
 
-import { NIVELES_COLIMA, NOMBRES_CATEGORIA, BONOS, ETAPA } from "./colima.js";
+import { NIVELES_COLIMA, NOMBRES_CATEGORIA, BONOS as BONOS_COLIMA, ETAPA as ETAPA_COLIMA } from "./colima.js";
+import { NIVELES_BCS, BONOS as BONOS_BCS, ETAPA as ETAPA_BCS } from "./bajacaliforniasur.js";
+import { NIVELES_CAMPECHE, BONOS as BONOS_CAMPECHE, ETAPA as ETAPA_CAMPECHE } from "./campeche.js";
+
+// Etapas con niveles ya hechos, por id de ESTADOS. Para agregar otra: importa su archivo y añádela aquí (y pon «listo: true» en ESTADOS).
+// El orden en que se desbloquean las 32 etapas está en etapas.js.
+const DATOS_ETAPA = {
+  col: { etapa: ETAPA_COLIMA, niveles: NIVELES_COLIMA, bonos: BONOS_COLIMA },
+  bcs: { etapa: ETAPA_BCS, niveles: NIVELES_BCS, bonos: BONOS_BCS },
+  camp: { etapa: ETAPA_CAMPECHE, niveles: NIVELES_CAMPECHE, bonos: BONOS_CAMPECHE },
+};
 
 const NS = "http://www.w3.org/2000/svg";
 const OCEANO = "#2c6e9e", TIERRA = "#f7ffec", T_BORDE = "#c3d6a9", T_SOMBRA = "#8fae7e", VECINO = "#a9c7a0";
@@ -38,12 +48,12 @@ export const MEXICO = [
   [-115.1, 27.85], [-114.5, 28.3], [-114.9, 29.1], [-115.7, 30.2], [-116.3, 31.0], [-116.7, 31.9],
 ];
 
-// ---------- Estados: un punto por estado (la capital). Solo Colima (etapa 1 de 32) está «listo» ----------
+// ---------- Estados: un punto por estado (la capital). Están «listo» Colima (1), Baja California Sur (2) y Campeche (3) ----------
 export const ESTADOS = [
   { id: "ags", nombre: "Aguascalientes", lon: -102.30, lat: 21.88 },
   { id: "bc", nombre: "Baja California", lon: -115.47, lat: 32.62 },
-  { id: "bcs", nombre: "Baja California Sur", lon: -110.31, lat: 24.14 },
-  { id: "camp", nombre: "Campeche", lon: -90.53, lat: 19.85 },
+  { id: "bcs", nombre: "Baja California Sur", lon: -110.31, lat: 24.14, listo: true },
+  { id: "camp", nombre: "Campeche", lon: -90.53, lat: 19.85, listo: true },
   { id: "chis", nombre: "Chiapas", lon: -93.11, lat: 16.75 },
   { id: "chih", nombre: "Chihuahua", lon: -106.09, lat: 28.63 },
   { id: "cdmx", nombre: "Ciudad de México", lon: -99.13, lat: 19.43 },
@@ -245,6 +255,7 @@ function accesible(nodo, etiqueta, accion) {
 //        jugarBono(bono) se llama al tocar una casilla de bono)
 export function montarMapa(r) {
   let vista = "mundo"; // mundo | mexico | estado
+  let estadoId = "col"; // estado abierto en la vista «estado» (clave de DATOS_ETAPA)
   const ir = (v) => { vista = v; pintar(); };
 
   function vistaMundo() {
@@ -268,7 +279,7 @@ export function montarMapa(r) {
   }
 
   function vistaMexico() {
-    r.info.textContent = "Colima es la etapa " + ETAPA.numero + " de " + ETAPA.total + " y el único estado disponible por ahora.";
+    r.info.textContent = "Disponibles por ahora: " + ESTADOS.filter((x) => x.listo).map((x) => x.nombre).join(", ") + ". Toca un punto morado para entrar.";
     const P = proyector(-118.8, -86.2, 33.2, 14, 20, 0.9);
     const svg = el("svg", { viewBox: "0 0 " + P.w + " " + P.h, role: "group", "aria-label": "Mapa de México" }, r.lienzo);
     el("rect", { width: P.w, height: P.h, fill: OCEANO }, svg);
@@ -287,17 +298,18 @@ export function montarMapa(r) {
       el("circle", { cx: x, cy: y, r: 9, fill: "none", stroke: MORADO, "stroke-width": 2.5, class: "pulso", "pointer-events": "none" }, svg);
       el("circle", { cx: x, cy: y, r: 9, fill: MORADO, stroke: "#fff", "stroke-width": 2.5, "pointer-events": "none" }, svg);
       const zona = el("circle", { cx: x, cy: y, r: 22, fill: "transparent", class: "sel" }, svg);
-      accesible(zona, e.nombre, () => ir("estado"));
+      accesible(zona, e.nombre, () => { estadoId = e.id; ir("estado"); });
       texto(svg, x, y - 17, e.nombre, 17);
     }
   }
 
   function vistaEstado() {
-    const listos = NIVELES_COLIMA.filter((nv) => nv.listo).length;
-    r.info.textContent = "Etapa " + ETAPA.numero + " de " + ETAPA.total + " · Niveles listos: " + listos + " de " + NIVELES_COLIMA.length + " · las estrellas son la dificultad fija de cada nivel (1 = muy fácil, 5 = muy difícil) · 🪙 = bono después de cada 10 niveles.";
+    const D = DATOS_ETAPA[estadoId], NIVELES_ESTADO = D.niveles, ETAPA = D.etapa;
+    const listos = NIVELES_ESTADO.filter((nv) => nv.listo).length;
+    r.info.textContent = "Etapa " + ETAPA.numero + " de " + ETAPA.total + " · Niveles listos: " + listos + " de " + NIVELES_ESTADO.length + " · las estrellas son la dificultad fija de cada nivel (1 = muy fácil, 5 = muy difícil) · 🪙 = bono después de cada 10 niveles.";
     const rej = document.createElement("div");
     rej.className = "rejilla-niveles";
-    for (const nv of NIVELES_COLIMA) {
+    for (const nv of NIVELES_ESTADO) {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "nv c" + nv.categoria + (nv.listo ? " hecho" : " bloq");
@@ -311,7 +323,7 @@ export function montarMapa(r) {
       b.append(n, e);
       b.addEventListener("click", () => { if (nv.listo && r.jugarNivel) r.jugarNivel(nv); });
       rej.appendChild(b);
-      const bono = nv.n % 10 === 0 && BONOS.find((x) => x.despuesDe === nv.n);
+      const bono = nv.n % 10 === 0 && D.bonos.find((x) => x.despuesDe === nv.n);
       if (bono) {
         const c = document.createElement("button");
         c.type = "button";
@@ -331,9 +343,9 @@ export function montarMapa(r) {
 
   function pintar() {
     r.lienzo.replaceChildren();
-    r.titulo.textContent = vista === "mundo" ? "Mapa" : vista === "mexico" ? "México" : ETAPA.nombre;
+    r.titulo.textContent = vista === "mundo" ? "Mapa" : vista === "mexico" ? "México" : DATOS_ETAPA[estadoId].etapa.nombre;
     r.ir.hidden = vista === "estado";
-    r.ir.textContent = vista === "mundo" ? "📍 México" : "📍 " + ETAPA.nombre;
+    r.ir.textContent = vista === "mundo" ? "📍 México" : "📍 " + DATOS_ETAPA[estadoId].etapa.nombre;
     if (vista === "mundo") vistaMundo();
     else if (vista === "mexico") vistaMexico();
     else vistaEstado();
