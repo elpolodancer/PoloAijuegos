@@ -19,26 +19,99 @@
     .carta.sel { outline: 3px solid #ffd54f; outline-offset: -3px; background: #fff8dc; }
     .reciclar { position: absolute; top: 0; left: 0; width: var(--w); height: calc(var(--w) * 1.4); display: flex; align-items: center; justify-content: center; font-size: calc(var(--w) * 0.6); color: rgba(255, 255, 255, 0.6); }
     .acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+    /* ---- Menú, dificultad y niveles ---- */
+    .panel { max-width: 420px; margin: 24px auto; display: flex; flex-direction: column; gap: 12px; text-align: center; }
+    .panel h2 { margin: 0 0 4px; font-size: 1.4rem; }
+    .panel p { margin: 0; color: var(--suave); }
+    .btn-grande { padding: 16px 18px; font-size: 1.1rem; text-align: left; display: flex; align-items: center; gap: 12px; }
+    .btn-grande small { display: block; font-weight: 400; opacity: 0.85; font-size: 0.8rem; }
+    .btn-grande .ico { font-size: 1.8rem; }
+    .btn-sec { background: var(--tarjeta); border: 1px solid var(--borde); }
+    .btn-sec:hover { border-color: var(--acento); }
+    .nivel-pag { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0; font-weight: 700; }
+    .rejilla-niveles { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 8px; }
+    .nivel { position: relative; padding: 10px 0; font: inherit; font-weight: 700; color: var(--texto); background: var(--tarjeta); border: 2px solid var(--borde); border-radius: 10px; cursor: pointer; }
+    .nivel.facil { border-color: #2e9e5b; }
+    .nivel.media { border-color: #d4a72c; }
+    .nivel.dificil { border-color: #d64545; }
+    .nivel.hecho { background: #24443a; }
+    .nivel small { display: block; margin-top: 2px; font-weight: 400; font-size: 0.7rem; color: var(--suave); }
+    .nivel.cerrado { opacity: 0.55; }
+    .nivel.pronto { opacity: 0.3; cursor: default; }
+    .nivel:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+    .leyenda { color: var(--suave); font-size: 0.85rem; margin: 6px 0 0; }
+    .monedas { font-weight: 700; color: #ffd54f; }
+    #titulo-partida { font-weight: 700; margin: 0 0 8px; color: var(--suave); }
   </style>
 </head>
 <body>
   <header class="barra">
     <a class="volver" href="../index.html">‹ Juegos</a>
     <h1>🃏 Solitario</h1>
+    <span id="monedas-barra" class="monedas" title="Tus monedas">🪙 0</span>
   </header>
   <main>
-    <div id="info">
-      <span>Puntos: <span id="marcador">0</span></span>
-      <span>Movimientos: <span id="movs">0</span></span>
-      <span>Tiempo: <span id="tiempo">0:00</span></span>
-    </div>
-    <div id="tablero" class="tablero"></div>
-    <p id="estado">Toca una carta y luego el lugar donde quieres ponerla. Toca una carta seleccionada otra vez para subirla a la base.</p>
-    <div class="acciones">
-      <button id="nueva" class="btn" type="button">Nueva partida</button>
-      <button id="deshacer" class="btn" type="button">Deshacer</button>
-      <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
-    </div>
+    <!-- Menú principal -->
+    <section id="vista-menu" class="panel">
+      <h2>¿Cómo quieres jugar?</h2>
+      <button id="ir-rapida" class="btn btn-grande" type="button">
+        <span class="ico">⚡</span><span>Partida rápida<small>Elige la dificultad y juega al instante</small></span>
+      </button>
+      <button id="ir-niveles" class="btn btn-grande" type="button">
+        <span class="ico">🗺️</span><span>Niveles<small>500 niveles, de menos a más reto</small></span>
+      </button>
+    </section>
+
+    <!-- Dificultad de la partida rápida -->
+    <section id="vista-dificultad" class="panel" hidden>
+      <h2>Elige la dificultad</h2>
+      <button class="btn btn-grande" type="button" data-dif="facil">
+        <span class="ico">🟢</span><span>Fácil<small>Robas 1 carta · reciclas el mazo sin límite</small></span>
+      </button>
+      <button class="btn btn-grande" type="button" data-dif="media">
+        <span class="ico">🟡</span><span>Normal<small>Robas 1 carta · 3 reciclajes del mazo</small></span>
+      </button>
+      <button class="btn btn-grande" type="button" data-dif="dificil">
+        <span class="ico">🔴</span><span>Difícil<small>Robas 3 cartas · reciclas el mazo sin límite</small></span>
+      </button>
+      <button class="btn btn-sec" type="button" data-volver="menu">‹ Volver</button>
+    </section>
+
+    <!-- Lista de niveles -->
+    <section id="vista-niveles" hidden>
+      <div class="nivel-pag">
+        <button id="pag-ant" class="btn btn-sec" type="button" aria-label="Página anterior">‹</button>
+        <span id="pag-texto">Niveles 1–50</span>
+        <button id="pag-sig" class="btn btn-sec" type="button" aria-label="Página siguiente">›</button>
+      </div>
+      <div id="rejilla-niveles" class="rejilla-niveles"></div>
+      <p class="leyenda">🟢 fácil · 🟡 normal · 🔴 difícil · ✓ superado · 🔒 supera el nivel anterior · gris: próximamente</p>
+      <p id="resumen-niveles" class="leyenda"></p>
+      <div class="acciones"><button class="btn btn-sec" type="button" data-volver="menu">‹ Volver</button></div>
+    </section>
+
+    <!-- Partida -->
+    <section id="vista-juego" hidden>
+      <p id="titulo-partida"></p>
+      <div id="info">
+        <span>Puntos: <span id="marcador">0</span></span>
+        <span>Movimientos: <span id="movs">0</span></span>
+        <span>Reciclajes: <span id="recic">∞</span></span>
+        <span>Tiempo: <span id="tiempo">0:00</span></span>
+        <span id="record-wrap" hidden>Récord: <span id="record">–</span></span>
+      </div>
+      <div id="tablero" class="tablero"></div>
+      <p id="estado">Toca una carta y luego el lugar donde quieres ponerla. Toca una carta seleccionada otra vez para subirla a la base.</p>
+      <div class="acciones">
+        <button id="siguiente" class="btn" type="button" hidden>Siguiente nivel ›</button>
+        <button id="nueva" class="btn" type="button">Nueva partida</button>
+        <button id="deshacer" class="btn" type="button">Deshacer</button>
+        <button id="boost" class="btn btn-sec" type="button" hidden>Boost: deshacer (10 🪙)</button>
+        <button id="menu" class="btn btn-sec" type="button">Menú</button>
+        <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
+      </div>
+    </section>
   </main>
   <script type="module" src="juego-solitario.js"></script>
 </body>
