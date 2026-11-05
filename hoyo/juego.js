@@ -62,8 +62,15 @@ const CAMPO_CALLE = 600, CAMPO_ANCHO = 90;
 const CAMPOS = ["#6aa84f", "#8fbc5a", "#c9b458", "#7a9a3e", "#a67c52", "#9acd62"];
 const enCalleCampo = (x, y) => Math.abs(((x + CAMPO_CALLE / 2) % CAMPO_CALLE) - CAMPO_CALLE / 2) < CAMPO_ANCHO / 2 || Math.abs(((y + CAMPO_CALLE / 2) % CAMPO_CALLE) - CAMPO_CALLE / 2) < CAMPO_ANCHO / 2;
 
+// Isla al azar, más probable entre más grande es (así hay la misma densidad de objetos en todas)
+function islaAlAzar() {
+  for (let i = 0; i < 20; i++) { const s = islas[Math.floor(Math.random() * islas.length)]; if (Math.random() < (s.R / 360) ** 2) return s; }
+  return islas[0];
+}
+
 const MAPAS = {
   ciudad: {
+    mundo: 7500, objetos: 3875, bots: 12, duracion: 300, // 15×15 cuadras de 500 px
     bg: "#13182b",
     tipos: [
       { e: "🌷", r: 7, w: 30 }, { e: "🧍", r: 7, w: 14 }, { e: "🐈", r: 9, w: 8 },
@@ -108,6 +115,7 @@ const MAPAS = {
     },
   },
   playa: {
+    mundo: 7500, objetos: 3875, bots: 12, duracion: 300, // igual de grande que la ciudad (15×15 cuadras de 500 px)
     bg: "#0c4a63",
     tipos: [
       { e: "🐚", r: 7, w: 30 }, { e: "🥥", r: 7, w: 20 }, { e: "🦀", r: 8, w: 14 }, { e: "🏐", r: 10, w: 14 },
@@ -118,7 +126,7 @@ const MAPAS = {
     ],
     preparar() {
       islas = [];
-      for (let i = 0; i < 400 && islas.length < 9; i++) {
+      for (let i = 0; i < 8000 && islas.length < 40; i++) {
         const R = rnd(190, 360), x = rnd(R + 80, MUNDO - R - 80), y = rnd(R + 80, MUNDO - R - 80);
         if (islas.every((s) => Math.hypot(s.x - x, s.y - y) > s.R + R + 140)) islas.push({ x, y, R });
       }
@@ -129,7 +137,7 @@ const MAPAS = {
           const x = rnd(100, MUNDO - 100), y = rnd(100, MUNDO - 100);
           if (islas.every((s) => Math.hypot(s.x - x, s.y - y) > s.R + 50 + t.r)) return [x, y];
         } else {
-          const s = islas[Math.floor(Math.random() * islas.length)], m = s.R - t.r - 10;
+          const s = islaAlAzar(), m = s.R - t.r - 10;
           if (m < 10) continue;
           const a = rnd(0, 6.2832), d = Math.sqrt(Math.random()) * m;
           return [s.x + Math.cos(a) * d, s.y + Math.sin(a) * d];
@@ -150,8 +158,8 @@ const MAPAS = {
     },
   },
   campo: {
-    // Mapa gigante: el doble de largo y de ancho que los demás (4 veces más superficie)
-    mundo: 6000, objetos: 2400, bots: 14, duracion: 180,
+    // Mapa grande: 15×15 cuadras de 600 px
+    mundo: 9000, objetos: 5400, bots: 18, duracion: 420,
     bg: "#3f6b34",
     tipos: [
       { e: "🌾", r: 7, w: 30 }, { e: "🌻", r: 7, w: 18 }, { e: "🐔", r: 8, w: 14 }, { e: "🐑", r: 11, w: 14 },
@@ -195,7 +203,7 @@ const MAPAS = {
     },
   },
 };
-const NOMBRES = ["Lalo", "Mimi", "Toño", "Kiki", "Chuy", "Nena", "Beto", "Pepa", "Rulo", "Cuca", "Tita", "Lupe", "Memo", "Chela", "Nacho", "Güera"];
+const NOMBRES = ["Lalo", "Mimi", "Toño", "Kiki", "Chuy", "Nena", "Beto", "Pepa", "Rulo", "Cuca", "Tita", "Lupe", "Memo", "Chela", "Nacho", "Güera", "Tere", "Paco"];
 const COLORES = ["#ff5c7a", "#ffb347", "#4ad6a7", "#5cb8ff", "#c77dff", "#ffe066", "#ff8fab", "#9be564", "#7de0e6", "#f2a65a"];
 
 let mapaId = "ciudad", mapa = MAPAS.ciudad;
@@ -370,10 +378,7 @@ function actualizar(dt) {
     }
   }
   for (let i = caidas.length - 1; i >= 0; i--) { caidas[i].t += dt / 0.35; if (caidas[i].t >= 1) caidas.splice(i, 1); }
-  if (objetos.length < totalObjetos && Math.random() < 0.3) {
-    const o = nuevoObjeto();
-    if (o && o.r < 30 && !hoyos.some((h) => Math.hypot(h.x - o.x, h.y - o.y) < h.r + 200)) objetos.push(o);
-  }
+  if (objetos.length === 0) return terminar(); // no reaparecen objetos: al acabarse todos, termina el mapa
 
   const zObj = Math.min(W, H) / (yo.r * 9);
   cam.z += (Math.max(0.12, Math.min(2.2, zObj)) - cam.z) * Math.min(1, dt * 2.5);
@@ -512,7 +517,8 @@ async function terminar() {
   jugando = false;
   const orden = [...hoyos].sort((a, b) => b.puntos - a.puntos);
   const lugar = orden.indexOf(yo) + 1;
-  $("fin").querySelector("h2").textContent = lugar === 1 ? "🏆 ¡Ganaste!" : "Terminó el tiempo: lugar " + lugar;
+  const motivo = objetos.length === 0 ? "Se acabaron los objetos" : "Terminó el tiempo";
+  $("fin").querySelector("h2").textContent = lugar === 1 ? "🏆 ¡Ganaste!" : motivo + ": lugar " + lugar;
   $("rank").innerHTML = "";
   orden.slice(0, 5).forEach((h, i) => {
     const li = document.createElement("li");
