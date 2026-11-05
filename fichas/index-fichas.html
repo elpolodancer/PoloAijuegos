@@ -1,0 +1,78 @@
+<!doctype html>
+<!-- Ruta: fichas/index-fichas.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Fichas de frutas</title>
+  <meta name="theme-color" content="#0c1626" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    html, body { height: 100%; overflow: hidden; background: #0c1626; overscroll-behavior: none; }
+    #app { height: 100%; display: flex; flex-direction: column; align-items: center; }
+    .top { width: 100%; max-width: 520px; height: 48px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
+    .top a.volver { font-size: 1.6rem; color: #fff; padding: 4px 10px; }
+    #nivelTxt { font-size: 1.3rem; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.4); }
+    .acciones { display: flex; gap: 6px; }
+    .ico { width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255,255,255,.3); background: rgba(255,255,255,.1); color: #fff; font-size: 1.1rem; cursor: pointer; }
+    #escena { position: relative; flex: none; border-radius: 14px; overflow: hidden; }
+    #lienzo { display: block; width: 100%; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none; }
+    #poderes { position: absolute; left: 0; right: 0; bottom: calc(22 * var(--u)); display: flex; justify-content: center; gap: calc(26 * var(--u)); pointer-events: none; }
+    .pw { pointer-events: auto; position: relative; width: calc(68 * var(--u)); height: calc(68 * var(--u)); border-radius: 50%; border: 3px solid #e3dccd; background: radial-gradient(circle at 35% 30%, #9a8878, #5a4a3e); font-size: calc(30 * var(--u)); line-height: 1; padding: 0; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,.4); -webkit-tap-highlight-color: transparent; }
+    .pw:active { transform: scale(.94); }
+    .pw:disabled { filter: grayscale(1); opacity: .55; }
+    .pw i { position: absolute; top: -4px; right: -4px; min-width: calc(24 * var(--u)); height: calc(24 * var(--u)); border-radius: 999px; background: #3fc45a; border: 2px solid #fff; color: #fff; font: 700 calc(14 * var(--u)) / calc(20 * var(--u)) system-ui, sans-serif; font-style: normal; text-align: center; }
+    .velo { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(6,12,24,.78); padding: 12px; }
+    .caja { width: min(92vw, 460px); max-height: 92vh; overflow: auto; background: #1b2740; border: 2px solid #8fb3e6; border-radius: 20px; padding: 18px; text-align: center; color: #fff; }
+    .caja h2 { margin: 0 0 8px; }
+    .caja p { margin: 6px 0; color: #c8d6ee; }
+    .caja .btn { margin: 6px 4px; }
+    .grande { font-size: 1.1rem; padding: 12px 20px; }
+    .niveles { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; margin-top: 12px; }
+    .nv { padding: 10px 0; border-radius: 10px; border: 1px solid #4a6490; background: #263a5c; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+    .nv.ok { background: #2e7d4a; border-color: #7be0a0; }
+    .nv:disabled { opacity: .35; cursor: default; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header class="top" id="top">
+      <a class="volver" href="../" aria-label="Volver al portal">←</a>
+      <b id="nivelTxt">Nivel 1</b>
+      <span class="acciones">
+        <button class="ico" id="btnMenu" aria-label="Niveles">☰</button>
+        <button class="ico" id="btnSon" aria-label="Sonido">🔊</button>
+      </span>
+    </header>
+    <div id="escena">
+      <canvas id="lienzo"></canvas>
+      <div id="poderes">
+        <button class="pw" id="pwDeshacer" aria-label="Deshacer">↩️<i>2</i></button>
+        <button class="pw" id="pwVarita" aria-label="Varita mágica">🪄<i>2</i></button>
+        <button class="pw" id="pwMezclar" aria-label="Mezclar">🔀<i>2</i></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="velo" id="modal" hidden>
+    <div class="caja">
+      <h2 id="mTit"></h2>
+      <p id="mTxt"></p>
+      <div id="mBot"></div>
+    </div>
+  </div>
+
+  <div class="velo" id="menu">
+    <div class="caja">
+      <h2>🍓 Fichas de frutas</h2>
+      <p>Toca las fichas que no tengan otra encima y junta 3 iguales en la bandeja. Si se llenan los 7 espacios, pierdes.</p>
+      <button class="btn grande" id="continuar">▶ Jugar</button>
+      <button class="btn grande" id="seguir" hidden>Seguir jugando</button>
+      <div class="niveles" id="niveles"></div>
+    </div>
+  </div>
+
+  <script type="module" src="juego-fichas.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
