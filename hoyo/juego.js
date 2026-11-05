@@ -8,6 +8,20 @@ const R_INICIAL = 22;
 const CRECIMIENTO = 0.35;  // cuánto crece el hoyo al tragar (más = más rápido)
 const OBJETOS = 620;
 
+// ----- Ajustes de los bots (más tontos) -----
+const BOT_COMER = 0.2;            // cuánto crecen y puntúan los bots al comer (0.2 = 80 % menos)
+const BOT_PROB_PERSEGUIR = 0.2;   // probabilidad de que decidan ir tras un hoyo más chico (tú incluido) cuando lo ven (0.2 = 80 % menos)
+const BOT_PERSECUCION_MAX = 2;    // segundos máximos que persiguen a un hoyo (antes: sin límite)
+const BOT_ENFRIAR = 6;            // segundos que descansan sin perseguir a nadie después de una persecución
+const BOT_VISION_HOYOS = 250;     // a qué distancia notan a un hoyo más chico (antes: 450)
+const BOT_VISION_OBJETOS = 400;   // a qué distancia ven objetos para comer (antes: todo el mapa)
+const BOT_HUIR_DIST = 200;        // a qué distancia notan el peligro de un hoyo más grande (antes: 380)
+const BOT_PROB_HUIR = 0.5;        // probabilidad de que huyan cuando notan el peligro
+const BOT_PROB_VAGAR = 0.3;       // probabilidad de que deambulen sin rumbo en vez de buscar comida
+
+// Velocidad de los hoyos: entre más grande, más rápido (hasta V_MAX)
+const V_BASE = 190, V_EXP = 0.25, V_MAX = 340;
+
 const $ = (id) => document.getElementById(id);
 const cv = $("c"), ctx = cv.getContext("2d");
 let W = 0, H = 0, dpr = 1;
@@ -144,12 +158,12 @@ function cargarMapa(id) {
   cam.x = cam.y = MUNDO / 2; cam.z = 0.3;
 }
 function crearHoyo(nombre, color, esBot) {
-  const h = { nombre, color, esBot, x: 0, y: 0, r: R_INICIAL, puntos: 0, dx: 0, dy: 0, meta: null, t: 0 };
+  const h = { nombre, color, esBot, x: 0, y: 0, r: R_INICIAL, puntos: 0, dx: 0, dy: 0, meta: null, t: 0, cazaT: 0, enfriar: rnd(0, BOT_ENFRIAR) };
   reaparecer(h);
   return h;
 }
 function reaparecer(h) {
-  h.r = R_INICIAL;
+  h.r = R_INICIAL; h.meta = null; h.cazaT = 0;
   for (let i = 0; i < 20; i++) {
     [h.x, h.y] = mapa.spawn();
     if (!hoyos.some((o) => o !== h && Math.hypot(o.x - h.x, o.y - h.y) < 400)) break;
@@ -197,26 +211,39 @@ function direccionJugador() {
 
 // ----- IA de los bots -----
 function pensar(b) {
-  let mejor = null, d2 = 1e12, peligro = null, presa = null;
-  for (const o of objetos) {
-    if (o.r >= b.r * 0.8) continue;
-    const d = (o.x - b.x) ** 2 + (o.y - b.y) ** 2;
-    if (d < d2) { d2 = d; mejor = o; }
+  // Si va en plena persecución, sigue un ratito más (hasta que se acabe su tiempo)
+  if (b.cazaT > 0 && b.meta && b.meta.nombre) {
+    const p = b.meta;
+    if (b.r > p.r * 1.3 && Math.hypot(p.x - b.x, p.y - b.y) < BOT_VISION_HOYOS * 1.5) return;
+    b.cazaT = 0;
   }
+  let peligro = null, presa = null;
   for (const h of hoyos) {
     if (h === b) continue;
     const d = Math.hypot(h.x - b.x, h.y - b.y);
-    if (h.r > b.r * 1.25 && d < 380 + h.r) peligro = h;
-    else if (b.r > h.r * 1.3 && d < 450 && (!presa || d < Math.hypot(presa.x - b.x, presa.y - b.y))) presa = h;
+    if (h.r > b.r * 1.25 && d < BOT_HUIR_DIST + h.r * 0.5) peligro = h;
+    else if (b.r > h.r * 1.3 && d < BOT_VISION_HOYOS && (!presa || d < Math.hypot(presa.x - b.x, presa.y - b.y))) presa = h;
   }
-  if (peligro) b.meta = { x: b.x - (peligro.x - b.x), y: b.y - (peligro.y - b.y) };
-  else if (presa) b.meta = presa;
-  else if (mejor) b.meta = mejor;
-  else b.meta = { x: rnd(100, MUNDO - 100), y: rnd(100, MUNDO - 100) };
+  const vagar = () => ({ x: rnd(100, MUNDO - 100), y: rnd(100, MUNDO - 100) });
+  if (peligro && Math.random() < BOT_PROB_HUIR) {
+    b.meta = { x: b.x - (peligro.x - b.x), y: b.y - (peligro.y - b.y) };
+  } else if (presa && b.enfriar <= 0 && Math.random() < BOT_PROB_PERSEGUIR) {
+    b.meta = presa; b.cazaT = rnd(1, BOT_PERSECUCION_MAX); b.enfriar = BOT_ENFRIAR;
+  } else if (Math.random() < BOT_PROB_VAGAR) {
+    b.meta = vagar();
+  } else {
+    let mejor = null, d2 = BOT_VISION_OBJETOS * BOT_VISION_OBJETOS;
+    for (const o of objetos) {
+      if (o.r >= b.r * 0.8) continue;
+      const d = (o.x - b.x) ** 2 + (o.y - b.y) ** 2;
+      if (d < d2) { d2 = d; mejor = o; }
+    }
+    b.meta = mejor || vagar();
+  }
 }
 
 // ----- Actualización -----
-const velocidad = (h) => 190 * Math.pow(R_INICIAL / h.r, 0.2) + 20;
+const velocidad = (h) => Math.min(V_MAX, V_BASE * Math.pow(h.r / R_INICIAL, V_EXP)); // más grande = más rápido
 
 function actualizar(dt) {
   if (!jugando) return;
@@ -226,7 +253,7 @@ function actualizar(dt) {
   [yo.dx, yo.dy] = direccionJugador();
   for (const h of hoyos) {
     if (h.esBot) {
-      h.t -= dt;
+      h.t -= dt; h.cazaT -= dt; h.enfriar -= dt;
       if (h.t <= 0 || !h.meta) { pensar(h); h.t = rnd(0.3, 0.7); }
       const m = h.meta, a = Math.hypot(m.x - h.x, m.y - h.y) || 1;
       h.dx = (m.x - h.x) / a; h.dy = (m.y - h.y) / a;
@@ -241,16 +268,18 @@ function actualizar(dt) {
       if (o.r < h.r * 0.8 && Math.hypot(o.x - h.x, o.y - h.y) < h.r - o.r * 0.3) {
         objetos[i] = objetos[objetos.length - 1]; objetos.pop();
         caidas.push({ e: o.e, r: o.r, x: o.x, y: o.y, t: 0, h });
-        h.r = Math.sqrt(h.r * h.r + o.r * o.r * CRECIMIENTO);
-        h.puntos += Math.round(o.r);
+        const k = h.esBot ? BOT_COMER : 1;
+        h.r = Math.sqrt(h.r * h.r + o.r * o.r * CRECIMIENTO * k);
+        h.puntos += Math.round(o.r * k);
       }
     }
   }
   for (const a of hoyos) for (const b of hoyos) {
     if (a === b || a.r < b.r * 1.25) continue;
     if (Math.hypot(a.x - b.x, a.y - b.y) < a.r * 0.7) {
-      a.r = Math.sqrt(a.r * a.r + b.r * b.r * 0.5);
-      a.puntos += Math.round(b.r * 3);
+      const k = a.esBot ? BOT_COMER : 1;
+      a.r = Math.sqrt(a.r * a.r + b.r * b.r * 0.5 * k);
+      a.puntos += Math.round(b.r * 3 * k);
       reaparecer(b);
     }
   }
