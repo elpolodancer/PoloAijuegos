@@ -19,6 +19,9 @@
     #aviso { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: #000b; padding: 6px 12px; border-radius: 999px; font-size: .85rem; pointer-events: none; }
     .zoom { position: absolute; top: 8px; right: 8px; display: flex; flex-direction: column; gap: 6px; }
     #inferior { flex: none; padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); background: var(--tarjeta); border-top: 1px solid var(--borde); }
+    #inv { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+    .ranura { min-width: 62px; min-height: 1.7em; padding: 3px 6px; font-size: .72rem; color: var(--suave); border: 1px dashed var(--borde); border-radius: 6px; }
+    .ranura.llena { color: var(--texto); background: var(--fondo); border-style: solid; }
     #seleccion { font-size: .85rem; color: var(--suave); margin-bottom: 6px; min-height: 1.2em; }
     #acciones { display: flex; flex-wrap: wrap; gap: 6px; }
     #acciones .btn { padding: 6px 10px; font-size: .82rem; }
@@ -42,7 +45,7 @@
 <body>
   <header class="barra">
     <a class="volver" href="../index.html">← Juegos</a>
-    <div class="datos" id="datos" hidden><span id="dinero">$0</span><span id="oleada"></span><span id="pobl"></span><span id="botin"></span></div>
+    <div class="datos" id="datos" hidden><span id="dinero">$0</span><span id="pobl"></span><span id="botin"></span></div>
     <button class="btn" id="bMenu" hidden>Guardar y salir</button>
   </header>
   <div id="zona">
@@ -58,9 +61,9 @@
         <div id="partidas"></div><button class="btn sec" id="vPers">Volver</button></div>
       <div id="mNiv" hidden><h2>Niveles</h2><p>Aquí irán los niveles con distintas temáticas. Por ahora no hay ninguno.</p><button class="btn sec" id="vNiv">Volver</button></div>
     </div>
-    <div id="fin" hidden><h2>Tu imperio cayó</h2><p id="finTxt"></p><button class="btn" id="otra">Empezar de nuevo</button></div>
+    <div id="fin" hidden><h2>Fin de la partida</h2><p id="finTxt"></p><button class="btn" id="otra">Empezar de nuevo</button></div>
   </div>
-  <div id="inferior"><div id="seleccion"></div><div id="acciones"></div></div>
+  <div id="inferior"><div id="inv"></div><div id="seleccion"></div><div id="acciones"></div></div>
   <script type="module" src="juego-imperio.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
