@@ -13,6 +13,7 @@ const VEL = 38;                       // velocidad (casillas por segundo)
 const GIRO = 3.4;                     // qué tan rápido gira (radianes por segundo): más alto = giros más cerrados
 const ANGULO_CHOQUE = 15;             // grados: si llegas al borde con menos de esto respecto a ir «de frente», mueres; si no, te deslizas
 const COS_CHOQUE = Math.cos(ANGULO_CHOQUE * Math.PI / 180);
+const GIRO_JUGADOR = 8;               // giro del jugador (más alto = responde más rápido y preciso a las teclas/dedo)
 const R_CABEZA = 3;                   // tamaño de la cabeza (para choques)
 const R_RASTRO = 2;                   // grosor de la estela
 const R_INICIO = 9;                   // radio del territorio inicial
@@ -315,7 +316,7 @@ function paso() {
     // giro suave hacia la dirección deseada
     let da = e.meta - e.ang;
     da = Math.atan2(Math.sin(da), Math.cos(da));
-    const mx = GIRO * SIM;
+    const mx = (e.jugador ? GIRO_JUGADOR : GIRO) * SIM;
     e.ang += Math.max(-mx, Math.min(mx, da));
 
     e.px = e.x; e.py = e.y;
@@ -593,7 +594,7 @@ function bucle(ts) {
   if (!seg) for (const e of ents) if (e.vivo && (!seg || cuenta[e.id] > cuenta[seg.id])) seg = e;
   if (seg) {
     const tx = seg.px + (seg.x - seg.px) * k, ty = seg.py + (seg.y - seg.py) * k;
-    const a = Math.min(1, dt * 8);
+    const a = seg === yo ? 1 : Math.min(1, dt * 8); // al jugador la cámara lo sigue pegada (sin retraso)
     cam.x += (tx - cam.x) * a; cam.y += (ty - cam.y) * a;
   }
   dibujar(k);
