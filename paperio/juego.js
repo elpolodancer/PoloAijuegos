@@ -7,6 +7,7 @@
 // - El territorio vive en una rejilla fina (cada casilla es muy pequeña) que se dibuja estirada y suavizada,
 //   así los bordes se ven redondeados y no «cuadrados».
 import { NIVELES, crearForma } from "./niveles.js";
+import { montarMapa } from "./mapa.js";
 const ID = "paperio";
 
 // ----- Ajustes -----
@@ -22,6 +23,8 @@ const PUNTOS_POR_NIVEL = 50;          // puntos extra por pasar un nivel
 const DESBLOQUEAR_TODOS = false;      // true = todos los niveles disponibles desde el inicio (útil para probar)
 const R_CABEZA = 3;                   // tamaño de la cabeza (para choques)
 const R_RASTRO = 2;                   // grosor de la estela
+const R_MONEDA = 3.4;                 // radio (en casillas) con que se dibujan las monedas del bono
+const R_RECOGER = 6.5;                // a esta distancia de la cabeza se recoge una moneda del bono
 const R_INICIO = 9;                   // radio del territorio inicial
 const GRACIA = 12;                    // pasos recientes de tu estela que no cuentan al girar (para no chocar contigo)
 const NUM_BOTS = 7;                   // máximo 7 (hay 8 colores/nombres)
@@ -44,6 +47,17 @@ const MULT_VELOZ = 2;                 // multiplicador de velocidad del jugador 
 const NOMBRES = ["Tú", "Lola", "Pepe", "Nico", "Rosa", "Toño", "Mara", "Beto"];
 const TONOS = [255, 5, 38, 135, 178, 300, 340, 55]; // color de cada uno (el primero es el jugador)
 const TEXTO_AYUDA = "Sal de tu territorio y regresa para quedarte con todo lo que encierres. Si alguien toca tu estela, pierdes; si tú tocas la suya, pierde él. Mantén el dedo pulsado y arrástralo hacia donde quieras ir, o usa las flechas / WASD. Durante la partida activa tus boosts con los botones ⭐ y ⚡ (o las teclas 1 y 2).";
+
+// ----- Partida simple: un mundo grande y 4 dificultades a elegir (se muestran en el menú de inicio) -----
+// El mundo es el círculo más grande que cabe en la rejilla (más grande que cualquier mapa de niveles.js). No tiene meta: se juega hasta que te eliminen.
+// bots = rivales (1 a 7) · dificultad (0 a 1) = agresividad de los bots · rasgos = comportamientos extra (ver niveles.js)
+const MUNDO_SIMPLE = { bolas: [[0, 0, 0.97]] };
+const DIFICULTADES = [
+  { nombre: "Fácil",   bots: 3, dificultad: 0.3,  rasgos: {} },
+  { nombre: "Normal",  bots: 5, dificultad: 0.55, rasgos: { mordisco: 0.2 } },
+  { nombre: "Difícil", bots: 7, dificultad: 0.8,  rasgos: { mordisco: 0.5, venganza: 0.5, acoso: 0.4 } },
+  { nombre: "Experto", bots: 7, dificultad: 1,    rasgos: { mordisco: 0.9, venganza: 0.8, acoso: 0.85, veloz: 0.07, giro: 0.15 } },
+];
 
 // ----- Estado -----
 const G = 2 * RADIO + 40, C = G / 2;  // lado de la rejilla y su centro (con un margen alrededor del mapa)
@@ -71,6 +85,9 @@ let estado = "demo";                  // demo | jugando | fin
 let sucio = true, bajas = 0, maxPct = 0, tiempo = 0, mejorPct = 0;
 let fx = [];
 let nivelActual = 0, nivelConstruido = -1, desbloqueado = 0, ganado = false;
+let simple = null;                    // null = modo niveles; si no, el «nivel» de la partida simple en curso
+let bono = null, monBono = [], bonoMonedas = 0; // bono de Michoacán en curso (ver michoacan.js), sus monedas {x, y, hasta} y lo recogido
+const nvActual = () => bono || simple || NIVELES[nivelActual];
 let monedas = 0, monedasPartida = 0, tramosPagados = 0, boostInicio = false, usarBoost = false; // boostInicio = comprado y pendiente; usarBoost = activo en la partida en curso
 let reloj = 0;                        // pasos de simulación transcurridos (60 por segundo)
 let nInvenc = 0, nVeloz = 0;          // boosts comprados y guardados (se activan durante la partida)
@@ -365,8 +382,8 @@ function chamfer(d) { // distancia (aprox.) al origen más cercano, en dos pasad
       d[i] = Math.min(d[i], d[i + 1] + 1, d[i + G] + 1, d[i + G + 1] + D2, d[i + G - 1] + D2);
     }
 }
-function construirNivel(n) {
-  const f = crearForma(NIVELES[n].forma);
+function construirNivel(nv) {
+  const f = crearForma(nv.forma);
   dentro.fill(0);
   for (let y = 0; y < G; y++)
     for (let x = 0; x < G; x++) {
@@ -410,12 +427,12 @@ function distEn(x, y) {
 // Qué tan agresivos son los bots en este nivel (0 a 1). Sube sola con el número de nivel;
 // un nivel puede fijarla con «dificultad: 0.8» en niveles.js.
 function dificultad() {
-  const nv = NIVELES[nivelActual];
+  const nv = nvActual();
   return typeof nv.dificultad === "number" ? Math.max(0, Math.min(1, nv.dificultad)) : Math.min(1, 0.4 + nivelActual * 0.07);
 }
 // Rasgos extra del nivel actual (mordisco, venganza, acoso, veloz), de 0 a 1; sin ellos valen 0
 function rasgo(n) {
-  const r = NIVELES[nivelActual].rasgos;
+  const r = nvActual().rasgos;
   return r && typeof r[n] === "number" ? Math.max(0, Math.min(1, r[n])) : 0;
 }
 function crear(id) {
@@ -748,7 +765,7 @@ function paso() {
     if (d0 < MARGEN_PARED) { // tocó una pared (el borde del mapa o un hueco)
       const gx = distM[yi * G + xi + 2] - distM[yi * G + xi - 2], gy = distM[(yi + 2) * G + xi] - distM[(yi - 2) * G + xi];
       const gl = Math.hypot(gx, gy);
-      const inv = e.jugador && invActiva();
+      const inv = e.jugador && (invActiva() || !!bono); // en el bono no se muere contra las paredes
       if (gl < 1e-3) { if (inv) { e.x = e.px; e.y = e.py; } else matar(e, null); continue; }
       const nx = -gx / gl, ny = -gy / gl, hx = Math.cos(e.ang), hy = Math.sin(e.ang); // (nx,ny) apunta hacia la pared
       const dot = hx * nx + hy * ny;                       // 1 = de frente contra la pared, 0 = paralelo
@@ -766,7 +783,7 @@ function paso() {
       else if (e.seq - rastroIdx[i] > GRACIA && !(e.jugador && invActiva())) { matar(e, null); continue; } // te pisaste tu propia estela
     }
     if (dueno[i] === e.id) { if (e.cola.length) cerrar(e); }
-    else sellar(e);
+    else if (!bono) sellar(e); // en el bono no se deja estela
   }
   // choque de frente: mueren los dos si ambos van fuera de casa
   const R2 = (R_CABEZA * 2) * (R_CABEZA * 2);
@@ -779,23 +796,61 @@ function paso() {
       if ((A.x - B.x) * (A.x - B.x) + (A.y - B.y) * (A.y - B.y) < R2) { matar(A, null); matar(B, null); break; }
     }
   }
+  recogerMonedas();
   if (sucio) recontar();
+}
+
+// ----- Bono: monedas que se recogen y reaparecen -----
+function colocarMonedas() {
+  monBono = []; bonoMonedas = 0;
+  if (!bono) return;
+  for (let t = 0; t < 20000 && monBono.length < bono.cantidad; t++) {
+    const x = C + (Math.random() * 2 - 1) * RADIO, y = C + (Math.random() * 2 - 1) * RADIO;
+    if (distEn(x, y) < 8) continue;                                        // lejos de las paredes
+    if (monBono.some((m) => Math.hypot(m.x - x, m.y - y) < 14)) continue;  // sin encimarse
+    monBono.push({ x, y, hasta: 0 });                                      // hasta = paso del «reloj» en que vuelve (0 = está en el mapa)
+  }
+}
+function recogerMonedas() {
+  if (!bono || estado !== "jugando" || !yo || !yo.vivo) return;
+  for (const m of monBono) {
+    if (m.hasta) { if (reloj >= m.hasta) m.hasta = 0; continue; }
+    if ((m.x - yo.x) * (m.x - yo.x) + (m.y - yo.y) * (m.y - yo.y) < R_RECOGER * R_RECOGER) {
+      m.hasta = reloj + Math.round(bono.reaparece * 60);
+      bonoMonedas += bono.valor;
+      ganarMonedas(bono.valor);
+    }
+  }
+}
+function terminarBono() {
+  estado = "fin"; ganado = false;
+  yo.vivo = false;
+  setTimeout(() => {
+    if (estado !== "fin" || !bono) return;
+    mostrarVelo("¡Se acabó el tiempo!", "", [
+      ["Monedas recogidas", String(bonoMonedas)],
+      ["Monedas totales", String(monedas)],
+    ]);
+  }, 500);
 }
 
 // ----- Partida -----
 function iniciar(demo) {
   dueno.fill(0); rastro.fill(0); rastroIdx.fill(0); clave.fill(0); limpiarCapas();
   fx = []; metaDedo = null;
-  if (nivelConstruido !== nivelActual) { construirNivel(nivelActual); nivelConstruido = nivelActual; }
-  const nBots = Math.max(1, Math.min(NUM_BOTS, NIVELES[nivelActual].bots || 4));
+  const llave = bono ? "bono" + bono.n : simple ? "simple" : nivelActual; // qué mapa hace falta
+  if (nivelConstruido !== llave) { construirNivel(nvActual()); nivelConstruido = llave; }
+  const nb = nvActual().bots;
+  const nBots = nb === 0 ? 0 : Math.max(1, Math.min(NUM_BOTS, nb || 4)); // bots: 0 = sin rivales (el bono)
   ents = [];
   for (let id = 1; id <= nBots + 1; id++) ents.push(crear(id));
   yo = ents[0];
   bajas = 0; maxPct = 0; tiempo = 0; monedasPartida = 0; tramosPagados = 0; invHasta = 0; velHasta = 0;
   estado = demo ? "demo" : "jugando";
-  usarBoost = !demo && boostInicio; // el boost comprado se gasta al empezar la partida
+  usarBoost = !demo && !bono && boostInicio; // el boost comprado se gasta al empezar la partida
   if (usarBoost) { boostInicio = false; guardarMonedas(); }
   for (const e of ents) if (!(demo && e.jugador)) aparecer(e);
+  colocarMonedas();
   recontar();
   if (!demo) { cam.x = yo.x; cam.y = yo.y; }
 }
@@ -810,7 +865,7 @@ function etiquetaNivel() {
 }
 function elegirNivel(i) {
   if (i < 0 || i > nivelMax() || i >= NIVELES.length) return;
-  nivelActual = i; ganado = false;
+  nivelActual = i; ganado = false; simple = null; bono = null;
   iniciar(true);
   mostrarVelo("Paperio", TEXTO_AYUDA, []);
 }
@@ -906,6 +961,9 @@ function mostrarVelo(titulo, texto, datos) {
   }
   $("jugar").textContent = estado === "fin" ? (ganado && nivelActual + 1 < NIVELES.length ? "Siguiente nivel" : "Jugar otra vez") : "Jugar";
   etiquetaNivel();
+  $("selNivel").hidden = !!(simple || bono);
+  if (simple) $("stNivel").textContent = "Simple";
+  else if (bono) $("stNivel").textContent = bono.nombre;
   refrescarTienda();
   marcarEntrar();
   $("velo").hidden = false;
@@ -938,6 +996,71 @@ async function cargarRanking() {
     caja.hidden = false;
   } catch (e) {}
 }
+
+// ----- Menú de inicio: Partida simple · Niveles · Mapa -----
+let difSimple = 1; // dificultad elegida (índice de DIFICULTADES; por defecto «Normal»)
+try {
+  const g = localStorage.getItem("paperio_dif_simple");
+  if (g !== null && Number.isInteger(Number(g))) difSimple = Math.max(0, Math.min(DIFICULTADES.length - 1, Number(g)));
+} catch (e) {}
+
+const mapa = montarMapa({
+  raiz: $("mapa"), titulo: $("mapaTitulo"), info: $("mapaInfo"), lienzo: $("mapaLienzo"),
+  atras: $("mapaAtras"), ir: $("mapaIr"),
+  alSalir: () => { mapa.cerrar(); mostrarInicio(); },
+  jugarBono: empezarBono,
+});
+
+function mostrarInicio() {
+  const eraSimple = !!(simple || bono);
+  simple = null; bono = null; ganado = false;
+  if (estado !== "demo" || eraSimple) iniciar(true); // de fondo se ve una demostración
+  $("velo").hidden = true; $("menu").hidden = true; mapa.cerrar();
+  $("inicioSimple").hidden = true; $("inicioBotones").hidden = false;
+  $("inicio").hidden = false;
+}
+function pintarDificultad() {
+  const d = DIFICULTADES[difSimple];
+  $("difNombre").textContent = d.nombre;
+  $("difInfo").textContent = d.bots + (d.bots === 1 ? " rival" : " rivales");
+  $("difAnt").disabled = difSimple <= 0;
+  $("difSig").disabled = difSimple >= DIFICULTADES.length - 1;
+}
+function cambiarDificultad(d) {
+  difSimple = Math.max(0, Math.min(DIFICULTADES.length - 1, difSimple + d));
+  try { localStorage.setItem("paperio_dif_simple", String(difSimple)); } catch (e) {}
+  pintarDificultad();
+}
+function empezarSimple() {
+  const d = DIFICULTADES[difSimple];
+  bono = null;
+  simple = { nombre: "Simple · " + d.nombre, bots: d.bots, meta: Infinity, dificultad: d.dificultad, rasgos: d.rasgos, forma: MUNDO_SIMPLE };
+  ganado = false;
+  $("inicio").hidden = true; $("velo").hidden = true;
+  iniciar(false);
+  $("stNivel").textContent = "Simple";
+}
+$("btnSimple").addEventListener("click", () => { $("inicioBotones").hidden = true; $("inicioSimple").hidden = false; pintarDificultad(); });
+$("difAnt").addEventListener("click", () => cambiarDificultad(-1));
+$("difSig").addEventListener("click", () => cambiarDificultad(1));
+$("simpleJugar").addEventListener("click", empezarSimple);
+$("simpleAtras").addEventListener("click", () => { $("inicioSimple").hidden = true; $("inicioBotones").hidden = false; });
+$("btnNiveles").addEventListener("click", () => {
+  $("inicio").hidden = true;
+  simple = null; bono = null; ganado = false;
+  iniciar(true);
+  mostrarVelo("Paperio", TEXTO_AYUDA, []);
+  abrirMenu();
+});
+function empezarBono(b) {
+  bono = b; simple = null; ganado = false;
+  mapa.cerrar();
+  $("inicio").hidden = true; $("velo").hidden = true; $("menu").hidden = true;
+  iniciar(false);
+  $("stNivel").textContent = b.nombre;
+}
+$("btnMapa").addEventListener("click", () => { $("inicio").hidden = true; mapa.abrir(); });
+$("irInicio").addEventListener("click", mostrarInicio);
 
 // ----- Controles -----
 // Dedo / ratón: mantén pulsado y arrastra: la cabeza gira hacia donde apuntes (como una palanca flotante).
@@ -1025,6 +1148,19 @@ function dibujar(k) {
   capa(cvB, Math.max(2, cs * 1.1));
   capa(cvA, 0);
 
+  // monedas del bono (las recogidas desaparecen y vuelven a los segundos)
+  if (bono) {
+    const rm = cs * R_MONEDA;
+    for (const m of monBono) {
+      if (m.hasta) continue;
+      const X = SX(m.x), Y = SY(m.y) + Math.sin((reloj + m.x * 7) / 12) * cs * 0.6;
+      if (X < -rm || Y < -rm || X > vw + rm || Y > vh + rm) continue;
+      ctx.fillStyle = "#b8860b"; ctx.beginPath(); ctx.arc(X, Y + cs * 0.6, rm, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ffd54a"; ctx.beginPath(); ctx.arc(X, Y, rm, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ffeb99"; ctx.beginPath(); ctx.arc(X, Y, rm * 0.58, 0, TAU); ctx.fill();
+    }
+  }
+
   // cabezas: cubito redondeado con ojos que miran hacia donde van
   const lado = cs * 6.2, grosor = cs * 1.4;
   ctx.textAlign = "center";
@@ -1086,7 +1222,7 @@ function dibujar(k) {
 
   // marcador de los primeros lugares
   const top = ents.filter((e) => e.vivo && cuenta[e.id] > 0).sort((a, b) => cuenta[b.id] - cuenta[a.id]).slice(0, 5);
-  if (top.length) {
+  if (top.length && !bono) {
     const ancho = 128, alto = 10 + top.length * 17, bx = vw - ancho - 8, by = 8;
     ctx.fillStyle = "rgba(20,26,46,.6)";
     ctx.fillRect(bx, by, ancho, alto);
@@ -1116,7 +1252,8 @@ function bucle(ts) {
   for (const e of ents) if (!e.vivo && !e.jugador) { e.espera -= dt; if (e.espera <= 0) aparecer(e); }
   if (sucio) recontar();
   if (estado === "jugando" && yo.vivo && invHasta > 0 && !invActiva() && cuenta[1] === 0) matar(yo, null); // se quedó sin territorio mientras era invencible
-  if (estado === "jugando" && yo.vivo && cuenta[1] * 100 / AREA >= NIVELES[nivelActual].meta) terminar(true);
+  if (estado === "jugando" && yo.vivo && cuenta[1] * 100 / AREA >= nvActual().meta) terminar(true);
+  if (bono && estado === "jugando" && tiempo >= bono.duracion) terminarBono();
   for (const f of fx) f.t += dt;
   fx = fx.filter((f) => f.t < 0.6);
 
@@ -1133,11 +1270,16 @@ function bucle(ts) {
   refrescarBoosts();
 
   const pct = (yo ? cuenta[1] * 100 / AREA : 0);
-  const txt = [pct.toFixed(1), bajas, Math.max(mejorPct, maxPct).toFixed(1), monedas].join("|");
+  const txt = [pct.toFixed(1), bajas, Math.max(mejorPct, maxPct).toFixed(1), monedas, bono ? Math.ceil(bono.duracion - tiempo) + "/" + bonoMonedas : ""].join("|");
   if (txt !== hud) {
     hud = txt;
-    $("stTerr").textContent = "▦ " + pct.toFixed(1) + " %";
-    $("stBajas").textContent = "☠ " + bajas;
+    if (bono) { // en el bono: tiempo que queda y monedas recogidas
+      $("stTerr").textContent = "⏱ " + Math.max(0, Math.ceil(bono.duracion - tiempo)) + " s";
+      $("stBajas").textContent = "🪙 +" + bonoMonedas;
+    } else {
+      $("stTerr").textContent = "▦ " + pct.toFixed(1) + " %";
+      $("stBajas").textContent = "☠ " + bajas;
+    }
     $("stMejor").textContent = "🏆 " + Math.max(mejorPct, maxPct).toFixed(1) + " %";
     $("stMonedas").textContent = "🪙 " + monedas;
   }
@@ -1146,6 +1288,6 @@ function bucle(ts) {
 ajustar();
 iniciar(true);
 mostrarVelo("Paperio", TEXTO_AYUDA, []);
-abrirMenu(); // al abrir el juego se muestra el menú de niveles
+mostrarInicio(); // al abrir el juego se muestra el menú de inicio
 cargarRanking();
 requestAnimationFrame((ts) => { ultimo = ts; bucle(ts); });

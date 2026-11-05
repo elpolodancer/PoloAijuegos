@@ -1,0 +1,351 @@
+// Ruta: paperio/mapa.js
+// Pantalla «Mapa» de Paperio: mundo → México → Michoacán.
+// - En el mundo solo se puede entrar a México.
+// - En México solo se puede entrar a Michoacán (los demás estados son puntos bloqueados; se desbloquean con «listo: true»).
+// - Michoacán muestra la cuadrícula de sus 100 niveles (ver michoacan.js); los que aún no tienen datos salen bloqueados.
+//   Después de cada 10 niveles aparece una casilla de bono (🪙), que se puede jugar siempre.
+// Los contornos están MUY simplificados (listas de [longitud, latitud]): es un dibujo decorativo, no un mapa exacto.
+// Para desbloquear otro estado: pon «listo: true» en ESTADOS (y añade lo que deba pasar al tocarlo).
+
+import { NIVELES_MICHOACAN, NOMBRES_CATEGORIA, BONOS } from "./michoacan.js";
+
+const NS = "http://www.w3.org/2000/svg";
+const OCEANO = "#2c6e9e", TIERRA = "#f7ffec", T_BORDE = "#c3d6a9", T_SOMBRA = "#8fae7e", VECINO = "#a9c7a0";
+const MORADO = "hsl(255,55%,66%)", MORADO_OSC = "hsl(255,48%,40%)", BLOQUEADO = "#6b7399";
+
+// ---------- México (de la frontera de Tijuana, hacia el este, y de vuelta por las costas) ----------
+export const MEXICO = [
+  [-117.12, 32.53], [-114.72, 32.72], [-114.81, 32.49], [-111.07, 31.33], [-108.21, 31.33], [-108.21, 31.78], [-106.53, 31.78],
+  [-105.0, 30.65], [-104.5, 29.65], [-103.1, 28.97], [-102.4, 29.78], [-101.4, 29.77], [-100.65, 29.1], [-100.3, 28.3],
+  [-99.5, 27.5], [-99.1, 26.4], [-98.2, 26.05], [-97.15, 25.95],
+  // costa del Golfo
+  [-97.4, 25.0], [-97.75, 22.6], [-97.4, 21.0], [-96.5, 19.9], [-96.1, 19.2], [-95.1, 18.6], [-94.4, 18.15], [-93.5, 18.4],
+  [-92.0, 18.65], [-90.7, 19.35], [-90.5, 19.85], [-90.4, 20.85], [-89.65, 21.3], [-88.1, 21.6], [-87.05, 21.6], [-86.8, 21.15],
+  [-87.45, 20.2], [-87.7, 18.7], [-88.3, 18.5],
+  // frontera sur
+  [-89.15, 17.98], [-89.15, 17.82], [-90.99, 17.82], [-90.99, 17.25], [-91.43, 17.25], [-90.97, 16.4], [-90.4, 16.1], [-91.7, 16.07],
+  [-92.2, 15.25], [-92.2, 14.53],
+  // costa del Pacífico
+  [-93.9, 15.9], [-94.7, 16.2], [-95.2, 15.95], [-96.5, 15.7], [-97.8, 15.85], [-98.7, 16.5], [-99.9, 16.85], [-101.0, 17.55],
+  [-102.2, 17.95], [-103.5, 18.3], [-104.3, 19.05], [-105.0, 19.6], [-105.7, 20.4], [-105.25, 20.65], [-105.4, 21.5], [-105.55, 22.2],
+  [-106.4, 23.2], [-107.0, 24.0], [-107.9, 24.65], [-108.6, 25.4], [-109.5, 26.5], [-110.5, 27.2], [-110.9, 27.9], [-112.0, 28.8],
+  [-112.7, 29.9], [-113.2, 30.8], [-113.5, 31.3], [-114.8, 31.75],
+  // Baja California: costa del Golfo de California (hacia el sur)
+  [-114.84, 31.0], [-114.35, 29.8], [-113.5, 28.95], [-112.9, 28.3], [-112.27, 27.34], [-111.7, 26.5], [-111.35, 25.95], [-110.9, 25.3],
+  [-110.3, 24.2], [-109.8, 23.4], [-109.9, 22.88],
+  // Baja California: costa del Pacífico (hacia el norte)
+  [-110.2, 23.1], [-110.6, 23.6], [-111.5, 24.3], [-112.1, 24.6], [-112.0, 25.2], [-112.2, 26.0], [-113.2, 26.7], [-114.2, 27.6],
+  [-115.1, 27.85], [-114.5, 28.3], [-114.9, 29.1], [-115.7, 30.2], [-116.3, 31.0], [-116.7, 31.9],
+];
+
+// ---------- Estados: un punto por estado (la capital). Solo Michoacán está «listo» ----------
+export const ESTADOS = [
+  { id: "ags", nombre: "Aguascalientes", lon: -102.30, lat: 21.88 },
+  { id: "bc", nombre: "Baja California", lon: -115.47, lat: 32.62 },
+  { id: "bcs", nombre: "Baja California Sur", lon: -110.31, lat: 24.14 },
+  { id: "camp", nombre: "Campeche", lon: -90.53, lat: 19.85 },
+  { id: "chis", nombre: "Chiapas", lon: -93.11, lat: 16.75 },
+  { id: "chih", nombre: "Chihuahua", lon: -106.09, lat: 28.63 },
+  { id: "cdmx", nombre: "Ciudad de México", lon: -99.13, lat: 19.43 },
+  { id: "coah", nombre: "Coahuila", lon: -101.00, lat: 25.42 },
+  { id: "col", nombre: "Colima", lon: -103.72, lat: 19.24 },
+  { id: "dgo", nombre: "Durango", lon: -104.67, lat: 24.02 },
+  { id: "gto", nombre: "Guanajuato", lon: -101.26, lat: 21.02 },
+  { id: "gro", nombre: "Guerrero", lon: -99.50, lat: 17.55 },
+  { id: "hgo", nombre: "Hidalgo", lon: -98.74, lat: 20.12 },
+  { id: "jal", nombre: "Jalisco", lon: -103.35, lat: 20.67 },
+  { id: "mex", nombre: "Estado de México", lon: -99.66, lat: 19.29 },
+  { id: "mich", nombre: "Michoacán", lon: -101.19, lat: 19.70, listo: true },
+  { id: "mor", nombre: "Morelos", lon: -99.23, lat: 18.92 },
+  { id: "nay", nombre: "Nayarit", lon: -104.89, lat: 21.51 },
+  { id: "nl", nombre: "Nuevo León", lon: -100.31, lat: 25.67 },
+  { id: "oax", nombre: "Oaxaca", lon: -96.73, lat: 17.07 },
+  { id: "pue", nombre: "Puebla", lon: -98.20, lat: 19.04 },
+  { id: "qro", nombre: "Querétaro", lon: -100.39, lat: 20.59 },
+  { id: "qroo", nombre: "Quintana Roo", lon: -88.30, lat: 18.50 },
+  { id: "slp", nombre: "San Luis Potosí", lon: -100.98, lat: 22.15 },
+  { id: "sin", nombre: "Sinaloa", lon: -107.39, lat: 24.80 },
+  { id: "son", nombre: "Sonora", lon: -110.96, lat: 29.07 },
+  { id: "tab", nombre: "Tabasco", lon: -92.93, lat: 17.99 },
+  { id: "tamps", nombre: "Tamaulipas", lon: -99.14, lat: 23.74 },
+  { id: "tlax", nombre: "Tlaxcala", lon: -98.24, lat: 19.32 },
+  { id: "ver", nombre: "Veracruz", lon: -96.92, lat: 19.54 },
+  { id: "yuc", nombre: "Yucatán", lon: -89.62, lat: 20.97 },
+  { id: "zac", nombre: "Zacatecas", lon: -102.57, lat: 22.77 },
+];
+
+// ---------- Continentes e islas (muy simplificados) ----------
+// Norteamérica: la parte que cruza México va por DENTRO de México (queda tapada por el contorno de México)
+const NORTEAMERICA = [
+  [-168, 65.6], [-162, 70.2], [-156.5, 71.3], [-141, 69.7], [-128, 70.2], [-115, 67.8], [-108, 68], [-100, 67.8], [-96, 68.5],
+  [-94, 71.7], [-91, 69.5], [-85, 69.8], [-81, 67.5], [-86, 66], [-90, 64], [-94, 61.5], [-93, 58.7], [-89, 57], [-82.3, 55],
+  [-80.5, 52.5], [-79.5, 51.2], [-78.8, 52.8], [-77, 56], [-78, 58.5], [-78, 62.2], [-72, 61.5], [-69, 59], [-64.4, 60.4],
+  [-61.5, 56.5], [-57, 53.5], [-55.7, 52.2], [-59, 50.2], [-66.5, 50.2], [-70, 47.2], [-64.2, 48.8], [-64.5, 46], [-61, 45.7],
+  [-60, 46], [-61.5, 45], [-65.5, 43.5], [-67, 44.8], [-69, 44], [-70.2, 43.6], [-70.8, 42.6], [-70, 41.7], [-71.5, 41.4],
+  [-73.9, 40.6], [-74, 39.4], [-75.2, 38], [-75.9, 37.1], [-75.5, 35.3], [-77.5, 34.3], [-78.9, 33.7], [-80.8, 32.2], [-81.3, 30.5],
+  [-80.5, 28.5], [-80, 26.7], [-80.4, 25.2], [-81.2, 25.2], [-81.8, 26.2], [-82.7, 27.7], [-82.8, 29], [-84.2, 30], [-85.3, 29.7],
+  [-86.5, 30.4], [-88, 30.4], [-89.3, 30.2], [-89.3, 29], [-90.5, 29.1], [-92, 29.5], [-93.8, 29.7], [-94.8, 29.3], [-96.2, 28.3],
+  [-97.2, 27.5], [-97.15, 25.95],
+  // por dentro de México (Golfo) y bajada por Centroamérica
+  [-99.5, 24], [-96, 18.5], [-93, 17.5], [-90.9, 17.1], [-89.1, 17.6], [-88.3, 17.7], [-88.2, 16.6], [-88, 15.8], [-85, 15.9],
+  [-83.3, 15], [-83.6, 12], [-83.7, 10.9], [-82.5, 9.5], [-80.5, 9], [-79, 9.6], [-77.5, 8.7],
+  // costa del Pacífico de Centroamérica y subida por dentro de México
+  [-78.4, 8.2], [-79.5, 8.9], [-80.4, 7.3], [-81.8, 8], [-83, 8.3], [-85.7, 10], [-86.2, 11.2], [-87.7, 13.1], [-89.4, 13.5], [-91.3, 14],
+  [-92.2, 14.53], [-95.5, 16.4], [-98.5, 17.4], [-101.3, 18.3], [-103.5, 19.3], [-104.8, 20.8], [-105, 22.5], [-107.2, 25],
+  [-109.5, 27.5], [-111.8, 30.3], [-113, 31.7], [-114.6, 32.3], [-116.8, 32.4],
+  // costa del Pacífico de EE. UU., Canadá y Alaska
+  [-117.12, 32.53], [-117.3, 33], [-118.5, 34], [-120.5, 34.5], [-121.9, 36.6], [-122.5, 37.8], [-123.8, 39.4], [-124.4, 40.4],
+  [-124.1, 41.9], [-124.5, 43], [-124, 46.2], [-124.7, 48.4], [-125.5, 49.8], [-127.5, 50.8], [-130, 54], [-132.5, 56], [-135, 58.3],
+  [-137.5, 58.9], [-140, 59.7], [-144, 60], [-148, 60], [-151.8, 59.2], [-154, 58.2], [-156.5, 56.8], [-160, 55.5], [-163, 54.7],
+  [-164.8, 54.4], [-162, 56], [-158.5, 57.5], [-161.5, 58.8], [-162.5, 60.2], [-165, 61.5], [-165.5, 63], [-161, 64.4], [-166, 64.6],
+];
+
+const SUDAMERICA = [
+  [-77.5, 8.6], [-75.5, 10.8], [-72, 12.2], [-71, 11], [-68, 10.6], [-64, 10.6], [-61, 10.5], [-60, 8.5], [-57, 6], [-52, 5],
+  [-50, 1.8], [-48.5, -1], [-44, -2.5], [-40, -3], [-35, -5.5], [-35, -9], [-39, -14], [-39, -18], [-41, -22], [-44, -23.2],
+  [-48, -26], [-49, -29], [-52, -32.5], [-54, -34.6], [-57, -35], [-58, -38.5], [-62, -39], [-62.5, -41], [-65, -42], [-65.5, -45],
+  [-67.5, -46.5], [-66, -48], [-68.5, -50.5], [-69, -52.5], [-68, -54], [-71, -54], [-74, -52], [-75.5, -48], [-73.5, -43],
+  [-73.7, -37], [-71.7, -30], [-70.5, -23], [-70.3, -18.5], [-76, -14], [-79, -8], [-81, -5], [-80, -2], [-80.5, 0], [-79, 2],
+  [-77.5, 4], [-77.3, 7],
+];
+
+const EURASIA = [
+  [-5.6, 36], [-2, 36.7], [-0.7, 37.6], [-0.3, 39.5], [0.9, 41], [3.2, 41.9], [3.1, 43], [4.8, 43.4], [6.9, 43.2], [8.9, 44.4],
+  [10.3, 43.5], [12.3, 41.7], [14.2, 40.8], [15.6, 40], [16.1, 38.9], [15.7, 38], [16.6, 38.9], [16.6, 39.6], [17.2, 40.4], [18.5, 40.1],
+  [18, 40.7], [16.9, 41.1], [16.1, 41.9], [14.7, 42.3], [13.6, 43.6], [12.3, 44.3], [12.3, 45.3], [13.7, 45.6], [14.3, 45.1], [15.2, 44.2],
+  [16.4, 43.5], [18.5, 42.4], [19.4, 41.9], [19.4, 40.4], [20, 39.7], [20.8, 38.7], [21.5, 37.6], [22.4, 36.5], [23.3, 37], [24, 37.7],
+  [23.3, 39.2], [22.7, 40.5], [24, 40.5], [25.5, 40.9], [26.3, 40.1], [26.4, 39.4], [27, 38.4], [27.4, 37], [29.1, 36.3], [30.5, 36.8],
+  [32.6, 36.1], [34.5, 36.7], [36, 36.6], [35.9, 35.4], [35.8, 34.4], [35.5, 33.2], [34.9, 32.4], [34.4, 31.5], [34.95, 29.55],
+  // Arabia, Golfo Pérsico, Irán, India, sudeste asiático
+  [35, 28], [36.6, 25.5], [38, 24], [39.2, 21.5], [40.5, 19], [41.8, 16.5], [42.8, 14], [43.4, 12.7], [45, 12.8], [48.5, 14], [52, 15.7],
+  [55.3, 17.2], [57.5, 18.9], [58.5, 20.5], [59.8, 22.5], [58.5, 23.7], [56.8, 24.8], [56.3, 26.2], [55, 25.3], [54, 24.4], [52.5, 24.2],
+  [51.2, 24.8], [51, 26.1], [50.2, 26.3], [49.8, 27], [49, 28], [48, 29.5], [48.5, 30], [49.5, 30.2], [50.8, 28.9], [52.5, 27.5],
+  [54.5, 26.6], [56.3, 27.2], [57.2, 25.9], [61.5, 25.2], [63.5, 25.3], [66.5, 25.4], [67, 24.8], [68.2, 23.6], [69, 22.2], [71, 20.7],
+  [72.8, 21], [72.8, 19], [73.3, 16.5], [73.8, 15.4], [74.8, 12.9], [76.2, 9.9], [77.5, 8.1], [78.2, 8.8], [79.8, 10.3], [80.3, 13.1],
+  [80, 15.2], [83.3, 17.7], [85, 19.5], [85.8, 19.8], [87, 21.5], [88.8, 21.8], [91.8, 22.3], [92.3, 20.8], [92.9, 20.1], [94.3, 18],
+  [95, 16], [96.2, 16.7], [97.6, 16.5], [98.4, 15], [98.6, 12], [98.3, 10], [98.5, 8.1], [100.3, 6.4], [100.3, 5.4], [101.2, 3],
+  [102.2, 2.2], [103.5, 1.3], [104.2, 1.7], [103.5, 2.5], [103.4, 4.5], [102.2, 6.2], [101.3, 6.9], [100.4, 7.8], [99.9, 9.2],
+  [99.3, 9.1], [99.2, 10.5], [99.8, 11.8], [100, 13.3], [100.5, 13.6], [101.5, 12.7], [102.5, 12.2], [103.1, 11.5], [104.5, 10.4],
+  [104.8, 8.6], [105.4, 9], [106.7, 9.6], [107.1, 10.4], [109, 11.5], [109.2, 12.3], [109.3, 13.8], [108.2, 16.1], [106.6, 17.8],
+  [105.8, 19], [106.8, 20.8], [107.8, 21.5], [109.1, 21.5], [110.4, 20.3], [110.4, 21.2], [112, 21.7], [114.2, 22.3], [116.7, 23.3],
+  [118.1, 24.5], [119.3, 26], [120.7, 28], [121.8, 29.9], [121.9, 31], [121, 32], [120.3, 34], [119.4, 34.8], [120.3, 36.1],
+  [122.5, 37.2], [121.4, 37.6], [119, 37.2], [118, 38.2], [117.7, 39], [119.6, 39.9], [121, 40.7], [122.2, 40.7], [121.6, 38.8],
+  [122.5, 39.5], [124.4, 40], [125.2, 38.5], [126, 37], [126.5, 35.5], [126.4, 34.6], [127.5, 34.6], [129.1, 35.1], [129.4, 36],
+  [129.2, 37.5], [128.4, 38.6], [127.5, 39.2], [128.5, 40.2], [129.7, 41], [130.6, 42.4], [131.9, 43.1], [133, 42.8], [135, 43.5],
+  [137.5, 45.5], [139, 47], [140.5, 48.5], [140.4, 50], [141.2, 52], [140.5, 53.4], [138, 54.2], [136.5, 54.6], [138.5, 56],
+  [142.5, 59.3], [146, 59.4], [150.5, 59.5], [154.5, 59.6], [155.5, 59], [156.4, 57.5], [156.7, 55.5], [155.9, 53.5], [156.7, 51],
+  [158.5, 52.5], [160, 53.8], [162, 55.8], [163.3, 57.7], [163, 58.2], [164, 59.8], [163.5, 60.7], [166, 60.4], [170, 60.2],
+  [173, 61.8], [176, 62.5], [178.5, 64.6], [180, 65.1], [180, 68.9], [176, 69.8], [170, 69.6], [165, 69.5], [160, 69.5],
+  // costa ártica de Siberia hacia el oeste, Escandinavia y costa atlántica de Europa
+  [150, 71], [145, 72.2], [140, 72.5], [133, 71.4], [129, 73], [125, 73.5], [118, 73.5], [113, 73.6], [110, 76], [104.5, 77.7],
+  [100, 76.5], [95, 76], [90, 75.5], [87, 74.8], [80.5, 73.5], [72, 73], [69, 70.5], [66, 69.2], [60.5, 69.8], [54, 68.7],
+  [46.5, 68], [44, 68.8], [41.2, 67.6], [36, 69.2], [32, 69.8], [28, 71], [25.8, 71.1], [23, 70.5], [19.5, 70.2], [17, 69],
+  [15, 68], [12.5, 66], [10, 64.5], [8, 63], [5.5, 62], [5, 60.5], [5.4, 59], [6.5, 58.1], [8.5, 58.1], [10.6, 57.7], [9.9, 57],
+  [8.2, 56.8], [8.2, 55.5], [8.6, 54.9], [8.9, 54], [7, 53.6], [4.8, 52.9], [4.3, 52], [3.4, 51.4], [1.6, 50.9], [1.5, 50.1],
+  [0.2, 49.7], [-1.6, 49.7], [-1.4, 48.7], [-2, 48.7], [-4.8, 48.4], [-2.8, 47.5], [-1.5, 46.5], [-1.2, 45.5], [-1.4, 44.4],
+  [-1.8, 43.4], [-4, 43.4], [-8, 43.7], [-9.3, 43.2], [-9, 42.2], [-8.8, 41.5], [-9.5, 38.8], [-9, 37], [-7.4, 37.2], [-6.3, 36.6],
+];
+
+const AFRICA = [
+  [-17.5, 14.7], [-16.5, 19.5], [-17, 21], [-13, 27.7], [-10, 29.5], [-9.7, 31], [-8.5, 33.5], [-5.9, 35.8], [-2, 35.1], [3, 36.8],
+  [10, 37.2], [11, 36], [11.1, 35.2], [10, 34], [11, 33.2], [15.2, 32.3], [19, 30.3], [20, 32.5], [23, 32.7], [25, 31.7], [29, 30.9],
+  [32.3, 31.3], [34.2, 31.3], [34.95, 29.55], [34.4, 27.8], [33.5, 28.2], [32.6, 30], [33.5, 27.5], [35.5, 23.5], [37.2, 21],
+  [38.5, 18], [41, 14.5], [43.2, 12.5], [43.1, 11.5], [44.5, 10.5], [48, 11.2], [51.3, 11.8], [50.8, 10], [49, 6.5], [46, 2],
+  [42, -1], [40.2, -3], [39, -6], [39.5, -10], [40.4, -15.5], [37, -18], [35, -20], [35.5, -24], [32.8, -26], [32.5, -28.5],
+  [30, -31.5], [27, -33.5], [25.5, -34], [22, -34], [20, -34.8], [18.4, -34.2], [17.8, -32.5], [16.5, -28.5], [15, -26.5],
+  [14.5, -22.5], [12, -18], [11.8, -15.5], [13.5, -12], [13, -8.5], [12, -5.5], [9.3, 0.5], [9.8, 3.9], [8.5, 4.5], [6, 4.3],
+  [4.5, 6.2], [1.5, 6], [-2, 4.8], [-4.5, 5.2], [-7.5, 4.4], [-11, 6.7], [-13, 8.5], [-14.5, 10.8], [-16.8, 12.4],
+];
+
+const AUSTRALIA = [
+  [113.5, -22], [114.5, -26], [115, -33.5], [118, -35], [123, -34], [126, -32.3], [131.5, -31.5], [135, -34.7], [137.5, -33],
+  [138, -35.5], [140, -37.9], [144, -38.5], [146.5, -39], [150, -37.5], [152.5, -32], [153.5, -28], [153, -25], [150, -22.5],
+  [146.5, -19], [145.3, -15], [143.5, -13.5], [142.5, -10.7], [141.5, -13], [141, -17], [139, -17], [136.5, -15.5], [135.5, -12],
+  [132.5, -11.2], [130, -12.3], [128, -15], [125, -14.5], [122, -18], [118, -20], [114.5, -21.8],
+];
+
+const ISLAS = [
+  // Groenlandia, Islandia, Reino Unido, Irlanda
+  [[-73, 78.5], [-60, 82], [-30, 83.5], [-20, 81], [-18, 76], [-21, 72], [-24, 70.5], [-32, 68], [-40, 65], [-43, 60], [-50, 62], [-53, 66], [-55, 70], [-58, 75], [-68, 76.5]],
+  [[-24, 65.5], [-22, 66.4], [-16, 66.5], [-13.5, 65], [-18, 63.4], [-22, 63.8]],
+  [[-5.7, 50.1], [1.4, 51.2], [1.7, 52.7], [0, 53.6], [-1.5, 55], [-2, 56], [-1.8, 57.5], [-3.5, 58.6], [-5, 58.6], [-6, 57], [-5.5, 55.5], [-3, 54.7], [-3.2, 53.4], [-4.7, 52.8], [-5.2, 51.7], [-3, 51.4], [-4.2, 50.4]],
+  [[-10, 51.8], [-6.2, 52.2], [-6, 54], [-7.2, 55.2], [-9.5, 54.2]],
+  // Canadá: Baffin, Victoria, Terranova
+  [[-80, 63.5], [-72, 64], [-62, 66], [-68, 70.5], [-80, 73.5], [-88, 70], [-83, 66.5]],
+  [[-122, 71.5], [-115, 73], [-105, 72], [-103, 69], [-112, 69]],
+  [[-59, 47.6], [-53, 46.7], [-52.7, 49], [-55.5, 51.5], [-59, 48.5]],
+  // Caribe
+  [[-85, 22], [-82, 23], [-79, 22.5], [-77, 21], [-74.2, 20.2], [-77.5, 19.9], [-80, 21.6], [-83.5, 22]],
+  [[-74.5, 18.5], [-72.5, 19.8], [-69, 19.5], [-68.4, 18.5], [-71, 17.8]],
+  // Japón, Sajalín
+  [[131, 33.8], [135, 35.6], [138, 37.5], [140, 40.5], [141.5, 41.5], [141.8, 39.5], [141, 38], [140.9, 35.7], [138.5, 34.7], [136.5, 34.2], [135.3, 33.6], [133.5, 34.3]],
+  [[140, 41.5], [140.5, 43.3], [141.5, 45.4], [145.5, 43.5], [143.5, 42], [141.2, 42.3]],
+  [[130, 31.5], [131.5, 31.5], [131.8, 33.5], [130, 33.5]],
+  [[142, 46], [143.5, 49], [143, 53.5], [142, 54], [141.8, 50]],
+  // Nueva Zembla
+  [[51.5, 71.5], [57, 75], [68, 77], [60, 73.5], [55, 71]],
+  // Filipinas, Indonesia, Nueva Guinea
+  [[120, 18.5], [122, 18.5], [122, 16], [121.5, 14], [120.5, 14.5], [119.8, 16]],
+  [[122, 8], [126.5, 7.5], [126, 6], [123.5, 7]],
+  [[95.3, 5.6], [98, 4], [101, 2], [104, -1.5], [106, -3.2], [105.7, -5.9], [102, -4], [99, -1], [96.5, 2.5]],
+  [[105.5, -6.8], [108.5, -6.5], [112, -6.8], [114.5, -7.8], [110, -8.2], [106, -7.3]],
+  [[109, 1.8], [110, 1.5], [113, 3.2], [115, 5], [117.5, 7], [119.2, 5.3], [118, 1], [116.5, -1.5], [116, -4], [114.5, -3.7], [111, -3], [110, -1.5]],
+  [[119.5, 0.5], [121, 1.2], [123, 0.8], [121.5, -1], [123, -4], [121, -3], [120, -5.5], [119.3, -3]],
+  [[131, -0.8], [135, -3.3], [138, -1.7], [141, -2.6], [145, -4.5], [147.5, -6], [147.8, -8], [150.5, -10.5], [147, -10], [143.5, -8.5], [141, -9.2], [138, -8.2], [137.5, -5], [133.5, -4], [132.5, -2.5]],
+  // Madagascar, Sri Lanka, Tasmania, Nueva Zelanda
+  [[44, -25], [47, -25], [49.5, -17], [50.4, -15.5], [49.3, -12], [48.2, -13.5], [44.5, -16.5], [44, -20]],
+  [[80, 9.8], [81.8, 7.5], [81, 6], [80, 6.5]],
+  [[145, -40.8], [148.2, -41], [147.5, -43.5], [146, -43.6]],
+  [[172.7, -34.5], [175.5, -37], [178.5, -37.7], [176.5, -39.5], [175, -41.5], [174.8, -39.5], [173.8, -39.2], [174.5, -37]],
+  [[172.7, -40.5], [174.3, -41.7], [173, -43.5], [171, -44.5], [170.5, -46.5], [167, -46], [168, -44], [171, -42]],
+];
+
+// Mares interiores que se pintan encima de la tierra
+const LAGOS = [
+  [[12.8, 55], [14.2, 54.2], [19.8, 54.5], [21, 56], [21.5, 57.5], [23.5, 59.2], [28, 59.5], [30.2, 60], [25, 60.2], [21.2, 60.6], [21.8, 62.2], [25.3, 65.2], [22, 65.7], [17.2, 62.5], [17.4, 60.3], [16.8, 57.8], [14.5, 56.2]],
+  [[28, 41.9], [28.7, 44], [30, 45.3], [31.8, 46.5], [35, 45.5], [36.5, 45], [37, 44.7], [39.5, 43.4], [41.5, 41.8], [39, 41], [35.5, 42], [31.5, 41.2], [29, 41.2]],
+  [[47, 45.5], [50, 46.5], [53, 45.5], [51, 44], [53, 41.5], [53.8, 39.5], [54, 37.5], [51, 36.7], [49.5, 38.3], [49, 40.5], [50.2, 40.3], [49, 41.5]],
+];
+
+export const CONTINENTES = [NORTEAMERICA, SUDAMERICA, EURASIA, AFRICA, AUSTRALIA, ...ISLAS];
+export { LAGOS };
+
+// ---------- Dibujo ----------
+function el(tag, attrs, padre) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (padre) padre.appendChild(n);
+  return n;
+}
+// Proyección plana: l0..l1 = longitudes, laTop..laBot = latitudes, s = unidades por grado, kx = ancho relativo de un grado de longitud
+function proyector(l0, l1, laTop, laBot, s, kx) {
+  return { w: (l1 - l0) * s * kx, h: (laTop - laBot) * s, p: (lo, la) => [(lo - l0) * s * kx, (laTop - la) * s] };
+}
+function trazo(pts, P) {
+  return "M" + pts.map(([lo, la]) => { const [x, y] = P.p(lo, la); return x.toFixed(1) + " " + y.toFixed(1); }).join("L") + "Z";
+}
+function texto(padre, x, y, s, tam) {
+  const t = el("text", {
+    x, y, "text-anchor": "middle", "font-size": tam, "font-weight": 700, fill: "#fff", "paint-order": "stroke",
+    stroke: "rgba(15,18,32,.85)", "stroke-width": 3.5, "stroke-linejoin": "round", "pointer-events": "none",
+  }, padre);
+  t.textContent = s;
+  return t;
+}
+function accesible(nodo, etiqueta, accion) {
+  nodo.setAttribute("role", "button");
+  nodo.setAttribute("tabindex", "0");
+  nodo.setAttribute("aria-label", etiqueta);
+  nodo.addEventListener("click", accion);
+  nodo.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); accion(); } });
+}
+
+// r = { raiz, titulo, info, lienzo, atras, ir, alSalir, jugarNivel, jugarBono }  (elementos del HTML y la función que vuelve al menú de inicio;
+//        jugarNivel(nivel) es opcional: se llama al tocar un nivel de Michoacán que ya está listo;
+//        jugarBono(bono) se llama al tocar una casilla de bono)
+export function montarMapa(r) {
+  let vista = "mundo"; // mundo | mexico | estado
+  const ir = (v) => { vista = v; pintar(); };
+
+  function vistaMundo() {
+    r.info.textContent = "Toca México para entrar.";
+    const P = proyector(-170, 180, 80, -57, 2, 1);
+    const svg = el("svg", { viewBox: "0 0 " + P.w + " " + P.h, role: "group", "aria-label": "Mapa mundial" }, r.lienzo);
+    el("rect", { width: P.w, height: P.h, fill: OCEANO }, svg);
+    const d = CONTINENTES.map((c) => trazo(c, P)).join("");
+    el("path", { d, fill: T_SOMBRA, transform: "translate(0 2.5)" }, svg);
+    el("path", { d, fill: TIERRA, stroke: T_BORDE, "stroke-width": 0.8, "stroke-linejoin": "round" }, svg);
+    for (const l of LAGOS) el("path", { d: trazo(l, P), fill: OCEANO }, svg);
+    const dm = trazo(MEXICO, P);
+    el("path", { d: dm, fill: MORADO_OSC, transform: "translate(0 1.5)" }, svg);
+    const forma = el("path", { d: dm, fill: MORADO, stroke: "#fff", "stroke-width": 0.8, "stroke-linejoin": "round", class: "sel" }, svg);
+    forma.addEventListener("click", () => ir("mexico"));
+    const [cx, cy] = P.p(-102, 23.5);
+    el("circle", { cx, cy, r: 6, fill: "none", stroke: "#fff", "stroke-width": 1.5, class: "pulso", "pointer-events": "none" }, svg);
+    const zona = el("circle", { cx, cy, r: 18, fill: "transparent", class: "sel" }, svg); // zona táctil más grande que el dibujo
+    accesible(zona, "México", () => ir("mexico"));
+    texto(svg, cx, cy + 34, "México", 16);
+  }
+
+  function vistaMexico() {
+    r.info.textContent = "Michoacán es el único estado disponible por ahora.";
+    const P = proyector(-118.8, -86.2, 33.2, 14, 20, 0.9);
+    const svg = el("svg", { viewBox: "0 0 " + P.w + " " + P.h, role: "group", "aria-label": "Mapa de México" }, r.lienzo);
+    el("rect", { width: P.w, height: P.h, fill: OCEANO }, svg);
+    const dv = CONTINENTES.map((c) => trazo(c, P)).join("");
+    el("path", { d: dv, fill: VECINO, stroke: T_BORDE, "stroke-width": 1.2, "stroke-linejoin": "round" }, svg);
+    const dm = trazo(MEXICO, P);
+    el("path", { d: dm, fill: T_SOMBRA, transform: "translate(0 5)" }, svg);
+    el("path", { d: dm, fill: TIERRA, stroke: T_BORDE, "stroke-width": 1.5, "stroke-linejoin": "round" }, svg);
+    for (const e of ESTADOS.filter((x) => !x.listo)) {
+      const [x, y] = P.p(e.lon, e.lat);
+      const c = el("circle", { cx: x, cy: y, r: 5, fill: BLOQUEADO, stroke: "#fff", "stroke-width": 1.2, role: "img", "aria-label": e.nombre + " (próximamente)" }, svg);
+      c.addEventListener("click", () => { r.info.textContent = e.nombre + ": próximamente."; });
+    }
+    for (const e of ESTADOS.filter((x) => x.listo)) {
+      const [x, y] = P.p(e.lon, e.lat);
+      el("circle", { cx: x, cy: y, r: 9, fill: "none", stroke: MORADO, "stroke-width": 2.5, class: "pulso", "pointer-events": "none" }, svg);
+      el("circle", { cx: x, cy: y, r: 9, fill: MORADO, stroke: "#fff", "stroke-width": 2.5, "pointer-events": "none" }, svg);
+      const zona = el("circle", { cx: x, cy: y, r: 22, fill: "transparent", class: "sel" }, svg);
+      accesible(zona, e.nombre, () => ir("estado"));
+      texto(svg, x, y - 17, e.nombre, 17);
+    }
+  }
+
+  function vistaEstado() {
+    const listos = NIVELES_MICHOACAN.filter((nv) => nv.listo).length;
+    r.info.textContent = "Niveles listos: " + listos + " de " + NIVELES_MICHOACAN.length + " · las estrellas son la dificultad fija de cada nivel (1 = muy fácil, 5 = muy difícil) · 🪙 = bono después de cada 10 niveles.";
+    const rej = document.createElement("div");
+    rej.className = "rejilla-niveles";
+    for (const nv of NIVELES_MICHOACAN) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "nv c" + nv.categoria + (nv.listo ? " hecho" : " bloq");
+      b.disabled = !nv.listo;
+      b.title = (nv.nombre || "Nivel " + nv.n) + " · " + NOMBRES_CATEGORIA[nv.categoria] + (nv.listo ? "" : " (próximamente)");
+      b.setAttribute("aria-label", "Nivel " + nv.n + ": " + NOMBRES_CATEGORIA[nv.categoria] + (nv.listo ? "" : " (próximamente)"));
+      const n = document.createElement("b");
+      n.textContent = String(nv.n);
+      const e = document.createElement("small");
+      e.textContent = "★".repeat(nv.categoria);
+      b.append(n, e);
+      b.addEventListener("click", () => { if (nv.listo && r.jugarNivel) r.jugarNivel(nv); });
+      rej.appendChild(b);
+      const bono = nv.n % 10 === 0 && BONOS.find((x) => x.despuesDe === nv.n);
+      if (bono) {
+        const c = document.createElement("button");
+        c.type = "button";
+        c.className = "nv bono";
+        c.setAttribute("aria-label", bono.nombre + ": " + bono.duracion + " segundos de monedas");
+        const t = document.createElement("b");
+        t.textContent = "🪙 " + bono.nombre;
+        const s = document.createElement("small");
+        s.textContent = bono.duracion + " s · monedas que vuelven en " + bono.reaparece + " s";
+        c.append(t, s);
+        c.addEventListener("click", () => { if (r.jugarBono) r.jugarBono(bono); });
+        rej.appendChild(c);
+      }
+    }
+    r.lienzo.appendChild(rej);
+  }
+
+  function pintar() {
+    r.lienzo.replaceChildren();
+    r.titulo.textContent = vista === "mundo" ? "Mapa" : vista === "mexico" ? "México" : "Michoacán";
+    r.ir.hidden = vista === "estado";
+    r.ir.textContent = vista === "mundo" ? "📍 México" : "📍 Michoacán";
+    if (vista === "mundo") vistaMundo();
+    else if (vista === "mexico") vistaMexico();
+    else vistaEstado();
+  }
+
+  const atras = () => (vista === "mundo" ? r.alSalir() : ir(vista === "estado" ? "mexico" : "mundo"));
+  r.atras.addEventListener("click", atras);
+  r.ir.addEventListener("click", () => ir(vista === "mundo" ? "mexico" : "estado"));
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !r.raiz.hidden) atras(); });
+
+  return {
+    abrir() { vista = "mundo"; r.raiz.hidden = false; pintar(); },
+    cerrar() { r.raiz.hidden = true; },
+  };
+}

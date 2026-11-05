@@ -55,6 +55,26 @@
     .boost:disabled { opacity: .4; cursor: default; }
     .boost.activo { border-color: #ffd54a; box-shadow: 0 0 10px rgba(255, 213, 74, .7); }
     .nv:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+    #inicio { position: absolute; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 18, 32, .78); overflow: auto; }
+    .btn.grande { display: block; width: 100%; margin: 0 0 10px; padding: 14px; font-size: 1.05rem; }
+    #inicioSimple .selnivel b { font-size: 1.2rem; }
+    #mapa { position: absolute; inset: 0; z-index: 7; display: flex; justify-content: center; padding: 12px; background: rgba(15, 18, 32, .95); overflow: auto; }
+    .mapa-caja { width: 100%; max-width: 760px; }
+    #mapaInfo { margin: 0 0 10px; color: var(--suave); font-size: .85rem; }
+    #mapaLienzo svg { display: block; width: 100%; height: auto; border: 1px solid var(--borde); border-radius: 12px; }
+    #mapaLienzo .sel { cursor: pointer; }
+    #mapaLienzo [role="button"]:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    #mapaLienzo .pulso { transform-box: fill-box; transform-origin: center; animation: pulso 1.8s ease-out infinite; }
+    @keyframes pulso { from { transform: scale(1); opacity: .9; } to { transform: scale(2.4); opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { #mapaLienzo .pulso { animation: none; } }
+    .rejilla-niveles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding-bottom: 12px; }
+    .nv.c1 small { color: #6fd08c; } .nv.c2 small { color: #b7d65a; } .nv.c3 small { color: #ffd54a; } .nv.c4 small { color: #ff9f4a; } .nv.c5 small { color: #ff6b6b; }
+    .nv.bono { grid-column: 1 / -1; aspect-ratio: auto; flex-direction: row; gap: 10px; padding: 10px; border-color: #ffd54a; background: #2a2a1c; }
+    .nv.bono small { font-size: .8rem; color: #ffe38a; }
+    .tarjeta-estado { padding: 28px 16px; text-align: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; }
+    .tarjeta-estado-ico { font-size: 3rem; }
+    .tarjeta-estado h3 { margin: 6px 0; font-size: 1.3rem; }
+    .tarjeta-estado p { margin: 0; color: var(--suave); }
   </style>
 </head>
 <body>
@@ -78,7 +98,7 @@
       <div class="panel">
         <h2 id="velTitulo">Paperio</h2>
         <p id="velTexto">Sal de tu territorio y regresa para quedarte con todo lo que encierres. Si alguien toca tu estela, pierdes; si tú tocas la suya, pierde él. Mantén el dedo pulsado y arrástralo hacia donde quieras ir, o usa las flechas / WASD. Durante la partida activa tus boosts con los botones ⭐ y ⚡ (o las teclas 1 y 2).</p>
-        <div class="selnivel">
+        <div class="selnivel" id="selNivel">
           <button class="btn sec" id="nivelAnt" type="button" aria-label="Nivel anterior">◀</button>
           <div><small id="nivelNum">Nivel 1</small><b id="nivelNom">Colina</b></div>
           <button class="btn sec" id="nivelSig" type="button" aria-label="Nivel siguiente">▶</button>
@@ -94,6 +114,7 @@
         <div class="acciones">
           <button class="btn" id="jugar" type="button">Jugar</button>
           <button class="btn sec" id="verNiveles" type="button">☰ Niveles</button>
+          <button class="btn sec" id="irInicio" type="button">⌂ Menú</button>
           <button class="btn sec" id="entrar" type="button" hidden>Entrar con Google</button>
         </div>
         <div id="ranking" hidden></div>
@@ -104,6 +125,39 @@
         <div class="menu-cab"><h2>Niveles</h2><button class="btn sec" id="menuCerrar" type="button">Cerrar</button></div>
         <p id="menuInfo"></p>
         <div id="menuRejilla"></div>
+      </div>
+    </div>
+    <div id="inicio" hidden>
+      <div class="panel">
+        <h2>Paperio</h2>
+        <div id="inicioBotones">
+          <button class="btn grande" id="btnSimple" type="button">▶ Partida simple</button>
+          <button class="btn grande" id="btnNiveles" type="button">☰ Niveles</button>
+          <button class="btn grande" id="btnMapa" type="button">🗺️ Mapa</button>
+        </div>
+        <div id="inicioSimple" hidden>
+          <p>Un mundo grande contra los rivales. No tiene meta: juega hasta que te eliminen. Elige la dificultad.</p>
+          <div class="selnivel">
+            <button class="btn sec" id="difAnt" type="button" aria-label="Dificultad anterior">◀</button>
+            <div><small>Dificultad</small><b id="difNombre">Normal</b><small id="difInfo"></small></div>
+            <button class="btn sec" id="difSig" type="button" aria-label="Dificultad siguiente">▶</button>
+          </div>
+          <div class="acciones">
+            <button class="btn" id="simpleJugar" type="button">Jugar</button>
+            <button class="btn sec" id="simpleAtras" type="button">Atrás</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="mapa" hidden>
+      <div class="mapa-caja">
+        <div class="menu-cab">
+          <button class="btn sec" id="mapaAtras" type="button">← Atrás</button>
+          <h2 id="mapaTitulo">Mapa</h2>
+          <button class="btn sec" id="mapaIr" type="button">📍 México</button>
+        </div>
+        <p id="mapaInfo"></p>
+        <div id="mapaLienzo"></div>
       </div>
     </div>
   </div>
