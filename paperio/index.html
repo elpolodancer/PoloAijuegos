@@ -1,0 +1,58 @@
+<!doctype html>
+<!-- Ruta: paperio/index.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Paperio</title>
+  <meta name="theme-color" content="#1b2330" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    html, body { height: 100%; }
+    body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
+    .barra { padding: 8px 12px; flex: 0 0 auto; }
+    .barra h1 { font-size: 1.05rem; }
+    .datos { display: flex; gap: 14px; align-items: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+    #escena { position: relative; flex: 1 1 auto; min-height: 0; }
+    #lienzo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+    #velo { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 18, 32, .78); overflow: auto; }
+    .panel { width: 100%; max-width: 380px; padding: 20px; text-align: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; }
+    .panel h2 { margin: 0 0 8px; font-size: 1.5rem; }
+    .panel p { margin: 0 0 12px; color: var(--suave); line-height: 1.4; }
+    #velDatos { margin: 0 0 14px; padding: 0; list-style: none; line-height: 1.7; }
+    #velDatos b { color: var(--texto); }
+    .acciones { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .btn.sec { background: transparent; border: 1px solid var(--borde); color: var(--texto); }
+    #ranking { margin-top: 14px; text-align: left; font-size: .9rem; color: var(--suave); }
+    #ranking h3 { margin: 0 0 4px; font-size: .95rem; color: var(--texto); }
+    #ranking ol { margin: 0; padding-left: 22px; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <a class="volver" href="../">← Juegos</a>
+    <div class="datos">
+      <span id="stTerr" title="Territorio">▦ 0 %</span>
+      <span id="stBajas" title="Bajas">☠ 0</span>
+      <span id="stMejor" title="Mejor territorio">🏆 0 %</span>
+    </div>
+  </header>
+  <div id="escena">
+    <canvas id="lienzo"></canvas>
+    <div id="velo">
+      <div class="panel">
+        <h2 id="velTitulo">Paperio</h2>
+        <p id="velTexto">Sal de tu territorio y regresa para quedarte con todo lo que encierres. Si alguien toca tu estela, pierdes; si tú tocas la suya, pierde él. Desliza el dedo o usa las flechas / WASD.</p>
+        <ul id="velDatos"></ul>
+        <div class="acciones">
+          <button class="btn" id="jugar" type="button">Jugar</button>
+          <button class="btn sec" id="entrar" type="button" hidden>Entrar con Google</button>
+        </div>
+        <div id="ranking" hidden></div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="juego.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
