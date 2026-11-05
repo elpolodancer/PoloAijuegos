@@ -29,13 +29,13 @@
 const PI = Math.PI;
 
 // Gotas a lo largo de una línea recta de (x1,y1) a (x2,y2)
-function cadena(x1, y1, x2, y2, r, paso = 0.1) {
+export function cadena(x1, y1, x2, y2, r, paso = 0.1) {
   const n = Math.max(1, Math.round(Math.hypot(x2 - x1, y2 - y1) / paso)), l = [];
   for (let i = 0; i <= n; i++) l.push([x1 + (x2 - x1) * i / n, y1 + (y2 - y1) * i / n, r]);
   return l;
 }
 // Gotas a lo largo de una espiral: de radio r0 a r1 dando «vueltas» vueltas
-function espiral(r0, r1, vueltas, r, giro = 0) {
+export function espiral(r0, r1, vueltas, r, giro = 0) {
   const l = [], pasos = Math.round(vueltas * 36);
   for (let i = 0; i <= pasos; i++) {
     const t = i / pasos, a = giro + t * vueltas * 2 * PI, d = r0 + (r1 - r0) * t;
@@ -82,34 +82,34 @@ const caracol = espiral(0.1, 0.8, 2.3, 0.11);
 
 // ----- Piezas para los niveles 21 a 100 -----
 // Generador de números «al azar» con semilla: el mismo número siempre da el mismo mapa
-function azar(sem) { let s = sem >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+export function azar(sem) { let s = sem >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
 // Gotas a lo largo de un arco de círculo (centro cx,cy; radio R; de a0 a a1 radianes)
-function arco(cx, cy, R, a0, a1, r, paso = 0.09) {
+export function arco(cx, cy, R, a0, a1, r, paso = 0.09) {
   const n = Math.max(1, Math.round(Math.abs(a1 - a0) * R / paso)), l = [];
   for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; l.push([cx + Math.cos(a) * R, cy + Math.sin(a) * R, r]); }
   return l;
 }
-const anillo = (R, r, cx = 0, cy = 0) => arco(cx, cy, R, 0, 2 * PI, r);
+export const anillo = (R, r, cx = 0, cy = 0) => arco(cx, cy, R, 0, 2 * PI, r);
 // «k» líneas que salen del centro (de la distancia d0 a d1)
-function rayos(k, d0, d1, r, giro = 0) {
+export function rayos(k, d0, d1, r, giro = 0) {
   const l = [];
   for (let i = 0; i < k; i++) { const a = giro + i * 2 * PI / k; l.push(...cadena(Math.cos(a) * d0, Math.sin(a) * d0, Math.cos(a) * d1, Math.sin(a) * d1, r)); }
   return l;
 }
 // Línea quebrada que pasa por los puntos [[x,y], ...]
-function poli(pts, r) {
+export function poli(pts, r) {
   const l = [];
   for (let i = 0; i + 1 < pts.length; i++) l.push(...cadena(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], r));
   return l;
 }
 // «k» puntos repartidos en un círculo de radio d (sirven para islas o para huecos)
-function circulos(k, d, r, giro = 0) {
+export function circulos(k, d, r, giro = 0) {
   const l = [];
   for (let i = 0; i < k; i++) { const a = giro + i * 2 * PI / k; l.push([Math.cos(a) * d, Math.sin(a) * d, r]); }
   return l;
 }
 // Rejilla de puntos (n×n) con separación «sep», recortada a un radio «max»
-function rejilla(n, sep, r, max = 0.8) {
+export function rejilla(n, sep, r, max = 0.8) {
   const l = [];
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
     const x = (i - (n - 1) / 2) * sep, y = (j - (n - 1) / 2) * sep;
@@ -118,7 +118,7 @@ function rejilla(n, sep, r, max = 0.8) {
   return l;
 }
 // Panal: puntos en filas desplazadas
-function panal(sep, r, max = 0.82) {
+export function panal(sep, r, max = 0.82) {
   const l = [], h = sep * 0.866;
   for (let j = -6; j <= 6; j++) for (let i = -6; i <= 6; i++) {
     const x = i * sep + (j % 2 ? sep / 2 : 0), y = j * h;
@@ -127,7 +127,7 @@ function panal(sep, r, max = 0.82) {
   return l;
 }
 // Lunares al azar: «n» puntos con radio entre rmin y rmax, separados al menos «sep» entre sí, a distancia dmin..dmax del centro
-function lunares(sem, n, rmin, rmax, sep, dmin = 0.15, dmax = 0.78) {
+export function lunares(sem, n, rmin, rmax, sep, dmin = 0.15, dmax = 0.78) {
   const az = azar(sem), l = [];
   for (let t = 0; t < 4000 && l.length < n; t++) {
     const a = az() * 2 * PI, d = dmin + az() * (dmax - dmin), r = rmin + az() * (rmax - rmin);
@@ -137,7 +137,7 @@ function lunares(sem, n, rmin, rmax, sep, dmin = 0.15, dmax = 0.78) {
   return l;
 }
 // Nube: gotas grandes al azar, siempre pegadas a las anteriores para que quede de una sola pieza
-function nube(sem, n, rmin, rmax) {
+export function nube(sem, n, rmin, rmax) {
   const az = azar(sem), l = [[0, 0, rmax]];
   for (let t = 0; t < 4000 && l.length < n; t++) {
     const p = l[(az() * l.length) | 0], a = az() * 2 * PI, r = rmin + az() * (rmax - rmin), d = p[2] + r * 0.6;
@@ -147,7 +147,7 @@ function nube(sem, n, rmin, rmax) {
   return l;
 }
 // Constelación: islitas al azar unidas por caminos delgados (el árbol que une todas con el menor camino)
-function constelacion(sem, n, rIsla, rCamino) {
+export function constelacion(sem, n, rIsla, rCamino) {
   const az = azar(sem), p = [];
   for (let t = 0; t < 4000 && p.length < n; t++) {
     const a = az() * 2 * PI, d = Math.sqrt(az()) * (0.88 - rIsla), x = Math.cos(a) * d, y = Math.sin(a) * d;
@@ -163,14 +163,14 @@ function constelacion(sem, n, rIsla, rCamino) {
   return l;
 }
 // Árbol: un tronco que se divide en dos ramas, «prof» veces
-function rama(x, y, a, L, r, prof, l = []) {
+export function rama(x, y, a, L, r, prof, l = []) {
   const x2 = x + Math.cos(a) * L, y2 = y + Math.sin(a) * L;
   l.push(...cadena(x, y, x2, y2, r));
   if (prof > 0) { rama(x2, y2, a - 0.55, L * 0.72, r, prof - 1, l); rama(x2, y2, a + 0.55, L * 0.72, r, prof - 1, l); }
   return l;
 }
 // Estrella de «k» puntas
-function estrellaN(k, largo, r0, r1) {
+export function estrellaN(k, largo, r0, r1) {
   const l = [[0, 0, r0 + 0.06]];
   for (let i = 0; i < k; i++) {
     const a = -PI / 2 + i * 2 * PI / k;
@@ -179,7 +179,7 @@ function estrellaN(k, largo, r0, r1) {
   return l;
 }
 // Copo de nieve: «k» brazos con dos ramitas cada uno
-function copo(k, r) {
+export function copo(k, r) {
   const l = [[0, 0, r * 1.6]];
   for (let i = 0; i < k; i++) {
     const a = i * 2 * PI / k, c = Math.cos(a), s = Math.sin(a);
@@ -192,7 +192,7 @@ function copo(k, r) {
   return l;
 }
 // Serpentina: «n» barras horizontales unidas por los extremos, alternando derecha e izquierda
-function serpentina(n, ancho, r, alto = 0.66) {
+export function serpentina(n, ancho, r, alto = 0.66) {
   const l = [];
   for (let i = 0; i < n; i++) {
     const y = -alto + i * (2 * alto / (n - 1));
@@ -202,7 +202,7 @@ function serpentina(n, ancho, r, alto = 0.66) {
   return l;
 }
 // Huecos en forma de pasillos: «n» barras que dejan un paso de ancho «gap» alternando derecha e izquierda (hace un laberinto)
-function pasillos(n, r, gap, alto = 0.6) {
+export function pasillos(n, r, gap, alto = 0.6) {
   const h = [];
   for (let i = 0; i < n; i++) {
     const y = -alto + i * (2 * alto / (n - 1)), x = Math.sqrt(Math.max(0.01, 0.81 - y * y));
@@ -211,7 +211,7 @@ function pasillos(n, r, gap, alto = 0.6) {
   return h;
 }
 // Calles: «n» líneas horizontales y «n» verticales
-function ciudad(n, r, a = 0.62) {
+export function ciudad(n, r, a = 0.62) {
   const l = [];
   for (let i = 0; i < n; i++) {
     const t = -a + i * (2 * a / (n - 1)), e = Math.sqrt(0.9 * 0.9 - t * t);
@@ -220,13 +220,13 @@ function ciudad(n, r, a = 0.62) {
   return l;
 }
 // Rombo macizo
-function rombo(R, r) {
+export function rombo(R, r) {
   const l = [];
   for (let y = -R; y <= R + 1e-6; y += r) { const h = R - Math.abs(y); l.push(...cadena(-h, y, h, y, r)); }
   return l;
 }
 // Islas unidas con puentes: lista de centros [x,y], radio de isla, radio de puente y qué pares unir [[i,j], ...]
-function islas2(centros, rIsla, rPuente, pares) {
+export function islas2(centros, rIsla, rPuente, pares) {
   const l = centros.map(([x, y]) => [x, y, rIsla]);
   for (const [i, j] of pares) l.push(...cadena(centros[i][0], centros[i][1], centros[j][0], centros[j][1], rPuente));
   return l;

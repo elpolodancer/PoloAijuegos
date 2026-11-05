@@ -1,13 +1,13 @@
 // Ruta: paperio/mapa.js
-// Pantalla «Mapa» de Paperio: mundo → México → Michoacán.
+// Pantalla «Mapa» de Paperio: mundo → México → Colima (etapa 1 de 32).
 // - En el mundo solo se puede entrar a México.
-// - En México solo se puede entrar a Michoacán (los demás estados son puntos bloqueados; se desbloquean con «listo: true»).
-// - Michoacán muestra la cuadrícula de sus 100 niveles (ver michoacan.js); los que aún no tienen datos salen bloqueados.
+// - En México solo se puede entrar a Colima (los demás estados son puntos bloqueados; se desbloquean con «listo: true»).
+// - Colima muestra la cuadrícula de sus 100 niveles (ver colima.js); los que aún no tienen datos salen bloqueados.
 //   Después de cada 10 niveles aparece una casilla de bono (🪙), que se puede jugar siempre.
 // Los contornos están MUY simplificados (listas de [longitud, latitud]): es un dibujo decorativo, no un mapa exacto.
 // Para desbloquear otro estado: pon «listo: true» en ESTADOS (y añade lo que deba pasar al tocarlo).
 
-import { NIVELES_MICHOACAN, NOMBRES_CATEGORIA, BONOS } from "./michoacan.js";
+import { NIVELES_COLIMA, NOMBRES_CATEGORIA, BONOS, ETAPA } from "./colima.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const OCEANO = "#2c6e9e", TIERRA = "#f7ffec", T_BORDE = "#c3d6a9", T_SOMBRA = "#8fae7e", VECINO = "#a9c7a0";
@@ -38,7 +38,7 @@ export const MEXICO = [
   [-115.1, 27.85], [-114.5, 28.3], [-114.9, 29.1], [-115.7, 30.2], [-116.3, 31.0], [-116.7, 31.9],
 ];
 
-// ---------- Estados: un punto por estado (la capital). Solo Michoacán está «listo» ----------
+// ---------- Estados: un punto por estado (la capital). Solo Colima (etapa 1 de 32) está «listo» ----------
 export const ESTADOS = [
   { id: "ags", nombre: "Aguascalientes", lon: -102.30, lat: 21.88 },
   { id: "bc", nombre: "Baja California", lon: -115.47, lat: 32.62 },
@@ -48,14 +48,14 @@ export const ESTADOS = [
   { id: "chih", nombre: "Chihuahua", lon: -106.09, lat: 28.63 },
   { id: "cdmx", nombre: "Ciudad de México", lon: -99.13, lat: 19.43 },
   { id: "coah", nombre: "Coahuila", lon: -101.00, lat: 25.42 },
-  { id: "col", nombre: "Colima", lon: -103.72, lat: 19.24 },
+  { id: "col", nombre: "Colima", lon: -103.72, lat: 19.24, listo: true },
   { id: "dgo", nombre: "Durango", lon: -104.67, lat: 24.02 },
   { id: "gto", nombre: "Guanajuato", lon: -101.26, lat: 21.02 },
   { id: "gro", nombre: "Guerrero", lon: -99.50, lat: 17.55 },
   { id: "hgo", nombre: "Hidalgo", lon: -98.74, lat: 20.12 },
   { id: "jal", nombre: "Jalisco", lon: -103.35, lat: 20.67 },
   { id: "mex", nombre: "Estado de México", lon: -99.66, lat: 19.29 },
-  { id: "mich", nombre: "Michoacán", lon: -101.19, lat: 19.70, listo: true },
+  { id: "mich", nombre: "Michoacán", lon: -101.19, lat: 19.70 },
   { id: "mor", nombre: "Morelos", lon: -99.23, lat: 18.92 },
   { id: "nay", nombre: "Nayarit", lon: -104.89, lat: 21.51 },
   { id: "nl", nombre: "Nuevo León", lon: -100.31, lat: 25.67 },
@@ -241,7 +241,7 @@ function accesible(nodo, etiqueta, accion) {
 }
 
 // r = { raiz, titulo, info, lienzo, atras, ir, alSalir, jugarNivel, jugarBono }  (elementos del HTML y la función que vuelve al menú de inicio;
-//        jugarNivel(nivel) es opcional: se llama al tocar un nivel de Michoacán que ya está listo;
+//        jugarNivel(nivel) es opcional: se llama al tocar un nivel de Colima que ya está listo;
 //        jugarBono(bono) se llama al tocar una casilla de bono)
 export function montarMapa(r) {
   let vista = "mundo"; // mundo | mexico | estado
@@ -268,7 +268,7 @@ export function montarMapa(r) {
   }
 
   function vistaMexico() {
-    r.info.textContent = "Michoacán es el único estado disponible por ahora.";
+    r.info.textContent = "Colima es la etapa " + ETAPA.numero + " de " + ETAPA.total + " y el único estado disponible por ahora.";
     const P = proyector(-118.8, -86.2, 33.2, 14, 20, 0.9);
     const svg = el("svg", { viewBox: "0 0 " + P.w + " " + P.h, role: "group", "aria-label": "Mapa de México" }, r.lienzo);
     el("rect", { width: P.w, height: P.h, fill: OCEANO }, svg);
@@ -293,11 +293,11 @@ export function montarMapa(r) {
   }
 
   function vistaEstado() {
-    const listos = NIVELES_MICHOACAN.filter((nv) => nv.listo).length;
-    r.info.textContent = "Niveles listos: " + listos + " de " + NIVELES_MICHOACAN.length + " · las estrellas son la dificultad fija de cada nivel (1 = muy fácil, 5 = muy difícil) · 🪙 = bono después de cada 10 niveles.";
+    const listos = NIVELES_COLIMA.filter((nv) => nv.listo).length;
+    r.info.textContent = "Etapa " + ETAPA.numero + " de " + ETAPA.total + " · Niveles listos: " + listos + " de " + NIVELES_COLIMA.length + " · las estrellas son la dificultad fija de cada nivel (1 = muy fácil, 5 = muy difícil) · 🪙 = bono después de cada 10 niveles.";
     const rej = document.createElement("div");
     rej.className = "rejilla-niveles";
-    for (const nv of NIVELES_MICHOACAN) {
+    for (const nv of NIVELES_COLIMA) {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "nv c" + nv.categoria + (nv.listo ? " hecho" : " bloq");
@@ -331,9 +331,9 @@ export function montarMapa(r) {
 
   function pintar() {
     r.lienzo.replaceChildren();
-    r.titulo.textContent = vista === "mundo" ? "Mapa" : vista === "mexico" ? "México" : "Michoacán";
+    r.titulo.textContent = vista === "mundo" ? "Mapa" : vista === "mexico" ? "México" : ETAPA.nombre;
     r.ir.hidden = vista === "estado";
-    r.ir.textContent = vista === "mundo" ? "📍 México" : "📍 Michoacán";
+    r.ir.textContent = vista === "mundo" ? "📍 México" : "📍 " + ETAPA.nombre;
     if (vista === "mundo") vistaMundo();
     else if (vista === "mexico") vistaMexico();
     else vistaEstado();
