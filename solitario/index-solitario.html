@@ -13,8 +13,13 @@
     .pila::before { content: ""; position: absolute; top: 0; left: 0; width: var(--w); height: calc(var(--w) * 1.4); border: 2px dashed rgba(255, 255, 255, 0.3); border-radius: calc(var(--w) * 0.1); box-sizing: border-box; }
     .carta { position: absolute; left: 0; width: var(--w); height: calc(var(--w) * 1.4); box-sizing: border-box; background: #fff; color: #111; border: 1px solid #888; border-radius: calc(var(--w) * 0.1); font-weight: 700; font-size: calc(var(--w) * 0.3); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); overflow: hidden; }
     .carta.roja { color: #d32f2f; }
-    .carta .e { position: absolute; top: 2px; left: 4px; line-height: 1; }
-    .carta .g { position: absolute; right: 4px; bottom: 2px; font-size: calc(var(--w) * 0.55); line-height: 1; }
+    /* Esquinas (.e arriba, .f abajo girada): número arriba y palo debajo. .c = símbolo del centro */
+    .carta .e, .carta .f { position: absolute; display: flex; flex-direction: column; align-items: center; line-height: 1; }
+    .carta .e { top: 2px; left: 4px; }
+    .carta .f { bottom: 2px; right: 4px; transform: rotate(180deg); }
+    .carta .e b, .carta .f b { display: block; font-size: calc(var(--w) * 0.26); }
+    .carta .e i, .carta .f i { display: block; font-style: normal; font-size: calc(var(--w) * 0.2); }
+    .carta .c { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: calc(var(--w) * 0.6); line-height: 1; pointer-events: none; }
     .carta.abajo { color: transparent; border-color: #fff; background: repeating-linear-gradient(45deg, #3b4cca, #3b4cca 6px, #2c3aa8 6px, #2c3aa8 12px); }
     .carta.sel { outline: 3px solid #ffd54f; outline-offset: -3px; background: #fff8dc; }
     .reciclar { position: absolute; top: 0; left: 0; width: var(--w); height: calc(var(--w) * 1.4); display: flex; align-items: center; justify-content: center; font-size: calc(var(--w) * 0.6); color: rgba(255, 255, 255, 0.6); }
