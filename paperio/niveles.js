@@ -445,6 +445,15 @@ function mapasExtra() {
 }
 mapasExtra().forEach(([nombre, forma], i) => NIVELES.push(escala(10 + i, nombre, forma)));
 
+// ===== AJUSTE FINAL: niveles activos y meta =====
+// Mientras se afina el juego solo están activos los primeros NIVELES_ACTIVOS niveles (los demás siguen definidos arriba, no se borraron).
+// Para volver a activarlos todos, sube este número (por ejemplo a NIVELES.length o 1000).
+const NIVELES_ACTIVOS = 10;
+// Meta común de todos los niveles activos: % del mapa que hay que conquistar para pasar.
+const META_GLOBAL = 90;
+NIVELES.length = Math.min(NIVELES.length, NIVELES_ACTIVOS);
+for (const nv of NIVELES) nv.meta = META_GLOBAL;
+
 // ----- Convierte una «forma» en una función (u, v) → ¿está dentro del mapa? -----
 const K = 1.6;                         // alcance de cada gota respecto a su radio
 const UMBRAL = Math.pow(1 - 1 / (K * K), 2);

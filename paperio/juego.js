@@ -457,14 +457,16 @@ function aparecer(e) {
     }
     for (let k = 0; k < 6000 && !ok; k++) { // plan B: cualquier lugar despejado
       cx = Math.round(C + (Math.random() * 2 - 1) * RADIO); cy = Math.round(C + (Math.random() * 2 - 1) * RADIO);
-      ok = distM[cy * G + cx] > r0 + 3;
+      // plan B: el jugador cae en cualquier lugar despejado; un bot nunca cae sobre territorio o estelas de otros
+      ok = distM[cy * G + cx] > r0 + 3 && (e.jugador || discoLibre(cx, cy, Math.ceil(r0) + 2));
     }
     if (!ok && r0 > R_INICIO) r0 = R_INICIO; else break;
   }
+  if (!ok && !e.jugador) { e.vivo = false; e.espera = 1; return; } // no hay lugar libre (el jugador tiene casi todo): lo intenta de nuevo en 1 s
   const discoIni = r0 > R_INICIO ? D_INICIO_GRANDE : D_INICIO;
   for (let k = 0; k < discoIni.length; k += 2) {
     const i = (cy + discoIni[k + 1]) * G + cx + discoIni[k];
-    if (dentro[i]) { dueno[i] = e.id; pix(i); }
+    if (dentro[i] && (e.jugador || !dueno[i])) { dueno[i] = e.id; pix(i); } // un bot no pisa casillas que ya son de alguien
   }
   e.x = e.px = cx + 0.5; e.y = e.py = cy + 0.5;
   let mejorA = 0, mejorS = -1; // mira hacia donde hay más espacio libre
