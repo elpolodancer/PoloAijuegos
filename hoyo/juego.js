@@ -1,22 +1,46 @@
 // Ruta: hoyo/juego.js
-// Estilo Hole.io en vista isométrica, con 2 mapas: «ciudad» y «playa» (islas).
+// Estilo Hole.io en vista isométrica, con 3 mapas: «ciudad», «playa» (islas) y «campo».
+// El hoyo tiene 15 niveles de tamaño; los objetos también (solo traga los de su nivel o menores). Ver «Niveles de tamaño» abajo.
 // Ajustes rápidos aquí arriba:
 const DURACION = 120;      // segundos por partida
 let MUNDO = 3000;          // tamaño del mapa (px); cada mapa puede traer el suyo con «mundo»
 const NUM_BOTS = 7;         // bots por defecto (cada mapa puede traer los suyos con «bots»)
 const R_INICIAL = 22;
-const CRECIMIENTO = 0.35;  // cuánto crece el hoyo al tragar (más = más rápido)
 const OBJETOS = 620;       // objetos por defecto (cada mapa puede traer los suyos con «objetos»)
 let totalObjetos = OBJETOS, duracionMapa = DURACION;
 const PISO_DESPRENDE = 0.35; // probabilidad de que, al tragar un piso, el piso de arriba se desprenda y quede tirado como bloque
 const R_PEQUENO = 15;      // los objetos con radio hasta este valor cuentan como «pequeños» (los que come el hoyo inicial)
 const PEQUENOS = 0.4;      // cuántos objetos pequeños quedan respecto a antes (0.4 = 60 % menos; 1 = como antes)
-const rComer = (o) => (o.pisos ? o.rp : o.r); // radio que cuenta para poder comerse un objeto (en edificios, el de un piso)
+
+// ----- Niveles de tamaño del hoyo -----
+// El hoyo tiene NIVELES tamaños fijos. Sube de nivel al juntar puntos y solo puede tragar objetos de su nivel o menores.
+// Cada objeto tiene un nivel de tamaño (o.t), que sale de su radio (en edificios, el de un piso).
+const NIVELES = 15;
+const PUNTOS_TOTALES = 1000000;  // el millón que se divide en los niveles (define los umbrales de abajo)
+// Puntos que realmente hay repartidos en los objetos del mapa. Con 1 000 000 (= PUNTOS_TOTALES) para llegar al nivel 15
+// habría que comerse el 93 % de todo el mapa, algo imposible en una partida (en pruebas, ni el mejor jugador simulado
+// pasaba del nivel 2-3). Con más puntos en el mapa se sube de nivel comiendo solo una parte; baja o sube este número para ajustar la dificultad.
+const PUNTOS_EN_MAPA = 12000000;
+const PUNTOS_NIVEL_2 = 10;       // con solo 10 puntos se llega al nivel 2
+const CRECE_NIVEL = 1.15;        // cada nivel el radio del hoyo es 15 % mayor (nivel 15 = radio ~156)
+const DIF_DEVORAR = 2;           // un hoyo se come a otro si tiene 2 niveles o más que él
+const R_NIVEL = [0];             // radio del hoyo en cada nivel (R_NIVEL[1] = R_INICIAL)
+for (let n = 1; n <= NIVELES; n++) R_NIVEL[n] = R_INICIAL * CRECE_NIVEL ** (n - 1);
+// Puntos con los que empieza cada nivel: nivel 1 = 0, nivel 2 = 10 y del 2 al 15 el millón se divide en partes iguales
+const UMBRAL = [0, 0];
+for (let n = 2; n <= NIVELES; n++) UMBRAL[n] = Math.round(PUNTOS_NIVEL_2 + ((n - 2) * (PUNTOS_TOTALES - PUNTOS_NIVEL_2)) / (NIVELES - 1));
+// Nivel de tamaño de un objeto: el primer nivel cuyo hoyo lo abarca (radio del objeto < 0.8 × radio del hoyo)
+function tierDe(rc) {
+  for (let n = 1; n <= NIVELES; n++) if (rc < R_NIVEL[n] * 0.8) return n;
+  return NIVELES;
+}
+let VALOR = []; // puntos que da un objeto (o un piso) de cada nivel; se calcula en cargarMapa para que el mapa sume PUNTOS_TOTALES
+const fmt = (n) => Math.floor(n).toLocaleString("es-MX");
 let reloj = 0;
 const pesoTipo = (t) => t.w * (t.r <= R_PEQUENO ? PEQUENOS : 1);
 
 // ----- Ajustes de los bots (más tontos) -----
-const BOT_COMER = 0.2;            // cuánto crecen y puntúan los bots al comer (0.2 = 80 % menos)
+const BOT_COMER = 1;              // cuántos puntos ganan los bots al comer, respecto a ti (1 = igual; menos = suben de nivel más lento)
 const BOT_PROB_PERSEGUIR = 0.2;   // probabilidad de que decidan ir tras un hoyo más chico (tú incluido) cuando lo ven (0.2 = 80 % menos)
 const BOT_PERSECUCION_MAX = 2;    // segundos máximos que persiguen a un hoyo (antes: sin límite)
 const BOT_ENFRIAR = 6;            // segundos que descansan sin perseguir a nadie después de una persecución
@@ -68,20 +92,39 @@ function islaAlAzar() {
   return islas[0];
 }
 
+// Edificios altos para los niveles 9 a 15: [radio, pisos, alto de piso, pf, peso]. Se comen piso por piso (el piso mide r × pf)
+const TORRES = [[70, 5, 26, 0.72, 0.28], [80, 6, 28, 0.72, 0.19], [92, 7, 30, 0.72, 0.14], [104, 8, 32, 0.72, 0.1], [118, 9, 34, 0.72, 0.07], [134, 10, 36, 0.72, 0.05], [152, 12, 40, 0.75, 0.035]];
+const torres = (col) => TORRES.map(([r, pisos, fh, pf, w]) => ({ est: true, r, pisos, fh, pf, col, w }));
+
+// Cada mapa debe traer objetos de los 15 niveles de tamaño (el comentario de cada grupo dice el nivel).
+// Los pesos (w) bajan con el nivel: muchos objetos chicos y pocos enormes.
 const MAPAS = {
   ciudad: {
     mundo: 7500, objetos: 3875, bots: 12, duracion: 300, // 15×15 cuadras de 500 px
     bg: "#13182b",
     tipos: [
+      // nivel 1
       { e: "🌷", r: 7, w: 30 }, { e: "🧍", r: 7, w: 14 }, { e: "🐈", r: 9, w: 8 },
       { e: "🚧", r: 10, w: 20, calle: true }, { e: "🪑", r: 12, w: 12 }, { e: "🛢️", r: 13, w: 14 },
-      { e: "🚗", r: 22, w: 22, calle: true }, { e: "🌳", r: 28, w: 14 }, { e: "🚚", r: 34, w: 8, calle: true },
-      { e: "🚌", r: 40, w: 5, calle: true },
-      // objetos 3D: cajas y edificios por pisos (cada piso se traga por separado)
-      { caja: true, r: 11, w: 12, col: "#c98b4a", alt: 0.85 }, { caja: true, r: 26, w: 5, col: "#2f7fd1", alt: 0.7 },
-      { est: true, r: 48, w: 8, pisos: 2, fh: 26, pf: 0.66, col: "#d9534f" },
-      { est: true, r: 62, w: 5, pisos: 4, fh: 28, pf: 0.6, col: "#c62f3a" },
-      { est: true, r: 78, w: 3, pisos: 6, fh: 28, pf: 0.55, col: "#4b6cb7" },
+      { caja: true, r: 11, w: 12, col: "#c98b4a", alt: 0.85 },
+      // nivel 2
+      { e: "🛵", r: 19, w: 9, calle: true }, { e: "🚲", r: 18, w: 5, calle: true },
+      // nivel 3
+      { e: "🚗", r: 22, w: 7, calle: true }, { e: "🌲", r: 21, w: 4.5 },
+      // nivel 4
+      { e: "⛲", r: 25, w: 5 }, { caja: true, r: 26, w: 4.4, col: "#2f7fd1", alt: 0.7 },
+      // nivel 5
+      { e: "🌳", r: 28, w: 4.2 }, { e: "🏠", r: 30, w: 3.5 },
+      // nivel 6
+      { e: "🚚", r: 34, w: 3.6, calle: true }, { est: true, r: 48, w: 1.35, pisos: 2, fh: 26, pf: 0.66, col: "#d9534f" },
+      // nivel 7
+      { e: "🚌", r: 40, w: 3.1, calle: true }, { est: true, r: 62, w: 0.52, pisos: 4, fh: 28, pf: 0.6, col: "#c62f3a" },
+      // nivel 8
+      { e: "🏥", r: 44, w: 2.6 }, { est: true, r: 78, w: 0.29, pisos: 6, fh: 28, pf: 0.55, col: "#4b6cb7" },
+      // niveles 9 a 15
+      { e: "⛪", r: 50, w: 2.1 }, { e: "🏭", r: 58, w: 1.7 }, { e: "🏟️", r: 66, w: 1.4 }, { e: "🏗️", r: 75, w: 1.1 },
+      { e: "🏰", r: 88, w: 0.95 }, { e: "🗼", r: 100, w: 0.8 }, { e: "🗽", r: 112, w: 0.65 },
+      ...torres("#6f7d99"),
     ],
     preparar() {},
     colocar(t) {
@@ -89,8 +132,8 @@ const MAPAS = {
         let x, y;
         if (t.calle) {
           const v = Math.random() < 0.5, c = Math.floor(rnd(0, MUNDO / CALLE)) * CALLE;
-          x = v ? c + rnd(-40, 40) : rnd(100, MUNDO - 100);
-          y = v ? rnd(100, MUNDO - 100) : c + rnd(-40, 40);
+          x = v ? Math.max(60, c + rnd(-40, 40)) : rnd(100, MUNDO - 100); // max(60, …): la calle del borde (c = 0) no deja objetos fuera del mapa
+          y = v ? rnd(100, MUNDO - 100) : Math.max(60, c + rnd(-40, 40));
         } else {
           x = rnd(60, MUNDO - 60); y = rnd(60, MUNDO - 60);
           if (enCalle(x, y) || enCalle(x + t.r, y + t.r) || enCalle(x - t.r, y - t.r)) continue;
@@ -118,11 +161,27 @@ const MAPAS = {
     mundo: 7500, objetos: 3875, bots: 12, duracion: 300, // igual de grande que la ciudad (15×15 cuadras de 500 px)
     bg: "#0c4a63",
     tipos: [
+      // nivel 1
       { e: "🐚", r: 7, w: 30 }, { e: "🥥", r: 7, w: 20 }, { e: "🦀", r: 8, w: 14 }, { e: "🏐", r: 10, w: 14 },
-      { e: "⛱️", r: 14, w: 16 }, { e: "🛶", r: 22, w: 12, agua: true }, { e: "🌴", r: 28, w: 22 },
-      { e: "🚤", r: 34, w: 6, agua: true }, { e: "⛵", r: 40, w: 5, agua: true }, { caja: true, r: 11, w: 12, col: "#a0693a", alt: 0.85 },
-      { est: true, r: 46, w: 10, pisos: 2, fh: 24, pf: 0.66, col: "#e8c98a" },
-      { est: true, r: 74, w: 3, pisos: 5, fh: 26, pf: 0.58, col: "#2aa6c9" },
+      { e: "⛱️", r: 14, w: 16 }, { caja: true, r: 11, w: 12, col: "#a0693a", alt: 0.85 },
+      // nivel 2
+      { e: "🦩", r: 19, w: 14 },
+      // nivel 3
+      { e: "🛶", r: 22, w: 11.5, agua: true },
+      // nivel 4
+      { e: "🐢", r: 24, w: 9.4 },
+      // nivel 5
+      { e: "🌴", r: 28, w: 4.2 }, { est: true, r: 46, w: 1.7, pisos: 2, fh: 24, pf: 0.66, col: "#e8c98a" },
+      // nivel 6
+      { e: "🚤", r: 34, w: 3.8, agua: true }, { e: "⛺", r: 33, w: 2.5 },
+      // nivel 7
+      { e: "⛵", r: 40, w: 3.1, agua: true }, { est: true, r: 62, w: 0.52, pisos: 4, fh: 28, pf: 0.6, col: "#f0b27a" },
+      // nivel 8
+      { e: "🚢", r: 44, w: 2.6, agua: true }, { est: true, r: 78, w: 0.29, pisos: 6, fh: 28, pf: 0.55, col: "#2aa6c9" },
+      // niveles 9 a 15
+      { e: "🗿", r: 50, w: 2.1 }, { e: "⛴️", r: 58, w: 1.7, agua: true }, { e: "🎡", r: 66, w: 1.4 }, { e: "🌋", r: 75, w: 1.1 },
+      { e: "🛳️", r: 88, w: 0.95, agua: true }, { e: "🏯", r: 100, w: 0.8 }, { e: "🗽", r: 112, w: 0.65 },
+      ...torres("#d98c5f"),
     ],
     preparar() {
       islas = [];
@@ -162,13 +221,27 @@ const MAPAS = {
     mundo: 9000, objetos: 5400, bots: 18, duracion: 420,
     bg: "#3f6b34",
     tipos: [
+      // nivel 1
       { e: "🌾", r: 7, w: 30 }, { e: "🌻", r: 7, w: 18 }, { e: "🐔", r: 8, w: 14 }, { e: "🐑", r: 11, w: 14 },
-      { e: "🪵", r: 12, w: 10 }, { e: "🐄", r: 15, w: 12 }, { e: "🐎", r: 18, w: 8 },
-      { e: "🚜", r: 26, w: 12, calle: true }, { e: "🌳", r: 28, w: 16 }, { e: "🛖", r: 40, w: 8 },
-      { caja: true, r: 12, w: 14, col: "#d8b84a", alt: 0.8 },
-      { est: true, r: 50, w: 8, pisos: 2, fh: 26, pf: 0.62, col: "#b3412f" },
-      { est: true, r: 46, w: 6, pisos: 2, fh: 24, pf: 0.66, col: "#ece0b3" },
-      { est: true, r: 78, w: 3, pisos: 5, fh: 28, pf: 0.56, col: "#7a7f8c" },
+      { e: "🪵", r: 12, w: 10 }, { e: "🐄", r: 15, w: 12 }, { caja: true, r: 12, w: 14, col: "#d8b84a", alt: 0.8 },
+      // nivel 2
+      { e: "🐎", r: 18, w: 14 },
+      // nivel 3
+      { e: "🐂", r: 22, w: 11.5 },
+      // nivel 4
+      { e: "🚜", r: 26, w: 9.4, calle: true },
+      // nivel 5
+      { e: "🌳", r: 28, w: 4.2 }, { est: true, r: 46, w: 1.7, pisos: 2, fh: 24, pf: 0.66, col: "#ece0b3" },
+      // nivel 6
+      { e: "🏚️", r: 33, w: 3.6 }, { est: true, r: 50, w: 1.35, pisos: 2, fh: 26, pf: 0.62, col: "#b3412f" },
+      // nivel 7
+      { e: "🛖", r: 40, w: 3.1 }, { est: true, r: 62, w: 0.52, pisos: 4, fh: 28, pf: 0.6, col: "#c9a15a" },
+      // nivel 8
+      { e: "🏡", r: 44, w: 2.6 }, { est: true, r: 78, w: 0.29, pisos: 6, fh: 28, pf: 0.55, col: "#7a7f8c" },
+      // niveles 9 a 15
+      { e: "⛪", r: 50, w: 2.1 }, { e: "🏫", r: 58, w: 1.7 }, { e: "🎪", r: 66, w: 1.4 }, { e: "⛰️", r: 75, w: 1.1 },
+      { e: "🏰", r: 88, w: 0.95 }, { e: "🗻", r: 100, w: 0.8 }, { e: "🏔️", r: 112, w: 0.65 },
+      ...torres("#8d8f99"),
     ],
     preparar() {},
     colocar(t) {
@@ -176,8 +249,8 @@ const MAPAS = {
         let x, y;
         if (t.calle) {
           const v = Math.random() < 0.5, c = Math.floor(rnd(0, MUNDO / CAMPO_CALLE)) * CAMPO_CALLE;
-          x = v ? c + rnd(-35, 35) : rnd(100, MUNDO - 100);
-          y = v ? rnd(100, MUNDO - 100) : c + rnd(-35, 35);
+          x = v ? Math.max(60, c + rnd(-35, 35)) : rnd(100, MUNDO - 100);
+          y = v ? rnd(100, MUNDO - 100) : Math.max(60, c + rnd(-35, 35));
         } else {
           x = rnd(60, MUNDO - 60); y = rnd(60, MUNDO - 60);
           if (enCalleCampo(x, y) || enCalleCampo(x + t.r, y + t.r) || enCalleCampo(x - t.r, y - t.r)) continue;
@@ -214,7 +287,7 @@ function nuevoObjeto() {
   for (const x of tipos) { if ((k -= pesoTipo(x)) < 0) { t = x; break; } }
   const p = mapa.colocar(t);
   if (!p) return null;
-  const o = { e: t.e, r: t.r, x: p[0], y: p[1] };
+  const o = { e: t.e, r: t.r, x: p[0], y: p[1], t: tierDe(t.est ? t.r * t.pf : t.r) };
   if (t.est) Object.assign(o, { pisos: t.pisos, fh: t.fh, rp: t.r * t.pf, col: t.col, lift: 0, cd: 0 });
   else if (t.caja) Object.assign(o, { caja: true, col: t.col, alt: t.alt, vent: !!t.vent });
   return o;
@@ -231,15 +304,32 @@ function cargarMapa(id) {
   mapa.preparar();
   objetos = []; caidas = []; hoyos = []; yo = null;
   while (objetos.length < totalObjetos) { const o = nuevoObjeto(); if (o) objetos.push(o); }
+  calcularValores();
   cam.x = cam.y = MUNDO / 2; cam.z = 0.3;
 }
+// Reparte PUNTOS_EN_MAPA entre los 15 niveles de objetos. El nivel 1 vale 1 punto por objeto (10 puntos = nivel 2);
+// el resto se reparte a partes iguales entre los niveles 2 a 15 y cada parte se divide entre los objetos de ese nivel
+// (por eso, como hay menos objetos grandes, cada uno vale más).
+function calcularValores() {
+  const n = new Array(NIVELES + 1).fill(0);
+  for (const o of objetos) n[o.t] += o.pisos || 1; // cada piso de un edificio cuenta como un objeto
+  const porNivel = (PUNTOS_EN_MAPA - n[1]) / (NIVELES - 1);
+  VALOR = [0, 1];
+  for (let t = 2; t <= NIVELES; t++) VALOR[t] = n[t] ? Math.max(1, Math.round(porNivel / n[t])) : 0;
+}
+// Suma puntos (los bots ganan menos) y sube de nivel si llega al siguiente umbral
+function ganar(h, v) {
+  v *= h.esBot ? BOT_COMER : 1;
+  h.puntos += v; h.prog += v;
+  while (h.nivel < NIVELES && h.prog >= UMBRAL[h.nivel + 1]) { h.nivel++; h.aviso = 2; }
+}
 function crearHoyo(nombre, color, esBot) {
-  const h = { nombre, color, esBot, x: 0, y: 0, r: R_INICIAL, puntos: 0, dx: 0, dy: 0, meta: null, t: 0, cazaT: 0, enfriar: rnd(0, BOT_ENFRIAR) };
+  const h = { nombre, color, esBot, x: 0, y: 0, r: R_INICIAL, puntos: 0, prog: 0, nivel: 1, aviso: 0, dx: 0, dy: 0, meta: null, t: 0, cazaT: 0, enfriar: rnd(0, BOT_ENFRIAR) };
   reaparecer(h);
   return h;
 }
 function reaparecer(h) {
-  h.r = R_INICIAL; h.meta = null; h.cazaT = 0;
+  h.r = R_NIVEL[1]; h.nivel = 1; h.prog = 0; h.meta = null; h.cazaT = 0; // al reaparecer vuelve al nivel 1 (los puntos del marcador se conservan)
   for (let i = 0; i < 20; i++) {
     [h.x, h.y] = mapa.spawn();
     if (!hoyos.some((o) => o !== h && Math.hypot(o.x - h.x, o.y - h.y) < 400)) break;
@@ -290,15 +380,15 @@ function pensar(b) {
   // Si va en plena persecución, sigue un ratito más (hasta que se acabe su tiempo)
   if (b.cazaT > 0 && b.meta && b.meta.nombre) {
     const p = b.meta;
-    if (b.r > p.r * 1.3 && Math.hypot(p.x - b.x, p.y - b.y) < BOT_VISION_HOYOS * 1.5) return;
+    if (b.nivel >= p.nivel + DIF_DEVORAR && Math.hypot(p.x - b.x, p.y - b.y) < BOT_VISION_HOYOS * 1.5) return;
     b.cazaT = 0;
   }
   let peligro = null, presa = null;
   for (const h of hoyos) {
     if (h === b) continue;
     const d = Math.hypot(h.x - b.x, h.y - b.y);
-    if (h.r > b.r * 1.25 && d < BOT_HUIR_DIST + h.r * 0.5) peligro = h;
-    else if (b.r > h.r * 1.3 && d < BOT_VISION_HOYOS && (!presa || d < Math.hypot(presa.x - b.x, presa.y - b.y))) presa = h;
+    if (h.nivel >= b.nivel + DIF_DEVORAR && d < BOT_HUIR_DIST + h.r * 0.5) peligro = h;
+    else if (b.nivel >= h.nivel + DIF_DEVORAR && d < BOT_VISION_HOYOS && (!presa || d < Math.hypot(presa.x - b.x, presa.y - b.y))) presa = h;
   }
   const vagar = () => ({ x: rnd(100, MUNDO - 100), y: rnd(100, MUNDO - 100) });
   if (peligro && Math.random() < BOT_PROB_HUIR) {
@@ -310,7 +400,7 @@ function pensar(b) {
   } else {
     let mejor = null, d2 = BOT_VISION_OBJETOS * BOT_VISION_OBJETOS;
     for (const o of objetos) {
-      if (rComer(o) >= b.r * 0.8) continue;
+      if (o.t > b.nivel) continue;
       const d = (o.x - b.x) ** 2 + (o.y - b.y) ** 2;
       if (d < d2) { d2 = d; mejor = o; }
     }
@@ -328,6 +418,8 @@ function actualizar(dt) {
 
   [yo.dx, yo.dy] = direccionJugador();
   for (const h of hoyos) {
+    h.r += (R_NIVEL[h.nivel] - h.r) * Math.min(1, dt * 5); // crece con suavidad hasta el tamaño de su nivel
+    if (h.aviso > 0) h.aviso -= dt;
     if (h.esBot) {
       h.t -= dt; h.cazaT -= dt; h.enfriar -= dt;
       if (h.t <= 0 || !h.meta) { pensar(h); h.t = rnd(0.3, 0.7); }
@@ -343,37 +435,31 @@ function actualizar(dt) {
       const o = objetos[i];
       if (o.pisos) { // edificio: el hoyo se traga un piso a la vez (el de abajo); los de arriba bajan
         const d = Math.hypot(o.x - h.x, o.y - h.y);
-        if (o.rp < h.r * 0.8 && d < h.r - o.rp * 0.3 && reloj >= o.cd) {
+        if (o.t <= h.nivel && d < h.r - o.rp * 0.3 && reloj >= o.cd) {
           o.cd = reloj + 0.45;
           caidas.push({ piso: { w: o.r, h: o.fh, col: o.col }, r: o.r, x: o.x, y: o.y, t: 0, h });
-          const k = h.esBot ? BOT_COMER : 1;
-          h.r = Math.sqrt(h.r * h.r + o.rp * o.rp * CRECIMIENTO * k);
-          h.puntos += Math.round(o.rp * k);
+          ganar(h, VALOR[o.t]);
           o.pisos--; o.lift = o.fh;
           if (o.pisos >= 2 && Math.random() < PISO_DESPRENDE) { // se desprende el piso de arriba y cae al suelo
             o.pisos--;
             const a = rnd(0, 6.2832), dist = o.r * 1.3;
-            objetos.push({ e: "🧱", r: o.rp * 0.8, x: Math.max(60, Math.min(MUNDO - 60, o.x + Math.cos(a) * dist)), y: Math.max(60, Math.min(MUNDO - 60, o.y + Math.sin(a) * dist)), caja: true, col: o.col, alt: 0.9, vent: true, drop: o.fh * 3 });
+            objetos.push({ e: "🧱", t: o.t, r: o.rp * 0.8, x: Math.max(60, Math.min(MUNDO - 60, o.x + Math.cos(a) * dist)), y: Math.max(60, Math.min(MUNDO - 60, o.y + Math.sin(a) * dist)), caja: true, col: o.col, alt: 0.9, vent: true, drop: o.fh * 3 });
           }
           if (o.pisos <= 0) { objetos[i] = objetos[objetos.length - 1]; objetos.pop(); }
         }
         continue;
       }
-      if (o.r < h.r * 0.8 && Math.hypot(o.x - h.x, o.y - h.y) < h.r - o.r * 0.3) {
+      if (o.t <= h.nivel && Math.hypot(o.x - h.x, o.y - h.y) < h.r - o.r * 0.3) {
         objetos[i] = objetos[objetos.length - 1]; objetos.pop();
         caidas.push({ e: o.e, r: o.r, x: o.x, y: o.y, t: 0, h });
-        const k = h.esBot ? BOT_COMER : 1;
-        h.r = Math.sqrt(h.r * h.r + o.r * o.r * CRECIMIENTO * k);
-        h.puntos += Math.round(o.r * k);
+        ganar(h, VALOR[o.t]);
       }
     }
   }
   for (const a of hoyos) for (const b of hoyos) {
-    if (a === b || a.r < b.r * 1.25) continue;
+    if (a === b || a.nivel < b.nivel + DIF_DEVORAR) continue;
     if (Math.hypot(a.x - b.x, a.y - b.y) < a.r * 0.7) {
-      const k = a.esBot ? BOT_COMER : 1;
-      a.r = Math.sqrt(a.r * a.r + b.r * b.r * 0.5 * k);
-      a.puntos += Math.round(b.r * 3 * k);
+      ganar(a, PUNTOS_NIVEL_2 + UMBRAL[b.nivel] * 0.1); // premio por devorar un hoyo: 10 + el 10 % de los puntos con que empieza su nivel
       reaparecer(b);
     }
   }
@@ -502,12 +588,26 @@ function dibujar() {
   const t = Math.max(0, Math.ceil(tiempo)), txt = Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0");
   ctx.strokeText(txt, W / 2, 36); ctx.fillText(txt, W / 2, 36);
   ctx.font = "700 18px system-ui, sans-serif";
-  ctx.strokeText(yo.puntos + " pts", W / 2, 62); ctx.fillText(yo.puntos + " pts", W / 2, 62);
+  ctx.strokeText(fmt(yo.puntos) + " pts", W / 2, 62); ctx.fillText(fmt(yo.puntos) + " pts", W / 2, 62);
+  // nivel de tamaño y barra hacia el siguiente
+  ctx.font = "700 15px system-ui, sans-serif"; ctx.lineWidth = 3;
+  const ntxt = "Nivel " + yo.nivel + " / " + NIVELES;
+  ctx.strokeText(ntxt, W / 2, 84); ctx.fillText(ntxt, W / 2, 84);
+  const bw = 150, ini = UMBRAL[yo.nivel], fin = UMBRAL[yo.nivel + 1];
+  const frac = yo.nivel >= NIVELES ? 1 : Math.max(0, Math.min(1, (yo.prog - ini) / (fin - ini)));
+  ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(W / 2 - bw / 2 - 2, 94, bw + 4, 10);
+  ctx.fillStyle = "#7c5cff"; ctx.fillRect(W / 2 - bw / 2, 96, bw * frac, 6);
+  if (yo.aviso > 0) {
+    ctx.globalAlpha = Math.min(1, yo.aviso); ctx.font = "800 34px system-ui, sans-serif"; ctx.fillStyle = "#ffe066"; ctx.lineWidth = 5;
+    ctx.strokeText("¡Nivel " + yo.nivel + "!", W / 2, H * 0.28); ctx.fillText("¡Nivel " + yo.nivel + "!", W / 2, H * 0.28);
+    ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = "#fff"; ctx.lineWidth = 4; ctx.font = "600 14px system-ui, sans-serif";
   const top = [...hoyos].sort((a, b) => b.puntos - a.puntos).slice(0, 5);
   ctx.textAlign = "right"; ctx.font = "600 14px system-ui, sans-serif";
   top.forEach((h, i) => {
     ctx.fillStyle = h === yo ? "#ffe066" : "#fff";
-    const s = (i + 1) + ". " + h.nombre + "  " + h.puntos;
+    const s = (i + 1) + ". " + h.nombre + "  " + fmt(h.puntos);
     ctx.strokeText(s, W - 12, 24 + i * 20); ctx.fillText(s, W - 12, 24 + i * 20);
   });
 }
@@ -523,7 +623,7 @@ async function terminar() {
   orden.slice(0, 5).forEach((h, i) => {
     const li = document.createElement("li");
     const n = document.createElement(h === yo ? "b" : "span");
-    n.textContent = (i + 1) + ". " + h.nombre + " — " + h.puntos + " pts";
+    n.textContent = (i + 1) + ". " + h.nombre + " — " + fmt(h.puntos) + " pts (nivel " + h.nivel + ")";
     li.appendChild(n); $("rank").appendChild(li);
   });
   $("jugar").textContent = "Jugar otra vez";
@@ -531,7 +631,7 @@ async function terminar() {
   $("msg").textContent = "";
   try {
     const { sumarPuntos } = await import("../compartido/jugador.js");
-    const ok = await sumarPuntos("hoyo", Math.floor(yo.puntos / 3));
+    const ok = await sumarPuntos("hoyo", Math.floor(yo.puntos / 1000)); // 1 punto de perfil por cada 1000 del juego (1 000 000 = tope de 1000)
     $("msg").textContent = ok ? "Puntos guardados en tu perfil." : "Entra con Google en el portal para guardar tus puntos.";
   } catch (e) {
     $("msg").textContent = "No se pudieron guardar los puntos (sin conexión).";
