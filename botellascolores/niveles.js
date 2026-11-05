@@ -57,8 +57,8 @@ export const NIVELES = [
   { botellas: 12, colores: 10, capacidad: 8, semilla: 45009 },
 ];
 
-// 12 colores bien distinguibles
+// 12 colores vivos, como en el juego de referencia
 export const PALETA = [
-  "#e53935", "#fb8c00", "#fdd835", "#7cb342", "#00897b", "#29b6f6",
-  "#1e40af", "#8e24aa", "#f48fb1", "#6d4c41", "#9e9e9e", "#eceff1",
+  "#ff2d8a", "#ffb000", "#ffe033", "#3dbb4f", "#12a08e", "#29c4f6",
+  "#3d5afe", "#8e2de2", "#e53935", "#b07a4f", "#8a8f98", "#e8dcc4",
 ];

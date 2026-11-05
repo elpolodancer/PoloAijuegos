@@ -9,20 +9,62 @@
   <link rel="stylesheet" href="../compartido/estilos.css" />
   <style>
     [hidden] { display: none !important; }
-    :root { --b-borde: #3a4658; --b-fondo: #222c3b; }
-    .zona { max-width: 480px; margin: 0 auto; padding: 12px 12px 28px; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+    :root { --vidrio: #1b2260; --vidrio-borde: rgba(190, 205, 255, .6); }
+
+    /* ----- Fondo: noche, luna y pinos ----- */
+    html { min-height: 100%; }
+    body {
+      min-height: 100vh;
+      background: radial-gradient(ellipse at 50% 30%, #1d2570 0%, #121a52 45%, #0a0f33 100%) fixed;
+    }
+    body::before { /* luna */
+      content: ""; position: fixed; z-index: -1; left: 7%; bottom: 14%;
+      width: 38px; height: 38px; border-radius: 50%;
+      background: #2d3b9a; box-shadow: 0 0 28px #2d3b9a99;
+      pointer-events: none;
+    }
+    body::after { /* pinos */
+      content: ""; position: fixed; z-index: -1; left: 0; right: 0; bottom: 0; height: 110px;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 90'%3E%3Cg fill='%23070b26'%3E%3Cpath d='M20 10 L30 34 H25 L35 58 H28 L40 80 H0 L12 58 H5 L15 34 H10Z'/%3E%3Crect x='18' y='80' width='4' height='10'/%3E%3Cg transform='translate(58 28) scale(.7)'%3E%3Cpath d='M20 10 L30 34 H25 L35 58 H28 L40 80 H0 L12 58 H5 L15 34 H10Z'/%3E%3Crect x='18' y='80' width='4' height='10'/%3E%3C/g%3E%3Cg transform='translate(84 40) scale(.55)'%3E%3Cpath d='M20 10 L30 34 H25 L35 58 H28 L40 80 H0 L12 58 H5 L15 34 H10Z'/%3E%3Crect x='18' y='80' width='4' height='10'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") repeat-x left bottom / auto 110px;
+      pointer-events: none;
+    }
+    .barra { background: rgba(10, 14, 50, .65); border-bottom-color: rgba(120, 140, 230, .25); backdrop-filter: blur(4px); }
+
+    .zona { position: relative; max-width: 480px; margin: 0 auto; padding: 12px 12px 120px; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+
+    /* ----- Menú de niveles ----- */
     #niveles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; width: 100%; }
-    #niveles button { aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--b-borde); background: var(--b-fondo); color: inherit; font-size: 1.2rem; font-weight: 700; cursor: pointer; }
-    #niveles button:disabled { opacity: .35; cursor: default; }
-    #niveles button.hecho { border-color: #6ee7a8; }
+    #niveles button { aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--vidrio-borde); background: rgba(60, 80, 200, .25); color: inherit; font-size: 1.2rem; font-weight: 700; cursor: pointer; }
+    #niveles button:disabled { opacity: .3; cursor: default; }
+    #niveles button.hecho { border-color: #6ee7a8; background: rgba(110, 231, 168, .15); }
+
     .fila { display: flex; gap: 8px; width: 100%; justify-content: space-between; align-items: center; }
     #info { font-weight: 700; }
-    #mesa { display: flex; flex-wrap: wrap; justify-content: center; gap: 22px 12px; width: 100%; padding-top: 18px; }
-    .bot { --alto: 28px; width: 46px; display: flex; flex-direction: column-reverse; padding: 3px; box-sizing: content-box; border: 2px solid #9fb0c8; border-top-width: 0; border-radius: 0 0 22px 22px; background: #ffffff0d; cursor: pointer; transition: transform .15s; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-    .bot.sel { transform: translateY(-16px); }
-    .bot.lista { border-color: #6ee7a8; box-shadow: 0 0 10px #6ee7a866; }
-    .seg { height: var(--alto); width: 100%; }
-    .seg:first-child { border-radius: 0 0 18px 18px; }
+    #mesa { display: flex; flex-wrap: wrap; justify-content: center; gap: 26px 12px; width: 100%; padding-top: 22px; }
+
+    /* ----- Botella de vidrio ----- */
+    .bot { --alto: 28px; width: 52px; display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: transform .15s; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    .bot.sel { transform: translateY(-18px); }
+
+    .cuello { position: relative; z-index: 1; width: 22px; height: 20px; margin-bottom: -2px; box-sizing: border-box;
+      border: 2px solid var(--vidrio-borde); border-bottom: 0; background: var(--vidrio); }
+    .cuello::before { /* aro de la boca */
+      content: ""; position: absolute; top: -5px; left: 50%; transform: translateX(-50%);
+      width: 30px; height: 7px; box-sizing: border-box; border: 2px solid var(--vidrio-borde); border-radius: 5px; background: var(--vidrio);
+    }
+
+    .cuerpo { position: relative; width: 46px; display: flex; flex-direction: column-reverse; padding: 3px; overflow: hidden;
+      box-sizing: content-box; border: 2px solid var(--vidrio-borde); border-radius: 18px 18px 24px 24px; background: var(--vidrio);
+      height: calc(var(--cap) * var(--alto)); }
+    .cuerpo::after { /* brillo del vidrio */
+      content: ""; position: absolute; left: 7px; top: 10px; bottom: 16px; width: 4px; border-radius: 4px; pointer-events: none;
+      background: linear-gradient(rgba(255,255,255,.45), rgba(255,255,255,.05));
+    }
+    .seg { width: 100%; height: var(--alto); box-shadow: inset 0 1px 0 rgba(255,255,255,.3); }
+
+    .bot.lista .cuerpo, .bot.lista .cuello { border-color: #6ee7a8; }
+    .bot.lista .cuerpo { box-shadow: 0 0 12px #6ee7a899; }
+
     #final { text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; }
     #final b { font-size: 1.2rem; color: #6ee7a8; }
   </style>

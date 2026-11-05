@@ -52,16 +52,21 @@ function pintar() {
   $("info").textContent = "Nivel " + (nivel + 1);
   const m = $("mesa");
   m.innerHTML = "";
+  m.style.setProperty("--cap", cap);
   est.forEach((b, i) => {
     const d = document.createElement("div");
     d.className = "bot" + (i === sel ? " sel" : "") + (b.length === cap && b.every((v) => v === b[0]) ? " lista" : "");
-    d.style.height = "calc(" + cap + " * var(--alto))";
+    const cuello = document.createElement("div");
+    cuello.className = "cuello";
+    const cuerpo = document.createElement("div");
+    cuerpo.className = "cuerpo";
     b.forEach((v) => {
       const s = document.createElement("div");
       s.className = "seg";
       s.style.background = PALETA[v];
-      d.appendChild(s);
+      cuerpo.appendChild(s);
     });
+    d.append(cuello, cuerpo);
     d.addEventListener("click", () => tocar(i));
     m.appendChild(d);
   });
