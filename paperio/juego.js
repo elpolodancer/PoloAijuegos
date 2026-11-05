@@ -190,6 +190,11 @@ function dificultad() {
   const nv = NIVELES[nivelActual];
   return typeof nv.dificultad === "number" ? Math.max(0, Math.min(1, nv.dificultad)) : Math.min(1, 0.4 + nivelActual * 0.07);
 }
+// Rasgos extra del nivel actual (mordisco, venganza, acoso, veloz), de 0 a 1; sin ellos valen 0
+function rasgo(n) {
+  const r = NIVELES[nivelActual].rasgos;
+  return r && typeof r[n] === "number" ? Math.max(0, Math.min(1, r[n])) : 0;
+}
 function crear(id) {
   const tono = TONOS[id - 1];
   return {
@@ -201,6 +206,8 @@ function crear(id) {
     cola: [], ruta: [], seq: 0, vivo: false, espera: 0,
     plan: null, wp: 0, vuelta: false, casa: null, casaT: 0, vagar: 0, desv: 0, ia: 0,
     caza: null, cazaT: 0, defiende: false, alarma: null, agr: 0.5 + Math.random() * 0.5, dif: dificultad(),
+    // personalidad: solo algunos bots son «mordedores» (así no todos van por ti a la vez)
+    mordedor: Math.random() < 0.3 + 0.6 * rasgo("mordisco"), vel: 1 + Math.min(0.1, rasgo("veloz")), gir: 1 + Math.min(0.4, rasgo("giro")),
   };
 }
 
@@ -259,7 +266,11 @@ function matar(v, por) {
   for (let i = 0; i < N; i++) if (dueno[i] === v.id) { dueno[i] = 0; pix(i); }
   fx.push({ x: v.x, y: v.y, t: 0, tono: v.tono });
   sucio = true;
-  if (por && por.jugador && por !== v && estado === "jugando") bajas++;
+  if (por && por.jugador && por !== v && estado === "jugando") {
+    bajas++;
+    const ven = rasgo("venganza"); // los demás bots se enteran: unos cuantos van a por ti un rato
+    if (ven > 0) for (const o of ents) if (o !== v && !o.jugador && o.vivo && Math.random() < ven * o.agr) o.alarma = { por, hasta: reloj + 60 * (4 + 6 * ven) };
+  }
   if (v.jugador) { if (estado === "jugando") terminar(); }
   else v.espera = REAPARECE_BOT[0] + Math.random() * (REAPARECE_BOT[1] - REAPARECE_BOT[0]);
 }
@@ -373,7 +384,31 @@ function casaCercana(e) { // punto de mi territorio al que volver (un poco hacia
   const dx = sx / n - mx, dy = sy / n - my, l = Math.hypot(dx, dy) || 1, m = Math.min(7, l);
   return [mx + dx / l * m, my + dy / l * m];
 }
+// Mordisco: sale directo hacia tu territorio, se mete un poco, gira y vuelve a su casa para quedarse con lo que encierre
+function empezarMordisco(e) {
+  const j = estado === "jugando" && yo && yo.vivo && cuenta[1] > 0 ? yo : null;
+  if (!j || j.cola.length > 400) return false;
+  let mejor = 1e12, mx = 0, my = 0, sx = 0, sy = 0, n = 0;
+  for (let y = 0; y < G; y += 3) {
+    const f = y * G;
+    for (let x = 0; x < G; x += 3)
+      if (dueno[f + x] === 1) {
+        n++; sx += x; sy += y;
+        const d = (x - e.x) * (x - e.x) + (y - e.y) * (y - e.y);
+        if (d < mejor) { mejor = d; mx = x; my = y; }
+      }
+  }
+  if (!n || mejor > 160 * 160 || mejor < 12 * 12) return false;
+  const dx = sx / n - mx, dy = sy / n - my, l = Math.hypot(dx, dy) || 1;
+  const A = lim(e.x, e.y, mx + dx / l * 14, my + dy / l * 14);          // punto dentro de tu zona
+  const a = Math.atan2(A[1] - e.y, A[0] - e.x), s = Math.random() < 0.5 ? 1 : -1;
+  const W = 22 + Math.random() * 30;
+  const B = lim(A[0], A[1], A[0] + Math.cos(a + s * Math.PI / 2) * W, A[1] + Math.sin(a + s * Math.PI / 2) * W);
+  e.plan = [A, B]; e.wp = 0; e.vuelta = false; e.casa = null;
+  return true;
+}
 function empezarPlan(e) { // excursión: salir recto, girar de lado y volver
+  if (e.mordedor && Math.random() < 0.15 + 0.5 * rasgo("mordisco") * e.agr && empezarMordisco(e)) return;
   const s = Math.random() < 0.5 ? 1 : -1;
   let a = e.ang;
   const j = estado === "jugando" && yo && yo.vivo ? yo : null;
@@ -414,7 +449,8 @@ function pensarBot(e) {
       const pt = (o.jugador ? 3 : 1) * (1 - d / rad);
       if (pt > mejorP) { mejorP = pt; presa = o; }
     }
-    if (presa && Math.random() < 0.05 * dif * (presa.jugador ? 3 : 0.5)) { e.caza = presa; e.cazaT = 45; e.defiende = false; }
+    const largo = presa && presa.jugador ? 1 + rasgo("acoso") * 2 * Math.min(1, presa.ruta.length / 300) : 1; // estela larga = más tentador
+    if (presa && Math.random() < 0.05 * dif * (presa.jugador ? 3 : 0.5) * largo) { e.caza = presa; e.cazaT = 45; e.defiende = false; }
   }
   let cazando = false;
   if (e.caza) {
@@ -467,12 +503,13 @@ function paso() {
     // giro suave hacia la dirección deseada
     let da = e.meta - e.ang;
     da = Math.atan2(Math.sin(da), Math.cos(da));
-    const mx = (e.jugador ? GIRO_JUGADOR : GIRO) * SIM;
+    const mx = (e.jugador ? GIRO_JUGADOR : GIRO * e.gir) * SIM;
     e.ang += Math.max(-mx, Math.min(mx, da));
 
     e.px = e.x; e.py = e.y;
-    e.x += Math.cos(e.ang) * VEL * SIM;
-    e.y += Math.sin(e.ang) * VEL * SIM;
+    const v = VEL * SIM * (e.jugador ? 1 : e.vel);
+    e.x += Math.cos(e.ang) * v;
+    e.y += Math.sin(e.ang) * v;
 
     const xi = e.x | 0, yi = e.y | 0, d0 = distM[yi * G + xi];
     if (d0 < MARGEN_PARED) { // tocó una pared (el borde del mapa o un hueco)
