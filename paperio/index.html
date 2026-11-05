@@ -30,6 +30,23 @@
     #ranking { margin-top: 14px; text-align: left; font-size: .9rem; color: var(--suave); }
     #ranking h3 { margin: 0 0 4px; font-size: .95rem; color: var(--texto); }
     #ranking ol { margin: 0; padding-left: 22px; }
+    .tienda { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; }
+    #velMonedas { font-weight: 700; }
+    .tienda small { flex-basis: 100%; color: var(--suave); }
+    #menu { position: absolute; inset: 0; z-index: 5; display: flex; justify-content: center; padding: 12px; background: rgba(15, 18, 32, .95); overflow: auto; }
+    .menu-caja { width: 100%; max-width: 480px; }
+    .menu-cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .menu-cab h2 { margin: 0; font-size: 1.4rem; }
+    #menuInfo { margin: 0 0 10px; color: var(--suave); font-size: .85rem; }
+    #menuRejilla { display: grid; gap: 8px; padding-bottom: 12px; }
+    .nv { aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 0; font: inherit; color: var(--texto); background: var(--tarjeta); border: 2px solid var(--borde); border-radius: 12px; cursor: pointer; }
+    .nv b { font-size: 1.05rem; }
+    .nv small { font-size: .7rem; color: var(--suave); }
+    .nv.hecho { border-color: #3fa66b; }
+    .nv.actual { border-color: var(--acento); box-shadow: 0 0 0 2px rgba(124, 92, 255, .35); }
+    .nv.bloq { opacity: .4; cursor: default; }
+    .nv.sel { background: #262d4d; }
+    .nv:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
   </style>
 </head>
 <body>
@@ -40,6 +57,7 @@
       <span id="stTerr" title="Territorio">▦ 0 %</span>
       <span id="stBajas" title="Bajas">☠ 0</span>
       <span id="stMejor" title="Mejor territorio">🏆 0 %</span>
+      <span id="stMonedas" title="Monedas">🪙 0</span>
     </div>
   </header>
   <div id="escena">
@@ -53,12 +71,25 @@
           <div><small id="nivelNum">Nivel 1</small><b id="nivelNom">Colina</b></div>
           <button class="btn sec" id="nivelSig" type="button" aria-label="Nivel siguiente">▶</button>
         </div>
+        <div class="tienda">
+          <span id="velMonedas">🪙 0</span>
+          <button class="btn sec" id="comprarInicio" type="button">Inicio más grande · 50 🪙</button>
+          <small>Tu círculo de inicio será 75 % más grande en la próxima partida.</small>
+        </div>
         <ul id="velDatos"></ul>
         <div class="acciones">
           <button class="btn" id="jugar" type="button">Jugar</button>
+          <button class="btn sec" id="verNiveles" type="button">☰ Niveles</button>
           <button class="btn sec" id="entrar" type="button" hidden>Entrar con Google</button>
         </div>
         <div id="ranking" hidden></div>
+      </div>
+    </div>
+    <div id="menu" hidden>
+      <div class="menu-caja">
+        <div class="menu-cab"><h2>Niveles</h2><button class="btn sec" id="menuCerrar" type="button">Cerrar</button></div>
+        <p id="menuInfo"></p>
+        <div id="menuRejilla"></div>
       </div>
     </div>
   </div>

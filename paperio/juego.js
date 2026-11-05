@@ -11,11 +11,12 @@ const ID = "paperio";
 
 // ----- Ajustes -----
 const RADIO = 300;                    // «tamaño» de los mapas: el cuadrado de -1 a 1 de niveles.js mide 2·RADIO casillas finas
-const VEL = 38;                       // velocidad (casillas por segundo)
-const GIRO = 5.5;                     // giro de los bots (radianes por segundo): más alto = giros más cerrados
+const FACTOR_VEL = 1.5;               // multiplicador de velocidad de TODOS (1 = original; 1.5 = 50 % más rápido). Escala también los giros para que las curvas midan lo mismo
+const VEL = 38 * FACTOR_VEL;                       // velocidad (casillas por segundo)
+const GIRO = 5.5 * FACTOR_VEL;                     // giro de los bots (radianes por segundo): más alto = giros más cerrados
 const ANGULO_CHOQUE = 15;             // grados: si llegas al borde con menos de esto respecto a ir «de frente», mueres; si no, te deslizas
 const COS_CHOQUE = Math.cos(ANGULO_CHOQUE * Math.PI / 180);
-const GIRO_JUGADOR = 8;               // giro del jugador (más alto = responde más rápido y preciso a las teclas/dedo)
+const GIRO_JUGADOR = 8 * FACTOR_VEL;               // giro del jugador (más alto = responde más rápido y preciso a las teclas/dedo)
 const MARGEN_PARED = 2.5;             // distancia a la pared a la que ya cuenta como roce
 const PUNTOS_POR_NIVEL = 50;          // puntos extra por pasar un nivel
 const DESBLOQUEAR_TODOS = false;      // true = todos los niveles disponibles desde el inicio (útil para probar)
@@ -29,6 +30,12 @@ const CELDAS_VISTA = 110;             // casillas finas que caben en el lado cor
 const REAPARECE_BOT = [2, 4];         // segundos que tarda un bot en volver
 const PUNTOS_POR_PCT = 10;            // puntos por cada 1 % de mapa (el máximo que lograste)
 const PUNTOS_POR_BAJA = 25;           // puntos por cada bot eliminado
+const MONEDAS_POR_BAJA = 2;           // monedas por cada enemigo eliminado
+const PCT_POR_MONEDA = 5;             // cada tantos % de mapa cubierto (el máximo de la partida) das...
+const MONEDAS_POR_TRAMO = 1;          // ...esta cantidad de monedas
+const MONEDAS_POR_NIVEL = 20;         // monedas por terminar un nivel
+const PRECIO_INICIO_GRANDE = 50;      // precio del boost «Inicio más grande» (se compra antes de la partida y se gasta en la siguiente)
+const MULT_INICIO_GRANDE = 1.75;      // con el boost, el radio del círculo de inicio del jugador es 75 % más grande
 const NOMBRES = ["Tú", "Lola", "Pepe", "Nico", "Rosa", "Toño", "Mara", "Beto"];
 const TONOS = [255, 5, 38, 135, 178, 300, 340, 55]; // color de cada uno (el primero es el jugador)
 const TEXTO_AYUDA = "Sal de tu territorio y regresa para quedarte con todo lo que encierres. Si alguien toca tu estela, pierdes; si tú tocas la suya, pierde él. Mantén el dedo pulsado y arrástralo hacia donde quieras ir, o usa las flechas / WASD.";
@@ -52,13 +59,14 @@ function disco(r) {
   for (let dy = -q; dy <= q; dy++) for (let dx = -q; dx <= q; dx++) if (dx * dx + dy * dy <= r * r) l.push(dx, dy);
   return l;
 }
-const D_RASTRO = disco(R_RASTRO), D_INICIO = disco(R_INICIO);
+const D_RASTRO = disco(R_RASTRO), D_INICIO = disco(R_INICIO), D_INICIO_GRANDE = disco(R_INICIO * MULT_INICIO_GRANDE);
 
 let ents = [], yo = null;
 let estado = "demo";                  // demo | jugando | fin
 let sucio = true, bajas = 0, maxPct = 0, tiempo = 0, mejorPct = 0;
 let fx = [];
 let nivelActual = 0, nivelConstruido = -1, desbloqueado = 0, ganado = false;
+let monedas = 0, monedasPartida = 0, tramosPagados = 0, boostInicio = false, usarBoost = false; // boostInicio = comprado y pendiente; usarBoost = activo en la partida en curso
 let reloj = 0;                        // pasos de simulación transcurridos (60 por segundo)
 const cam = { x: C, y: C };
 
@@ -69,6 +77,34 @@ let vw = 300, vh = 300, cs = 4;
 try { mejorPct = Number(localStorage.getItem("paperio_mejor")) || 0; } catch (e) {}
 try { desbloqueado = Math.min(NIVELES.length - 1, Number(localStorage.getItem("paperio_nivel")) || 0); } catch (e) {}
 const nivelMax = () => (DESBLOQUEAR_TODOS ? NIVELES.length - 1 : desbloqueado);
+try {
+  monedas = Math.max(0, Math.floor(Number(localStorage.getItem("paperio_monedas")) || 0));
+  boostInicio = localStorage.getItem("paperio_boost_inicio") === "1";
+} catch (e) {}
+
+// ----- Monedas y tienda (las monedas y el boost comprado se guardan en este navegador) -----
+function guardarMonedas() {
+  try {
+    localStorage.setItem("paperio_monedas", String(monedas));
+    localStorage.setItem("paperio_boost_inicio", boostInicio ? "1" : "0");
+  } catch (e) {}
+}
+function ganarMonedas(n) {
+  if (!(n > 0)) return;
+  monedas += n; monedasPartida += n;
+  guardarMonedas();
+}
+function refrescarTienda() {
+  $("velMonedas").textContent = "🪙 " + monedas;
+  const b = $("comprarInicio");
+  b.textContent = boostInicio ? "✓ Inicio más grande listo" : "Inicio más grande · " + PRECIO_INICIO_GRANDE + " 🪙";
+  b.disabled = boostInicio || monedas < PRECIO_INICIO_GRANDE;
+}
+$("comprarInicio").addEventListener("click", () => {
+  if (boostInicio || monedas < PRECIO_INICIO_GRANDE) return;
+  monedas -= PRECIO_INICIO_GRANDE; boostInicio = true;
+  guardarMonedas(); refrescarTienda();
+});
 
 // ----- Sesión y puntos (opcional: sin conexión el juego funciona igual) -----
 let J = null, usuario = null;
@@ -347,17 +383,23 @@ function lejos(cx, cy, r) {
   return true;
 }
 function aparecer(e) {
-  let cx = C, cy = C, ok = false;
-  for (let k = 0; k < 2500 && !ok; k++) {
-    cx = Math.round(C + (Math.random() * 2 - 1) * RADIO); cy = Math.round(C + (Math.random() * 2 - 1) * RADIO);
-    ok = distM[cy * G + cx] > R_INICIO + 8 && discoLibre(cx, cy, R_INICIO + 5) && lejos(cx, cy, k < 1200 ? 60 : 30);
+  // con el boost «Inicio más grande» el jugador empieza con un círculo de radio MULT_INICIO_GRANDE veces mayor
+  // (si en este mapa no cabe en ningún lado, usa el tamaño normal)
+  let r0 = e.jugador && usarBoost ? R_INICIO * MULT_INICIO_GRANDE : R_INICIO, cx = C, cy = C, ok = false;
+  for (let intento = 0; intento < 2 && !ok; intento++) {
+    for (let k = 0; k < 2500 && !ok; k++) {
+      cx = Math.round(C + (Math.random() * 2 - 1) * RADIO); cy = Math.round(C + (Math.random() * 2 - 1) * RADIO);
+      ok = distM[cy * G + cx] > r0 + 8 && discoLibre(cx, cy, Math.ceil(r0) + 5) && lejos(cx, cy, k < 1200 ? 60 : 30);
+    }
+    for (let k = 0; k < 6000 && !ok; k++) { // plan B: cualquier lugar despejado
+      cx = Math.round(C + (Math.random() * 2 - 1) * RADIO); cy = Math.round(C + (Math.random() * 2 - 1) * RADIO);
+      ok = distM[cy * G + cx] > r0 + 3;
+    }
+    if (!ok && r0 > R_INICIO) r0 = R_INICIO; else break;
   }
-  for (let k = 0; k < 6000 && !ok; k++) { // plan B: cualquier lugar despejado
-    cx = Math.round(C + (Math.random() * 2 - 1) * RADIO); cy = Math.round(C + (Math.random() * 2 - 1) * RADIO);
-    ok = distM[cy * G + cx] > R_INICIO + 3;
-  }
-  for (let k = 0; k < D_INICIO.length; k += 2) {
-    const i = (cy + D_INICIO[k + 1]) * G + cx + D_INICIO[k];
+  const discoIni = r0 > R_INICIO ? D_INICIO_GRANDE : D_INICIO;
+  for (let k = 0; k < discoIni.length; k += 2) {
+    const i = (cy + discoIni[k + 1]) * G + cx + discoIni[k];
     if (dentro[i]) { dueno[i] = e.id; pix(i); }
   }
   e.x = e.px = cx + 0.5; e.y = e.py = cy + 0.5;
@@ -378,7 +420,7 @@ function recontar() {
   cuenta.fill(0);
   for (let i = 0; i < N; i++) { const o = dueno[i]; if (o) cuenta[o]++; }
   sucio = false;
-  if (estado === "jugando" && yo.vivo) { const p = cuenta[1] * 100 / AREA; if (p > maxPct) maxPct = p; }
+  if (estado === "jugando" && yo.vivo) { const p = cuenta[1] * 100 / AREA; if (p > maxPct) maxPct = p; const tr = Math.floor(maxPct / PCT_POR_MONEDA); if (tr > tramosPagados) { ganarMonedas((tr - tramosPagados) * MONEDAS_POR_TRAMO); tramosPagados = tr; } }
 }
 
 function matar(v, por) {
@@ -390,7 +432,7 @@ function matar(v, por) {
   fx.push({ x: v.x, y: v.y, t: 0, tono: v.tono });
   sucio = true;
   if (por && por.jugador && por !== v && estado === "jugando") {
-    bajas++;
+    bajas++; ganarMonedas(MONEDAS_POR_BAJA);
     const ven = rasgo("venganza"); // los demás bots se enteran: unos cuantos van a por ti un rato
     if (ven > 0) for (const o of ents) if (o !== v && !o.jugador && o.vivo && Math.random() < ven * o.agr) o.alarma = { por, hasta: reloj + 60 * (4 + 6 * ven) };
   }
@@ -677,8 +719,10 @@ function iniciar(demo) {
   ents = [];
   for (let id = 1; id <= nBots + 1; id++) ents.push(crear(id));
   yo = ents[0];
-  bajas = 0; maxPct = 0; tiempo = 0;
+  bajas = 0; maxPct = 0; tiempo = 0; monedasPartida = 0; tramosPagados = 0;
   estado = demo ? "demo" : "jugando";
+  usarBoost = !demo && boostInicio; // el boost comprado se gasta al empezar la partida
+  if (usarBoost) { boostInicio = false; guardarMonedas(); }
   for (const e of ents) if (!(demo && e.jugador)) aparecer(e);
   recontar();
   if (!demo) { cam.x = yo.x; cam.y = yo.y; }
@@ -701,6 +745,42 @@ function elegirNivel(i) {
 $("nivelAnt").addEventListener("click", () => elegirNivel(nivelActual - 1));
 $("nivelSig").addEventListener("click", () => elegirNivel(nivelActual + 1));
 
+// ----- Menú principal: cuadrícula de niveles (5 columnas) -----
+// Cada cuadro es un nivel: bloqueado (🔒), pasado (borde verde), el siguiente por pasar (borde morado).
+// Los niveles de la escala de 10 dificultades muestran «D1»…«D10» abajo del número.
+const COLUMNAS_MENU = 5;
+function construirMenu() {
+  const rej = $("menuRejilla");
+  rej.style.gridTemplateColumns = "repeat(" + COLUMNAS_MENU + ", 1fr)";
+  rej.innerHTML = "";
+  const max = nivelMax();
+  NIVELES.forEach((nv, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "nv" + (i > max ? " bloq" : i === max ? " actual" : " hecho") + (i === nivelActual ? " sel" : "");
+    b.disabled = i > max;
+    b.title = nv.nombre + (nv.tier ? " · dificultad " + nv.tier + "/10" : "");
+    b.setAttribute("aria-label", "Nivel " + (i + 1) + ": " + nv.nombre + (i > max ? " (bloqueado)" : ""));
+    const n = document.createElement("b");
+    n.textContent = String(i + 1);
+    const t = document.createElement("small");
+    t.textContent = i > max ? "🔒" : nv.tier ? "D" + nv.tier : i < max ? "✓" : "★";
+    b.append(n, t);
+    b.addEventListener("click", () => { $("menu").hidden = true; elegirNivel(i); });
+    rej.appendChild(b);
+  });
+  $("menuInfo").textContent = "Desbloqueados: " + (max + 1) + " de " + NIVELES.length + " · D = dificultad (1 a 10)";
+}
+function abrirMenu() {
+  $("velo").hidden = true;
+  construirMenu();
+  $("menu").hidden = false;
+  const objetivo = $("menuRejilla").querySelector(".actual") || $("menuRejilla").querySelector(".sel");
+  if (objetivo) objetivo.scrollIntoView({ block: "center" });
+}
+$("menuCerrar").addEventListener("click", () => { $("menu").hidden = true; $("velo").hidden = false; });
+$("verNiveles").addEventListener("click", abrirMenu);
+
 function fmtTiempo(s) { s = Math.floor(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
 
 async function terminar(gano) {
@@ -715,6 +795,7 @@ async function terminar(gano) {
       try { localStorage.setItem("paperio_nivel", String(desbloqueado)); } catch (e) {}
     }
   }
+  if (gano) ganarMonedas(MONEDAS_POR_NIVEL);
   const pct = Math.max(maxPct, 0);
   const puntos = Math.round(pct * PUNTOS_POR_PCT) + bajas * PUNTOS_POR_BAJA + (gano ? PUNTOS_POR_NIVEL : 0);
   if (pct > mejorPct) {
@@ -732,6 +813,7 @@ async function terminar(gano) {
       ["Bajas", String(bajas)],
       ["Tiempo", fmtTiempo(tiempo)],
       ["Puntos", "+" + puntos + (guardado ? " (" + guardado + ")" : "")],
+      ["Monedas", "+" + monedasPartida + " (tienes " + monedas + ")"],
     ]);
     cargarRanking();
   }, 700);
@@ -752,6 +834,7 @@ function mostrarVelo(titulo, texto, datos) {
   }
   $("jugar").textContent = estado === "fin" ? (ganado && nivelActual + 1 < NIVELES.length ? "Siguiente nivel" : "Jugar otra vez") : "Jugar";
   etiquetaNivel();
+  refrescarTienda();
   marcarEntrar();
   $("velo").hidden = false;
 }
@@ -952,17 +1035,19 @@ function bucle(ts) {
   dibujar(k);
 
   const pct = (yo ? cuenta[1] * 100 / AREA : 0);
-  const txt = [pct.toFixed(1), bajas, Math.max(mejorPct, maxPct).toFixed(1)].join("|");
+  const txt = [pct.toFixed(1), bajas, Math.max(mejorPct, maxPct).toFixed(1), monedas].join("|");
   if (txt !== hud) {
     hud = txt;
     $("stTerr").textContent = "▦ " + pct.toFixed(1) + " %";
     $("stBajas").textContent = "☠ " + bajas;
     $("stMejor").textContent = "🏆 " + Math.max(mejorPct, maxPct).toFixed(1) + " %";
+    $("stMonedas").textContent = "🪙 " + monedas;
   }
 }
 
 ajustar();
 iniciar(true);
 mostrarVelo("Paperio", TEXTO_AYUDA, []);
+abrirMenu(); // al abrir el juego se muestra el menú de niveles
 cargarRanking();
 requestAnimationFrame((ts) => { ultimo = ts; bucle(ts); });
