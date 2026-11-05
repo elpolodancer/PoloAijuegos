@@ -1,0 +1,94 @@
+/* Ruta: solitario/mesa-solitario.css */
+/* DECORACIÓN del solitario: mesa de madera con luz en la esquina superior izquierda y cartas.
+   Aquí solo hay colores, sombras y texturas (nada de medidas ni posiciones: eso va en estilos-solitario.css).
+   Para cambiar el look, empieza por las variables de abajo. */
+
+.tablero {
+  /* ---- Ajustes de la mesa ---- */
+  --madera-clara: #b9803f;
+  --madera-media: #a56a30;
+  --madera-oscura: #7e4d22;
+  --luz: rgba(255, 238, 190, 0.8);     /* color de la luz que entra por la esquina */
+  --luz-fuerza: 1;                       /* 0 = sin luz · 1 = normal · 1.5 = más fuerte */
+
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #5a3515;
+  border-radius: 16px;
+  box-shadow: inset 0 0 40px rgba(40, 18, 4, 0.45);
+  background:
+    /* veta: ruido SVG estirado en horizontal (se genera en el navegador, no hay imagen que descargar) */
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='700' height='420'%3E%3Cfilter id='v' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.004 0.16' numOctaves='4' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.22  0 0 0 0 0.10  0 0 0 0 0.03  2.6 0 0 0 -1.05'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23v)'/%3E%3C/svg%3E"),
+    /* tablas: franjas horizontales de distinto tono */
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0) 0 118px, rgba(40, 18, 4, 0.5) 118px 120px),
+    linear-gradient(180deg, var(--madera-clara), var(--madera-media) 55%, var(--madera-oscura));
+  background-size: 700px 420px, auto, auto;
+}
+
+/* Luz: un resplandor en la esquina superior izquierda y rayos diagonales suaves (como luz de ventana).
+   Va debajo de las cartas (se pinta antes que las pilas). */
+.tablero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--luz-fuerza);
+  background:
+    radial-gradient(ellipse 55% 45% at 0% 0%, var(--luz), rgba(255, 238, 190, 0) 70%),
+    linear-gradient(118deg,
+      rgba(255, 236, 180, 0) 0%, rgba(255, 236, 180, 0.32) 7%, rgba(255, 236, 180, 0) 15%,
+      rgba(255, 236, 180, 0.22) 21%, rgba(255, 236, 180, 0) 29%,
+      rgba(255, 236, 180, 0.13) 36%, rgba(255, 236, 180, 0) 44%);
+  filter: blur(6px);
+}
+/* Esquina opuesta un poco más oscura, para dar profundidad */
+.tablero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 80% 80% at 100% 100%, rgba(30, 12, 2, 0.35), rgba(30, 12, 2, 0) 70%);
+}
+
+/* Huecos vacíos (mazo vacío, bases, columnas sin cartas): como tallados en la madera */
+.pila::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  width: var(--w);
+  height: calc(var(--w) * 1.4);
+  box-sizing: border-box;
+  border: 2px solid rgba(40, 18, 4, 0.35);
+  border-radius: calc(var(--w) * 0.1);
+  background: rgba(40, 18, 4, 0.12);
+  box-shadow: inset 0 2px 4px rgba(40, 18, 4, 0.35), 0 1px 0 rgba(255, 230, 180, 0.25);
+}
+.reciclar { color: rgba(255, 240, 210, 0.75); text-shadow: 0 1px 2px rgba(40, 18, 4, 0.6); }
+
+/* ---- Cartas ---- */
+.carta {
+  color: #1b1b1f;
+  background: linear-gradient(160deg, #ffffff 0%, #faf7f0 60%, #efe9dc 100%);
+  border: 1px solid rgba(0, 0, 0, 0.22);
+  border-radius: calc(var(--w) * 0.09);
+  font-family: Georgia, "Times New Roman", serif;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 3px 6px rgba(40, 18, 4, 0.35);
+}
+.carta.roja { color: #c9202b; }
+.carta .c { text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6); font-family: system-ui, sans-serif; }
+
+/* Reverso: azul con marco blanco, como en la foto */
+.carta.abajo {
+  color: transparent;
+  border: calc(var(--w) * 0.05) solid #fdfcf8;
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.1) 0 2px, rgba(255, 255, 255, 0) 2px 6px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.1) 0 2px, rgba(255, 255, 255, 0) 2px 6px),
+    linear-gradient(160deg, #3d5bc2, #27408f);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 3px 6px rgba(40, 18, 4, 0.35), inset 0 0 0 1px rgba(39, 64, 143, 0.55);
+}
+
+.carta.sel { outline: 3px solid #ffd54f; outline-offset: -3px; background: #fff8dc; }
+
+/* Las pilas van siempre por encima de la luz y la sombra de la mesa */
+.tablero > .pila { z-index: 1; }

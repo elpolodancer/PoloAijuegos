@@ -6,49 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Solitario</title>
   <link rel="stylesheet" href="../compartido/estilos.css" />
-  <style>
-    #info { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-weight: 700; }
-    .tablero { --w: min(11vw, 76px); display: grid; grid-template-columns: repeat(7, var(--w)); gap: calc(var(--w) * 0.2) calc(var(--w) * 0.1); justify-content: center; align-items: start; padding: 10px 10px calc(var(--w) * 1.2); background: #1f6b3f; border: 1px solid var(--borde); border-radius: 16px; user-select: none; touch-action: manipulation; }
-    .pila { position: relative; width: var(--w); height: calc(var(--w) * 1.4); cursor: pointer; }
-    .pila::before { content: ""; position: absolute; top: 0; left: 0; width: var(--w); height: calc(var(--w) * 1.4); border: 2px dashed rgba(255, 255, 255, 0.3); border-radius: calc(var(--w) * 0.1); box-sizing: border-box; }
-    .carta { position: absolute; left: 0; width: var(--w); height: calc(var(--w) * 1.4); box-sizing: border-box; background: #fff; color: #111; border: 1px solid #888; border-radius: calc(var(--w) * 0.1); font-weight: 700; font-size: calc(var(--w) * 0.3); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); overflow: hidden; }
-    .carta.roja { color: #d32f2f; }
-    /* Esquinas (.e arriba, .f abajo girada): número arriba y palo debajo. .c = símbolo del centro */
-    .carta .e, .carta .f { position: absolute; display: flex; flex-direction: column; align-items: center; line-height: 1; }
-    .carta .e { top: 2px; left: 4px; }
-    .carta .f { bottom: 2px; right: 4px; transform: rotate(180deg); }
-    .carta .e b, .carta .f b { display: block; font-size: calc(var(--w) * 0.26); }
-    .carta .e i, .carta .f i { display: block; font-style: normal; font-size: calc(var(--w) * 0.2); }
-    .carta .c { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: calc(var(--w) * 0.6); line-height: 1; pointer-events: none; }
-    .carta.abajo { color: transparent; border-color: #fff; background: repeating-linear-gradient(45deg, #3b4cca, #3b4cca 6px, #2c3aa8 6px, #2c3aa8 12px); }
-    .carta.sel { outline: 3px solid #ffd54f; outline-offset: -3px; background: #fff8dc; }
-    .reciclar { position: absolute; top: 0; left: 0; width: var(--w); height: calc(var(--w) * 1.4); display: flex; align-items: center; justify-content: center; font-size: calc(var(--w) * 0.6); color: rgba(255, 255, 255, 0.6); }
-    .acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-
-    /* ---- Menú, dificultad y niveles ---- */
-    .panel { max-width: 420px; margin: 24px auto; display: flex; flex-direction: column; gap: 12px; text-align: center; }
-    .panel h2 { margin: 0 0 4px; font-size: 1.4rem; }
-    .panel p { margin: 0; color: var(--suave); }
-    .btn-grande { padding: 16px 18px; font-size: 1.1rem; text-align: left; display: flex; align-items: center; gap: 12px; }
-    .btn-grande small { display: block; font-weight: 400; opacity: 0.85; font-size: 0.8rem; }
-    .btn-grande .ico { font-size: 1.8rem; }
-    .btn-sec { background: var(--tarjeta); border: 1px solid var(--borde); }
-    .btn-sec:hover { border-color: var(--acento); }
-    .nivel-pag { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0; font-weight: 700; }
-    .rejilla-niveles { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 8px; }
-    .nivel { position: relative; padding: 10px 0; font: inherit; font-weight: 700; color: var(--texto); background: var(--tarjeta); border: 2px solid var(--borde); border-radius: 10px; cursor: pointer; }
-    .nivel.facil { border-color: #2e9e5b; }
-    .nivel.media { border-color: #d4a72c; }
-    .nivel.dificil { border-color: #d64545; }
-    .nivel.hecho { background: #24443a; }
-    .nivel small { display: block; margin-top: 2px; font-weight: 400; font-size: 0.7rem; color: var(--suave); }
-    .nivel.cerrado { opacity: 0.55; }
-    .nivel.pronto { opacity: 0.3; cursor: default; }
-    .nivel:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
-    .leyenda { color: var(--suave); font-size: 0.85rem; margin: 6px 0 0; }
-    .monedas { font-weight: 700; color: #ffd54f; }
-    #titulo-partida { font-weight: 700; margin: 0 0 8px; color: var(--suave); }
-  </style>
+  <link rel="stylesheet" href="estilos-solitario.css" />
+  <link rel="stylesheet" href="mesa-solitario.css" />
 </head>
 <body>
   <header class="barra">

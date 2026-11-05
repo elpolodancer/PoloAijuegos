@@ -9,14 +9,14 @@
 // Al agregar un juego: añádelo a «JUEGOS» de abajo (carpeta: [archivos extra además de la página]) y sube VERSION.
 // Si el juego tiene imagen de tarjeta, agrégala a «ARCHIVOS» (imagenes/nombre.webp).
 // Subir VERSION fuerza a todos a descargar todo de nuevo y borra las copias viejas (juegos-vN).
-// Última versión: 42 = todos los archivos se llaman «tipo-carpeta» (index-ajedrez.html, juego-ajedrez.js…); 41 = se agregaron «2048» y «ajedrez».
-const VERSION = 42;
+// Última versión: 43 = el solitario guarda también sus hojas de estilo (estilos-solitario.css, mesa-solitario.css), niveles y victoria; 42 = todos los archivos se llaman «tipo-carpeta» (index-ajedrez.html, juego-ajedrez.js…); 41 = se agregaron «2048» y «ajedrez».
+const VERSION = 43;
 const CACHE = "juegos-v" + VERSION;
 const ESPERA_RED = 3000;
 
 // Carpeta de cada juego y los archivos que tiene además de su página.
 // Los que se llaman juego/logica/niveles/ia reciben el sufijo de la carpeta; cualquier otro (mapa.js, grande.js…) se usa tal cual.
-const CON_SUFIJO = ["juego", "logica", "niveles", "ia"];
+const CON_SUFIJO = ["juego", "logica", "niveles", "ia", "victoria"];
 const nombreArchivo = (carpeta, f) => {
   const base = f.replace(/\.js$/, "");
   return CON_SUFIJO.includes(base) ? base + "-" + carpeta + ".js" : f;
@@ -26,7 +26,7 @@ const JUEGOS = {
   doodle: ["juego.js"],
   piano: ["juego.js"],
   corredor: ["juego.js"],
-  solitario: ["juego.js"],
+  solitario: ["juego.js", "niveles.js", "victoria.js", "estilos-solitario.css", "mesa-solitario.css"], // los .css llevan su nombre completo
   dulces: ["juego.js", "logica.js", "niveles.js"],
   gominolas: ["juego.js"],
   rompeladrillos: ["juego.js"],
