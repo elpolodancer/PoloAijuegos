@@ -21,7 +21,11 @@ const PUNTOS_TOTALES = 1000000;  // el millón que se divide en los niveles (def
 // Puntos que realmente hay repartidos en los objetos del mapa. Con 1 000 000 (= PUNTOS_TOTALES) para llegar al nivel 15
 // habría que comerse el 93 % de todo el mapa, algo imposible en una partida (en pruebas, ni el mejor jugador simulado
 // pasaba del nivel 2-3). Con más puntos en el mapa se sube de nivel comiendo solo una parte; baja o sube este número para ajustar la dificultad.
-const PUNTOS_EN_MAPA = 12000000;
+const MULT_OBJETOS = 4;          // cuántas veces más objetos hay en cada mapa (4 = 300 % más; 6 = 500 % más; 1 = como antes)
+// Los puntos del mapa suben igual que los objetos, así cada objeto vale lo mismo que antes y el hoyo sube de nivel y crece
+// exactamente igual: los umbrales siguen saliendo del millón de PUNTOS_TOTALES (nivel 15 = radio ~156, nivel 1 = radio 10).
+// Los puntos que sobren después del nivel 15 solo cuentan para el marcador.
+const PUNTOS_EN_MAPA = 12000000 * MULT_OBJETOS;
 const PUNTOS_NIVEL_2 = 10;       // con solo 10 puntos se llega al nivel 2
 const R_FINAL = 22 * 1.15 ** 14;  // radio del hoyo en el nivel 15 (~156): NO cambia, es el de siempre
 const CRECE_NIVEL = (R_FINAL / R_INICIAL) ** (1 / 14); // cada nivel el radio es ~21.7 % mayor, para ir de R_INICIAL a R_FINAL
@@ -313,7 +317,7 @@ const cam = { x: MUNDO / 2, y: MUNDO / 2, z: 0.3 };
 function cargarMapa(id) {
   mapaId = id; mapa = MAPAS[id];
   MUNDO = mapa.mundo || 3000; const base = mapa.objetos || OBJETOS, wTodos = mapa.tipos.reduce((a, t) => a + t.w, 0), wPeq = mapa.tipos.reduce((a, t) => a + (t.r <= R_PEQUENO ? t.w : 0), 0);
-  totalObjetos = Math.round(base * (1 - (wPeq / wTodos) * (1 - PEQUENOS))); duracionMapa = mapa.duracion || DURACION;
+  totalObjetos = Math.round(base * (1 - (wPeq / wTodos) * (1 - PEQUENOS)) * MULT_OBJETOS); duracionMapa = mapa.duracion || DURACION;
   mapa.preparar();
   objetos = []; caidas = []; hoyos = []; yo = null;
   while (objetos.length < totalObjetos) { const o = nuevoObjeto(); if (o) objetos.push(o); }
@@ -446,6 +450,7 @@ function actualizar(dt) {
 
     for (let i = objetos.length - 1; i >= 0; i--) {
       const o = objetos[i];
+      if (Math.abs(o.x - h.x) > h.r || Math.abs(o.y - h.y) > h.r) continue; // lejos del hoyo: se salta (con tantos objetos ahorra mucho cálculo)
       if (o.pisos) { // edificio: el hoyo se traga un piso a la vez (el de abajo); los de arriba bajan
         const d = Math.hypot(o.x - h.x, o.y - h.y);
         if (o.t <= h.nivel && d < h.r - o.rp * 0.3 && reloj >= o.cd) {
