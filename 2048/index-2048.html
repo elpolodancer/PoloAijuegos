@@ -1,0 +1,71 @@
+<!doctype html>
+<!-- Ruta: 2048/index-2048.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>2048</title>
+  <meta name="theme-color" content="#1b2330" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    html, body { height: 100%; overflow: hidden; overscroll-behavior: none; touch-action: none; user-select: none; -webkit-user-select: none; }
+    #juego { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 44px 12px 12px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: var(--ancho); }
+    h1 { margin: 0; font-size: 2.6rem; line-height: 1; letter-spacing: -1px; color: #ffcc33; }
+    .marcas { display: flex; gap: 8px; }
+    .marcas div { min-width: 74px; padding: 6px 10px; text-align: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; }
+    .marcas small { display: block; color: var(--suave); font-size: .7rem; }
+    .marcas b { font-size: 1.15rem; }
+    .barra2 { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; width: var(--ancho); }
+    #tamanos, #acciones { display: flex; gap: 6px; }
+    .btn2 { padding: 7px 11px; font: inherit; font-size: .85rem; font-weight: 700; color: var(--texto); background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; cursor: pointer; }
+    .btn2.sel { background: var(--acento); border-color: var(--acento); color: #fff; }
+    .btn2:disabled { opacity: .4; }
+    .btn2:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+    #tablero { position: relative; flex: none; background: #1b2036; border: 1px solid var(--borde); border-radius: 16px; }
+    .celda { position: absolute; background: #262d4d; border-radius: 10px; }
+    .ficha { position: absolute; left: 0; top: 0; display: flex; align-items: center; justify-content: center; border-radius: 10px; font-weight: 800; color: #fff; box-shadow: inset 0 -4px 0 rgba(0,0,0,.18), inset 0 2px 0 rgba(255,255,255,.18); transition: transform .12s ease-out; will-change: transform; }
+    .ficha span { display: block; }
+    .ficha.nueva span { animation: aparece .18s .1s backwards; }
+    .ficha.suma span { animation: pop .18s; }
+    @keyframes aparece { from { transform: scale(0); } to { transform: scale(1); } }
+    @keyframes pop { 50% { transform: scale(1.25); } }
+    @media (prefers-reduced-motion: reduce) { .ficha, .ficha span { transition: none; animation: none !important; } }
+    .ayuda { margin: 0; width: var(--ancho); color: var(--suave); font-size: .8rem; text-align: center; }
+    #velo { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 20px; text-align: center; background: rgba(15,18,32,.86); }
+    #velo h2 { margin: 0; font-size: 1.8rem; }
+    #velo p { margin: 0; color: var(--suave); }
+    #velo .fila { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+    a.volver { position: fixed; top: calc(8px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 5; padding: 6px 10px; background: rgba(15,18,32,.7); border-radius: 999px; font-size: .85rem; }
+  </style>
+</head>
+<body>
+  <a class="volver" href="../">← Juegos</a>
+  <main id="juego">
+    <header>
+      <h1>2048</h1>
+      <div class="marcas">
+        <div><small>Puntos</small><b id="pts">0</b></div>
+        <div><small>Mejor</small><b id="mejor">0</b></div>
+      </div>
+    </header>
+    <div class="barra2">
+      <div id="tamanos" role="group" aria-label="Tamaño del tablero"></div>
+      <div id="acciones">
+        <button class="btn2" id="deshacer">↶ Deshacer</button>
+        <button class="btn2" id="nueva">Nueva</button>
+      </div>
+    </div>
+    <div id="tablero" aria-label="Tablero"></div>
+    <p class="ayuda">Desliza el dedo (o usa las flechas / WASD). Junta dos números iguales para sumarlos y llega a 2048.</p>
+  </main>
+  <div id="velo" hidden>
+    <h2 id="veloTitulo"></h2>
+    <p id="veloTexto"></p>
+    <p id="msg"></p>
+    <div class="fila" id="veloBotones"></div>
+  </div>
+  <script type="module" src="juego-2048.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>

@@ -32,7 +32,7 @@
     <div class="titulo">
       <h1>🎮 Juegos</h1>
       <!-- Juego escondido: «Reflejos» (carpeta ejemplo/), ya no está en juegos.js -->
-      <a class="mini" href="ejemplo/">Juego de prueba</a>
+      <a class="mini" href="ejemplo/index-ejemplo.html">Juego de prueba</a>
       <button class="btn" id="instalar" hidden>📲 Instalar</button>
       <span id="sinred" hidden>Sin conexión</span>
     </div>
@@ -53,7 +53,7 @@
     JUEGOS.forEach((j) => {
       const a = document.createElement("a");
       a.className = "tarjeta";
-      a.href = j.url || j.carpeta + "/";
+      a.href = j.url || j.carpeta + "/index-" + j.carpeta + ".html"; // ej.: ajedrez/index-ajedrez.html
       a.title = j.nombre;
       a.setAttribute("aria-label", j.nombre);
       if (j.imagen) {

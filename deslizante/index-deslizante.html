@@ -1,0 +1,54 @@
+<!doctype html>
+<!-- Ruta: deslizante/index-deslizante.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Puzle deslizante</title>
+  <meta name="theme-color" content="#1b2330" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    main { max-width: 560px; }
+    .niveles { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 12px; }
+    .niveles .btn { background: var(--tarjeta); border: 1px solid var(--borde); font-size: .85rem; padding: 6px 10px; }
+    .niveles .btn.activo { background: var(--acento); border-color: var(--acento); }
+    .datos { display: flex; justify-content: space-around; gap: 8px; margin-bottom: 12px; text-align: center; color: var(--suave); font-size: .85rem; }
+    .datos b { display: block; color: var(--texto); font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+    #tablero { --n: 3; position: relative; width: min(100%, 78vh, 520px); aspect-ratio: 1 / 1; margin: 0 auto; container-type: inline-size;
+      background: var(--tarjeta); border: 2px solid var(--borde); border-radius: 16px; padding: 6px; touch-action: manipulation; user-select: none; }
+    #fichas { position: relative; width: 100%; height: 100%; }
+    .ficha { position: absolute; top: 0; left: 0; width: calc(100% / var(--n)); height: calc(100% / var(--n)); padding: 3px;
+      transition: transform .16s ease-out; cursor: pointer; }
+    .ficha > span { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; border-radius: 12%;
+      font-weight: 800; color: #fff; font-size: calc(100cqw / var(--n) * .42); text-shadow: 0 2px 3px rgba(0,0,0,.35);
+      box-shadow: inset 0 -4px 0 rgba(0,0,0,.25), 0 2px 4px rgba(0,0,0,.3); }
+    .ficha.bien > span { outline: 3px solid rgba(255,255,255,.55); outline-offset: -3px; }
+    .acciones { display: flex; gap: 8px; justify-content: center; margin: 14px 0 6px; flex-wrap: wrap; }
+    #msg { text-align: center; min-height: 1.4em; margin: 8px 0 0; }
+    #victoria { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+      background: rgba(15,18,32,.88); border-radius: 14px; text-align: center; padding: 12px; }
+    #victoria h2 { margin: 0; font-size: 1.6rem; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <div><a class="volver" href="../">← Juegos</a> <h1 style="display:inline;margin-left:8px">🔢 Puzle deslizante</h1></div>
+    <div id="sesion" style="color:var(--suave);font-size:.8rem"></div>
+  </header>
+  <main>
+    <div class="niveles" id="niveles"></div>
+    <div class="datos">
+      <div>Movimientos<b id="movs">0</b></div>
+      <div>Tiempo<b id="tiempo">0:00</b></div>
+      <div>Mejor<b id="mejor">–</b></div>
+    </div>
+    <div id="tablero"><div id="fichas"></div></div>
+    <p id="msg">Toca una ficha en la fila o columna del hueco para deslizarla.</p>
+    <div class="acciones">
+      <button class="btn" id="nuevo">🔀 Mezclar de nuevo</button>
+    </div>
+  </main>
+  <script type="module" src="juego-deslizante.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>

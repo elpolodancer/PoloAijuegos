@@ -4,12 +4,23 @@
 //   o tarda más de 3 s, usa la copia guardada.
 // - SDK de Firebase (www.gstatic.com/firebasejs): se guarda la primera vez y se reutiliza.
 // - Login, Firestore y demás llamadas a Google NO se tocan.
-// Al agregar un juego: añádelo a «JUEGOS» de abajo. Para forzar que todos vuelvan a descargar todo, sube el número de VERSION.
-const VERSION = 39;
+// Nombres: la página de cada juego es «index-<carpeta>.html» y los archivos juego, logica, niveles e ia se llaman
+// «juego-<carpeta>.js», etc. Abajo se escriben con el nombre corto ("juego.js") y aquí se completan solos.
+// Al agregar un juego: añádelo a «JUEGOS» de abajo (carpeta: [archivos extra además de la página]) y sube VERSION.
+// Si el juego tiene imagen de tarjeta, agrégala a «ARCHIVOS» (imagenes/nombre.webp).
+// Subir VERSION fuerza a todos a descargar todo de nuevo y borra las copias viejas (juegos-vN).
+// Última versión: 42 = todos los archivos se llaman «tipo-carpeta» (index-ajedrez.html, juego-ajedrez.js…); 41 = se agregaron «2048» y «ajedrez».
+const VERSION = 42;
 const CACHE = "juegos-v" + VERSION;
 const ESPERA_RED = 3000;
 
-// Carpeta de cada juego y los archivos que tiene además de index.html
+// Carpeta de cada juego y los archivos que tiene además de su página.
+// Los que se llaman juego/logica/niveles/ia reciben el sufijo de la carpeta; cualquier otro (mapa.js, grande.js…) se usa tal cual.
+const CON_SUFIJO = ["juego", "logica", "niveles", "ia"];
+const nombreArchivo = (carpeta, f) => {
+  const base = f.replace(/\.js$/, "");
+  return CON_SUFIJO.includes(base) ? base + "-" + carpeta + ".js" : f;
+};
 const JUEGOS = {
   ejemplo: ["juego.js"],
   doodle: ["juego.js"],
@@ -46,6 +57,8 @@ const JUEGOS = {
   isla: ["juego.js"],
   minas: ["juego.js", "logica.js", "grande.js"],
   cavar: ["juego.js", "logica.js"],
+  jetpack: ["juego.js"],
+  "2048": ["juego.js"],
   paperio: ["juego.js", "niveles.js", "mapa.js", "michoacan.js", "colima.js", "bajacaliforniasur.js", "campeche.js", "etapas.js"],
 };
 
@@ -55,7 +68,7 @@ const ARCHIVOS = [
   "compartido/estilos.css", "imagenes/agario.webp", "imagenes/gominolas.webp", "imagenes/restaurante.webp", "imagenes/rompecabezas.webp", "imagenes/pradera.webp", "imagenes/ajedrez.webp", "imagenes/solitario.webp", "imagenes/botellascolores.webp", "imagenes/buscaminas.webp", "imagenes/corredor.webp", "imagenes/pantano.webp", "imagenes/piano.webp", "imagenes/saltarin.webp", "imagenes/dulces.webp", "compartido/firebase.js", "compartido/jugador.js", "compartido/configs.js", "compartido/pantalla-completa.js",
 ];
 for (const [carpeta, extra] of Object.entries(JUEGOS)) {
-  ARCHIVOS.push(carpeta + "/", carpeta + "/index.html", ...extra.map((f) => carpeta + "/" + f));
+  ARCHIVOS.push(carpeta + "/", carpeta + "/index-" + carpeta + ".html", ...extra.map((f) => carpeta + "/" + nombreArchivo(carpeta, f)));
 }
 
 self.addEventListener("install", (ev) => {

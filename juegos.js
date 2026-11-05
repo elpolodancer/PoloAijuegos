@@ -1,10 +1,23 @@
 // Ruta: juegos.js (raíz del repo)
-// Lista de juegos del portal. Para agregar uno: copia la carpeta «ejemplo», cámbiale el nombre y añade una línea aquí.
-// («ejemplo» / Reflejos no está en esta lista: se abre con el botón «Juego de prueba» de index.html).
-// - Juego dentro de este repo:      { ..., carpeta: "ajedrez" }
-// - Imagen del cuadro (opcional): imagen: "imagenes/nombre.webp"; si falta, se muestra el icono y el nombre.
-// El orden de esta lista es el orden en que aparecen en el portal.
-// - Juego pesado en su propio repo: { ..., url: "https://usuario.github.io/otro-repo/" }
+// Lista de juegos del portal. El orden de esta lista es el orden en que aparecen las tarjetas.
+//
+// Campos de cada juego:
+//   id           identificador corto y único del juego
+//   nombre       título que se ve en el portal
+//   icono        emoji que se muestra si no hay imagen
+//   descripcion  una frase de qué trata (texto de ayuda de la tarjeta)
+//   carpeta      carpeta del juego dentro de este repo ........ { carpeta: "jetpack" }
+//   (la página del juego se abre sola como carpeta/index-carpeta.html: no hace falta anotarla)
+//   url          (alternativa a «carpeta») juego pesado en su propio repo ... { url: "https://usuario.github.io/otro-repo/" }
+//   imagen       (opcional) imagen del cuadro: "imagenes/nombre.webp"; si falta, se muestra el icono y el nombre
+//
+// Para agregar un juego:
+//   1. Copia la carpeta «ejemplo», cámbiale el nombre y el ID de su juego-<carpeta>.js; renombra index-ejemplo.html a index-<carpeta>.html (y juego/logica/niveles/ia igual).
+//   2. Añade una línea aquí.
+//   3. Anota su carpeta en «JUEGOS» de sw.js y sube VERSION (así funciona sin internet).
+//   4. Si tiene imagen, agrégala también a «ARCHIVOS» de sw.js.
+//   5. Agrega su fila en el mapa de archivos del README y una nota en «Estado».
+// «ejemplo» (Reflejos) no está en esta lista: se abre con el botón «Juego de prueba» de index.html.
 export const JUEGOS = [
   { id: "piano", nombre: "Piano", icono: "🎹", descripcion: "Toca las teclas negras para tocar canciones clásicas y populares: elige una o juega en modo aleatorio.", carpeta: "piano", imagen: "imagenes/piano.webp" },
   { id: "doodle", nombre: "Saltarín", icono: "🦘", descripcion: "Sube lo más alto que puedas: plataformas trampa, enemigos, monedas y un gorro que te lanza 100 m (estilo Doodle Jump).", carpeta: "doodle", imagen: "imagenes/saltarin.webp" },
@@ -40,4 +53,7 @@ export const JUEGOS = [
   { id: "minas", nombre: "Minero Tycoon", icono: "⛏️", descripcion: "Compra pozos, sube de nivel a tus mineros, el ascensor y el almacén, contrata gerentes para que trabajen solos (también sin conexión) y haz prestigio para ganar estrellas.", carpeta: "minas" },
   { id: "cavar", nombre: "Cavar", icono: "⛏️", descripcion: "Cava un hoyo en el terreno junto a la casa y encuentra minerales de $1, $2, $5, $10, $20, $50 y $100: llena la mochila, véndela en la caja y mejora la pala, la mochila y la linterna para llegar a 100 m.", carpeta: "cavar" },
   { id: "paperio", nombre: "Paperio", icono: "🟦", descripcion: "Sal de tu territorio dejando una estela y vuelve para quedarte con todo lo que encierres: cuida tu estela, corta la de los 7 bots y llega al mayor territorio (estilo Paper.io).", carpeta: "paperio" },
+  { id: "jetpack", nombre: "Jetpack", icono: "🚀", descripcion: "Vuela con tu jetpack: mantén pulsado para subir y suelta para bajar; esquiva zappers y misiles, junta monedas y llega lo más lejos que puedas (estilo Jetpack Joyride).", carpeta: "jetpack" },
+  { id: "2048", nombre: "2048", icono: "🔢", descripcion: "Desliza el dedo para juntar números iguales y llegar al 2048 (y más allá): tablero de 4×4, 5×5 o 6×6, con deshacer y tu mejor puntaje por tamaño.", carpeta: "2048" },
+  { id: "ajedrez", nombre: "Ajedrez", icono: "♟️", descripcion: "Ajedrez completo contra la computadora: 5 niveles, enroque, al paso, coronación y tablas; juega con blancas o negras y gana puntos la primera vez que vences cada nivel.", carpeta: "ajedrez" },
 ];
