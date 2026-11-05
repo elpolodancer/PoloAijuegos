@@ -2,11 +2,12 @@
 // Estilo Hole.io en vista isométrica, con 2 mapas: «ciudad» y «playa» (islas).
 // Ajustes rápidos aquí arriba:
 const DURACION = 120;      // segundos por partida
-const MUNDO = 3000;        // tamaño del mapa (px)
-const NUM_BOTS = 7;
+let MUNDO = 3000;          // tamaño del mapa (px); cada mapa puede traer el suyo con «mundo»
+const NUM_BOTS = 7;         // bots por defecto (cada mapa puede traer los suyos con «bots»)
 const R_INICIAL = 22;
 const CRECIMIENTO = 0.35;  // cuánto crece el hoyo al tragar (más = más rápido)
-const OBJETOS = 620;
+const OBJETOS = 620;       // objetos por defecto (cada mapa puede traer los suyos con «objetos»)
+let totalObjetos = OBJETOS, duracionMapa = DURACION;
 
 // ----- Ajustes de los bots (más tontos) -----
 const BOT_COMER = 0.2;            // cuánto crecen y puntúan los bots al comer (0.2 = 80 % menos)
@@ -51,6 +52,9 @@ function recto(x, y, fn) {
 const CALLE = 500, ANCHO_CALLE = 120;
 const enCalle = (x, y) => Math.abs(((x + CALLE / 2) % CALLE) - CALLE / 2) < ANCHO_CALLE / 2 || Math.abs(((y + CALLE / 2) % CALLE) - CALLE / 2) < ANCHO_CALLE / 2;
 let islas = [];
+const CAMPO_CALLE = 600, CAMPO_ANCHO = 90;
+const CAMPOS = ["#6aa84f", "#8fbc5a", "#c9b458", "#7a9a3e", "#a67c52", "#9acd62"];
+const enCalleCampo = (x, y) => Math.abs(((x + CAMPO_CALLE / 2) % CAMPO_CALLE) - CAMPO_CALLE / 2) < CAMPO_ANCHO / 2 || Math.abs(((y + CAMPO_CALLE / 2) % CAMPO_CALLE) - CAMPO_CALLE / 2) < CAMPO_ANCHO / 2;
 
 const MAPAS = {
   ciudad: {
@@ -132,9 +136,51 @@ const MAPAS = {
       for (const s of islas) { ctx.beginPath(); ctx.arc(s.x, s.y, s.R * 0.82, 0, 7); ctx.fill(); }
     },
   },
+  campo: {
+    // Mapa gigante: el doble de largo y de ancho que los demás (4 veces más superficie)
+    mundo: 6000, objetos: 2400, bots: 14, duracion: 180,
+    bg: "#3f6b34",
+    tipos: [
+      { e: "🌾", r: 7, w: 30 }, { e: "🌻", r: 7, w: 18 }, { e: "🐔", r: 8, w: 14 }, { e: "🐑", r: 11, w: 14 },
+      { e: "🪵", r: 12, w: 10 }, { e: "🐄", r: 15, w: 12 }, { e: "🐎", r: 18, w: 8 },
+      { e: "🚜", r: 26, w: 12, calle: true }, { e: "🌳", r: 28, w: 16 }, { e: "🛖", r: 40, w: 8 },
+      { e: "🏠", r: 55, w: 7 }, { e: "🏭", r: 80, w: 3 },
+    ],
+    preparar() {},
+    colocar(t) {
+      for (let i = 0; i < 30; i++) {
+        let x, y;
+        if (t.calle) {
+          const v = Math.random() < 0.5, c = Math.floor(rnd(0, MUNDO / CAMPO_CALLE)) * CAMPO_CALLE;
+          x = v ? c + rnd(-35, 35) : rnd(100, MUNDO - 100);
+          y = v ? rnd(100, MUNDO - 100) : c + rnd(-35, 35);
+        } else {
+          x = rnd(60, MUNDO - 60); y = rnd(60, MUNDO - 60);
+          if (enCalleCampo(x, y) || enCalleCampo(x + t.r, y + t.r) || enCalleCampo(x - t.r, y - t.r)) continue;
+        }
+        return [x, y];
+      }
+      return null;
+    },
+    spawn: () => [rnd(200, MUNDO - 200), rnd(200, MUNDO - 200)],
+    factor: () => 1,
+    suelo() {
+      ctx.fillStyle = "#5f9e4a"; ctx.fillRect(0, 0, MUNDO, MUNDO);
+      const n = Math.ceil(MUNDO / CAMPO_CALLE), m = CAMPO_ANCHO / 2 + 10;
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { // parcelas de cultivo, cada una de un color fijo
+        ctx.fillStyle = CAMPOS[(((i * 73856093) ^ (j * 19349663)) >>> 0) % CAMPOS.length];
+        ctx.fillRect(i * CAMPO_CALLE + m, j * CAMPO_CALLE + m, CAMPO_CALLE - 2 * m, CAMPO_CALLE - 2 * m);
+      }
+      ctx.fillStyle = "#b08d57"; // caminos de tierra
+      for (let k = 0; k * CAMPO_CALLE <= MUNDO; k++) {
+        ctx.fillRect(k * CAMPO_CALLE - CAMPO_ANCHO / 2, 0, CAMPO_ANCHO, MUNDO);
+        ctx.fillRect(0, k * CAMPO_CALLE - CAMPO_ANCHO / 2, MUNDO, CAMPO_ANCHO);
+      }
+    },
+  },
 };
-const NOMBRES = ["Lalo", "Mimi", "Toño", "Kiki", "Chuy", "Nena", "Beto", "Pepa", "Rulo", "Cuca"];
-const COLORES = ["#ff5c7a", "#ffb347", "#4ad6a7", "#5cb8ff", "#c77dff", "#ffe066", "#ff8fab", "#9be564"];
+const NOMBRES = ["Lalo", "Mimi", "Toño", "Kiki", "Chuy", "Nena", "Beto", "Pepa", "Rulo", "Cuca", "Tita", "Lupe", "Memo", "Chela", "Nacho", "Güera"];
+const COLORES = ["#ff5c7a", "#ffb347", "#4ad6a7", "#5cb8ff", "#c77dff", "#ffe066", "#ff8fab", "#9be564", "#7de0e6", "#f2a65a"];
 
 let mapaId = "ciudad", mapa = MAPAS.ciudad;
 
@@ -152,9 +198,10 @@ const cam = { x: MUNDO / 2, y: MUNDO / 2, z: 0.3 };
 
 function cargarMapa(id) {
   mapaId = id; mapa = MAPAS[id];
+  MUNDO = mapa.mundo || 3000; totalObjetos = mapa.objetos || OBJETOS; duracionMapa = mapa.duracion || DURACION;
   mapa.preparar();
   objetos = []; caidas = []; hoyos = []; yo = null;
-  while (objetos.length < OBJETOS) { const o = nuevoObjeto(); if (o) objetos.push(o); }
+  while (objetos.length < totalObjetos) { const o = nuevoObjeto(); if (o) objetos.push(o); }
   cam.x = cam.y = MUNDO / 2; cam.z = 0.3;
 }
 function crearHoyo(nombre, color, esBot) {
@@ -173,8 +220,8 @@ function empezar() {
   cargarMapa(mapaId);
   yo = crearHoyo("Tú", "#7c5cff", false);
   hoyos.push(yo);
-  for (let i = 0; i < NUM_BOTS; i++) hoyos.push(crearHoyo(NOMBRES[i % NOMBRES.length], COLORES[i % COLORES.length], true));
-  tiempo = DURACION; jugando = true;
+  for (let i = 0, nb = mapa.bots || NUM_BOTS; i < nb; i++) hoyos.push(crearHoyo(NOMBRES[i % NOMBRES.length], COLORES[i % COLORES.length], true));
+  tiempo = duracionMapa; jugando = true;
   $("fin").hidden = true;
   cam.x = yo.x; cam.y = yo.y; cam.z = Math.min(W, H) / (yo.r * 9);
 }
@@ -284,7 +331,7 @@ function actualizar(dt) {
     }
   }
   for (let i = caidas.length - 1; i >= 0; i--) { caidas[i].t += dt / 0.35; if (caidas[i].t >= 1) caidas.splice(i, 1); }
-  if (objetos.length < OBJETOS && Math.random() < 0.3) {
+  if (objetos.length < totalObjetos && Math.random() < 0.3) {
     const o = nuevoObjeto();
     if (o && o.r < 30 && !hoyos.some((h) => Math.hypot(h.x - o.x, h.y - o.y) < h.r + 200)) objetos.push(o);
   }
