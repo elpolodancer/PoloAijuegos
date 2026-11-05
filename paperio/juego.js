@@ -1,38 +1,63 @@
 // Ruta: paperio/juego.js
-// «Paperio» (estilo Paper.io): sales de tu territorio dejando una estela y, al volver, te quedas con todo lo que encerraste.
+// «Paperio» (estilo Paper.io 2): sales de tu territorio dejando una estela y, al volver, te quedas con todo lo que encerraste.
 // - Si alguien toca tu estela (o tú la tuya), pierdes todo; si tú tocas la estela de otro, pierde él.
 // - Si te quedas sin territorio, pierdes. Los bots reaparecen solos; tú no (se acaba la partida).
-// - Todo vive en dos rejillas planas (dueno / rastro); el dibujo solo pinta lo que se ve.
+// - El mapa es un círculo y todos se mueven LIBRES (por ángulo), girando en curvas, no en esquinas de 90°.
+// - El territorio vive en una rejilla fina (cada casilla es muy pequeña) que se dibuja estirada y suavizada,
+//   así los bordes se ven redondeados y no «cuadrados».
 const ID = "paperio";
 
 // ----- Ajustes -----
-const ANCHO = 90, ALTO = 90;          // tamaño del mapa en casillas
-const PASO = 0.12;                    // segundos por casilla (todos van igual de rápido)
+const RADIO = 300;                    // radio del mapa circular, en casillas finas
+const VEL = 38;                       // velocidad (casillas por segundo)
+const GIRO = 3.4;                     // qué tan rápido gira (radianes por segundo): más alto = giros más cerrados
+const R_CABEZA = 3;                   // tamaño de la cabeza (para choques)
+const R_RASTRO = 2;                   // grosor de la estela
+const R_INICIO = 9;                   // radio del territorio inicial
+const GRACIA = 12;                    // pasos recientes de tu estela que no cuentan al girar (para no chocar contigo)
 const NUM_BOTS = 7;                   // máximo 7 (hay 8 colores/nombres)
-const CELDAS_VISTA = 22;              // casillas que caben en el lado corto de la pantalla
+const CELDAS_VISTA = 110;             // casillas finas que caben en el lado corto de la pantalla (menos = más cerca)
 const REAPARECE_BOT = [2, 4];         // segundos que tarda un bot en volver
-const UMBRAL_GIRO = 18;               // píxeles de deslizamiento para girar
 const PUNTOS_POR_PCT = 10;            // puntos por cada 1 % de mapa (el máximo que lograste)
 const PUNTOS_POR_BAJA = 25;           // puntos por cada bot eliminado
 const NOMBRES = ["Tú", "Lola", "Pepe", "Nico", "Rosa", "Toño", "Mara", "Beto"];
 const TONOS = [255, 5, 38, 135, 178, 300, 340, 55]; // color de cada uno (el primero es el jugador)
+const TEXTO_AYUDA = "Sal de tu territorio y regresa para quedarte con todo lo que encierres. Si alguien toca tu estela, pierdes; si tú tocas la suya, pierde él. Mantén el dedo pulsado y arrástralo hacia donde quieras ir, o usa las flechas / WASD.";
 
 // ----- Estado -----
-const N = ANCHO * ALTO;
-const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0]; // 0 arriba, 1 derecha, 2 abajo, 3 izquierda
-const dueno = new Uint8Array(N);    // id del dueño de cada casilla (0 = nadie)
-const rastro = new Uint8Array(N);   // id de quien dejó estela en la casilla (0 = ninguna)
+const G = 2 * RADIO + 8, C = G / 2;   // lado de la rejilla y su centro
+const N = G * G;
+const SIM = 1 / 60;                   // paso fijo de simulación
+const TAU = Math.PI * 2;
+const dueno = new Uint8Array(N);      // id del dueño de cada casilla (0 = nadie)
+const rastro = new Uint8Array(N);     // id de quien dejó estela en la casilla (0 = ninguna)
+const rastroIdx = new Int32Array(N);  // número de paso en que se dejó esa estela
+const dentro = new Uint8Array(N);     // 1 = casilla dentro del círculo
+const etiqueta = new Int32Array(N), cola2 = new Int32Array(N); // memoria de trabajo para cerrar zonas
+let AREA = 0;
+for (let y = 0; y < G; y++)
+  for (let x = 0; x < G; x++) {
+    const dx = x + 0.5 - C, dy = y + 0.5 - C;
+    if (dx * dx + dy * dy < RADIO * RADIO) { dentro[y * G + x] = 1; AREA++; }
+  }
 const cuenta = new Int32Array(NUM_BOTS + 2);
+
+function disco(r) {
+  const l = [], q = Math.ceil(r);
+  for (let dy = -q; dy <= q; dy++) for (let dx = -q; dx <= q; dx++) if (dx * dx + dy * dy <= r * r) l.push(dx, dy);
+  return l;
+}
+const D_RASTRO = disco(R_RASTRO), D_INICIO = disco(R_INICIO);
+
 let ents = [], yo = null;
-let estado = "demo";                // demo | jugando | fin
+let estado = "demo";                  // demo | jugando | fin
 let sucio = true, bajas = 0, maxPct = 0, tiempo = 0, mejorPct = 0;
-let ordenes = [];
 let fx = [];
-const cam = { x: ANCHO / 2, y: ALTO / 2 };
+const cam = { x: C, y: C };
 
 const $ = (id) => document.getElementById(id);
 const cv = $("lienzo"), ctx = cv.getContext("2d");
-let vw = 300, vh = 300, cs = 14;
+let vw = 300, vh = 300, cs = 4;
 
 try { mejorPct = Number(localStorage.getItem("paperio_mejor")) || 0; } catch (e) {}
 
@@ -42,43 +67,86 @@ import("../compartido/jugador.js")
   .then((m) => { J = m; m.alCambiarSesion((u) => { usuario = u; marcarEntrar(); }); })
   .catch(() => {});
 
+// ----- Capas de territorio (un píxel por casilla, luego se estiran suavizadas) -----
+// A = colores claros (territorio y estela), B = colores oscuros (el «grosor» de abajo)
+const cvA = document.createElement("canvas"), cvB = document.createElement("canvas");
+cvA.width = cvA.height = cvB.width = cvB.height = G;
+const ctxA = cvA.getContext("2d"), ctxB = cvB.getContext("2d");
+const imgA = ctxA.createImageData(G, G), imgB = ctxB.createImageData(G, G);
+const u32A = new Uint32Array(imgA.data.buffer), u32B = new Uint32Array(imgB.data.buffer);
+let sx0 = 0, sy0 = 0, sx1 = G - 1, sy1 = G - 1; // zona que cambió y hay que subir a las capas
+
+function pix(i) {
+  const o = dueno[i], r = rastro[i];
+  let a = 0, b = 0;
+  if (r) { const e = ents[r - 1]; a = e.pRl; b = e.pRd; }
+  else if (o) { const e = ents[o - 1]; a = e.pTl; b = e.pTd; }
+  u32A[i] = a; u32B[i] = b;
+  const x = i % G, y = (i / G) | 0;
+  if (x < sx0) sx0 = x;
+  if (x > sx1) sx1 = x;
+  if (y < sy0) sy0 = y;
+  if (y > sy1) sy1 = y;
+}
+function subirCapas() {
+  if (sx1 < sx0) return;
+  const w = sx1 - sx0 + 1, h = sy1 - sy0 + 1;
+  ctxA.putImageData(imgA, 0, 0, sx0, sy0, w, h);
+  ctxB.putImageData(imgB, 0, 0, sx0, sy0, w, h);
+  sx0 = G; sy0 = G; sx1 = -1; sy1 = -1;
+}
+
+// ----- Colores -----
+function hslRgb(h, s, l) {
+  s /= 100; l /= 100;
+  const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [Math.round(255 * f(0)), Math.round(255 * f(8)), Math.round(255 * f(4))];
+}
+const pack = (c) => ((255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0; // ABGR (little endian)
+
 // ----- Entidades -----
 function crear(id) {
   const tono = TONOS[id - 1];
   return {
     id, jugador: id === 1, nombre: NOMBRES[id - 1], tono,
-    cT: "hsl(" + tono + ",62%,58%)", cB: "hsl(" + tono + ",62%,40%)",
-    cR: "hsl(" + tono + ",80%,78%)", cC: "hsl(" + tono + ",72%,42%)",
-    x: 0, y: 0, px: 0, py: 0, dir: 0, cola: [], vivo: false, espera: 0,
-    fase: 0, rest: 0, lado: 1, largo: 0,
+    cT: "hsl(" + tono + ",55%,66%)", cC: "hsl(" + tono + ",42%,56%)", cD: "hsl(" + tono + ",38%,34%)",
+    pTl: pack(hslRgb(tono, 55, 66)), pTd: pack(hslRgb(tono, 48, 46)),   // territorio claro / oscuro
+    pRl: pack(hslRgb(tono, 62, 78)), pRd: pack(hslRgb(tono, 45, 60)),   // estela clara / oscura
+    x: 0, y: 0, px: 0, py: 0, ang: 0, meta: 0,
+    cola: [], ruta: [], seq: 0, vivo: false, espera: 0,
+    plan: null, wp: 0, vuelta: false, casa: null, casaT: 0, vagar: 0, desv: 0, ia: 0,
+    caza: null, cazaT: 0, agr: 0.3 + Math.random() * 0.7,
   };
 }
 
-function libre5(cx, cy) {
-  for (let dy = -2; dy <= 2; dy++)
-    for (let dx = -2; dx <= 2; dx++) {
-      const i = (cy + dy) * ANCHO + cx + dx;
+function discoLibre(cx, cy, r) {
+  for (let dy = -r; dy <= r; dy += 2)
+    for (let dx = -r; dx <= r; dx += 2) {
+      const i = (cy + dy) * G + cx + dx;
       if (dueno[i] || rastro[i]) return false;
     }
   return true;
 }
 function lejos(cx, cy, r) {
-  for (const o of ents) if (o.vivo && Math.abs(o.x - cx) + Math.abs(o.y - cy) < r) return false;
+  for (const o of ents) if (o.vivo && Math.hypot(o.x - cx, o.y - cy) < r) return false;
   return true;
 }
 function aparecer(e) {
-  let cx = 0, cy = 0, ok = false;
-  for (let k = 0; k < 400 && !ok; k++) {
-    cx = 3 + Math.floor(Math.random() * (ANCHO - 6));
-    cy = 3 + Math.floor(Math.random() * (ALTO - 6));
-    ok = libre5(cx, cy) && lejos(cx, cy, 9);
+  let cx = C, cy = C, ok = false;
+  for (let k = 0; k < 500 && !ok; k++) {
+    const a = Math.random() * TAU, d = Math.sqrt(Math.random()) * (RADIO - 45);
+    cx = Math.round(C + Math.cos(a) * d); cy = Math.round(C + Math.sin(a) * d);
+    ok = discoLibre(cx, cy, R_INICIO + 5) && lejos(cx, cy, 60);
   }
-  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) dueno[(cy + dy) * ANCHO + cx + dx] = e.id;
-  e.x = e.px = cx; e.y = e.py = cy;
-  // mira hacia el centro del mapa para no chocar con la pared enseguida
-  const mx = cx - ANCHO / 2, my = cy - ALTO / 2;
-  e.dir = Math.abs(mx) > Math.abs(my) ? (mx < 0 ? 1 : 3) : (my < 0 ? 2 : 0);
-  e.cola = []; e.fase = 0; e.vivo = true;
+  for (let k = 0; k < D_INICIO.length; k += 2) {
+    const i = (cy + D_INICIO[k + 1]) * G + cx + D_INICIO[k];
+    if (dentro[i]) { dueno[i] = e.id; pix(i); }
+  }
+  e.x = e.px = cx + 0.5; e.y = e.py = cy + 0.5;
+  e.ang = e.meta = Math.atan2(C - cy, C - cx) + (Math.random() - 0.5); // mira hacia el centro
+  e.cola = []; e.ruta = []; e.seq = 0; e.plan = null; e.caza = null; e.casa = null; e.vuelta = false;
+  e.vivo = true;
   sucio = true;
 }
 
@@ -86,15 +154,15 @@ function recontar() {
   cuenta.fill(0);
   for (let i = 0; i < N; i++) { const o = dueno[i]; if (o) cuenta[o]++; }
   sucio = false;
-  if (estado === "jugando" && yo.vivo) { const p = cuenta[1] * 100 / N; if (p > maxPct) maxPct = p; }
+  if (estado === "jugando" && yo.vivo) { const p = cuenta[1] * 100 / AREA; if (p > maxPct) maxPct = p; }
 }
 
 function matar(v, por) {
   if (!v.vivo) return;
   v.vivo = false;
-  for (const i of v.cola) if (rastro[i] === v.id) rastro[i] = 0;
-  v.cola = [];
-  for (let i = 0; i < N; i++) if (dueno[i] === v.id) dueno[i] = 0;
+  for (const i of v.cola) if (rastro[i] === v.id) { rastro[i] = 0; pix(i); }
+  v.cola = []; v.ruta = [];
+  for (let i = 0; i < N; i++) if (dueno[i] === v.id) { dueno[i] = 0; pix(i); }
   fx.push({ x: v.x, y: v.y, t: 0, tono: v.tono });
   sucio = true;
   if (por && por.jugador && por !== v && estado === "jugando") bajas++;
@@ -102,121 +170,186 @@ function matar(v, por) {
   else v.espera = REAPARECE_BOT[0] + Math.random() * (REAPARECE_BOT[1] - REAPARECE_BOT[0]);
 }
 
-// Cierra el bucle: la estela pasa a ser territorio y todo lo que no se alcanza desde el borde también
+// Cierra el bucle: la estela pasa a ser territorio y se queda con las zonas encerradas.
+// Se separan las zonas «no mías» en grupos; el grupo más grande es el exterior y todos los demás quedan encerrados.
 function cerrar(e) {
-  for (const i of e.cola) { dueno[i] = e.id; rastro[i] = 0; }
-  e.cola = [];
-  const vis = new Uint8Array(N), q = new Int32Array(N);
-  let h = 0, t = 0;
-  const meter = (i) => { if (!vis[i] && dueno[i] !== e.id) { vis[i] = 1; q[t++] = i; } };
-  for (let x = 0; x < ANCHO; x++) { meter(x); meter((ALTO - 1) * ANCHO + x); }
-  for (let y = 0; y < ALTO; y++) { meter(y * ANCHO); meter(y * ANCHO + ANCHO - 1); }
-  while (h < t) {
-    const i = q[h++], x = i % ANCHO, y = (i / ANCHO) | 0;
-    if (x > 0) meter(i - 1);
-    if (x < ANCHO - 1) meter(i + 1);
-    if (y > 0) meter(i - ANCHO);
-    if (y < ALTO - 1) meter(i + ANCHO);
+  for (const i of e.cola) { if (rastro[i] === e.id) rastro[i] = 0; dueno[i] = e.id; pix(i); }
+  e.cola = []; e.ruta = [];
+  etiqueta.fill(0);
+  let nEt = 0, mayor = 0, tam = 0;
+  for (let s = 0; s < N; s++) {
+    if (!dentro[s] || dueno[s] === e.id || etiqueta[s]) continue;
+    nEt++;
+    let h = 0, t = 0;
+    cola2[t++] = s; etiqueta[s] = nEt;
+    while (h < t) {
+      const i = cola2[h++], x = i % G;
+      let j;
+      if (x > 0) { j = i - 1; if (dentro[j] && dueno[j] !== e.id && !etiqueta[j]) { etiqueta[j] = nEt; cola2[t++] = j; } }
+      if (x < G - 1) { j = i + 1; if (dentro[j] && dueno[j] !== e.id && !etiqueta[j]) { etiqueta[j] = nEt; cola2[t++] = j; } }
+      j = i - G; if (j >= 0 && dentro[j] && dueno[j] !== e.id && !etiqueta[j]) { etiqueta[j] = nEt; cola2[t++] = j; }
+      j = i + G; if (j < N && dentro[j] && dueno[j] !== e.id && !etiqueta[j]) { etiqueta[j] = nEt; cola2[t++] = j; }
+    }
+    if (t > tam) { tam = t; mayor = nEt; }
   }
-  for (let i = 0; i < N; i++) if (!vis[i] && dueno[i] !== e.id) dueno[i] = e.id;
+  for (let s = 0; s < N; s++) {
+    const l = etiqueta[s];
+    if (l && l !== mayor) { dueno[s] = e.id; pix(s); }
+  }
   recontar();
   for (const o of ents) if (o !== e && o.vivo && cuenta[o.id] === 0) matar(o, e); // sin territorio = fuera
 }
 
-// ----- Bots -----
-function fuera(x, y) { return x < 0 || y < 0 || x >= ANCHO || y >= ALTO; }
-function seguro(e, d) {
-  const nx = e.x + DX[d], ny = e.y + DY[d];
-  return !fuera(nx, ny) && rastro[ny * ANCHO + nx] !== e.id;
+// Deja la estela (un círculo pequeño) en la posición de la cabeza
+function sellar(e) {
+  e.seq++;
+  const cx = e.x | 0, cy = e.y | 0;
+  for (let k = 0; k < D_RASTRO.length; k += 2) {
+    const i = (cy + D_RASTRO[k + 1]) * G + cx + D_RASTRO[k];
+    if (!dentro[i] || dueno[i] === e.id || rastro[i]) continue;
+    rastro[i] = e.id; rastroIdx[i] = e.seq; e.cola.push(i); pix(i);
+  }
+  e.ruta.push(e.x, e.y);
 }
-function propioCercano(e) {
-  let mejor = 1e9, mx = e.x, my = e.y;
-  for (let y = 0; y < ALTO; y++)
-    for (let x = 0; x < ANCHO; x++)
-      if (dueno[y * ANCHO + x] === e.id) {
-        const d = Math.abs(x - e.x) + Math.abs(y - e.y);
+
+// ----- Bots -----
+function lim(x, y) { // mantiene un punto dentro del círculo
+  const dx = x - C, dy = y - C, d = Math.hypot(dx, dy), m = RADIO - 16;
+  return d > m ? [C + dx * m / d, C + dy * m / d] : [x, y];
+}
+function esMia(e, x, y) {
+  const cx = x | 0, cy = y | 0;
+  return cx >= 0 && cy >= 0 && cx < G && cy < G && dueno[cy * G + cx] === e.id;
+}
+function libre(e, a) { // ¿puedo seguir en esta dirección sin chocar con la pared o con mi propia estela?
+  const c = Math.cos(a), s = Math.sin(a);
+  for (const d of [6, 12, 18]) {
+    const px = e.x + c * d, py = e.y + s * d, dx = px - C, dy = py - C;
+    if (dx * dx + dy * dy > (RADIO - 7) * (RADIO - 7)) return false;
+    const i = (py | 0) * G + (px | 0);
+    if (rastro[i] === e.id && e.seq - rastroIdx[i] > GRACIA) return false;
+  }
+  return true;
+}
+function casaCercana(e) { // punto de mi territorio al que volver (un poco hacia adentro)
+  let mejor = 1e12, mx = e.x, my = e.y, sx = 0, sy = 0, n = 0;
+  for (let y = 0; y < G; y += 2) {
+    const f = y * G;
+    for (let x = 0; x < G; x += 2)
+      if (dueno[f + x] === e.id) {
+        n++; sx += x; sy += y;
+        const d = (x - e.x) * (x - e.x) + (y - e.y) * (y - e.y);
         if (d < mejor) { mejor = d; mx = x; my = y; }
       }
-  return { x: mx, y: my };
+  }
+  if (!n) return [e.x, e.y];
+  const dx = sx / n - mx, dy = sy / n - my, l = Math.hypot(dx, dy) || 1, m = Math.min(7, l);
+  return [mx + dx / l * m, my + dy / l * m];
 }
-function decidirBot(e) {
-  const opts = [e.dir, (e.dir + 1) % 4, (e.dir + 3) % 4];
-  const ok = opts.filter((d) => seguro(e, d));
-  if (!ok.length) return e.dir;
-  // si justo adelante hay estela de otro, se la come
-  for (const d of ok) {
-    const t = rastro[(e.y + DY[d]) * ANCHO + e.x + DX[d]];
-    if (t && t !== e.id && Math.random() < 0.9) return d;
+function empezarPlan(e) { // excursión: salir recto, girar de lado y volver
+  const s = Math.random() < 0.5 ? 1 : -1, a = e.ang;
+  const L = 22 + Math.random() * 60, W = 18 + Math.random() * 50;
+  const A = lim(e.x + Math.cos(a) * L, e.y + Math.sin(a) * L);
+  const b = a + s * Math.PI / 2;
+  const B = lim(A[0] + Math.cos(b) * W, A[1] + Math.sin(b) * W);
+  e.plan = [A, B]; e.wp = 0; e.vuelta = false; e.casa = null;
+}
+function pensarBot(e) {
+  if (!e.cola.length) { e.plan = null; e.vuelta = false; }
+  let meta = e.ang;
+  const larga = e.cola.length > 700;
+
+  // cazar la estela de otro que ande cerca
+  if (e.caza && (!e.caza.vivo || e.cazaT-- <= 0 || larga || e.caza.ruta.length < 26)) e.caza = null;
+  if (!e.caza && !larga && Math.random() < 0.04 * e.agr) {
+    for (const o of ents) if (o !== e && o.vivo && o.ruta.length > 30 && Math.hypot(o.x - e.x, o.y - e.y) < 60) { e.caza = o; e.cazaT = 40; break; }
   }
-  if (e.cola.length === 0) { // en casa: pasea y, al salir, planea un rectángulo
-    e.fase = 0;
-    const d = ok.includes(e.dir) && Math.random() < 0.8 ? e.dir : ok[Math.floor(Math.random() * ok.length)];
-    if (dueno[(e.y + DY[d]) * ANCHO + e.x + DX[d]] !== e.id) {
-      e.fase = 1;
-      e.rest = 3 + Math.floor(Math.random() * 9);
-      e.largo = 3 + Math.floor(Math.random() * 9);
-      e.lado = Math.random() < 0.5 ? 1 : 3;
+  let cazando = false;
+  if (e.caza) {
+    const r = e.caza.ruta;
+    let mejor = 1e12, tx = 0, ty = 0;
+    for (let k = 0; k < r.length - 24; k += 8) {
+      const d = (r[k] - e.x) * (r[k] - e.x) + (r[k + 1] - e.y) * (r[k + 1] - e.y);
+      if (d < mejor) { mejor = d; tx = r[k]; ty = r[k + 1]; }
     }
-    return d;
+    if (mejor < 1e12) { meta = Math.atan2(ty - e.y, tx - e.x); cazando = true; } else e.caza = null;
   }
-  if (e.fase === 1) {
-    if (e.rest > 0) { e.rest--; if (ok.includes(e.dir)) return e.dir; }
-    else { const d = (e.dir + e.lado) % 4; e.fase = 2; e.rest = e.largo; if (ok.includes(d)) return d; }
-  } else if (e.fase === 2) {
-    if (e.rest > 0) { e.rest--; if (ok.includes(e.dir)) return e.dir; }
-    else e.fase = 3;
+
+  if (!cazando) {
+    if (e.cola.length && !e.plan) { e.plan = []; e.wp = 0; e.vuelta = true; e.casa = null; } // salió cazando: ahora vuelve
+    if (e.plan) {
+      let obj = null;
+      if (!e.vuelta) {
+        const w = e.plan[e.wp];
+        if (Math.hypot(w[0] - e.x, w[1] - e.y) < 13) { e.wp++; if (e.wp >= e.plan.length) e.vuelta = true; }
+        if (!e.vuelta) obj = e.plan[e.wp];
+      }
+      if (e.vuelta || larga) {
+        e.vuelta = true;
+        if (!e.casa || --e.casaT <= 0) { e.casa = casaCercana(e); e.casaT = 6; }
+        obj = e.casa;
+      }
+      meta = Math.atan2(obj[1] - e.y, obj[0] - e.x);
+    } else { // en casa: pasea y sale cuando llega a la orilla
+      if (--e.vagar <= 0) { e.vagar = 8 + Math.random() * 12; e.desv = (Math.random() - 0.5) * 1.6; }
+      meta = e.ang + e.desv * 0.5;
+      if (!esMia(e, e.x + Math.cos(e.ang) * 10, e.y + Math.sin(e.ang) * 10) || Math.random() < 0.02) empezarPlan(e);
+    }
   }
-  e.fase = 3; // volver al territorio propio por el camino más corto
-  const m = propioCercano(e);
-  let mejor = ok[0], md = 1e9;
-  for (const d of ok) {
-    const dd = Math.abs(e.x + DX[d] - m.x) + Math.abs(e.y + DY[d] - m.y) - (d === e.dir ? 0.1 : 0);
-    if (dd < md) { md = dd; mejor = d; }
-  }
-  return mejor;
+
+  // elegir la dirección libre más parecida a la que quiere
+  let a = null;
+  for (const o of [0, 0.35, -0.35, 0.7, -0.7, 1.1, -1.1, 1.6, -1.6, 2.3, -2.3]) if (libre(e, meta + o)) { a = meta + o; break; }
+  e.meta = a === null ? e.ang + 1 : a;
 }
 
 // ----- Un paso de juego -----
 function paso() {
-  const mv = [];
   for (const e of ents) {
     if (!e.vivo) continue;
-    if (e.jugador) {
-      while (ordenes.length) {
-        const d = ordenes.shift();
-        if (d !== e.dir && d !== (e.dir + 2) % 4) { e.dir = d; break; }
-      }
-    } else e.dir = decidirBot(e);
-    mv.push({ e, nx: e.x + DX[e.dir], ny: e.y + DY[e.dir], ox: e.x, oy: e.y, choque: false });
-  }
-  // choques de frente (misma casilla o cruzándose): mueren los dos
-  for (let a = 0; a < mv.length; a++)
-    for (let b = a + 1; b < mv.length; b++) {
-      const A = mv[a], B = mv[b];
-      if ((A.nx === B.nx && A.ny === B.ny) || (A.nx === B.ox && A.ny === B.oy && B.nx === A.ox && B.ny === A.oy)) A.choque = B.choque = true;
-    }
-  for (const m of mv) if (m.choque) matar(m.e, null);
-  for (const m of mv) {
-    const e = m.e;
-    if (!e.vivo || m.choque) continue;
-    e.px = m.ox; e.py = m.oy;
-    if (fuera(m.nx, m.ny)) { matar(e, null); continue; }
-    e.x = m.nx; e.y = m.ny;
-    const i = e.y * ANCHO + e.x, t = rastro[i];
-    if (t) {
-      const v = ents[t - 1];
-      if (v === e) { matar(e, null); continue; }
-      matar(v, e);
+    if (e.jugador) e.meta = metaTeclas !== null ? metaTeclas : metaDedo !== null ? metaDedo : e.ang;
+    else if (--e.ia <= 0) { e.ia = 5; pensarBot(e); }
+
+    // giro suave hacia la dirección deseada
+    let da = e.meta - e.ang;
+    da = Math.atan2(Math.sin(da), Math.cos(da));
+    const mx = GIRO * SIM;
+    e.ang += Math.max(-mx, Math.min(mx, da));
+
+    e.px = e.x; e.py = e.y;
+    e.x += Math.cos(e.ang) * VEL * SIM;
+    e.y += Math.sin(e.ang) * VEL * SIM;
+
+    const dx = e.x - C, dy = e.y - C;
+    if (dx * dx + dy * dy > (RADIO - 2.5) * (RADIO - 2.5)) { matar(e, null); continue; } // tocó el borde
+
+    const i = (e.y | 0) * G + (e.x | 0), r = rastro[i];
+    if (r) {
+      if (r !== e.id) matar(ents[r - 1], e);                       // cortaste la estela de otro
+      else if (e.seq - rastroIdx[i] > GRACIA) { matar(e, null); continue; } // te pisaste tu propia estela
     }
     if (dueno[i] === e.id) { if (e.cola.length) cerrar(e); }
-    else { rastro[i] = e.id; e.cola.push(i); }
+    else sellar(e);
+  }
+  // choque de frente: mueren los dos si ambos van fuera de casa
+  const R2 = (R_CABEZA * 2) * (R_CABEZA * 2);
+  for (let a = 0; a < ents.length; a++) {
+    const A = ents[a];
+    if (!A.vivo || !A.cola.length) continue;
+    for (let b = a + 1; b < ents.length; b++) {
+      const B = ents[b];
+      if (!B.vivo || !B.cola.length) continue;
+      if ((A.x - B.x) * (A.x - B.x) + (A.y - B.y) * (A.y - B.y) < R2) { matar(A, null); matar(B, null); break; }
+    }
   }
   if (sucio) recontar();
 }
 
 // ----- Partida -----
 function iniciar(demo) {
-  dueno.fill(0); rastro.fill(0); fx = []; ordenes = [];
+  dueno.fill(0); rastro.fill(0); rastroIdx.fill(0); u32A.fill(0); u32B.fill(0);
+  sx0 = 0; sy0 = 0; sx1 = G - 1; sy1 = G - 1;
+  fx = []; metaDedo = null;
   ents = [];
   for (let id = 1; id <= NUM_BOTS + 1; id++) ents.push(crear(id));
   yo = ents[0];
@@ -224,7 +357,7 @@ function iniciar(demo) {
   estado = demo ? "demo" : "jugando";
   for (const e of ents) if (!(demo && e.jugador)) aparecer(e);
   recontar();
-  if (!demo) { cam.x = yo.x + 0.5; cam.y = yo.y + 0.5; }
+  if (!demo) { cam.x = yo.x; cam.y = yo.y; }
 }
 
 function fmtTiempo(s) { s = Math.floor(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
@@ -296,16 +429,26 @@ async function cargarRanking() {
 }
 
 // ----- Controles -----
-function ordenar(d) {
-  if (estado !== "jugando" || !yo || !yo.vivo) return;
-  const ult = ordenes.length ? ordenes[ordenes.length - 1] : yo.dir;
-  if (d === ult || d === (ult + 2) % 4) return;
-  if (ordenes.length < 3) ordenes.push(d);
+// Dedo / ratón: mantén pulsado y arrastra: la cabeza gira hacia donde apuntes (como una palanca flotante).
+// Teclado: flechas / WASD (se pueden combinar dos para ir en diagonal).
+let metaDedo = null, metaTeclas = null;
+const TECLAS = { arrowup: "u", w: "u", arrowdown: "d", s: "d", arrowleft: "l", a: "l", arrowright: "r", d: "r" };
+const puls = new Set();
+function recalcularTeclas() {
+  const vx = (puls.has("r") ? 1 : 0) - (puls.has("l") ? 1 : 0), vy = (puls.has("d") ? 1 : 0) - (puls.has("u") ? 1 : 0);
+  metaTeclas = vx || vy ? Math.atan2(vy, vx) : null;
 }
-const TECLAS = { ArrowUp: 0, w: 0, W: 0, ArrowRight: 1, d: 1, D: 1, ArrowDown: 2, s: 2, S: 2, ArrowLeft: 3, a: 3, A: 3 };
 addEventListener("keydown", (ev) => {
-  if (ev.key in TECLAS) { ev.preventDefault(); ordenar(TECLAS[ev.key]); }
+  const t = TECLAS[ev.key.toLowerCase()];
+  if (t) { ev.preventDefault(); puls.add(t); recalcularTeclas(); }
 });
+addEventListener("keyup", (ev) => {
+  const t = TECLAS[ev.key.toLowerCase()];
+  if (t) { puls.delete(t); recalcularTeclas(); }
+});
+addEventListener("blur", () => { puls.clear(); metaTeclas = null; });
+
+const RADIO_PALANCA = 60; // px: si arrastras más lejos, el punto de origen te sigue (así puedes cambiar de rumbo rápido)
 let arrastra = false, ox = 0, oy = 0;
 cv.addEventListener("pointerdown", (ev) => {
   arrastra = true; ox = ev.clientX; oy = ev.clientY;
@@ -313,12 +456,12 @@ cv.addEventListener("pointerdown", (ev) => {
 });
 cv.addEventListener("pointermove", (ev) => {
   if (!arrastra) return;
-  const dx = ev.clientX - ox, dy = ev.clientY - oy;
-  if (Math.hypot(dx, dy) < UMBRAL_GIRO) return;
-  ordenar(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 1 : 3) : (dy > 0 ? 2 : 0));
-  ox = ev.clientX; oy = ev.clientY;
+  const dx = ev.clientX - ox, dy = ev.clientY - oy, d = Math.hypot(dx, dy);
+  if (d < 10) return;
+  metaDedo = Math.atan2(dy, dx);
+  if (d > RADIO_PALANCA) { ox = ev.clientX - dx / d * RADIO_PALANCA; oy = ev.clientY - dy / d * RADIO_PALANCA; }
 });
-const soltar = () => { arrastra = false; };
+const soltar = () => { arrastra = false; metaDedo = null; };
 cv.addEventListener("pointerup", soltar);
 cv.addEventListener("pointercancel", soltar);
 
@@ -329,7 +472,7 @@ function ajustar() {
   vw = Math.max(1, r.width); vh = Math.max(1, r.height);
   cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  cs = Math.max(10, Math.min(vw, vh) / CELDAS_VISTA);
+  cs = Math.max(2, Math.min(vw, vh) / CELDAS_VISTA);
 }
 addEventListener("resize", ajustar);
 if (typeof ResizeObserver !== "undefined") new ResizeObserver(ajustar).observe($("escena"));
@@ -337,61 +480,60 @@ if (typeof ResizeObserver !== "undefined") new ResizeObserver(ajustar).observe($
 const SX = (x) => (x - cam.x) * cs + vw / 2;
 const SY = (y) => (y - cam.y) * cs + vh / 2;
 
-function dibujar(k) {
-  ctx.fillStyle = "#141a2e";
-  ctx.fillRect(0, 0, vw, vh);
-  const x0 = SX(0), y0 = SY(0);
-  ctx.fillStyle = "#f1f4fb";
-  ctx.fillRect(x0, y0, ANCHO * cs, ALTO * cs);
-
-  const ix0 = Math.max(0, Math.floor(cam.x - vw / 2 / cs) - 1), ix1 = Math.min(ANCHO - 1, Math.ceil(cam.x + vw / 2 / cs) + 1);
-  const iy0 = Math.max(0, Math.floor(cam.y - vh / 2 / cs) - 1), iy1 = Math.min(ALTO - 1, Math.ceil(cam.y + vh / 2 / cs) + 1);
-
-  ctx.strokeStyle = "#e1e6f2";
-  ctx.lineWidth = 1;
+function cuadro(x, y, w, h, r) {
   ctx.beginPath();
-  for (let x = ix0; x <= ix1 + 1; x++) { const X = Math.round(SX(x)) + 0.5; ctx.moveTo(X, SY(iy0)); ctx.lineTo(X, SY(iy1 + 1)); }
-  for (let y = iy0; y <= iy1 + 1; y++) { const Y = Math.round(SY(y)) + 0.5; ctx.moveTo(SX(ix0), Y); ctx.lineTo(SX(ix1 + 1), Y); }
-  ctx.stroke();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
 
-  const franja = Math.max(2, Math.round(cs * 0.16));
-  for (let y = iy0; y <= iy1; y++) {
-    const Y = Math.floor(SY(y)), H = Math.floor(SY(y + 1)) - Y;
-    for (let x = ix0; x <= ix1; x++) {
-      const i = y * ANCHO + x, o = dueno[i], r = rastro[i];
-      if (!o && !r) continue;
-      const X = Math.floor(SX(x)), W = Math.floor(SX(x + 1)) - X;
-      if (o) {
-        const e = ents[o - 1];
-        ctx.fillStyle = e.cT;
-        ctx.fillRect(X, Y, W, H);
-        if (y + 1 >= ALTO || dueno[i + ANCHO] !== o) { ctx.fillStyle = e.cB; ctx.fillRect(X, Y + H - franja, W, franja); }
-      }
-      if (r) { ctx.fillStyle = ents[r - 1].cR; ctx.fillRect(X, Y, W, H); }
-    }
-  }
+function dibujar(k) {
+  subirCapas();
 
-  // cabezas, con ojos que miran hacia donde van
+  // fuera del mapa (azul)
+  ctx.fillStyle = "#2c6e9e";
+  ctx.fillRect(0, 0, vw, vh);
+
+  // el mapa circular, con un borde de sombra abajo
+  const mx = SX(C), my = SY(C), rr = RADIO * cs;
+  ctx.fillStyle = "#a9d6c3";
+  ctx.beginPath(); ctx.arc(mx, my + Math.max(3, cs * 1.6), rr, 0, TAU); ctx.fill();
+  ctx.fillStyle = "#ecfff7";
+  ctx.beginPath(); ctx.arc(mx, my, rr, 0, TAU); ctx.fill();
+
+  // territorio y estelas (capas estiradas y suavizadas: bordes redondeados)
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(cvB, SX(0), SY(0) + Math.max(2, cs * 1.1), G * cs, G * cs);
+  ctx.drawImage(cvA, SX(0), SY(0), G * cs, G * cs);
+
+  // cabezas: cubito redondeado con ojos que miran hacia donde van
+  const lado = cs * 6.2, grosor = cs * 1.4;
   ctx.textAlign = "center";
-  ctx.font = "700 " + Math.round(cs * 0.55) + "px system-ui, sans-serif";
+  ctx.font = "700 " + Math.max(11, Math.round(cs * 4)) + "px system-ui, sans-serif";
   for (const e of ents) {
     if (!e.vivo) continue;
     const hx = e.px + (e.x - e.px) * k, hy = e.py + (e.y - e.py) * k;
     const X = SX(hx), Y = SY(hy);
-    if (X < -cs * 2 || Y < -cs * 2 || X > vw + cs * 2 || Y > vh + cs * 2) continue;
+    if (X < -lado * 3 || Y < -lado * 3 || X > vw + lado * 3 || Y > vh + lado * 3) continue;
+    ctx.fillStyle = e.cD;
+    cuadro(X - lado / 2, Y - lado / 2 + grosor, lado, lado, lado * 0.22); ctx.fill();
     ctx.fillStyle = e.cC;
-    ctx.fillRect(X + cs * 0.04, Y + cs * 0.04, cs * 0.92, cs * 0.92);
-    const fx0 = DX[e.dir], fy0 = DY[e.dir], sx0 = -fy0, sy0 = fx0;
-    const cx = X + cs / 2 + fx0 * cs * 0.1, cy = Y + cs / 2 + fy0 * cs * 0.1;
+    cuadro(X - lado / 2, Y - lado / 2, lado, lado, lado * 0.22); ctx.fill();
+    const fxx = Math.cos(e.ang), fyy = Math.sin(e.ang), sxx = -fyy, syy = fxx;
+    const ex0 = X + fxx * lado * 0.1, ey0 = Y + fyy * lado * 0.1;
     for (const s of [-1, 1]) {
-      const ex = cx + sx0 * s * cs * 0.2, ey = cy + sy0 * s * cs * 0.2;
+      const ex = ex0 + sxx * s * lado * 0.2, ey = ey0 + syy * s * lado * 0.2;
       ctx.fillStyle = "#fff";
-      ctx.beginPath(); ctx.arc(ex, ey, cs * 0.14, 0, 6.2832); ctx.fill();
+      ctx.beginPath(); ctx.arc(ex, ey, lado * 0.14, 0, TAU); ctx.fill();
       ctx.fillStyle = "#111";
-      ctx.beginPath(); ctx.arc(ex + fx0 * cs * 0.06, ey + fy0 * cs * 0.06, cs * 0.07, 0, 6.2832); ctx.fill();
+      ctx.beginPath(); ctx.arc(ex + fxx * lado * 0.06, ey + fyy * lado * 0.06, lado * 0.07, 0, TAU); ctx.fill();
     }
     ctx.fillStyle = "rgba(20,26,46,.85)";
-    ctx.fillText(e.nombre, X + cs / 2, Y - cs * 0.18);
+    ctx.fillText(e.nombre, X, Y - lado * 0.8);
   }
 
   // aros al morir
@@ -399,7 +541,7 @@ function dibujar(k) {
     ctx.strokeStyle = "hsla(" + f.tono + ",80%,50%," + Math.max(0, 1 - f.t / 0.6) + ")";
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(SX(f.x + 0.5), SY(f.y + 0.5), cs * (0.5 + f.t * 5), 0, 6.2832);
+    ctx.arc(SX(f.x), SY(f.y), cs * (3 + f.t * 40), 0, TAU);
     ctx.stroke();
   }
 
@@ -417,7 +559,7 @@ function dibujar(k) {
       ctx.fillStyle = e.jugador ? "#fff" : "#c9d0ee";
       ctx.fillText(e.nombre, bx + 22, yy + 9);
       ctx.textAlign = "right";
-      ctx.fillText((cuenta[e.id] * 100 / N).toFixed(1) + "%", bx + ancho - 6, yy + 9);
+      ctx.fillText((cuenta[e.id] * 100 / AREA).toFixed(1) + "%", bx + ancho - 6, yy + 9);
       ctx.textAlign = "left";
     });
   }
@@ -430,7 +572,7 @@ function bucle(ts) {
   const dt = Math.min(0.1, Math.max(0, (ts - ultimo) / 1000));
   ultimo = ts;
   acum += dt;
-  while (acum >= PASO) { paso(); acum -= PASO; }
+  while (acum >= SIM) { paso(); acum -= SIM; }
   if (estado === "jugando" && yo.vivo) tiempo += dt;
   for (const e of ents) if (!e.vivo && !e.jugador) { e.espera -= dt; if (e.espera <= 0) aparecer(e); }
   if (sucio) recontar();
@@ -438,17 +580,17 @@ function bucle(ts) {
   fx = fx.filter((f) => f.t < 0.6);
 
   // la cámara sigue al jugador (o, mientras no juegas, al bot más grande)
-  const k = acum / PASO;
+  const k = acum / SIM;
   let seg = yo && yo.vivo ? yo : null;
   if (!seg) for (const e of ents) if (e.vivo && (!seg || cuenta[e.id] > cuenta[seg.id])) seg = e;
   if (seg) {
-    const tx = seg.px + (seg.x - seg.px) * k + 0.5, ty = seg.py + (seg.y - seg.py) * k + 0.5;
+    const tx = seg.px + (seg.x - seg.px) * k, ty = seg.py + (seg.y - seg.py) * k;
     const a = Math.min(1, dt * 8);
     cam.x += (tx - cam.x) * a; cam.y += (ty - cam.y) * a;
   }
   dibujar(k);
 
-  const pct = (yo ? cuenta[1] * 100 / N : 0);
+  const pct = (yo ? cuenta[1] * 100 / AREA : 0);
   const txt = [pct.toFixed(1), bajas, Math.max(mejorPct, maxPct).toFixed(1)].join("|");
   if (txt !== hud) {
     hud = txt;
@@ -460,6 +602,6 @@ function bucle(ts) {
 
 ajustar();
 iniciar(true);
-mostrarVelo("Paperio", "Sal de tu territorio y regresa para quedarte con todo lo que encierres. Si alguien toca tu estela, pierdes; si tú tocas la suya, pierde él. Desliza el dedo o usa las flechas / WASD.", []);
+mostrarVelo("Paperio", TEXTO_AYUDA, []);
 cargarRanking();
 requestAnimationFrame((ts) => { ultimo = ts; bucle(ts); });
