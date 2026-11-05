@@ -46,6 +46,14 @@
     .nv.actual { border-color: var(--acento); box-shadow: 0 0 0 2px rgba(124, 92, 255, .35); }
     .nv.bloq { opacity: .4; cursor: default; }
     .nv.sel { background: #262d4d; }
+    .estrella { display: inline-block; animation: arcoiris 1.4s linear infinite; }
+    @keyframes arcoiris { from { filter: hue-rotate(0deg) saturate(2.2) drop-shadow(0 0 3px #fff); } to { filter: hue-rotate(360deg) saturate(2.2) drop-shadow(0 0 3px #fff); } }
+    @media (prefers-reduced-motion: reduce) { .estrella { animation: none; } }
+    #boosts { position: absolute; left: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 8px; }
+    .boost { display: flex; align-items: center; gap: 6px; padding: 8px 12px; font: inherit; font-weight: 700; color: var(--texto); background: rgba(27, 32, 54, .85); border: 1px solid var(--borde); border-radius: 999px; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    .boost .ico { font-size: 1.3rem; line-height: 1; }
+    .boost:disabled { opacity: .4; cursor: default; }
+    .boost.activo { border-color: #ffd54a; box-shadow: 0 0 10px rgba(255, 213, 74, .7); }
     .nv:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
   </style>
 </head>
@@ -62,10 +70,14 @@
   </header>
   <div id="escena">
     <canvas id="lienzo"></canvas>
+    <div id="boosts" hidden>
+      <button class="boost" id="usarInvenc" type="button" aria-label="Activar Invencible (tecla 1)"><span class="ico estrella">⭐</span><span id="nInvenc">×0</span></button>
+      <button class="boost" id="usarVeloz" type="button" aria-label="Activar Velocidad doble (tecla 2)"><span class="ico">⚡</span><span id="nVeloz">×0</span></button>
+    </div>
     <div id="velo">
       <div class="panel">
         <h2 id="velTitulo">Paperio</h2>
-        <p id="velTexto">Sal de tu territorio y regresa para quedarte con todo lo que encierres. Si alguien toca tu estela, pierdes; si tú tocas la suya, pierde él. Mantén el dedo pulsado y arrástralo hacia donde quieras ir, o usa las flechas / WASD.</p>
+        <p id="velTexto">Sal de tu territorio y regresa para quedarte con todo lo que encierres. Si alguien toca tu estela, pierdes; si tú tocas la suya, pierde él. Mantén el dedo pulsado y arrástralo hacia donde quieras ir, o usa las flechas / WASD. Durante la partida activa tus boosts con los botones ⭐ y ⚡ (o las teclas 1 y 2).</p>
         <div class="selnivel">
           <button class="btn sec" id="nivelAnt" type="button" aria-label="Nivel anterior">◀</button>
           <div><small id="nivelNum">Nivel 1</small><b id="nivelNom">Colina</b></div>
@@ -74,7 +86,9 @@
         <div class="tienda">
           <span id="velMonedas">🪙 0</span>
           <button class="btn sec" id="comprarInicio" type="button">Inicio más grande · 50 🪙</button>
-          <small>Tu círculo de inicio será 75 % más grande en la próxima partida.</small>
+          <button class="btn sec" id="comprarInvenc" type="button"><span class="estrella">⭐</span> <span id="txtInvenc">Invencible · 100 🪙</span></button>
+          <button class="btn sec" id="comprarVeloz" type="button">⚡ <span id="txtVeloz">Velocidad ×2 · 80 🪙</span></button>
+          <small>Inicio más grande: tu círculo de inicio será 75 % más grande en la próxima partida. Invencible (8 s) y Velocidad ×2 (10 s) se guardan y los activas tú durante la partida.</small>
         </div>
         <ul id="velDatos"></ul>
         <div class="acciones">

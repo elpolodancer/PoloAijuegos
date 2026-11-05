@@ -36,9 +36,14 @@ const MONEDAS_POR_TRAMO = 1;          // ...esta cantidad de monedas
 const MONEDAS_POR_NIVEL = 20;         // monedas por terminar un nivel
 const PRECIO_INICIO_GRANDE = 50;      // precio del boost «Inicio más grande» (se compra antes de la partida y se gasta en la siguiente)
 const MULT_INICIO_GRANDE = 1.75;      // con el boost, el radio del círculo de inicio del jugador es 75 % más grande
+const PRECIO_INVENCIBLE = 100;        // precio del boost «Invencible» (estrella arcoíris)
+const SEG_INVENCIBLE = 8;             // segundos que dura: nadie te mata ni te corta la estela
+const PRECIO_VELOZ = 80;              // precio del boost «Velocidad ×2»
+const SEG_VELOZ = 10;                 // segundos que dura
+const MULT_VELOZ = 2;                 // multiplicador de velocidad del jugador con el boost
 const NOMBRES = ["Tú", "Lola", "Pepe", "Nico", "Rosa", "Toño", "Mara", "Beto"];
 const TONOS = [255, 5, 38, 135, 178, 300, 340, 55]; // color de cada uno (el primero es el jugador)
-const TEXTO_AYUDA = "Sal de tu territorio y regresa para quedarte con todo lo que encierres. Si alguien toca tu estela, pierdes; si tú tocas la suya, pierde él. Mantén el dedo pulsado y arrástralo hacia donde quieras ir, o usa las flechas / WASD.";
+const TEXTO_AYUDA = "Sal de tu territorio y regresa para quedarte con todo lo que encierres. Si alguien toca tu estela, pierdes; si tú tocas la suya, pierde él. Mantén el dedo pulsado y arrástralo hacia donde quieras ir, o usa las flechas / WASD. Durante la partida activa tus boosts con los botones ⭐ y ⚡ (o las teclas 1 y 2).";
 
 // ----- Estado -----
 const G = 2 * RADIO + 40, C = G / 2;  // lado de la rejilla y su centro (con un margen alrededor del mapa)
@@ -68,6 +73,10 @@ let fx = [];
 let nivelActual = 0, nivelConstruido = -1, desbloqueado = 0, ganado = false;
 let monedas = 0, monedasPartida = 0, tramosPagados = 0, boostInicio = false, usarBoost = false; // boostInicio = comprado y pendiente; usarBoost = activo en la partida en curso
 let reloj = 0;                        // pasos de simulación transcurridos (60 por segundo)
+let nInvenc = 0, nVeloz = 0;          // boosts comprados y guardados (se activan durante la partida)
+let invHasta = 0, velHasta = 0;       // paso de «reloj» en que termina cada boost activo (0 = ninguno)
+const invActiva = () => reloj < invHasta;
+const velActiva = () => reloj < velHasta;
 const cam = { x: C, y: C };
 
 const $ = (id) => document.getElementById(id);
@@ -80,6 +89,8 @@ const nivelMax = () => (DESBLOQUEAR_TODOS ? NIVELES.length - 1 : desbloqueado);
 try {
   monedas = Math.max(0, Math.floor(Number(localStorage.getItem("paperio_monedas")) || 0));
   boostInicio = localStorage.getItem("paperio_boost_inicio") === "1";
+  nInvenc = Math.max(0, Math.floor(Number(localStorage.getItem("paperio_boost_invenc")) || 0));
+  nVeloz = Math.max(0, Math.floor(Number(localStorage.getItem("paperio_boost_veloz")) || 0));
 } catch (e) {}
 
 // ----- Monedas y tienda (las monedas y el boost comprado se guardan en este navegador) -----
@@ -87,6 +98,8 @@ function guardarMonedas() {
   try {
     localStorage.setItem("paperio_monedas", String(monedas));
     localStorage.setItem("paperio_boost_inicio", boostInicio ? "1" : "0");
+    localStorage.setItem("paperio_boost_invenc", String(nInvenc));
+    localStorage.setItem("paperio_boost_veloz", String(nVeloz));
   } catch (e) {}
 }
 function ganarMonedas(n) {
@@ -99,11 +112,62 @@ function refrescarTienda() {
   const b = $("comprarInicio");
   b.textContent = boostInicio ? "✓ Inicio más grande listo" : "Inicio más grande · " + PRECIO_INICIO_GRANDE + " 🪙";
   b.disabled = boostInicio || monedas < PRECIO_INICIO_GRANDE;
+  $("txtInvenc").textContent = "Invencible · " + PRECIO_INVENCIBLE + " 🪙" + (nInvenc ? " (tienes " + nInvenc + ")" : "");
+  $("comprarInvenc").disabled = monedas < PRECIO_INVENCIBLE;
+  $("txtVeloz").textContent = "Velocidad ×2 · " + PRECIO_VELOZ + " 🪙" + (nVeloz ? " (tienes " + nVeloz + ")" : "");
+  $("comprarVeloz").disabled = monedas < PRECIO_VELOZ;
 }
 $("comprarInicio").addEventListener("click", () => {
   if (boostInicio || monedas < PRECIO_INICIO_GRANDE) return;
   monedas -= PRECIO_INICIO_GRANDE; boostInicio = true;
   guardarMonedas(); refrescarTienda();
+});
+
+$("comprarInvenc").addEventListener("click", () => {
+  if (monedas < PRECIO_INVENCIBLE) return;
+  monedas -= PRECIO_INVENCIBLE; nInvenc++;
+  guardarMonedas(); refrescarTienda();
+});
+$("comprarVeloz").addEventListener("click", () => {
+  if (monedas < PRECIO_VELOZ) return;
+  monedas -= PRECIO_VELOZ; nVeloz++;
+  guardarMonedas(); refrescarTienda();
+});
+
+// Activa un boost comprado durante la partida (no se gasta si ya está activo)
+function activarBoost(tipo) {
+  if (estado !== "jugando" || !yo || !yo.vivo) return;
+  if (tipo === "inv") {
+    if (invActiva() || nInvenc < 1) return;
+    nInvenc--; invHasta = reloj + SEG_INVENCIBLE * 60;
+  } else {
+    if (velActiva() || nVeloz < 1) return;
+    nVeloz--; velHasta = reloj + SEG_VELOZ * 60;
+  }
+  guardarMonedas(); refrescarBoosts();
+}
+let boostsTxt = "";
+function refrescarBoosts() {
+  const jug = estado === "jugando" && !!yo && yo.vivo;
+  $("boosts").hidden = !jug;
+  if (!jug) { boostsTxt = ""; return; }
+  const ti = invActiva() ? Math.ceil((invHasta - reloj) / 60) + " s" : "×" + nInvenc;
+  const tv = velActiva() ? Math.ceil((velHasta - reloj) / 60) + " s" : "×" + nVeloz;
+  const txt = ti + "|" + tv;
+  if (txt === boostsTxt) return;
+  boostsTxt = txt;
+  $("nInvenc").textContent = ti; $("nVeloz").textContent = tv;
+  $("usarInvenc").disabled = !invActiva() && nInvenc < 1;
+  $("usarVeloz").disabled = !velActiva() && nVeloz < 1;
+  $("usarInvenc").classList.toggle("activo", invActiva());
+  $("usarVeloz").classList.toggle("activo", velActiva());
+}
+$("usarInvenc").addEventListener("click", () => activarBoost("inv"));
+$("usarVeloz").addEventListener("click", () => activarBoost("vel"));
+addEventListener("keydown", (ev) => {
+  if (ev.repeat) return;
+  if (ev.key === "1") activarBoost("inv");
+  else if (ev.key === "2") activarBoost("vel");
 });
 
 // ----- Sesión y puntos (opcional: sin conexión el juego funciona igual) -----
@@ -425,6 +489,7 @@ function recontar() {
 
 function matar(v, por) {
   if (!v.vivo) return;
+  if (v.jugador && estado === "jugando" && invActiva()) return; // con el boost «Invencible» nadie te mata ni te corta la estela
   v.vivo = false;
   for (const i of v.cola) if (rastro[i] === v.id) { rastro[i] = 0; pix(i); }
   v.cola = []; v.ruta = [];
@@ -668,11 +733,12 @@ function paso() {
     // giro suave hacia la dirección deseada
     let da = e.meta - e.ang;
     da = Math.atan2(Math.sin(da), Math.cos(da));
-    const mx = (e.jugador ? GIRO_JUGADOR : GIRO * e.gir) * SIM;
+    const multVel = e.jugador && velActiva() ? MULT_VELOZ : 1; // boost «Velocidad ×2» (también escala el giro para que las curvas midan lo mismo)
+    const mx = (e.jugador ? GIRO_JUGADOR * multVel : GIRO * e.gir) * SIM;
     e.ang += Math.max(-mx, Math.min(mx, da));
 
     e.px = e.x; e.py = e.y;
-    const v = VEL * SIM * (e.jugador ? 1 : e.vel);
+    const v = VEL * SIM * (e.jugador ? multVel : e.vel);
     e.x += Math.cos(e.ang) * v;
     e.y += Math.sin(e.ang) * v;
 
@@ -680,18 +746,22 @@ function paso() {
     if (d0 < MARGEN_PARED) { // tocó una pared (el borde del mapa o un hueco)
       const gx = distM[yi * G + xi + 2] - distM[yi * G + xi - 2], gy = distM[(yi + 2) * G + xi] - distM[(yi - 2) * G + xi];
       const gl = Math.hypot(gx, gy);
-      if (gl < 1e-3) { matar(e, null); continue; }
+      const inv = e.jugador && invActiva();
+      if (gl < 1e-3) { if (inv) { e.x = e.px; e.y = e.py; } else matar(e, null); continue; }
       const nx = -gx / gl, ny = -gy / gl, hx = Math.cos(e.ang), hy = Math.sin(e.ang); // (nx,ny) apunta hacia la pared
       const dot = hx * nx + hy * ny;                       // 1 = de frente contra la pared, 0 = paralelo
-      if (dot > COS_CHOQUE) { matar(e, null); continue; }  // muy de frente: muere
+      if (dot > COS_CHOQUE && !inv) { matar(e, null); continue; }  // muy de frente: muere (salvo con «Invencible»)
       const sale = MARGEN_PARED - d0;                      // si no, lo saca de la pared y se desliza
       e.x -= nx * sale; e.y -= ny * sale;
-      if (dot > 0) e.ang = Math.atan2(hy - dot * ny, hx - dot * nx); // su rumbo se alinea con la pared
+      if (dot > 0) {
+        const tx = hx - dot * nx, ty = hy - dot * ny;
+        e.ang = Math.hypot(tx, ty) < 0.05 ? Math.atan2(nx, -ny) : Math.atan2(ty, tx); // su rumbo se alinea con la pared (si iba de frente, gira de lado)
+      }
     }
     const i = (e.y | 0) * G + (e.x | 0), r = rastro[i];
     if (r) {
       if (r !== e.id) matar(ents[r - 1], e);                       // cortaste la estela de otro
-      else if (e.seq - rastroIdx[i] > GRACIA) { matar(e, null); continue; } // te pisaste tu propia estela
+      else if (e.seq - rastroIdx[i] > GRACIA && !(e.jugador && invActiva())) { matar(e, null); continue; } // te pisaste tu propia estela
     }
     if (dueno[i] === e.id) { if (e.cola.length) cerrar(e); }
     else sellar(e);
@@ -719,7 +789,7 @@ function iniciar(demo) {
   ents = [];
   for (let id = 1; id <= nBots + 1; id++) ents.push(crear(id));
   yo = ents[0];
-  bajas = 0; maxPct = 0; tiempo = 0; monedasPartida = 0; tramosPagados = 0;
+  bajas = 0; maxPct = 0; tiempo = 0; monedasPartida = 0; tramosPagados = 0; invHasta = 0; velHasta = 0;
   estado = demo ? "demo" : "jugando";
   usarBoost = !demo && boostInicio; // el boost comprado se gasta al empezar la partida
   if (usarBoost) { boostInicio = false; guardarMonedas(); }
@@ -956,15 +1026,20 @@ function dibujar(k) {
   // cabezas: cubito redondeado con ojos que miran hacia donde van
   const lado = cs * 6.2, grosor = cs * 1.4;
   ctx.textAlign = "center";
-  ctx.font = "700 " + Math.max(11, Math.round(cs * 4)) + "px system-ui, sans-serif";
+  const fuenteNombre = "700 " + Math.max(11, Math.round(cs * 4)) + "px system-ui, sans-serif";
+  ctx.font = fuenteNombre;
   for (const e of ents) {
     if (!e.vivo) continue;
     const hx = e.px + (e.x - e.px) * k, hy = e.py + (e.y - e.py) * k;
     const X = SX(hx), Y = SY(hy);
     if (X < -lado * 3 || Y < -lado * 3 || X > vw + lado * 3 || Y > vh + lado * 3) continue;
-    ctx.fillStyle = e.cD;
+    const esInv = e.jugador && invActiva(), esVel = e.jugador && velActiva();
+    const parpadea = esInv && invHasta - reloj < 120 && ((reloj / 6) | 0) % 2 === 0; // en los últimos 2 s parpadea para avisar
+    let cC = e.cC, cD = e.cD;
+    if (esInv && !parpadea) { const h = (reloj * 6) % 360; cC = "hsl(" + h + ",90%,60%)"; cD = "hsl(" + h + ",80%,38%)"; }
+    ctx.fillStyle = cD;
     cuadro(X - lado / 2, Y - lado / 2 + grosor, lado, lado, lado * 0.22); ctx.fill();
-    ctx.fillStyle = e.cC;
+    ctx.fillStyle = cC;
     cuadro(X - lado / 2, Y - lado / 2, lado, lado, lado * 0.22); ctx.fill();
     const fxx = Math.cos(e.ang), fyy = Math.sin(e.ang), sxx = -fyy, syy = fxx;
     const ex0 = X + fxx * lado * 0.1, ey0 = Y + fyy * lado * 0.1;
@@ -975,8 +1050,27 @@ function dibujar(k) {
       ctx.fillStyle = "#111";
       ctx.beginPath(); ctx.arc(ex + fxx * lado * 0.06, ey + fyy * lado * 0.06, lado * 0.07, 0, TAU); ctx.fill();
     }
+    if (esInv && !parpadea) { // aro arcoíris brillante
+      ctx.save();
+      const col = "hsl(" + ((reloj * 6 + 180) % 360) + ",100%,65%)";
+      ctx.lineWidth = 3; ctx.strokeStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 14;
+      ctx.beginPath(); ctx.arc(X, Y + grosor / 2, lado * 0.95, 0, TAU); ctx.stroke();
+      ctx.restore();
+    }
+    if (esVel) { // rayas de velocidad detrás de la cabeza
+      ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.lineWidth = 2; ctx.lineCap = "round";
+      for (const s of [-1, 0, 1]) {
+        const bx = X - fxx * lado * 0.75 + sxx * s * lado * 0.32, by = Y - fyy * lado * 0.75 + syy * s * lado * 0.32;
+        ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx - fxx * lado * 0.9, by - fyy * lado * 0.9); ctx.stroke();
+      }
+    }
     ctx.fillStyle = "rgba(20,26,46,.85)";
     ctx.fillText(e.nombre, X, Y - lado * 0.8);
+    if (esInv || esVel) {
+      ctx.font = Math.round(lado * 0.8) + "px system-ui, sans-serif";
+      ctx.fillText((esInv ? "⭐" : "") + (esVel ? "⚡" : ""), X, Y - lado * 1.5);
+      ctx.font = fuenteNombre;
+    }
   }
 
   // aros al morir
@@ -1019,6 +1113,7 @@ function bucle(ts) {
   if (estado === "jugando" && yo.vivo) tiempo += dt;
   for (const e of ents) if (!e.vivo && !e.jugador) { e.espera -= dt; if (e.espera <= 0) aparecer(e); }
   if (sucio) recontar();
+  if (estado === "jugando" && yo.vivo && invHasta > 0 && !invActiva() && cuenta[1] === 0) matar(yo, null); // se quedó sin territorio mientras era invencible
   if (estado === "jugando" && yo.vivo && cuenta[1] * 100 / AREA >= NIVELES[nivelActual].meta) terminar(true);
   for (const f of fx) f.t += dt;
   fx = fx.filter((f) => f.t < 0.6);
@@ -1033,6 +1128,7 @@ function bucle(ts) {
     cam.x += (tx - cam.x) * a; cam.y += (ty - cam.y) * a;
   }
   dibujar(k);
+  refrescarBoosts();
 
   const pct = (yo ? cuenta[1] * 100 / AREA : 0);
   const txt = [pct.toFixed(1), bajas, Math.max(mejorPct, maxPct).toFixed(1), monedas].join("|");
