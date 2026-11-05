@@ -1,10 +1,10 @@
 // Ruta: minas/juego.js
 // «Minero Tycoon»: compra pozos, sube de nivel a mineros, ascensor y almacén, contrata gerentes y haz prestigio. Las reglas están en logica.js.
 import * as L from "./logica.js";
-const ID = "minas", GUARDA = "minas_partida";
+const ID = "minas", GUARDA = "minas_partida2";   // clave nueva: la partida vieja tenía otros valores y empezaba con un pozo
 const H = 112;                                 // alto de cada fila en px (igual que .fila en index.html)
 const PUNTOS_LOTE = 10;                        // al perfil: pozo nuevo +10, gerente +5, prestigio +50, por lotes
-const MINERAL = ["🪨", "🪙", "💎", "🟣", "🔶", "💠"];
+const MINERAL = ["⚫", "🪙", "💎", "🟣", "🔶", "💠"];
 const $ = (id) => document.getElementById(id);
 const escena = $("escena");
 
@@ -23,7 +23,7 @@ const numeros = (o) => o && Number.isFinite(o.n) && Number.isFinite(o.f) && Numb
 function cargar() {
   try {
     const g = JSON.parse(localStorage.getItem(GUARDA)), S = g && g.E;
-    if (!S || !Array.isArray(S.pozos) || !S.pozos.length || !numeros(S.asc) || !numeros(S.alm) || !S.pozos.every(numeros) || !Number.isFinite(S.din)) return;
+    if (!S || !Array.isArray(S.pozos) || !numeros(S.asc) || !numeros(S.alm) || !S.pozos.every(numeros) || !Number.isFinite(S.din)) return;
     E = S; pend = g.pend || 0;
     const seg = (Date.now() - g.t) / 1000;
     if (seg > 30) { const x = L.fuera(E, seg); if (x > 0) aviso("Mientras no estabas ganaste $" + fmt(x)); }
@@ -48,8 +48,9 @@ function crearFila(tipo, i) {
   for (let k = 0; k < (tipo === "m" ? 6 : tipo === "w" ? 1 : 0); k++) {   // un pozo puede tener hasta 6 mineros
     const e = document.createElement("span"); e.className = "pj"; e.textContent = tipo === "m" ? "👷" : "🚚"; e.hidden = k > 0; q(".esc").appendChild(e); r.pjs.push(e);
   }
-  r.nom.textContent = tipo === "m" ? "Pozo " + (i + 1) : tipo === "w" ? "Almacén" : "Ascensor";
+  r.nom.textContent = tipo === "m" ? "Pozo " + (i + 1) + (i === 0 ? " · Carbón" : "") : tipo === "w" ? "Almacén" : "Ascensor";
   q(".esc").onclick = () => { if (L.tocar(E, tipo, i)) pintar(); };
+  if (tipo === "m") { r.nom.style.cursor = "pointer"; r.nom.onclick = () => { const s = L.estadisticas(E, i); aviso("Pozo " + (i + 1) + " Nv " + E.pozos[i].n + " · Extracción total $" + fmt(s.total) + "/s · Mineros " + s.mineros + " · Caminata " + s.caminata + " · Extracción " + fmt(s.extraccion) + "/s · Capacidad " + fmt(s.capacidad)); }; }
   r.s.onclick = () => comprarNiv(r);
   r.g.onclick = () => comprarGer(r);
   escena.insertBefore(el, nuevo);
@@ -106,7 +107,7 @@ function pintar() {
   const g = L.estrellasGanables(E);
   bPres.textContent = g >= 1 ? "⭐ Prestigio +" + g : "⭐ Prestigio";
   bPres.style.opacity = g >= 1 ? 1 : 0.55;
-  nuevo.textContent = N >= L.AJ.MAX_POZOS ? "Mina completa" : "➕ Nuevo pozo (" + (N + 1) + ") · $" + fmt(L.costoPozo(N));
+  nuevo.textContent = N >= L.AJ.MAX_POZOS ? "Mina completa" : (N === 0 ? "🔒 Desbloquear pozo 1 (carbón) · $" : "➕ Nuevo pozo (" + (N + 1) + ") · $") + fmt(L.costoPozo(N));
   nuevo.classList.toggle("no", N < L.AJ.MAX_POZOS && L.costoPozo(N) > E.din);
   for (const r of filas) {
     const w = L.trab(E, r.tipo, r.i), k = cantidad(r, w), c = L.costoNiv(r.tipo, r.i, w.n, k);
