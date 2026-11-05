@@ -1,0 +1,116 @@
+<!doctype html>
+<!-- Ruta: supermercado/index-supermercado.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Supermercado</title>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    .caja { max-width: 440px; margin: 0 auto; padding: 10px; user-select: none; -webkit-user-select: none; }
+    .hud { display: flex; justify-content: space-between; align-items: end; gap: 8px; margin: 4px 2px 8px; }
+    .hud div { display: flex; flex-direction: column; font-size: 12px; opacity: .8; }
+    .hud b { font-size: 24px; line-height: 1; opacity: 1; font-variant-numeric: tabular-nums; }
+    .tablero { position: relative; border-radius: 22px; overflow: hidden; background: #efe3c8; box-shadow: 0 8px 0 #0004; touch-action: none; }
+    canvas { display: block; width: 100%; touch-action: none; }
+    .ovl { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; background: #1b2330d9; color: #fff; }
+    .ovl.oculto { display: none; }
+    .mejoras { position: absolute; left: 8px; right: 8px; bottom: 90px; max-height: 70%; overflow-y: auto; z-index: 2; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 14px; background: #1b2330ee; color: #fff; }
+    .mejoras.oculto { display: none; }
+    .mejoras h3 { margin: 0 0 2px; font-size: 15px; }
+    .mej { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid #fff4; background: #2b3a55; color: #fff; font-size: 14px; text-align: left; }
+    .mej b { white-space: nowrap; }
+    .grupo-t { margin-top: 4px; font-size: 13px; opacity: .85; }
+    .grupo-b { display: flex; gap: 6px; }
+    .grupo-b .mej { flex: 1; }
+    .mej:disabled { opacity: .45; }
+    .ovl h2 { margin: 0; font-size: 30px; }
+    .ovl p { margin: 0; max-width: 34ch; line-height: 1.4; }
+    .ovl .btn { font-size: 18px; padding: 10px 26px; }
+    .ovl { overflow-y: auto; justify-content: safe center; }
+    .btn.chico { padding: 4px 10px; font-size: 13px; }
+    .adm { position: absolute; top: 8px; left: 8px; right: 8px; z-index: 3; display: flex; flex-direction: column; gap: 6px; max-height: 85%; overflow-y: auto; padding: 10px; border-radius: 14px; background: #1b2330f2; color: #fff; font-size: 14px; }
+    .adm.oculto { display: none; }
+    .conf { position: absolute; left: 10px; right: 10px; z-index: 4; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; border-radius: 14px; background: #1b2330f2; color: #fff; text-align: center; font-size: 14px; line-height: 1.35; }
+    .conf.oculto { display: none; }
+    .conf.centro { top: 36%; }
+    .conf.abajo { bottom: 8px; }
+    .conf p { margin: 0; }
+    .conf .fila { display: flex; gap: 8px; }
+    .adm h3 { margin: 0 0 2px; font-size: 15px; }
+    .adm label { display: flex; align-items: center; gap: 8px; }
+    .adm input[type=checkbox] { width: 18px; height: 18px; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <a class="volver" href="../index.html">‹ Juegos</a>
+    <h1>🛒 Supermercado</h1>
+    <div style="display:flex;gap:6px">
+      <button class="btn chico" id="dineroBtn" type="button" hidden>💰 +$1000</button>
+      <button class="btn chico" id="admBtn" type="button" hidden>⚙️ Admin</button>
+    </div>
+  </header>
+  <main>
+    <div class="caja">
+      <div class="hud">
+        <div>Dinero<b id="dinero">$0</b></div>
+        <div>Cargando<b id="carga">0/3</b></div>
+        <div>Estantería<b id="estante">0/5</b></div>
+        <div>Clientes<b id="clientes">0/3</b></div>
+      </div>
+      <div class="tablero">
+        <canvas id="lienzo"></canvas>
+        <div class="mejoras oculto" id="mejoras">
+          <h3>🛠️ Mejoras</h3>
+          <button class="mej" id="mejCarga" type="button"><span></span><b></b></button>
+          <button class="mej" id="mejEmpleado" type="button"><span></span><b></b></button>
+          <button class="mej" id="mejEstante" type="button"><span></span><b></b></button>
+          <div class="grupo-t" id="titEdificio">🏗️ Edificio</div>
+          <div class="grupo-b" id="botsEdificio">
+            <button class="mej" id="mejEdIzq" type="button"><span></span><b></b></button>
+            <button class="mej" id="mejEdDer" type="button"><span></span><b></b></button>
+          </div>
+          <div class="grupo-t" id="titPatio">🌱 Patio</div>
+          <div class="grupo-b" id="botsPatio">
+            <button class="mej" id="mejPatIzq" type="button"><span></span><b></b></button>
+            <button class="mej" id="mejPatDer" type="button"><span></span><b></b></button>
+          </div>
+        </div>
+        <div class="adm oculto" id="adm">
+          <h3>⚙️ Admin (para pruebas)</h3>
+          <label><input type="checkbox" id="admDinero" /> 💰 Dinero infinito</label>
+          <label><input type="checkbox" id="admRapido" /> ⚡ Producción instantánea</label>
+          <label><input type="checkbox" id="admAuto" /> 🔓 Empezar con todo desbloqueado</label>
+          <button class="mej" id="admMas" type="button"><span>➕ Sumar dinero</span><b>+$1000</b></button>
+          <button class="mej" id="admTodo" type="button"><span>🔓 Desbloquear todo ahora</span><b></b></button>
+          <button class="mej" id="admReiniciar" type="button"><span>🔄 Reiniciar partida</span><b></b></button>
+        </div>
+        <div class="conf abajo oculto" id="confirmar">
+          <p id="confTxt"></p>
+          <div class="fila">
+            <button class="btn" id="confSi" type="button">Comprar</button>
+            <button class="btn" id="confNo" type="button">Ahora no</button>
+          </div>
+        </div>
+        <div class="conf abajo oculto" id="colocar">
+          <p id="colTxt"></p>
+          <div class="fila">
+            <button class="btn" id="colSi" type="button">✓ Colocar aquí</button>
+            <button class="btn" id="colNo" type="button">✕ Cancelar</button>
+          </div>
+        </div>
+        <div class="ovl" id="ovl">
+          <h2>Supermercado</h2>
+          <p>Tu tienda está vacía. Camina hasta la estantería y el jardín para comprarlos. Lo que crece en el jardín lo recoges solo al acercarte (al empezar llevas hasta 3; cada mejora 🧤 te deja llevar una más). Cada jardín comprado puede tener su empleado 🧑‍🌾, que lleva lo maduro a la estantería por ti, y hay 15 productos en total (🌽🥦🍆🥒🌶️🥔🧅🍓🍋🍉🥑🥭🍍…), cada uno con su jardín, su estantería (caben 5) y su empleado. Los clientes toman sus productos y van a la caja: cobra parándote junto a ella o contrata a un empleado en la zona de mejoras 🛠️. Las estanterías de jitomates y de zanahorias son fijas; en las estanterías extra, toca el botón ↻ para elegir qué producto llevan.</p>
+          <p>En la zona de mejoras 🛠️ también puedes ampliar por separado el edificio (+4 estanterías) y el patio (+6 jardines), cada uno hacia la izquierda o la derecha, como elijas. El patio inicial y cada ampliación caben 6 jardines. Solo ves el siguiente jardín por comprar; si el patio se llena, ampliarlo es lo que te deja seguir. La pantalla no cambia de tamaño: la cámara te sigue.</p>
+          <p>En la zona de mejoras también puedes comprar más cajas registradoras 🧾 y más entradas 🚪 y colocarlas donde quieras: camina hasta el sitio y toca «Colocar aquí». Cada jardín que desbloquees permite un cliente más a la vez. Al pararte sobre un jardín te preguntará si quieres comprarlo.</p>
+          <p>Toca o arrastra para moverte (o usa las flechas / WASD).</p>
+          <button class="btn" id="ovlBtn">Jugar</button>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script type="module" src="juego-supermercado.js?v=3"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!doctype html>
+<!-- Ruta: piano/index-piano.html (página del juego «piano») -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Piano</title>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    #menu:not([hidden]) { display: flex; flex-direction: column; gap: 12px; }
+    #rejilla { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+    .cuadro { position: relative; aspect-ratio: 1 / 1; min-width: 0; padding: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-align: center; color: #fff; font: inherit; cursor: pointer; border: 0; border-radius: 6px; overflow: hidden; background: linear-gradient(135deg, var(--c1, #5a46c8), var(--c2, #2a2260)); -webkit-tap-highlight-color: transparent; }
+    .cuadro .nota { font-size: 1.4rem; line-height: 1; }
+    .cuadro b { font-size: .62rem; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+    .cuadro small { position: absolute; right: 4px; bottom: 2px; font-size: .6rem; font-weight: 700; text-shadow: 0 0 3px #000; }
+    .cuadro:active { transform: scale(.96); }
+    .cuadro:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <a class="volver" href="../index.html">‹ Juegos</a>
+    <h1>🎹 Piano</h1>
+  </header>
+  <main>
+    <canvas id="lienzo" class="lienzo" width="320" height="520"></canvas>
+    <p id="estado"></p>
+    <div id="menu">
+      <button id="modoAzar" class="btn" type="button">🎲 Modo aleatorio</button>
+      <div id="rejilla"></div>
+    </div>
+    <button id="jugar" class="btn" type="button" hidden>Jugar otra vez</button>
+    <button id="alMenu" class="btn" type="button" hidden>‹ Menú</button>
+    <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
+  </main>
+  <script type="module" src="juego-piano.js"></script>
+</body>
+</html>

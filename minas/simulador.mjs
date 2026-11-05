@@ -2,11 +2,11 @@
 // Usa los números enormes de grande.js y simula una sola mina (la mina 1) hasta N pozos.
 //   node simulador.mjs                    → 1000 pozos
 //   N=300 node simulador.mjs              → hasta el pozo 300
-//   P='{"PASO_MAX":1.0}' node simulador.mjs → cambia valores de AJ sin tocar logica.js
+//   P='{"PASO_MAX":1.0}' node simulador.mjs → cambia valores de AJ sin tocar logica-minas.js
 //   VENTANA=20 (pozos recientes que considera comprar mejoras)
 import fs from 'fs';
 const over = JSON.parse(process.env.P || '{}');
-let src = fs.readFileSync('./logica.js', 'utf8');
+let src = fs.readFileSync('./logica-minas.js', 'utf8');
 for (const [k, v] of Object.entries(over)) src = src.replace(new RegExp('\\b' + k + ': [0-9.eE+-]+'), k + ': ' + v);
 const tmp = './_l' + Math.random().toString(36).slice(2) + '.mjs'; fs.writeFileSync(tmp, src);
 const L = await import(tmp); fs.unlinkSync(tmp);

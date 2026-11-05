@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- Ruta: jetpack/index-jetpack.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Jetpack</title>
+  <meta name="theme-color" content="#1b2330" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    main { max-width: 900px; padding: 8px; }
+    #lienzo { display: block; width: 100%; height: auto; aspect-ratio: 2 / 1; border: 1px solid var(--borde); border-radius: 16px; touch-action: none; user-select: none; -webkit-user-select: none; background: #1a2238; }
+    #info { text-align: center; color: var(--suave); font-size: .85rem; margin: 6px 0; min-height: 1.2em; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <div><a class="volver" href="../">← Juegos</a> <h1 style="display:inline;margin-left:10px">🚀 Jetpack</h1></div>
+    <div id="sesion"></div>
+  </header>
+  <main>
+    <canvas id="lienzo"></canvas>
+    <div id="info"></div>
+  </main>
+  <script type="module" src="juego-jetpack.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>

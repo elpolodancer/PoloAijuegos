@@ -1,0 +1,42 @@
+<!doctype html>
+<!-- Ruta: hoyo/index-hoyo.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Hoyo</title>
+  <meta name="theme-color" content="#1b2330" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+    #c { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; user-select: none; display: block; }
+    a.volver { position: fixed; top: calc(8px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 5; padding: 6px 10px; background: rgba(15,18,32,.7); border-radius: 999px; font-size: .85rem; }
+    #fin { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 20px; text-align: center; background: rgba(15,18,32,.88); }
+    #fin h2 { margin: 0; font-size: 1.8rem; }
+    #fin ol { margin: 0; padding: 0; list-style: none; color: var(--suave); line-height: 1.7; }
+    #fin ol b { color: var(--texto); }
+    #mapas { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+    #mapas .btn { opacity: .6; }
+    #mapas .btn.sel { opacity: 1; outline: 2px solid #fff; outline-offset: 2px; }
+    #msg { color: var(--suave); font-size: .85rem; min-height: 1.2em; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <a class="volver" href="../">← Juegos</a>
+  <div id="fin">
+    <h2>🕳️ Hoyo</h2>
+    <p>Arrastra el dedo para mover tu hoyo (o usa las flechas / WASD). Traga lo que quepa, crece y devora a los hoyos más chicos.</p>
+    <ol id="rank"></ol>
+    <div id="mapas" role="group" aria-label="Mapa">
+      <button class="btn sel" data-mapa="ciudad">🏙️ Ciudad</button>
+      <button class="btn" data-mapa="playa">🏝️ Playa con islas</button>
+      <button class="btn" data-mapa="campo">🌾 Campo gigante</button>
+    </div>
+    <div id="msg"></div>
+    <button class="btn" id="jugar">Jugar</button>
+  </div>
+  <script type="module" src="juego-hoyo.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>

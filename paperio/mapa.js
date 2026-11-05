@@ -7,17 +7,22 @@
 // Los contornos están MUY simplificados (listas de [longitud, latitud]): es un dibujo decorativo, no un mapa exacto.
 // Para desbloquear otro estado: pon «listo: true» en ESTADOS (y añade lo que deba pasar al tocarlo).
 
-import { NIVELES_COLIMA, NOMBRES_CATEGORIA, BONOS as BONOS_COLIMA, ETAPA as ETAPA_COLIMA } from "./colima.js";
-import { NIVELES_BCS, BONOS as BONOS_BCS, ETAPA as ETAPA_BCS } from "./bajacaliforniasur.js";
-import { NIVELES_CAMPECHE, BONOS as BONOS_CAMPECHE, ETAPA as ETAPA_CAMPECHE } from "./campeche.js";
+// Los archivos de cada etapa (colima.js, bajacaliforniasur.js, campeche.js...) son pesados: NO se descargan al abrir el juego,
+// solo cuando entras a ese estado en el mapa (import() dinámico). Una vez cargados se guardan en memoria.
+export const NOMBRES_CATEGORIA = { 1: "Muy fácil", 2: "Fácil", 3: "Media", 4: "Difícil", 5: "Muy difícil" };
 
-// Etapas con niveles ya hechos, por id de ESTADOS. Para agregar otra: importa su archivo y añádela aquí (y pon «listo: true» en ESTADOS).
+// Etapas con niveles ya hechos, por id de ESTADOS. Para agregar otra: añade aquí su import() (y pon «listo: true» en ESTADOS).
 // El orden en que se desbloquean las 32 etapas está en etapas.js.
-const DATOS_ETAPA = {
-  col: { etapa: ETAPA_COLIMA, niveles: NIVELES_COLIMA, bonos: BONOS_COLIMA },
-  bcs: { etapa: ETAPA_BCS, niveles: NIVELES_BCS, bonos: BONOS_BCS },
-  camp: { etapa: ETAPA_CAMPECHE, niveles: NIVELES_CAMPECHE, bonos: BONOS_CAMPECHE },
+const CARGAR_ETAPA = {
+  col: () => import("./colima.js").then((m) => ({ etapa: m.ETAPA, niveles: m.NIVELES_COLIMA, bonos: m.BONOS })),
+  bcs: () => import("./bajacaliforniasur.js").then((m) => ({ etapa: m.ETAPA, niveles: m.NIVELES_BCS, bonos: m.BONOS })),
+  camp: () => import("./campeche.js").then((m) => ({ etapa: m.ETAPA, niveles: m.NIVELES_CAMPECHE, bonos: m.BONOS })),
 };
+const DATOS_ETAPA = {}; // etapas ya cargadas: id -> { etapa, niveles, bonos }
+function cargarEtapa(id) {
+  if (DATOS_ETAPA[id]) return Promise.resolve(DATOS_ETAPA[id]);
+  return CARGAR_ETAPA[id]().then((d) => (DATOS_ETAPA[id] = d)); // si falla (sin conexión) no se guarda y se puede reintentar
+}
 
 const NS = "http://www.w3.org/2000/svg";
 const OCEANO = "#2c6e9e", TIERRA = "#f7ffec", T_BORDE = "#c3d6a9", T_SOMBRA = "#8fae7e", VECINO = "#a9c7a0";
@@ -256,6 +261,8 @@ function accesible(nodo, etiqueta, accion) {
 export function montarMapa(r) {
   let vista = "mundo"; // mundo | mexico | estado
   let estadoId = "col"; // estado abierto en la vista «estado» (clave de DATOS_ETAPA)
+  let pinta = 0; // número de pintado: si cambias de vista mientras carga una etapa, ese pintado viejo se descarta
+  const nombreEstado = () => (ESTADOS.find((e) => e.id === estadoId) || {}).nombre || "";
   const ir = (v) => { vista = v; pintar(); };
 
   function vistaMundo() {
@@ -303,8 +310,19 @@ export function montarMapa(r) {
     }
   }
 
-  function vistaEstado() {
-    const D = DATOS_ETAPA[estadoId], NIVELES_ESTADO = D.niveles, ETAPA = D.etapa;
+  async function vistaEstado() {
+    const mio = pinta, id = estadoId;
+    let D = DATOS_ETAPA[id];
+    if (!D) {
+      r.info.textContent = "Cargando niveles…";
+      try { D = await cargarEtapa(id); }
+      catch (e) {
+        if (mio === pinta) r.info.textContent = "No se pudieron cargar los niveles. Revisa tu conexión y vuelve a entrar al estado.";
+        return;
+      }
+      if (mio !== pinta) return; // ya saliste de esta vista
+    }
+    const NIVELES_ESTADO = D.niveles, ETAPA = D.etapa;
     const listos = NIVELES_ESTADO.filter((nv) => nv.listo).length;
     r.info.textContent = "Etapa " + ETAPA.numero + " de " + ETAPA.total + " · Niveles listos: " + listos + " de " + NIVELES_ESTADO.length + " · las estrellas son la dificultad fija de cada nivel (1 = muy fácil, 5 = muy difícil) · 🪙 = bono después de cada 10 niveles.";
     const rej = document.createElement("div");
@@ -342,10 +360,11 @@ export function montarMapa(r) {
   }
 
   function pintar() {
+    pinta++;
     r.lienzo.replaceChildren();
-    r.titulo.textContent = vista === "mundo" ? "Mapa" : vista === "mexico" ? "México" : DATOS_ETAPA[estadoId].etapa.nombre;
+    r.titulo.textContent = vista === "mundo" ? "Mapa" : vista === "mexico" ? "México" : nombreEstado();
     r.ir.hidden = vista === "estado";
-    r.ir.textContent = vista === "mundo" ? "📍 México" : "📍 " + DATOS_ETAPA[estadoId].etapa.nombre;
+    r.ir.textContent = vista === "mundo" ? "📍 México" : "📍 " + nombreEstado();
     if (vista === "mundo") vistaMundo();
     else if (vista === "mexico") vistaMexico();
     else vistaEstado();

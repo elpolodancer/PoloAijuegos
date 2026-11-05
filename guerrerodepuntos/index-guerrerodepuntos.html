@@ -1,0 +1,36 @@
+<!doctype html>
+<!-- Ruta: guerrerodepuntos/index-guerrerodepuntos.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Devorador</title>
+  <meta name="theme-color" content="#1b2330" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    #lienzo { background: #12203a; max-width: 400px; cursor: pointer; }
+    .centro { text-align: center; }
+    .botones { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    #ayuda { font-size: .85rem; color: var(--suave); max-width: 400px; margin: 8px auto; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <a class="volver" href="../">← Juegos</a>
+    <h1>🐲 Devorador</h1>
+    <div id="sesion"></div>
+  </header>
+  <main class="centro">
+    <p id="estado"></p>
+    <canvas id="lienzo" class="lienzo" width="360" height="600"></canvas>
+    <div class="botones">
+      <button class="btn" id="mapa">🗺️ Ver mapa</button>
+      <button class="btn" id="accion" hidden>Reintentar</button>
+      <button class="btn" id="reiniciar">Reiniciar nivel</button>
+    </div>
+    <p id="ayuda">Toca una zona unida a la tuya para saltar a ella. Si el enemigo tiene un nivel menor que el tuyo, lo vences y sumas su nivel al tuyo. Arrastra para mirar el mapa. Solo ves las zonas junto a las que has estado. Ojo: una zona vacía puede ser una trampa.</p>
+  </main>
+  <script type="module" src="juego-guerrerodepuntos.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>

@@ -1,0 +1,195 @@
+<!doctype html>
+<!-- Ruta: rompecabezas/index-rompecabezas.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Rompecabezas</title>
+  <meta name="theme-color" content="#1f4568" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    /* --u = 1% del ancho de pantalla, con tope para que en la compu se vea como en el celular */
+    :root { --u: min(1vw, 5.4px); --lima: #8fdc00; --azul: #2b6ea6; }
+    [hidden] { display: none !important; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      background: #1f4568 var(--jean, none); color: #fff;
+      font-family: "Arial Rounded MT Bold", "Nunito", "Baloo 2", ui-rounded, system-ui, sans-serif;
+      -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
+    }
+    body.en-juego { position: fixed; inset: 0; width: 100%; overflow: hidden; }
+
+    .pantalla {
+      position: relative; max-width: calc(var(--u) * 100); min-height: 100dvh; margin: 0 auto;
+      padding: calc(env(safe-area-inset-top, 0px) + var(--u) * 4) 0 calc(env(safe-area-inset-bottom, 0px) + var(--u) * 10);
+    }
+    .cab {
+      position: relative; display: flex; align-items: center; justify-content: center;
+      min-height: calc(var(--u) * 14); margin: 0 calc(var(--u) * 4) calc(var(--u) * 7);
+    }
+    .cab .redondo { position: absolute; top: 50%; transform: translateY(-50%); }
+    .cab .izq { left: 0; } .cab .der { right: 0; }
+
+    .redondo {
+      display: grid; place-items: center; width: calc(var(--u) * 13); height: calc(var(--u) * 13); padding: 0;
+      border: 0; border-radius: 50%; background: #fff; cursor: pointer; text-decoration: none;
+      box-shadow: 0 calc(var(--u) * .5) calc(var(--u) * 1.2) rgba(0, 0, 0, .35);
+    }
+    .redondo svg { width: calc(var(--u) * 6.8); height: calc(var(--u) * 6.8); }
+    .redondo:focus-visible, .carta:focus-visible, .b-lima:focus-visible, .b-blanco:focus-visible { outline: 3px solid #ffc400; outline-offset: 3px; }
+
+    .logo { margin: 0; padding: 0 calc(var(--u) * 15); font-size: calc(var(--u) * 9.2); white-space: nowrap; font-style: italic; font-weight: 900; letter-spacing: -.02em; color: #ffc400; text-shadow: 0 calc(var(--u) * .5) 0 #b57f00, 0 calc(var(--u) * 1) calc(var(--u) * 1.4) rgba(0, 0, 0, .4); }
+    .tit { margin: 0; padding: 0 calc(var(--u) * 15); text-align: center; font-size: calc(var(--u) * 7.4); font-weight: 700; line-height: 1.1; }
+
+    /* Cuadrículas */
+    .cuadricula { display: grid; grid-template-columns: 1fr 1fr; padding: 0 calc(var(--u) * 5.5); column-gap: calc(var(--u) * 4.5); row-gap: calc(var(--u) * 6); }
+    .carta { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: center; cursor: pointer; }
+    .pila { display: grid; justify-items: center; gap: calc(var(--u) * .9); margin-bottom: calc(var(--u) * 1.2); }
+    .pila i { display: block; height: calc(var(--u) * .7); background: #aab3bd; border-radius: 9px; }
+    .pila i:nth-child(1) { width: 90%; } .pila i:nth-child(2) { width: 96%; }
+    .marco { display: block; aspect-ratio: 1; overflow: hidden; background: #12304a; border: calc(var(--u) * .3) solid #cfd6de; border-radius: calc(var(--u) * .5); }
+    .marco canvas, .marco img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .nom { display: block; min-height: calc(var(--u) * 10); margin-top: calc(var(--u) * 1.6); font: 400 calc(var(--u) * 4.2)/1.25 system-ui, Roboto, sans-serif; text-transform: uppercase; letter-spacing: .02em; color: #eaf0f6; }
+    .galeria { padding: 0 calc(var(--u) * 2.7); column-gap: calc(var(--u) * 3.8); row-gap: calc(var(--u) * 9); }
+    .galeria .marco { border-width: calc(var(--u) * .25); border-color: #c4ccd5; }
+    .vacio { grid-column: 1 / -1; padding: calc(var(--u) * 6); text-align: center; font-size: calc(var(--u) * 4.2); color: #cfdceb; }
+
+    /* Ajustes */
+    #prevCaja { display: grid; place-items: center; margin: 0 calc(var(--u) * 5); }
+    #prev { display: block; border: calc(var(--u) * .4) solid #d5dce4; border-radius: calc(var(--u) * .8); background: #123; }
+    .etq { margin: calc(var(--u) * 4.5) 0 calc(var(--u) * 1.6); text-align: center; font-size: calc(var(--u) * 5.2); }
+    .etq b { font-size: calc(var(--u) * 6); font-weight: 700; }
+    #rango {
+      -webkit-appearance: none; appearance: none; display: block; width: calc(100% - var(--u) * 10); height: calc(var(--u) * 5.6);
+      margin: calc(var(--u) * 2) calc(var(--u) * 5); padding: 0; overflow: visible; outline: 0; border-radius: 99px;
+      background:
+        linear-gradient(#ffd53d, #e3a300) 0 0 / calc(var(--f, .3) * (100% - var(--u) * 3.6) + var(--u) * 1.8) 100% no-repeat,
+        linear-gradient(#8d8d8d, #5c5c5c);
+      box-shadow: inset 0 calc(var(--u) * .5) calc(var(--u) * .9) rgba(0, 0, 0, .4);
+    }
+    #rango::-webkit-slider-thumb { -webkit-appearance: none; width: calc(var(--u) * 3.6); height: calc(var(--u) * 7.8); border: calc(var(--u) * .25) solid #5d5d5d; border-radius: calc(var(--u) * 1.1); background: linear-gradient(90deg, #cfcfcf, #9b9b9b 50%, #c6c6c6); box-shadow: 0 calc(var(--u) * .4) calc(var(--u) * .8) rgba(0, 0, 0, .45); }
+    #rango::-moz-range-thumb { width: calc(var(--u) * 3.6); height: calc(var(--u) * 7.8); border: calc(var(--u) * .25) solid #5d5d5d; border-radius: calc(var(--u) * 1.1); background: linear-gradient(90deg, #cfcfcf, #9b9b9b 50%, #c6c6c6); }
+    .fila-rot { display: flex; align-items: center; justify-content: center; gap: calc(var(--u) * 2); margin-top: calc(var(--u) * 3.6); font-size: calc(var(--u) * 4.8); }
+    .interruptor { position: relative; width: calc(var(--u) * 18.5); height: calc(var(--u) * 6.4); padding: 0; border: calc(var(--u) * .25) solid #646464; border-radius: calc(var(--u) * .8); background: linear-gradient(#7a7a7a, #555); cursor: pointer; }
+    .interruptor i { position: absolute; top: calc(var(--u) * .3); bottom: calc(var(--u) * .3); left: calc(var(--u) * .3); display: grid; place-items: center; width: calc(var(--u) * 9); border-radius: calc(var(--u) * .5); background: linear-gradient(#cdcdcd, #9c9c9c); color: #2a2a2a; font: normal calc(var(--u) * 3.8) system-ui, sans-serif; transition: left .15s; }
+    .interruptor.on i { left: calc(100% - var(--u) * 9.3); }
+    .b-lima, .b-blanco { display: block; margin: calc(var(--u) * 9) auto 0; width: calc(var(--u) * 50); height: calc(var(--u) * 14.4); border: 0; border-radius: 99px; font: inherit; font-size: calc(var(--u) * 8); cursor: pointer; }
+    .b-lima { background: linear-gradient(#a6f01a, #86d200); color: #3d5a00; box-shadow: 0 calc(var(--u) * .6) 0 #5e9100, 0 calc(var(--u) * 1.4) calc(var(--u) * 1.6) rgba(0, 0, 0, .3); }
+    .b-blanco { background: #fff; color: var(--azul); box-shadow: 0 calc(var(--u) * .6) calc(var(--u) * 1.4) rgba(0, 0, 0, .3); }
+    .extras { display: flex; flex-wrap: wrap; justify-content: center; gap: calc(var(--u) * 2); margin-top: calc(var(--u) * 5); }
+    .mini-b { padding: calc(var(--u) * 1.6) calc(var(--u) * 4); border: calc(var(--u) * .25) solid rgba(255, 255, 255, .45); border-radius: 99px; background: rgba(255, 255, 255, .13); color: #fff; font: inherit; font-size: calc(var(--u) * 3.8); cursor: pointer; }
+    .mini-b:disabled { opacity: .5; }
+
+    /* Juego */
+    #juego { position: fixed; inset: 0; background: #cbb68e var(--lino, none); }
+    #lienzo { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+    .pausa { position: fixed; z-index: 5; top: calc(env(safe-area-inset-top, 0px) + var(--u) * 3); right: calc(var(--u) * 3.5); }
+    .guardarp { position: fixed; z-index: 5; top: calc(env(safe-area-inset-top, 0px) + var(--u) * 3); right: calc(var(--u) * 19); }
+    .marco { position: relative; }
+    .borrar { position: absolute; top: calc(var(--u) * 1); right: calc(var(--u) * 1); display: grid; place-items: center; width: calc(var(--u) * 8); height: calc(var(--u) * 8); border-radius: 50%; background: rgba(0, 0, 0, .6); color: #fff; font-size: calc(var(--u) * 4); line-height: 1; }
+
+    /* Menús encima del juego */
+    .velo { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: rgba(10, 28, 46, .72); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+    .panel { width: min(88vw, 380px); padding: 22px 18px 24px; text-align: center; background: #1f4568 var(--jean, none); border: 2px solid #cfd6de; border-radius: 18px; box-shadow: 0 10px 30px rgba(0, 0, 0, .5); }
+    .panel h2 { margin: 0 0 6px; font-size: 32px; }
+    .panel p { margin: 0 0 16px; color: #d6e2ee; font-size: 17px; }
+    .panel .b-lima, .panel .b-blanco { width: 100%; height: 56px; margin: 10px 0 0; font-size: 24px; }
+    .panel .b-blanco { font-size: 20px; }
+
+    #msg { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 30; max-width: 90vw; padding: 10px 16px; border-radius: 12px; background: #000c; color: #fff; text-align: center; font: 15px system-ui, sans-serif; }
+  </style>
+</head>
+<body>
+
+  <!-- 1. MENÚ: categorías -->
+  <section id="menu" class="pantalla">
+    <div class="cab">
+      <a class="redondo izq" href="../" aria-label="Volver al portal de juegos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#2b6ea6" stroke-width="2" stroke-linejoin="round"><path d="M7 7h10a4.5 4.5 0 0 1 4.4 5.4l-.7 3.6a2.6 2.6 0 0 1-4.6 1l-1.2-1.7a2 2 0 0 0-1.6-.8h-2.6a2 2 0 0 0-1.6.8l-1.2 1.7a2.6 2.6 0 0 1-4.6-1l-.7-3.6A4.5 4.5 0 0 1 7 7z"/><path d="M8 10.5v3M6.5 12h3" stroke-linecap="round"/><circle cx="15.6" cy="10.8" r=".9" fill="#2b6ea6"/><circle cx="17.8" cy="12.8" r=".9" fill="#2b6ea6"/></svg>
+      </a>
+      <h1 class="logo">Rompecabezas</h1>
+    </div>
+    <div id="cats" class="cuadricula"></div>
+  </section>
+
+  <!-- 2. CATEGORÍA: imágenes -->
+  <section id="cat" class="pantalla" hidden>
+    <div class="cab">
+      <h2 class="tit" id="catTitulo"></h2>
+      <button class="redondo der" id="catCerrar" aria-label="Cerrar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#2b6ea6" stroke-width="3.6" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+      </button>
+    </div>
+    <div id="catImgs" class="cuadricula galeria"></div>
+  </section>
+
+  <!-- 3. AJUSTES: número de piezas y rotación -->
+  <section id="cfg" class="pantalla" hidden>
+    <div class="cab">
+      <button class="redondo der" id="cfgCerrar" aria-label="Cerrar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#2b6ea6" stroke-width="3.6" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+      </button>
+    </div>
+    <div id="prevCaja"><canvas id="prev"></canvas></div>
+    <p class="etq">Número de piezas: <b id="nPiezas">36</b></p>
+    <input type="range" id="rango" min="0" max="10" step="1" value="0" aria-label="Número de piezas" />
+    <div class="fila-rot">
+      <span>Rotación de las piezas:</span>
+      <button class="interruptor" id="rot" role="switch" aria-checked="false" aria-label="Rotación de las piezas"><i>0</i></button>
+    </div>
+    <button class="b-lima" id="jugar">Jugar</button>
+    <div class="extras">
+      <button class="mini-b" id="guardar" hidden title="Sube la imagen a imgbb (requiere sesión con Google)">☁️ Guardar imagen</button>
+      <button class="mini-b" id="enlace" hidden>🔗 Copiar enlace</button>
+    </div>
+  </section>
+
+  <!-- 4. JUEGO -->
+  <section id="juego" hidden>
+    <canvas id="lienzo"></canvas>
+    <button class="redondo pausa" id="pausa" aria-label="Pausa">
+      <svg viewBox="0 0 24 24" fill="#2b6ea6"><rect x="5.5" y="4" width="4.6" height="16" rx="1"/><rect x="13.9" y="4" width="4.6" height="16" rx="1"/></svg>
+    </button>
+    <button class="redondo guardarp" id="guardarPartida" aria-label="Guardar partida" title="Guardar partida">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#2b6ea6" stroke-width="2" stroke-linejoin="round"><path d="M5 3h11l4 4v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M8 3v5h7V3"/><rect x="7.5" y="13" width="9" height="8"/></svg>
+    </button>
+  </section>
+
+  <div class="velo" id="pausaMenu" hidden>
+    <div class="panel" role="dialog" aria-label="Pausa">
+      <h2>Pausa</h2>
+      <p id="pausaInfo"></p>
+      <button class="b-lima" id="pContinuar">Continuar</button>
+      <button class="b-blanco" id="pGuia">Ver imagen guía</button>
+      <button class="b-blanco" id="pGuardar">Guardar partida</button>
+      <button class="b-blanco" id="pMezclar">Mezclar de nuevo</button>
+      <button class="b-blanco" id="pPiezas">Cambiar piezas</button>
+      <button class="b-blanco" id="pSalir">Salir</button>
+    </div>
+  </div>
+
+  <div class="velo" id="finMenu" hidden>
+    <div class="panel" role="dialog" aria-label="Rompecabezas completo">
+      <h2>¡Completo! 🎉</h2>
+      <p id="finInfo"></p>
+      <button class="b-lima" id="fOtra">Jugar otra vez</button>
+      <button class="b-blanco" id="fPiezas">Cambiar piezas</button>
+      <button class="b-blanco" id="fSalir">Elegir otra imagen</button>
+    </div>
+  </div>
+
+  <div class="velo" id="loginMenu" hidden>
+    <div class="panel" role="dialog" aria-label="Iniciar sesión para guardar">
+      <h2>Inicia sesión</h2>
+      <p>Para guardar la partida, tu imagen se sube a tu galería y eso necesita que entres con Google.</p>
+      <button class="b-lima" id="lEntrar">Entrar con Google</button>
+      <button class="b-blanco" id="lCancelar">Ahora no</button>
+    </div>
+  </div>
+
+  <input type="file" id="archivo" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
+  <div id="msg" hidden></div>
+
+  <script type="module" src="juego-rompecabezas.js"></script>
+</body>
+</html>

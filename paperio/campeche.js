@@ -10,7 +10,7 @@
 // Cada silueta se eligió para que su dificultad real (grosor de los caminos, huecos, bordes) vaya con su categoría.
 
 import { cadena, espiral, rayos, poli, circulos, rejilla, panal, lunares, nube, constelacion, rama, estrellaN, copo,
-  serpentina, pasillos, ciudad, rombo, islas2, anillo } from "./niveles.js";
+  serpentina, pasillos, ciudad, rombo, islas2, anillo } from "./niveles-paperio.js";
 
 const PI = Math.PI;
 
@@ -35,7 +35,7 @@ export const CATEGORIAS = Object.freeze([
 
 // ----- Qué tan duros son los bots según la categoría: [valor al inicio de la categoría, valor al final] -----
 // (los mismos valores que colima.js y bajacaliforniasur.js; dentro de la categoría se interpola según el lugar del nivel).
-// Topes de la guía de niveles.js: veloz ≤ 0.1, giro ≤ 0.4, bots ≤ 7.
+// Topes de la guía de niveles-paperio.js: veloz ≤ 0.1, giro ≤ 0.4, bots ≤ 7.
 const PERFIL = {
   1: { bots: [3, 4], meta: [20, 24], dificultad: [0.35, 0.5], rasgos: {} },
   2: { bots: [4, 5], meta: [25, 28], dificultad: [0.5, 0.62], rasgos: { mordisco: [0.15, 0.3], venganza: [0.1, 0.2], acoso: [0.1, 0.2] } },

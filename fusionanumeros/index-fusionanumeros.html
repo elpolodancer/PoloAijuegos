@@ -1,0 +1,46 @@
+<!doctype html>
+<!-- Ruta: fusionanumeros/index-fusionanumeros.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Fusiona números</title>
+  <meta name="theme-color" content="#1b2330" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    main { padding: 8px 12px; }
+    .hud { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; font-size: .9rem; color: var(--suave); }
+    .hud b { color: var(--texto); }
+    #caja { position: relative; width: min(100%, calc((100dvh - 150px) * 0.554), 440px); margin: 8px auto; }
+    #lienzo { width: 100%; max-width: none; aspect-ratio: 360 / 650; height: auto; margin: 0; background: #0f1220; touch-action: none; }
+    #fin { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(10,12,20,.82); border-radius: 16px; text-align: center; padding: 16px; }
+    #fin h2 { margin: 0; font-size: 1.6rem; }
+    .ayuda { text-align: center; font-size: .8rem; color: var(--suave); margin: 2px 0 8px; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <a class="volver" href="../">← Juegos</a>
+    <h1>🔢 Fusiona números</h1>
+    <button class="btn" id="reiniciar">↺ Reiniciar</button>
+  </header>
+  <main>
+    <div class="hud">
+      <span>Puntos: <b id="puntos">0</b></span>
+      <span>Bloque más alto: <b id="maximo">2</b></span>
+      <span>Récord: <b id="record">2</b></span>
+    </div>
+    <div id="caja">
+      <canvas id="lienzo" class="lienzo" width="360" height="650"></canvas>
+      <div id="fin" hidden>
+        <h2>Sin movimientos</h2>
+        <div id="ftexto"></div>
+        <button class="btn" id="otra">Jugar otra vez</button>
+      </div>
+    </div>
+    <p class="ayuda">Toca una columna (o desliza y suelta) para dejar caer el bloque. Los iguales que quedan pegados se fusionan y suman sus valores.</p>
+  </main>
+  <script type="module" src="juego-fusionanumeros.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>

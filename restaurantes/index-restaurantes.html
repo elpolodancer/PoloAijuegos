@@ -1,0 +1,129 @@
+<!doctype html>
+<!-- Ruta: restaurantes/index-restaurantes.html -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Restaurantes</title>
+  <meta name="theme-color" content="#1b2330" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <style>
+    /* La página es una sola pantalla: barra arriba y, debajo, la escena (el lienzo del juego) ocupando todo el resto.
+       Marcador, «Empleados», mensajes y botones van ENCIMA del lienzo, dentro de la escena. */
+    html, body { height: 100%; }
+    body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+    .barra { flex: none; padding: 6px 12px; }
+    .barra h1 { font-size: 1.05rem; }
+    main { flex: 1; min-height: 0; max-width: none; margin: 0; padding: 0; }
+    .escena { position: relative; width: 100%; height: 100%; overflow: hidden; background: #8bbf6a; }
+    .lienzo { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; margin: 0; background: #8bbf6a; border: 0; border-radius: 0; }
+    .encima { position: absolute; z-index: 5; pointer-events: none; } /* lo de encima deja pasar los toques al lienzo (solo los botones los reciben) */
+    .encima .btn, .encima a { pointer-events: auto; }
+    /* Arriba a la izquierda: perfil + dólares + energía */
+    .izq { top: calc(8px + env(safe-area-inset-top, 0px)); left: calc(8px + env(safe-area-inset-left, 0px)); max-width: calc(100% - 165px); flex-wrap: wrap; display: flex; align-items: center; gap: 6px; }
+    .caja { display: flex; align-items: center; gap: 4px; height: 38px; padding: 0 10px; font-size: .85rem; font-weight: 700; white-space: nowrap; background: rgba(15, 18, 32, .68); border-radius: 12px; }
+    .caja b { color: var(--texto); }
+    .btn-perfil { flex: none; display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; padding: 0; overflow: hidden; font-size: 1.2rem; border-radius: 50%; box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
+    .btn-perfil img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    /* Arriba a la derecha: récord y tiempo, y debajo Empleados y Cocina */
+    .der { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(8px + env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+    .der .stats { display: flex; flex-direction: column; gap: 1px; padding: 5px 10px; font-size: .8rem; font-weight: 700; text-align: right; background: rgba(15, 18, 32, .68); border-radius: 12px; }
+    .der .stats b { color: var(--texto); }
+    .der .btn { box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
+    #estado { left: 8px; right: 8px; bottom: calc(52px + env(safe-area-inset-bottom, 0px)); margin: 0 auto; width: fit-content; max-width: calc(100% - 64px); padding: 4px 10px; font-size: .75rem; line-height: 1.25; text-align: center; color: var(--texto); background: rgba(15, 18, 32, .68); border-radius: 10px; min-height: 0; }
+    #estado:empty { display: none; }
+    .acciones { left: 8px; right: 56px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; }
+    .acciones .btn { padding: 6px 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, .4); }
+    .tienda { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); overflow-y: auto; position: fixed; z-index: 100; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(92vw, 420px); padding: 14px; background: var(--tarjeta); border: 1px solid var(--acento); border-radius: 16px; box-shadow: 0 8px 30px rgba(0, 0, 0, .5); }
+    .tienda-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+    .tienda-fila { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--borde); }
+    .tienda-fila .ico { font-size: 1.8rem; }
+    .tienda-fila .txt { flex: 1; }
+    .tienda-fila small { display: block; color: var(--suave); }
+    .menu { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 16px; background: var(--fondo); overflow: auto; }
+    .menu-caja { width: min(100%, 600px); text-align: center; }
+    .menu-caja > div { display: flex; flex-direction: column; gap: 12px; }
+    .menu-caja h2 { margin: 0; }
+    .menu-caja p { margin: 0; color: var(--suave); }
+    .btn.grande { padding: 14px 18px; font-size: 1.1rem; }
+    .btn.sec { background: var(--tarjeta); border: 1px solid var(--borde); }
+    .ranuras { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; text-align: left; }
+    @media (max-width: 420px) { .ranuras { grid-template-columns: 1fr; } }
+    .ranura { display: flex; flex-direction: column; gap: 4px; padding: 14px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; }
+    .ranura.llena { border-color: var(--acento); }
+    .ranura.vacia { justify-content: space-between; min-height: 110px; border-style: dashed; }
+    .ranura small { color: var(--suave); }
+    .ranura-botones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <div>
+      <a class="volver" href="../">← Juegos</a>
+      <h1>🍽️ Restaurantes</h1>
+    </div>
+    <div id="sesion"></div>
+  </header>
+  <main>
+    <div class="escena">
+      <canvas id="lienzo" class="lienzo" width="720" height="480" aria-label="Restaurante en vista isométrica con cocina, baño, recepción y cuatro mesas; toca a los clientes que esperan para darles mesa"></canvas>
+      <div class="izq encima">
+        <button class="btn btn-perfil" id="btnPerfil" aria-label="Perfil del jugador" title="Perfil">👤</button>
+        <div class="caja" title="Dólares">💵 <span>$<b id="dinero">0</b></span></div>
+        <div class="caja" title="Energía">⚡ <b id="energia">22/33</b></div>
+      </div>
+      <div class="der encima">
+        <div class="stats">
+          <span>🕒 <b id="hora">9:30 AM</b> · Día <b id="dia">1</b></span>
+          <span id="horario">🟢 Abierto</span>
+          <span>🏆 Récord $<b id="record">0</b></span>
+          <span>⏱️ <b id="tiempo">0:00</b></span>
+        </div>
+        <button class="btn" id="btnEmpleados" aria-label="Empleados">👥 Empleados (<span id="numEmpleados">0</span>)</button>
+      </div>
+      <p id="estado" class="encima">Ya tienes cocinero, recepcionista, mesero y personal de limpieza. Los clientes llegan solos de 9:30 AM a 11:00 PM: la recepcionista les da mesa (o tócalos tú). Toca el precio de un terreno en venta para ampliar, la caseta 🅿️ para comprar lugares de estacionamiento, la 🕴️ oficina del jefe para comprar mesas, zonas y la segunda puerta, el mostrador de la recepción para mejorarla, una mesa para mejorarla y 👥 Empleados (arriba a la derecha) para el personal.</p>
+      <div class="acciones encima">
+        <button class="btn" id="alejar" aria-label="Alejar" title="Alejar">➖</button>
+        <button class="btn" id="acercar" aria-label="Acercar" title="Acercar">➕</button>
+        <button class="btn" id="centrar" aria-label="Centrar la vista" title="Centrar la vista">🎯</button>
+        <button class="btn" id="menuBtn">☰ Menú</button>
+        <button class="btn" id="btnAnuncios">📢 Anuncios</button>
+        <button class="btn" id="reiniciar">Reiniciar</button>
+      </div>
+    </div>
+  </main>
+  <div id="menu" class="menu">
+    <div class="menu-caja">
+      <div id="menuInicio">
+        <h2>🍽️ Restaurantes</h2>
+        <p>Tu partida se guarda sola.</p>
+        <button class="btn grande" id="jugar">▶️ Jugar</button>
+        <a class="volver" href="../">← Volver a los juegos</a>
+      </div>
+      <div id="menuJugar" hidden>
+        <h2>▶️ Jugar</h2>
+        <button class="btn grande sec" id="btnPartidas" disabled>💾 Partidas guardadas</button>
+        <p id="avisoPartidas">No disponible de momento</p>
+        <button class="btn grande" id="btnNueva">🆕 Nueva partida</button>
+        <button class="btn sec" id="atrasJugar">← Atrás</button>
+      </div>
+      <div id="menuPartidas" hidden>
+        <h2 id="tituloPartidas">💾 Partidas guardadas</h2>
+        <p id="avisoRanuras"></p>
+        <div id="listaPartidas" class="ranuras"></div>
+        <button class="btn sec" id="volverMenu">← Atrás</button>
+      </div>
+    </div>
+  </div>
+  <div id="tienda" class="tienda" role="dialog" aria-label="Tienda y mejoras de mesa" hidden>
+    <div class="tienda-cab">
+      <b id="tiendaTitulo">🛒 Tienda</b>
+      <span>💰 $<b id="tiendaDinero">0</b> dólares</span>
+      <button class="btn" id="cerrarTienda">Cerrar</button>
+    </div>
+    <div id="tiendaLista"></div>
+  </div>
+  <script type="module" src="juego-restaurantes.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<!doctype html>
+<!-- Ruta: pantano/index-pantano.html (página del juego «pantano») — proyecto: Juegos (portal) -->
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Ataque al pantano</title>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+</head>
+<body>
+  <header class="barra">
+    <a class="volver" href="../index.html">‹ Juegos</a>
+    <h1>🐊 Ataque al pantano</h1>
+  </header>
+  <main>
+    <canvas id="lienzo" class="lienzo" width="640" height="360"></canvas>
+    <p id="estado">Defiende tu cabaña: toca o arrastra para apuntar y disparar. Se recarga sola.</p>
+    <button id="jugar" class="btn" type="button">Jugar</button>
+    <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
+    <section id="niveles" style="margin-top:14px" hidden></section>
+    <section id="tienda" style="margin-top:14px" hidden></section>
+  </main>
+  <script type="module" src="juego-pantano.js"></script>
+</body>
+</html>

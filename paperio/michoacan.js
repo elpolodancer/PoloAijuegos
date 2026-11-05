@@ -7,7 +7,7 @@
 // Los fáciles se concentran al principio (niveles 1-10: ocho de categoría 1) y los difíciles aparecen poco a poco:
 // el primer 4 es el nivel 27, el primer 5 el 40 y el último nivel (100) es de categoría 5.
 //
-// PARA LLENAR UN NIVEL: quita el «//» de su línea en DATOS (o copia el ejemplo) y rellénalo con el mismo formato de niveles.js:
+// PARA LLENAR UN NIVEL: quita el «//» de su línea en DATOS (o copia el ejemplo) y rellénalo con el mismo formato de niveles-paperio.js:
 //   n: { nombre, bots, meta, forma, dificultad (opcional, 0 a 1), rasgos (opcional) }
 // Un nivel con «forma» queda «listo»; los demás se muestran bloqueados («próximamente») en el mapa.
 // NO cambies la categoría al llenar el nivel: es la dificultad fija de ese número de nivel. Lo que pongas en bots, meta,
@@ -29,7 +29,7 @@ export const CATEGORIAS = Object.freeze([
   3, 2, 4, 5, 3, 2, 5, 4, 3, 5, //  91 - 100
 ]);
 
-// Datos de cada nivel, por número (1 a 100). Ejemplo (formato de niveles.js):
+// Datos de cada nivel, por número (1 a 100). Ejemplo (formato de niveles-paperio.js):
 //   1: { nombre: "Morelia", bots: 3, meta: 20, forma: { polar: [0.84, [3, 0.07, 0]] } },
 const DATOS = {
 };
