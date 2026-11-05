@@ -349,6 +349,102 @@ export const NIVELES = [
   { nombre: "El gran final", ...dura(100), forma: { bolas: [[0, 0, 0.95]], huecos: lunares(100, 22, 0.06, 0.12, 0.17, 0.1, 0.84) } },
 ];
 
+// ===== ESCALA DE 10 DIFICULTADES (niveles 200 en adelante; pensada para llegar a ~1000 niveles) =====
+// Cada nivel de la escala recibe una dificultad («tier») del 1 (la más suave) al 10 (la más dura), repartidas AL AZAR
+// pero de forma pareja: en cada bloque de 10 niveles aparecen las 10 dificultades, una vez cada una y en orden mezclado
+// (siempre igual, porque el mezclado usa una semilla fija). Así el juego nunca se vuelve «cada vez más difícil sin parar»:
+// un nivel 700 puede ser tier 2 y el 701 tier 9.
+// Todos los tiers son superables: veloz ≤ 0.1, giro ≤ 0.4, meta ≤ 42 % y como máximo 7 bots (los topes que pide la guía de arriba).
+//
+// Cómo agregar niveles a la escala: añade una línea  escala(k, "Nombre", { forma })  y el «tier» se calcula solo.
+//   k = posición dentro de la escala (0 = primer nivel de la escala, 1 = segundo, ...). Para ajustar un tier, edita TIERS.
+// El nivel 200 es el primero de la escala (k = 0). Los niveles 101 a 199 se agregan ANTES de este bloque (aún no existen,
+// así que por ahora las pruebas quedan a continuación del 100 y pasarán a ser el 200+ cuando los agregues).
+const NIVEL_INICIO_ESCALA = 200;
+const TIERS = [ // índice 0 = tier 1 ... índice 9 = tier 10
+  { bots: 4, meta: 28, dificultad: 0.45, rasgos: { mordisco: 0.3, venganza: 0.2, acoso: 0.2, veloz: 0,    giro: 0 } },
+  { bots: 5, meta: 30, dificultad: 0.55, rasgos: { mordisco: 0.4, venganza: 0.3, acoso: 0.3, veloz: 0,    giro: 0.05 } },
+  { bots: 5, meta: 31, dificultad: 0.62, rasgos: { mordisco: 0.5, venganza: 0.4, acoso: 0.4, veloz: 0.02, giro: 0.1 } },
+  { bots: 6, meta: 33, dificultad: 0.7,  rasgos: { mordisco: 0.6, venganza: 0.5, acoso: 0.5, veloz: 0.03, giro: 0.15 } },
+  { bots: 6, meta: 34, dificultad: 0.78, rasgos: { mordisco: 0.7, venganza: 0.6, acoso: 0.6, veloz: 0.05, giro: 0.2 } },
+  { bots: 7, meta: 36, dificultad: 0.85, rasgos: { mordisco: 0.8, venganza: 0.7, acoso: 0.7, veloz: 0.06, giro: 0.25 } },
+  { bots: 7, meta: 37, dificultad: 0.9,  rasgos: { mordisco: 0.9, venganza: 0.8, acoso: 0.8, veloz: 0.07, giro: 0.3 } },
+  { bots: 7, meta: 39, dificultad: 0.95, rasgos: { mordisco: 1,   venganza: 0.9, acoso: 0.9, veloz: 0.08, giro: 0.33 } },
+  { bots: 7, meta: 40, dificultad: 1,    rasgos: { mordisco: 1,   venganza: 1,   acoso: 1,   veloz: 0.09, giro: 0.37 } },
+  { bots: 7, meta: 42, dificultad: 1,    rasgos: { mordisco: 1,   venganza: 1,   acoso: 1,   veloz: 0.1,  giro: 0.4 } },
+];
+// Orden mezclado de las 10 dificultades dentro del bloque «b» (semilla fija por bloque)
+const bloquesTier = [];
+function barajaBloque(b) {
+  if (bloquesTier[b]) return bloquesTier[b];
+  const az = azar(7919 + b * 104729), p = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  for (let i = p.length - 1; i > 0; i--) { const j = (az() * (i + 1)) | 0; [p[i], p[j]] = [p[j], p[i]]; }
+  if (b > 0 && p[0] === barajaBloque(b - 1)[9]) [p[0], p[1]] = [p[1], p[0]]; // no repetir la misma dificultad al cambiar de bloque
+  return (bloquesTier[b] = p);
+}
+// Dificultad (1 a 10) del nivel k de la escala
+export function tierDe(k) { return barajaBloque((k / 10) | 0)[k % 10]; }
+function escala(k, nombre, forma) {
+  const tier = tierDe(k), t = TIERS[tier - 1];
+  return { nombre, tier, bots: t.bots, meta: t.meta, dificultad: t.dificultad, rasgos: { ...t.rasgos }, forma };
+}
+
+// ----- 10 niveles de prueba de la escala (k = 0 a 9; el tier de cada uno sale de tierDe) -----
+NIVELES.push(
+  escala(0, "Cuatro pétalos",   { polar: [0.62, [4, 0.25, 0]] }),
+  escala(1, "Anillo de islas",  { bolas: [...circulos(5, 0.6, 0.2), ...anillo(0.6, 0.07)] }),
+  escala(2, "Lunares",          { bolas: [[0, 0, 0.95]], huecos: lunares(201, 12, 0.07, 0.12, 0.15) }),
+  escala(3, "Zigzag doble",     { bolas: serpentina(5, 0.6, 0.1, 0.7) }),
+  escala(4, "Cruz gruesa",      { bolas: [...cadena(-0.8, 0, 0.8, 0, 0.2), ...cadena(0, -0.8, 0, 0.8, 0.2), [0, 0, 0.32]] }),
+  escala(5, "Diamante hueco",   { bolas: rombo(0.85, 0.1), huecos: [[0, 0, 0.25]] }),
+  escala(6, "Triple galaxia",   { bolas: [0, 1, 2].flatMap((q) => espiral(0.08, 0.82, 1.4, 0.09, q * 2 * PI / 3)) }),
+  escala(7, "Calles estrechas", { bolas: [[0, 0, 0.95]], huecos: pasillos(3, 0.07, 0.45, 0.4) }),
+  escala(8, "Constelación 7",   { bolas: constelacion(210, 7, 0.15, 0.07) }),
+  escala(9, "Corona de espinas",{ polar: [0.78, [12, 0.1, 0]], huecos: [[0, 0, 0.3]] }),
+);
+
+// ----- 100 niveles más de la escala (k = 10 a 109) -----
+// Diez «familias» de mapas (flores, estrellas, ruedas, islas, pilares, nubes, espirales, árboles, serpientes, copos/engranajes)
+// con variaciones; se intercalan una de cada familia para que no salgan seguidas formas parecidas.
+// La dificultad de cada uno la reparte tierDe() al azar, igual que en las pruebas.
+function mapasExtra() {
+  const A = [], B = [], C = [], D = [], E = [], F = [], G = [], H = [], I = [], J = [];
+  for (const n of [3, 7, 9, 10, 11, 13, 14, 15, 16, 18]) A.push([`Flor de ${n} pétalos`, { polar: [0.7, [n, n <= 10 ? 0.2 : 0.12, 0]] }]);
+  for (const k of [6, 8, 10, 13, 14]) B.push([`Estrella de ${k} puntas`, { bolas: estrellaN(k, 0.86, 0.2, 0.08) }]);
+  for (const k of [5, 6, 7, 8, 9]) B.push([`Estrella gorda de ${k} puntas`, { bolas: estrellaN(k, 0.84, 0.27, 0.13) }]);
+  for (const k of [3, 4, 5, 7, 8, 9, 10, 12]) C.push([`Rueda de ${k} rayos`, { bolas: [...anillo(0.72, 0.1), ...rayos(k, 0, 0.72, 0.1), [0, 0, 0.2]] }]);
+  for (const k of [6, 8]) C.push([`Rueda doble de ${k} rayos`, { bolas: [...anillo(0.42, 0.09), ...anillo(0.8, 0.09), ...rayos(k, 0, 0.8, 0.09), [0, 0, 0.2]] }]);
+  for (const n of [3, 4, 5, 7, 8]) {
+    const r = n <= 5 ? 0.22 : n === 7 ? 0.17 : 0.15, d = n <= 5 ? 0.6 : 0.65;
+    D.push([`Corona de ${n} islas`, { bolas: [...circulos(n, d, r), ...anillo(d, 0.07)] }]);
+  }
+  for (const n of [3, 5, 6, 7, 8]) {
+    const pts = [[0, 0], ...circulos(n, 0.65, 0).map(([x, y]) => [x, y])];
+    D.push([`Isla con ${n} satélites`, { bolas: islas2(pts, 0.2, 0.08, pts.slice(1).map((_, i) => [0, i + 1])) }]);
+  }
+  for (const [n, r] of [[3, 0.2], [5, 0.15], [6, 0.14], [7, 0.13], [9, 0.11], [10, 0.1]]) E.push([`${n} pilares`, { bolas: [[0, 0, 0.95]], huecos: circulos(n, 0.6, r) }]);
+  for (const [s, c] of [[111, 8], [112, 10], [113, 12], [114, 14]]) E.push([`Queso de ${c} huecos`, { bolas: [[0, 0, 0.95]], huecos: lunares(s, c, 0.07, 0.13, 0.15) }]);
+  for (const [s, n] of [[120, 9], [121, 10], [122, 11], [123, 12], [124, 13]]) F.push([`Nube de ${n} bolas`, { bolas: nube(s, n, 0.18, 0.28) }]);
+  for (const [s, n] of [[130, 6], [131, 7], [132, 8], [133, 9], [134, 10]]) F.push([`Constelación de ${n} islas`, { bolas: constelacion(s, n, 0.15, 0.07) }]);
+  for (const n of [2, 4, 5, 6]) G.push([`Galaxia de ${n} brazos`, { bolas: [...Array(n).keys()].flatMap((q) => espiral(0.08, 0.82, n <= 2 ? 1.6 : 1.1, 0.09, q * 2 * PI / n)) }]);
+  for (const v of [1.5, 2, 2.7]) G.push([`Caracol de ${v} vueltas`, { bolas: espiral(0.1, 0.86, v, 0.09) }]);
+  for (const v of [1.2, 1.5, 1.8]) G.push([`Espiral hueca de ${v} vueltas`, { bolas: [[0, 0, 0.95]], huecos: espiral(0.12, 0.85, v, 0.1) }]);
+  for (const [prof, L, r, nom] of [[2, 0.5, 0.1, "Arbusto"], [3, 0.4, 0.09, "Árbol joven"], [4, 0.36, 0.08, "Árbol alto"], [5, 0.32, 0.07, "Roble"]])
+    H.push([nom, { bolas: [...rama(0, 0.88, -PI / 2, L, r, prof), [0, 0.88, 0.15]] }]);
+  for (const [prof, nom] of [[3, "Helecho"], [4, "Helecho grande"]]) H.push([nom, { bolas: [...rama(-0.88, 0, 0, 0.4, 0.08, prof), [-0.88, 0, 0.15]] }]);
+  for (const [prof, nom] of [[3, "Raíces"], [4, "Raíces largas"], [5, "Raíces de roble"]]) H.push([nom, { bolas: [...rama(0, -0.88, PI / 2, 0.36, 0.08, prof), [0, -0.88, 0.15]] }]);
+  H.push(["Rama diagonal", { bolas: rama(-0.7, 0.7, -PI / 4, 0.4, 0.09, 4) }]);
+  for (const n of [3, 4, 5, 6, 7, 8]) I.push([`Serpiente de ${n} tramos`, { bolas: serpentina(n, 0.58, n <= 5 ? 0.11 : n < 8 ? 0.09 : 0.08, 0.7) }]);
+  for (const [n, r, nom] of [[2, 0.14, "Cruz de calles"], [3, 0.11, "Barrio"], [5, 0.065, "Metrópolis"]]) I.push([nom, { bolas: ciudad(n, r) }]);
+  I.push(["Peine fino", { bolas: [...cadena(-0.7, -0.7, -0.7, 0.7, 0.12), ...[-0.5, -0.17, 0.17, 0.5].flatMap((y) => cadena(-0.7, y, 0.7, y, 0.1))] }]);
+  for (const k of [4, 5, 7, 9, 10]) J.push([`Copo de ${k} brazos`, { bolas: copo(k, 0.08) }]);
+  for (const n of [8, 10, 12, 16, 18]) J.push([`Engranaje de ${n} dientes`, { polar: [0.76, [n, 0.08, 0]], huecos: [[0, 0, 0.25]] }]);
+  const fam = [A, B, C, D, E, F, G, H, I, J], salida = [];
+  for (let i = 0; i < 10; i++) for (const f of fam) salida.push(f[i]);
+  return salida;
+}
+mapasExtra().forEach(([nombre, forma], i) => NIVELES.push(escala(10 + i, nombre, forma)));
+
 // ----- Convierte una «forma» en una función (u, v) → ¿está dentro del mapa? -----
 const K = 1.6;                         // alcance de cada gota respecto a su radio
 const UMBRAL = Math.pow(1 - 1 / (K * K), 2);

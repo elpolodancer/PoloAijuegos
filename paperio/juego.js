@@ -687,7 +687,7 @@ function iniciar(demo) {
 function etiquetaNivel() {
   const nv = NIVELES[nivelActual];
   $("nivelNum").textContent = "Nivel " + (nivelActual + 1) + " de " + NIVELES.length;
-  $("nivelNom").textContent = nv.nombre + " · meta " + nv.meta + " %";
+  $("nivelNom").textContent = nv.nombre + (nv.tier ? " · dificultad " + nv.tier + "/10" : "") + " · meta " + nv.meta + " %";
   $("nivelAnt").disabled = nivelActual <= 0;
   $("nivelSig").disabled = nivelActual >= nivelMax();
   $("stNivel").textContent = "Nv " + (nivelActual + 1);
