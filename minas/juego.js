@@ -15,6 +15,7 @@ function fmt(n) {
   const i = Math.floor(Math.log10(n) / 3), s = i < 5 ? ["", "K", "M", "B", "T"][i] : String.fromCharCode(97 + Math.floor((i - 5) / 26) % 26) + String.fromCharCode(97 + (i - 5) % 26);
   return (n / Math.pow(10, i * 3)).toFixed(2).replace(/\.?0+$/, "") + s;
 }
+const est = (n) => (n >= 1000 ? fmt(n) : n >= 100 ? String(Math.round(n)) : String(Math.round(n * 10) / 10));   // como el panel del juego original: 14.8, 124, 1.06K
 function aviso(t) { const a = $("aviso"); a.textContent = t; a.style.opacity = 1; clearTimeout(aviso.t); aviso.t = setTimeout(() => (a.style.opacity = 0), 3500); }
 
 // ----- Partida -----
@@ -50,7 +51,9 @@ function crearFila(tipo, i) {
   }
   r.nom.textContent = tipo === "m" ? "Pozo " + (i + 1) + (i === 0 ? " · Carbón" : "") : tipo === "w" ? "Almacén" : "Ascensor";
   q(".esc").onclick = () => { if (L.tocar(E, tipo, i)) pintar(); };
-  if (tipo === "m") { r.nom.style.cursor = "pointer"; r.nom.onclick = () => { const s = L.estadisticas(E, i); aviso("Pozo " + (i + 1) + " Nv " + E.pozos[i].n + " · Extracción total $" + fmt(s.total) + "/s · Mineros " + s.mineros + " · Caminata " + s.caminata + " · Extracción " + fmt(s.extraccion) + "/s · Capacidad " + fmt(s.capacidad)); }; }
+  if (tipo === "m") { r.nom.style.cursor = "pointer"; r.nom.onclick = () => { const s = L.estadisticas(E, i); aviso("Pozo " + (i + 1) + " Nv " + E.pozos[i].n + " · Extracción total $" + est(s.total) + "/s · Mineros " + s.mineros + " · Caminata " + s.caminata + " · Extracción " + est(s.extraccion) + "/s · Capacidad " + est(s.capacidad)); }; }
+  if (tipo === "a") { r.nom.style.cursor = "pointer"; r.nom.onclick = () => { const s = L.estadisticasAsc(E); aviso("Ascensor Nv " + E.asc.n + " · Transporte total $" + est(s.total) + "/s · Carga " + est(s.carga) + " · Velocidad de movimiento " + Number(s.movimiento.toFixed(2)) + " · Velocidad de carga " + est(s.velCarga) + "/s"); }; }
+  if (tipo === "w") { r.nom.style.cursor = "pointer"; r.nom.onclick = () => { const s = L.estadisticasAlm(E); aviso("Almacén Nv " + E.alm.n + " · Transporte total $" + est(s.total) + "/s · Transportadores " + s.transportadores + " · Carga por transportador " + est(s.carga) + " · Velocidad de carga " + est(s.velCarga) + "/s · Caminata " + s.caminata); }; }
   r.s.onclick = () => comprarNiv(r);
   r.g.onclick = () => comprarGer(r);
   escena.insertBefore(el, nuevo);
@@ -77,8 +80,9 @@ function comprarNiv(r) {
 function comprarGer(r) {
   const w = L.trab(E, r.tipo, r.i);
   if (w.ger >= 3) return;
+  if (w.ger === 0 && !L.asesoresActivos(E)) { aviso("Los asesores se desbloquean cuando el pozo 1 llega al nivel " + L.AJ.NIV_ASESOR); return; }
   if (!L.comprarGer(E, r.tipo, r.i)) { aviso("Te falta dinero"); return; }
-  if (w.ger === 1) { pend += 5; enviar(PUNTOS_LOTE); aviso("Gerente Junior: ahora trabaja solo"); } else if (w.ger === 3) aviso("¡Ejecutivo! Además sube solo el nivel de este trabajador (si cuesta menos del 10 % de tu dinero)"); else aviso("Gerente " + L.RANGOS[w.ger] + ": ×" + L.vel(w));
+  if (w.ger === 1) { pend += 5; enviar(PUNTOS_LOTE); aviso("Asesor contratado: ahora trabaja solo"); } else if (w.ger === 3) aviso("¡Ejecutivo! Además sube solo el nivel de este trabajador (si cuesta menos del 10 % de tu dinero)"); else aviso("Gerente " + L.RANGOS[w.ger] + ": ×" + L.vel(w));
   pintar();
 }
 
@@ -103,7 +107,7 @@ function pintar() {
   const N = E.pozos.length, a = E.asc;
   $("din").textContent = "$ " + fmt(E.din);
   $("est").textContent = "⭐ " + E.estrellas;
-  const ips = L.ingreso(E); $("ips").textContent = ips ? "$" + fmt(ips) + "/s" : "Sin gerentes: toca";
+  const ips = L.ingreso(E); $("ips").textContent = ips ? "$" + fmt(ips) + "/s" : "Sin asesores: toca";
   const g = L.estrellasGanables(E);
   bPres.textContent = g >= 1 ? "⭐ Prestigio +" + g : "⭐ Prestigio";
   bPres.style.opacity = g >= 1 ? 1 : 0.55;
@@ -117,8 +121,9 @@ function pintar() {
     r.s.textContent = w.n >= L.nivMax(r.tipo) ? "Nivel máx." : "▲ +" + k + " · $" + fmt(c);
     r.s.classList.toggle("no", c > E.din);
     const gc = L.costoGer(r.tipo, r.i, w);
-    r.g.textContent = w.ger >= 3 ? "👔 Ejecutivo ✔" : "👔 " + L.RANGOS[w.ger + 1] + " · $" + fmt(gc);
-    r.g.classList.toggle("no", gc > E.din);
+    const bloq = w.ger === 0 && !L.asesoresActivos(E);
+    r.g.textContent = w.ger >= 3 ? "👔 Ejecutivo ✔" : bloq ? "🔒 Asesor · Nv " + L.AJ.NIV_ASESOR : "👔 " + L.RANGOS[w.ger + 1] + " · $" + fmt(gc);
+    r.g.classList.toggle("no", bloq || gc > E.din);
     const dep = r.tipo === "m" ? w.dep : r.tipo === "w" ? w.dep : null;
     r.dep.hidden = !dep || dep.u < 1e-9;
     if (dep) r.dep.textContent = "📦 " + fmt(dep.u);

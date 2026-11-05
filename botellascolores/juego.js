@@ -1,7 +1,7 @@
 // Ruta: botellascolores/juego.js
 // Botellas de colores: vierte los colores de una botella a otra hasta que cada botella tenga un solo color.
-import { crear, verter, puedeVerter, resuelto } from "./logica.js";
-import { NIVELES, PALETA } from "./niveles.js";
+import { crear, verter, puedeVerter, resuelto, racha } from "./logica.js";
+import { NIVELES, PALETA, MUNDOS, NIVELES_POR_MUNDO } from "./niveles.js";
 
 // ----- Ajustes -----
 const ID = "botellas-colores";
@@ -16,19 +16,51 @@ let nivel = 0, cap = 3, est = [], hist = [], sel = -1, acabo = false;
 const leer = () => { try { hechos = JSON.parse(localStorage.getItem(CLAVE)) || []; } catch (e) { hechos = []; } };
 const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(hechos)); } catch (e) {} };
 
+// ----- Mundos (cada 25 niveles cambia el fondo) -----
+const mundoDe = (i) => Math.min(Math.floor(i / NIVELES_POR_MUNDO), MUNDOS.length - 1);
+function aplicarMundo(i) {
+  const m = MUNDOS[mundoDe(i)];
+  const s = document.documentElement.style;
+  s.setProperty("--f1", m.fondo[0]);
+  s.setProperty("--f2", m.fondo[1]);
+  s.setProperty("--f3", m.fondo[2]);
+  s.setProperty("--vidrio", m.vidrio);
+  s.setProperty("--luna", m.luna);
+}
+
 // ----- Menú -----
 function menu() {
   $("juego").hidden = true;
   $("menu").hidden = false;
+  let siguiente = 0; // primer nivel sin pasar
+  while (siguiente < NIVELES.length && hechos[siguiente]) siguiente++;
+  if (siguiente >= NIVELES.length) siguiente = NIVELES.length - 1;
+  aplicarMundo(siguiente);
   const c = $("niveles");
   c.innerHTML = "";
-  NIVELES.forEach((_, i) => {
-    const b = document.createElement("button");
-    b.textContent = hechos[i] ? "✓ " + (i + 1) : i + 1;
-    b.disabled = i > 0 && !hechos[i - 1];
-    if (hechos[i]) b.className = "hecho";
-    b.addEventListener("click", () => jugar(i));
-    c.appendChild(b);
+  MUNDOS.forEach((m, w) => {
+    const ini = w * NIVELES_POR_MUNDO;
+    const fin = Math.min(ini + NIVELES_POR_MUNDO, NIVELES.length);
+    if (ini >= NIVELES.length) return;
+    let pasados = 0;
+    for (let i = ini; i < fin; i++) if (hechos[i]) pasados++;
+    const det = document.createElement("details");
+    det.className = "mundo";
+    det.open = w === mundoDe(siguiente);
+    const sum = document.createElement("summary");
+    sum.textContent = m.nombre + " · " + pasados + "/" + (fin - ini) + (ini > 0 && !hechos[ini - 1] ? " 🔒" : "");
+    const rej = document.createElement("div");
+    rej.className = "rejilla-niv";
+    for (let i = ini; i < fin; i++) {
+      const b = document.createElement("button");
+      b.textContent = hechos[i] ? "✓ " + (i + 1) : i + 1;
+      b.disabled = i > 0 && !hechos[i - 1];
+      if (hechos[i]) b.className = "hecho";
+      b.addEventListener("click", () => jugar(i));
+      rej.appendChild(b);
+    }
+    det.append(sum, rej);
+    c.appendChild(det);
   });
 }
 
@@ -41,6 +73,7 @@ function jugar(i) {
   hist = [];
   sel = -1;
   acabo = false;
+  aplicarMundo(i);
   $("menu").hidden = true;
   $("juego").hidden = false;
   $("final").hidden = true;
@@ -50,6 +83,8 @@ function jugar(i) {
 
 function pintar() {
   $("info").textContent = "Nivel " + (nivel + 1);
+  const oculto = !!NIVELES[nivel].oculto; // modo niebla: solo se ve el color de arriba
+  $("pista").textContent = MUNDOS[mundoDe(nivel)].nombre + (oculto ? " · 🌫️ solo ves el color de arriba" : "");
   const m = $("mesa");
   m.innerHTML = "";
   m.style.setProperty("--cap", cap);
@@ -60,10 +95,16 @@ function pintar() {
     cuello.className = "cuello";
     const cuerpo = document.createElement("div");
     cuerpo.className = "cuerpo";
-    b.forEach((v) => {
+    const visibles = racha(b); // las capas del mismo color que la de arriba se ven juntas
+    b.forEach((v, k) => {
       const s = document.createElement("div");
       s.className = "seg";
-      s.style.background = PALETA[v];
+      if (oculto && k < b.length - visibles) {
+        s.classList.add("oculto");
+        s.textContent = "?";
+      } else {
+        s.style.background = PALETA[v];
+      }
       cuerpo.appendChild(s);
     });
     d.append(cuello, cuerpo);
