@@ -24,6 +24,7 @@ const R_RASTRO = 2;                   // grosor de la estela
 const R_INICIO = 9;                   // radio del territorio inicial
 const GRACIA = 12;                    // pasos recientes de tu estela que no cuentan al girar (para no chocar contigo)
 const NUM_BOTS = 7;                   // máximo 7 (hay 8 colores/nombres)
+const ESCALA = 3;                     // nitidez: píxeles por casilla al dibujar el territorio (2 = ligero, 3 = recomendado, 4 = más nítido pero usa más memoria)
 const CELDAS_VISTA = 110;             // casillas finas que caben en el lado corto de la pantalla (menos = más cerca)
 const REAPARECE_BOT = [2, 4];         // segundos que tarda un bot en volver
 const PUNTOS_POR_PCT = 10;            // puntos por cada 1 % de mapa (el máximo que lograste)
@@ -75,33 +76,128 @@ import("../compartido/jugador.js")
   .then((m) => { J = m; m.alCambiarSesion((u) => { usuario = u; marcarEntrar(); }); })
   .catch(() => {});
 
-// ----- Capas de territorio (un píxel por casilla, luego se estiran suavizadas) -----
-// A = colores claros (territorio y estela), B = colores oscuros (el «grosor» de abajo)
-const cvA = document.createElement("canvas"), cvB = document.createElement("canvas");
-cvA.width = cvA.height = cvB.width = cvB.height = G;
-const ctxA = cvA.getContext("2d"), ctxB = cvB.getContext("2d");
-const imgA = ctxA.createImageData(G, G), imgB = ctxB.createImageData(G, G);
-const u32A = new Uint32Array(imgA.data.buffer), u32B = new Uint32Array(imgB.data.buffer);
-let sx0 = 0, sy0 = 0, sx1 = G - 1, sy1 = G - 1; // zona que cambió y hay que subir a las capas
+// ----- Capas de territorio, estelas y suelo -----
+// El juego calcula todo en una rejilla de casillas, pero se DIBUJA a más resolución (ESCALA píxeles por casilla)
+// y con los bordes suavizados: así los colores quedan firmes y las curvas lisas en vez de escalonadas.
+// A = colores claros (territorio y estela), B = colores oscuros (el «grosor» de abajo), M = suelo, S = sombra del suelo.
+// Se redibujan solo las «baldosas» (de 16×16 casillas) que cambiaron.
+const T_SH = 4, T = 1 << T_SH;               // lado de una baldosa, en casillas
+const NT = Math.ceil(G / T), GT = NT * T;    // baldosas por lado y lado total (en casillas)
+const TP = T * ESCALA;                       // lado de una baldosa, en píxeles
+const SUAVIZADO = 1.1;                       // cuánto se redondean los bordes, en casillas (más alto = más lisos pero más «blandos» en las esquinas)
+const RAD = Math.max(2, Math.round(SUAVIZADO * 2)), K = 2 * RAD + 1; // alcance del filtro y lado de su ventana
+const GANA = ESCALA * SUAVIZADO * 1.25;      // qué tan «seco» es el borde entre dos colores (transición de ~1 píxel)
+function crearCapa() { const c = document.createElement("canvas"); c.width = c.height = GT * ESCALA; return c; }
+const cvA = crearCapa(), cvB = crearCapa(), cvM = crearCapa(), cvS = crearCapa();
+const ctxA = cvA.getContext("2d"), ctxB = cvB.getContext("2d"), ctxM = cvM.getContext("2d"), ctxS = cvS.getContext("2d");
+const tA = ctxA.createImageData(TP, TP), tB = ctxB.createImageData(TP, TP);   // una baldosa de trabajo
+const u32TA = new Uint32Array(tA.data.buffer), u32TB = new Uint32Array(tB.data.buffer);
+const clave = new Uint8Array(N);             // qué se ve en cada casilla: 0 nada, 1-8 territorio de ese id, 9-16 estela de ese id (+8)
+const sucioT = new Uint8Array(NT * NT), listaT = [];
+
+// Color de cada clave: claro (A) y oscuro (B)
+const CR = new Float32Array(17), CG = new Float32Array(17), CB = new Float32Array(17);
+const DR = new Float32Array(17), DG = new Float32Array(17), DB = new Float32Array(17);
+const PA = new Uint32Array(17), PB = new Uint32Array(17); // los mismos colores ya empaquetados (opacos)
+for (let id = 1; id <= 8; id++) {
+  const tono = TONOS[id - 1];
+  for (const [k, cl, os] of [[id, hslRgb(tono, 55, 66), hslRgb(tono, 48, 46)], [id + 8, hslRgb(tono, 62, 78), hslRgb(tono, 45, 60)]]) {
+    CR[k] = cl[0]; CG[k] = cl[1]; CB[k] = cl[2]; DR[k] = os[0]; DG[k] = os[1]; DB[k] = os[2];
+    PA[k] = ((255 << 24) | (cl[2] << 16) | (cl[1] << 8) | cl[0]) >>> 0;
+    PB[k] = ((255 << 24) | (os[2] << 16) | (os[1] << 8) | os[0]) >>> 0;
+  }
+}
+// Pesos de un filtro gaussiano para cada sub-píxel dentro de una casilla: PESOS[s][t] = peso de la casilla que está (t - RAD) casillas al lado
+function erf(x) { // aproximación de Abramowitz-Stegun
+  const t = 1 / (1 + 0.3275911 * Math.abs(x)), y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return x < 0 ? -y : y;
+}
+const PESOS = [];
+for (let s = 0; s < ESCALA; s++) {
+  const p = (s + 0.5) / ESCALA - 0.5, w = [];
+  let tot = 0;
+  for (let t = 0; t < K; t++) {
+    const c = (t - RAD) - p, v = 0.5 * (erf((c + 0.5) / (SUAVIZADO * Math.SQRT2)) - erf((c - 0.5) / (SUAVIZADO * Math.SQRT2)));
+    w.push(v); tot += v;
+  }
+  PESOS.push(w.map((v) => v / tot));
+}
+const KS = new Uint8Array(K * K), UK = new Uint8Array(K * K), IX = new Uint8Array(K * K), AC = new Float32Array(K * K);
 
 function pix(i) {
   const o = dueno[i], r = rastro[i];
-  let a = 0, b = 0;
-  if (r) { const e = ents[r - 1]; a = e.pRl; b = e.pRd; }
-  else if (o) { const e = ents[o - 1]; a = e.pTl; b = e.pTd; }
-  u32A[i] = a; u32B[i] = b;
+  clave[i] = r ? 8 + r : o;
   const x = i % G, y = (i / G) | 0;
-  if (x < sx0) sx0 = x;
-  if (x > sx1) sx1 = x;
-  if (y < sy0) sy0 = y;
-  if (y > sy1) sy1 = y;
+  const a = Math.max(0, (x - RAD) >> T_SH), b = Math.min(NT - 1, (x + RAD) >> T_SH);
+  const c = Math.max(0, (y - RAD) >> T_SH), d = Math.min(NT - 1, (y + RAD) >> T_SH);
+  for (let ty = c; ty <= d; ty++)
+    for (let tx = a; tx <= b; tx++) { const k = ty * NT + tx; if (!sucioT[k]) { sucioT[k] = 1; listaT.push(k); } }
+}
+function limpiarCapas() {
+  ctxA.clearRect(0, 0, cvA.width, cvA.height);
+  ctxB.clearRect(0, 0, cvB.width, cvB.height);
+  for (const k of listaT) sucioT[k] = 0;
+  listaT.length = 0;
+}
+
+// Vuelve a dibujar una baldosa: en cada píxel mezcla las casillas de alrededor con el filtro suave y se queda con el color
+// dominante; en el borde entre dos colores hace una transición de ~1 píxel (bordes lisos y sin dientes).
+function pintarBaldosa(tx, ty) {
+  const cx0 = tx * T, cy0 = ty * T;
+  for (let cy = 0; cy < T; cy++)
+    for (let cx = 0; cx < T; cx++) {
+      const X = cx0 + cx, Y = cy0 + cy;
+      let n = 0, igual = true;
+      for (let j = -RAD; j <= RAD; j++)
+        for (let i = -RAD; i <= RAD; i++) {
+          const xx = X + i, yy = Y + j;
+          const k = xx >= 0 && yy >= 0 && xx < G && yy < G ? clave[yy * G + xx] : 0;
+          KS[n++] = k;
+          if (k !== KS[0]) igual = false;
+        }
+      const px0 = cx * ESCALA, py0 = cy * ESCALA;
+      if (igual) { // casilla rodeada de lo mismo: color liso
+        const pa = PA[KS[0]], pb = PB[KS[0]];
+        for (let sy = 0; sy < ESCALA; sy++) {
+          let o = (py0 + sy) * TP + px0;
+          for (let sx = 0; sx < ESCALA; sx++, o++) { u32TA[o] = pa; u32TB[o] = pb; }
+        }
+        continue;
+      }
+      let nu = 0;
+      for (let q = 0; q < K * K; q++) {
+        let f = -1;
+        for (let u = 0; u < nu; u++) if (UK[u] === KS[q]) { f = u; break; }
+        if (f < 0) { UK[nu] = KS[q]; f = nu++; }
+        IX[q] = f;
+      }
+      for (let sy = 0; sy < ESCALA; sy++) {
+        const wy = PESOS[sy];
+        let o = (py0 + sy) * TP + px0;
+        for (let sx = 0; sx < ESCALA; sx++, o++) {
+          const wx = PESOS[sx];
+          for (let u = 0; u < nu; u++) AC[u] = 0;
+          for (let j = 0, q = 0; j < K; j++) { const w = wy[j]; for (let i = 0; i < K; i++, q++) AC[IX[q]] += w * wx[i]; }
+          let i1 = 0;
+          for (let u = 1; u < nu; u++) if (AC[u] > AC[i1]) i1 = u;
+          let i2 = -1;
+          for (let u = 0; u < nu; u++) if (u !== i1 && (i2 < 0 || AC[u] > AC[i2])) i2 = u;
+          const k1 = UK[i1], k2 = UK[i2];
+          const m = Math.min(1, 0.5 + (AC[i1] - AC[i2]) * GANA);
+          const a1 = k1 ? m : 0, a2 = k2 ? 1 - m : 0, al = a1 + a2;
+          if (al < 0.004) { u32TA[o] = 0; u32TB[o] = 0; continue; }
+          const ab = (al * 255 + 0.5) | 0, inv = 1 / al;
+          u32TA[o] = ((ab << 24) | (((CB[k1] * a1 + CB[k2] * a2) * inv + 0.5) << 16) | (((CG[k1] * a1 + CG[k2] * a2) * inv + 0.5) << 8) | ((CR[k1] * a1 + CR[k2] * a2) * inv + 0.5)) >>> 0;
+          u32TB[o] = ((ab << 24) | (((DB[k1] * a1 + DB[k2] * a2) * inv + 0.5) << 16) | (((DG[k1] * a1 + DG[k2] * a2) * inv + 0.5) << 8) | ((DR[k1] * a1 + DR[k2] * a2) * inv + 0.5)) >>> 0;
+        }
+      }
+    }
+  ctxA.putImageData(tA, tx * TP, ty * TP);
+  ctxB.putImageData(tB, tx * TP, ty * TP);
 }
 function subirCapas() {
-  if (sx1 < sx0) return;
-  const w = sx1 - sx0 + 1, h = sy1 - sy0 + 1;
-  ctxA.putImageData(imgA, 0, 0, sx0, sy0, w, h);
-  ctxB.putImageData(imgB, 0, 0, sx0, sy0, w, h);
-  sx0 = G; sy0 = G; sx1 = -1; sy1 = -1;
+  for (const k of listaT) { sucioT[k] = 0; pintarBaldosa(k % NT, (k / NT) | 0); }
+  listaT.length = 0;
 }
 
 // ----- Colores -----
@@ -114,13 +210,47 @@ function hslRgb(h, s, l) {
 const pack = (c) => ((255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0; // ABGR (little endian)
 
 // ----- Mapa del nivel -----
-// Capas del fondo: M = suelo claro, S = su sombra (más oscura, se dibuja un poco más abajo)
-const cvM = document.createElement("canvas"), cvS = document.createElement("canvas");
-cvM.width = cvM.height = cvS.width = cvS.height = G;
-const ctxM = cvM.getContext("2d"), ctxS = cvS.getContext("2d");
-const imgM = ctxM.createImageData(G, G), imgS = ctxS.createImageData(G, G);
-const u32M = new Uint32Array(imgM.data.buffer), u32S = new Uint32Array(imgS.data.buffer);
+// El suelo (M) y su sombra (S) también se dibujan a mayor resolución y con el borde suavizado (ver «pintarPiso»)
 const tmpD = new Float32Array(N);
+const PISO_M = (247 << 16) | (255 << 8) | 236, PISO_S = (195 << 16) | (214 << 8) | 169; // colores (ABGR sin el alfa)
+const AA_PISO = ESCALA * SUAVIZADO * 2.5;    // ancho de la transición del borde del suelo
+
+function pintarPiso() {
+  for (let ty = 0; ty < NT; ty++)
+    for (let tx = 0; tx < NT; tx++) {
+      const cx0 = tx * T, cy0 = ty * T;
+      for (let cy = 0; cy < T; cy++)
+        for (let cx = 0; cx < T; cx++) {
+          const X = cx0 + cx, Y = cy0 + cy;
+          let n = 0, suma = 0;
+          for (let j = -RAD; j <= RAD; j++)
+            for (let i = -RAD; i <= RAD; i++) {
+              const xx = X + i, yy = Y + j;
+              const k = xx >= 0 && yy >= 0 && xx < G && yy < G ? dentro[yy * G + xx] : 0;
+              KS[n++] = k; suma += k;
+            }
+          const px0 = cx * ESCALA, py0 = cy * ESCALA;
+          const fijo = suma === K * K ? 255 : suma === 0 ? 0 : -1;
+          for (let sy = 0; sy < ESCALA; sy++) {
+            const wy = PESOS[sy];
+            let o = (py0 + sy) * TP + px0;
+            for (let sx = 0; sx < ESCALA; sx++, o++) {
+              let a8 = fijo;
+              if (a8 < 0) {
+                const wx = PESOS[sx];
+                let w = 0;
+                for (let j = 0, q = 0; j < K; j++) for (let i = 0; i < K; i++, q++) if (KS[q]) w += wy[j] * wx[i];
+                a8 = Math.round(Math.max(0, Math.min(1, 0.5 + (w - 0.5) * AA_PISO)) * 255);
+              }
+              u32TA[o] = a8 ? ((a8 << 24) | PISO_M) >>> 0 : 0;
+              u32TB[o] = a8 ? ((a8 << 24) | PISO_S) >>> 0 : 0;
+            }
+          }
+        }
+      ctxM.putImageData(tA, tx * TP, ty * TP);
+      ctxS.putImageData(tB, tx * TP, ty * TP);
+    }
+}
 
 function chamfer(d) { // distancia (aprox.) al origen más cercano, en dos pasadas
   const D2 = 1.4142;
@@ -168,15 +298,8 @@ function construirNivel(n) {
   }
   // distancia a la pared (dentro) y al mapa (fuera): sirve para los roces, los bots y para suavizar el borde al dibujar
   for (let i = 0; i < N; i++) { distM[i] = dentro[i] ? 1e4 : 0; tmpD[i] = dentro[i] ? 0 : 1e4; }
-  chamfer(distM); chamfer(tmpD);
-  for (let i = 0; i < N; i++) {
-    const sd = dentro[i] ? distM[i] - 0.5 : -(tmpD[i] - 0.5);
-    const a = Math.max(0, Math.min(1, 0.5 + sd * 0.8)), a8 = Math.round(a * 255);
-    u32M[i] = a8 ? ((a8 << 24) | (247 << 16) | (255 << 8) | 236) >>> 0 : 0;
-    u32S[i] = a8 ? ((a8 << 24) | (195 << 16) | (214 << 8) | 169) >>> 0 : 0;
-  }
-  ctxM.putImageData(imgM, 0, 0);
-  ctxS.putImageData(imgS, 0, 0);
+  chamfer(distM);
+  pintarPiso();
 }
 function distEn(x, y) {
   const cx = x | 0, cy = y | 0;
@@ -547,8 +670,7 @@ function paso() {
 
 // ----- Partida -----
 function iniciar(demo) {
-  dueno.fill(0); rastro.fill(0); rastroIdx.fill(0); u32A.fill(0); u32B.fill(0);
-  sx0 = 0; sy0 = 0; sx1 = G - 1; sy1 = G - 1;
+  dueno.fill(0); rastro.fill(0); rastroIdx.fill(0); clave.fill(0); limpiarCapas();
   fx = []; metaDedo = null;
   if (nivelConstruido !== nivelActual) { construirNivel(nivelActual); nivelConstruido = nivelActual; }
   const nBots = Math.max(1, Math.min(NUM_BOTS, NIVELES[nivelActual].bots || 4));
@@ -724,6 +846,14 @@ function cuadro(x, y, w, h, r) {
   ctx.closePath();
 }
 
+// Dibuja solo la parte de una capa que se ve en pantalla (dy = desplazamiento hacia abajo, para las sombras)
+function capa(c, dy) {
+  const x0 = Math.max(0, Math.floor(cam.x - vw / 2 / cs) - 2), x1 = Math.min(G, Math.ceil(cam.x + vw / 2 / cs) + 2);
+  const y0 = Math.max(0, Math.floor(cam.y - vh / 2 / cs) - 2), y1 = Math.min(G, Math.ceil(cam.y + vh / 2 / cs) + 2);
+  if (x1 <= x0 || y1 <= y0) return;
+  ctx.drawImage(c, x0 * ESCALA, y0 * ESCALA, (x1 - x0) * ESCALA, (y1 - y0) * ESCALA, SX(x0), SY(y0) + dy, (x1 - x0) * cs, (y1 - y0) * cs);
+}
+
 function dibujar(k) {
   subirCapas();
 
@@ -732,13 +862,13 @@ function dibujar(k) {
   ctx.fillRect(0, 0, vw, vh);
 
   // el suelo del mapa (con su sombra abajo) y, encima, territorio y estelas.
-  // Todas son capas finas estiradas y suavizadas: por eso los bordes se ven redondeados.
+  // Son capas de alta resolución con los bordes ya suavizados (ver «Capas de territorio»).
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(cvS, SX(0), SY(0) + Math.max(3, cs * 1.6), G * cs, G * cs);
-  ctx.drawImage(cvM, SX(0), SY(0), G * cs, G * cs);
-  ctx.drawImage(cvB, SX(0), SY(0) + Math.max(2, cs * 1.1), G * cs, G * cs);
-  ctx.drawImage(cvA, SX(0), SY(0), G * cs, G * cs);
+  capa(cvS, Math.max(3, cs * 1.6));
+  capa(cvM, 0);
+  capa(cvB, Math.max(2, cs * 1.1));
+  capa(cvA, 0);
 
   // cabezas: cubito redondeado con ojos que miran hacia donde van
   const lado = cs * 6.2, grosor = cs * 1.4;
