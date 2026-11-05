@@ -27,8 +27,9 @@
     #acciones .btn { padding: 6px 10px; font-size: .82rem; }
     #bReino { position: absolute; top: 8px; left: 8px; z-index: 3; }
     #bCrea { position: absolute; top: 50px; left: 8px; z-index: 3; }
-    #reino, #crea { position: absolute; top: 92px; left: 8px; z-index: 3; width: min(340px, calc(100% - 16px)); max-height: calc(100% - 108px); overflow: auto; display: flex; flex-direction: column; gap: 6px; padding: 10px; background: #1b2036ee; border: 1px solid var(--borde); border-radius: 12px; font-size: .85rem; }
-    #reino .resumen, #crea .resumen { font-weight: 700; } #reino p, #crea p { margin: 0; color: var(--suave); }
+    #bTropas { position: absolute; top: 92px; left: 8px; z-index: 3; }
+    #reino, #crea, #tropas { position: absolute; top: 134px; left: 8px; z-index: 3; width: min(340px, calc(100% - 16px)); max-height: calc(100% - 150px); overflow: auto; display: flex; flex-direction: column; gap: 6px; padding: 10px; background: #1b2036ee; border: 1px solid var(--borde); border-radius: 12px; font-size: .85rem; }
+    #reino .resumen, #crea .resumen, #tropas .resumen { font-weight: 700; } #reino p, #crea p, #tropas p { margin: 0; color: var(--suave); }
     .soldado:disabled { opacity: .5; cursor: default; }
     .soldado { padding: 8px 10px; font: inherit; font-size: .82rem; text-align: left; color: var(--texto); background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; cursor: pointer; }
     .soldado.activo { border-color: var(--acento); }
@@ -56,7 +57,9 @@
     <button class="btn" id="bReino" hidden>👑 Reino</button>
     <button class="btn" id="bCrea" hidden>🛠️ Creaciones</button>
     <div id="reino" hidden></div>
+    <button class="btn" id="bTropas" hidden>🎯 Seleccionar tropas</button>
     <div id="crea" hidden></div>
+    <div id="tropas" hidden></div>
     <div class="zoom"><button class="btn" id="zmas" aria-label="Acercar">+</button><button class="btn" id="zmenos" aria-label="Alejar">−</button></div>
     <div id="menu">
       <div id="mPrincipal"><h1>🏛️ Imperio</h1><button class="btn grande" id="bPers">Partida personalizada</button><button class="btn grande" id="bNiv">Niveles</button></div>

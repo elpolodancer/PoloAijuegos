@@ -26,7 +26,8 @@ const ANI = { // vel en puntos (humano = 10); ag = a qué distancia notan a un s
 const nuevoAnimal = (k, x, y) => ({ k, x, y, hp: ANI[k].hp, mh: ANI[k].hp, cd: 0, dest: null, esp: 0, obj: null });
 const ITEM = { tronco: "Tronco", tablon: "Tablón", roca: "Piedra", carbon: "Carbón", cobre: "Cobre", hierro: "Hierro", oro: "Oro", diamante: "Diamante" };
 const MADERA = ["tronco", "tablon"], STACK = 20, RANURAS = 10; // cada ranura guarda un solo material, hasta 20 (el personaje tiene 10 ranuras; el baúl, 20)
-const ES_CONT = ["baul", "cajonM", "cajonN"]; // cosas que el personaje fabrica con 4 tablones y que guardan objetos
+const COSTO_FAB = { poste: 2, baul: 4, cajonM: 4, cajonN: 4 }; // tablones que cuesta cada cosa que fabrica el personaje
+const ES_CONT = ["baul", "cajonM", "cajonN"]; // las que guardan objetos
 const espacio = (inv, t, r = RANURAS) => inv.filter((s) => s.t == t).reduce((a, s) => a + STACK - s.n, 0) + (r - inv.length) * STACK;
 const cuenta = (inv, t) => inv.filter((s) => s.t == t).reduce((a, s) => a + s.n, 0);
 function anadir(inv, t, n) { for (const s of inv) if (s.t == t && n > 0) { const k = Math.min(n, STACK - s.n); s.n += k; n -= k; } while (n > 0) { const k = Math.min(n, STACK); inv.push({ t, n: k }); n -= k; } }
@@ -34,15 +35,17 @@ function quitar(inv, t, n) { for (let i = inv.length - 1; i >= 0 && n > 0; i--) 
 function pasar(de, a, ok, r = RANURAS) { de.slice().forEach((s) => { if (!ok(s.t)) return; const k = Math.min(cuenta(de, s.t), espacio(a, s.t, r)); if (k > 0) { quitar(de, s.t, k); anadir(a, s.t, k); } }); }
 const heroe = () => us.find((u) => u.k == "h");
 const ED = {
-  baul: { nom: "Baúl", w: 1, hp: 80, c: "#8b5a2b", ran: 20 }, cajonM: { nom: "Cajón de madera", w: 1, hp: 60, c: "#a1763f" }, cajonN: { nom: "Cajón de minerales", w: 1, hp: 60, c: "#6b7280" }, centro: { nom: "Centro", w: 2, hp: 400, c: "#c9a66b" }, almacen: { nom: "Almacén", costo: 60, w: 1, hp: 150, c: "#a47148" }, torre: { nom: "Torre", costo: 120, w: 1, hp: 200, c: "#8a8fa3" } };
+  poste: { nom: "Poste de imperio", w: 1, hp: 120, c: "#c0392b" }, baul: { nom: "Baúl", w: 1, hp: 80, c: "#8b5a2b", ran: 20 }, cajonM: { nom: "Cajón de madera", w: 1, hp: 60, c: "#a1763f" }, cajonN: { nom: "Cajón de minerales", w: 1, hp: 60, c: "#6b7280" }, centro: { nom: "Centro", w: 2, hp: 400, c: "#c9a66b" }, almacen: { nom: "Almacén", costo: 60, w: 1, hp: 150, c: "#a47148" }, torre: { nom: "Torre", costo: 120, w: 1, hp: 200, c: "#8a8fa3" } };
 const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const capac = (b) => ED[b.k].ran || RANURAS; // ranuras de un contenedor
 const cv = $("lienzo"), cx = cv.getContext("2d");
 let W, H, cam, anim, stock, bio, res, bloq, vis, expl, us, eds, enem, fx, dinero, oleada, tReloj, tOleada, sel, colocar, fin, muertes, pend;
+let zona = new Uint8Array(N * N), grupos = [], nPostes = 0, grSel = null, moverGrupo = null; // zona del imperio, grupos de tropas y estado de los paneles
 
 function nuevo() {
   res = new Array(N * N).fill(null); bloq = new Uint8Array(N * N); expl = new Uint8Array(N * N); vis = new Uint8Array(N * N);
   us = []; eds = []; anim = []; stock = { carne: 0, piel: 0, cuero: 0 }; enem = []; fx = []; dinero = 100; oleada = 0; tReloj = 0; tOleada = 70; sel = null; colocar = null; fin = false; muertes = 0; pend = 0;
+  grupos = []; grSel = null; moverGrupo = null; nPostes = 0; zona = new Uint8Array(N * N);
   generarMapa();
   ponerEdificio("centro", 8, 8, true); sel = crearUnidad("h");
   cam = { x: W / 2 - 0 * TW, y: H / 3, z: 1 };
@@ -116,10 +119,12 @@ function ponerEdificio(k, x, y, listo) {
   for (let i = 0; i < w; i++) for (let j = 0; j < w; j++) bloq[(y + j) * N + x + i] = 1;
   eds.push(b); return b;
 }
-function crearUnidad(k) {
-  for (let r = 2; r < 6; r++) for (let a = 0; a < 40; a++) {
-    const x = 9 + ((Math.random() * (2 * r + 1)) | 0) - r, y = 9 + ((Math.random() * (2 * r + 1)) | 0) - r;
-    if (x >= 0 && y >= 0 && x < N && y < N && !bloq[y * N + x]) { const u = { k, x: x + .5, y: y + .5, hp: UN[k].hp, mh: UN[k].hp, p: [], o: null, cd: 0, carry: { t: null, n: 0 }, inv: k == "h" ? [] : null }; us.push(u); return u; }
+function crearUnidad(k) { // el personaje aparece junto a la base; las tropas, en el punto de reunión de su grupo
+  let bx = 9, by = 9, gr = null;
+  if (k != "h") { gr = asignarGrupo(); bx = grupos[gr].x | 0; by = grupos[gr].y | 0; }
+  for (let r = k == "h" ? 2 : 1; r < 6; r++) for (let a = 0; a < 40; a++) {
+    const x = bx + ((Math.random() * (2 * r + 1)) | 0) - r, y = by + ((Math.random() * (2 * r + 1)) | 0) - r;
+    if (x >= 0 && y >= 0 && x < N && y < N && !bloq[y * N + x]) { const u = { k, x: x + .5, y: y + .5, hp: UN[k].hp, mh: UN[k].hp, p: [], o: null, cd: 0, carry: { t: null, n: 0 }, inv: k == "h" ? [] : null, gr, reu: true }; us.push(u); return u; }
   }
 }
 // ----- Ruta (BFS por casillas) -----
@@ -154,8 +159,8 @@ function golpe(a, b, dmg) { b.hp -= dmg; fx.push({ x1: a.x, y1: a.y, x2: b.x + (
 function actualizar(u, dt) {
   u.cd = Math.max(0, u.cd - dt);
   if (u.k == "e") return iaEnemigo(u, dt);
-  const o = u.o;
-  if (!o) { if (u.k == "g") { const e = cercano(enem.concat(anim.filter((a) => ANI[a.k].dmg)).filter((e) => vis[(e.y | 0) * N + (e.x | 0)]), u, 5); if (e) u.o = { t: "atk", e }; } return; }
+  const o = u.o; if (o) { if (u.pr && u.pr.length) u.pr = []; if (o.t != "tar") u.reu = false; } // una orden manual deja a la unidad «suelta» (ya no vuelve sola al grupo)
+  if (!o) { if (u.k != "h" && u.reu) inactivo(u, dt); return; } // sin órdenes se queda quieta (las del grupo se juntan en su punto de reunión)
   if (o.t == "mov") { if (!paso(u, dt)) u.o = null; return; }
   if (o.t == "atk") {
     if (o.e.hp <= 0) { u.o = null; return; }
@@ -177,6 +182,27 @@ function actualizar(u, dt) {
       if (b.prog < 1) { b.prog = Math.min(1, b.prog + dt / 8); b.hp = Math.min(b.mh, b.hp + b.mh * dt / 8.8); }
       else if (b.hp < b.mh) b.hp = Math.min(b.mh, b.hp + 25 * dt); else u.o = null;
     } else if (!paso(u, dt)) { u.p = ruta(u, b.x, b.y, b.w); if (!u.p.length) u.o = null; }
+    return;
+  }
+  if (o.t == "tar") { // tarea de grupo: junta madera o minerales y los guarda en un cofre dentro de la zona del imperio
+    const g = grupos[u.gr];
+    if (!g || g.tarea != o.cat) { u.o = null; return; } // la tarea cambió o se detuvo
+    const r = res[o.i], rx = o.i % N, ry = (o.i / N) | 0;
+    if (o.f == "ir") {
+      if (o.i < 0 || !r) { const j = buscarCat(u, CAT[o.cat]); if (j < 0) { if (u.carry.n) o.f = "vol"; else { u.o = null; u.rt2 = 5; } } else { o.i = j; u.p = []; } return; }
+      if (distRect(u, rx, ry, 1) < 1.6) { o.f = "cav"; o.t0 = 0; } else if (!paso(u, dt)) { u.p = ruta(u, rx, ry, 1); if (!u.p.length) { u.o = null; u.rt2 = 5; } }
+    } else if (o.f == "cav") {
+      if (!r) { o.f = u.carry.n ? "vol" : "ir"; o.i = -1; return; }
+      if (u.carry.n && u.carry.t != r.t) { o.f = "vol"; return; } // primero deja lo que lleva
+      o.t0 += dt;
+      if (o.t0 >= 1) { o.t0 = 0; u.carry.t = r.t; u.carry.n++; r.n--; if (r.n <= 0) { res[o.i] = null; bloq[o.i] = 0; } if (u.carry.n >= 5) o.f = "vol"; }
+    } else {
+      if (!u.carry.n) { o.f = "ir"; o.i = -1; return; }
+      const item = itemDe(u.carry.t), c = cofreDestino(u, item);
+      if (!c) { g.tarea = null; u.o = null; aviso("Grupo " + (u.gr + 1) + ": no hay cofre con espacio, tarea detenida"); return; }
+      if (distRect(u, c.x, c.y, c.w) < 1.6) { const k = Math.min(u.carry.n, espacio(c.inv, item, capac(c))); anadir(c.inv, item, k); u.carry.n -= k; if (!u.carry.n) { o.f = "ir"; o.i = -1; } }
+      else if (!paso(u, dt)) { u.p = ruta(u, c.x, c.y, c.w); if (!u.p.length) { u.o = null; u.rt2 = 5; } }
+    }
     return;
   }
   if (o.t == "rec") {
@@ -244,6 +270,72 @@ function iaEnemigo(e, dt) {
   else if (!e.cd) { golpe(e, t, 8); e.cd = 1; }
 }
 function puntos(n) { pend += n; if (pend >= 10 || (fin && pend > 0)) { const p = pend; pend = 0; import("../compartido/jugador.js").then((m) => m.sumarPuntos("imperio", p)).catch(() => {}); } }
+// ----- Zona del imperio (postes), grupos de tropas y tareas -----
+const MAX_GRUPO = 10, RADIO_ZONA = 6; // tropas por grupo; radio (en casillas) que marca cada poste de imperio
+const CAT = { madera: ["arbol"], mineral: ["roca", "carbon", "cobre", "hierro", "oro", "diamante"] };
+const itemDe = (t) => (t == "arbol" ? "tronco" : t);
+const aceptaCont = (b, t) => b.k == "baul" || (b.k == "cajonM") == MADERA.includes(t);
+const zonaOk = (i, k) => (k == "poste" ? !nPostes || zona[i] : k in COSTO_FAB ? zona[i] : true); // poste: el primero va libre, los demás dentro de la zona; cofres: siempre dentro de la zona
+function recalcZona() {
+  zona = new Uint8Array(N * N);
+  eds.forEach((b) => {
+    if (b.k != "poste" || b.prog < 1) return;
+    for (let y = Math.max(0, b.y - RADIO_ZONA); y <= Math.min(N - 1, b.y + RADIO_ZONA); y++) for (let x = Math.max(0, b.x - RADIO_ZONA); x <= Math.min(N - 1, b.x + RADIO_ZONA); x++) if (Math.hypot(x - b.x, y - b.y) <= RADIO_ZONA) zona[y * N + x] = 1;
+  });
+}
+const contenedores = () => eds.filter((b) => ES_CONT.includes(b.k) && b.prog >= 1 && b.hp > 0 && b.inv && zona[b.y * N + b.x]); // solo cuentan los cofres dentro de la zona
+const cofreDestino = (u, item) => contenedores().filter((b) => aceptaCont(b, item) && espacio(b.inv, item, capac(b)) >= 1).sort((a, b) => Math.hypot(a.x - u.x, a.y - u.y) - Math.hypot(b.x - u.x, b.y - u.y))[0];
+const cofreListo = (tarea) => { const it = tarea == "madera" ? "tronco" : "roca"; return contenedores().some((b) => aceptaCont(b, it) && espacio(b.inv, it, capac(b)) >= 1); };
+function buscarCat(u, lista) { let m = -1, md = 1e9; res.forEach((r, i) => { if (r && lista.includes(r.t) && expl[i]) { const d = Math.hypot(i % N - u.x, ((i / N) | 0) - u.y); if (d < md) { md = d; m = i; } } }); return m; }
+function libreCerca(x, y) { // centro de la casilla libre más cercana
+  let m = null, md = 1e9;
+  for (let j = -8; j <= 8; j++) for (let i = -8; i <= 8; i++) { const a = (x | 0) + i, b = (y | 0) + j; if (a < 0 || b < 0 || a >= N || b >= N || bloq[b * N + a]) continue; const d = Math.hypot(a + .5 - x, b + .5 - y); if (d < md) { md = d; m = { x: a + .5, y: b + .5 }; } }
+  return m || { x: 10.5, y: 10.5 };
+}
+function nuevoRally(id) { const p = eds.find((b) => b.k == "poste"), bx = p ? p.x + .5 : 10, by = p ? p.y + .5 : 11, a = id * 2.1, r = Math.min(5, 2.5 + (id >> 1) * 1.5); return libreCerca(bx + Math.cos(a) * r, by + Math.sin(a) * r); }
+function asignarGrupo() { // el primer grupo con menos de 10 tropas; si todos están llenos, uno nuevo
+  for (let id = 0; id < grupos.length; id++) if (us.filter((u) => u.gr === id).length < MAX_GRUPO) return id;
+  const id = grupos.length, q = nuevoRally(id); grupos.push({ id, x: q.x, y: q.y, tarea: null }); return id;
+}
+function hueco(u) { // lugar de la unidad alrededor del punto de reunión de su grupo
+  const g = grupos[u.gr]; if (!g) return null;
+  if (bloq[(g.y | 0) * N + (g.x | 0)]) { const q = libreCerca(g.x, g.y); g.x = q.x; g.y = q.y; }
+  let s = 0; for (const o of us) { if (o === u) break; if (o.gr === u.gr) s++; }
+  const a = s * 2.4, r = s ? .45 + .3 * Math.sqrt(s) : 0, x = g.x + Math.cos(a) * r, y = g.y + Math.sin(a) * r;
+  return x < 0 || y < 0 || x >= N || y >= N || bloq[(y | 0) * N + (x | 0)] ? { x: g.x, y: g.y } : { x, y };
+}
+function reunir(u, dt) {
+  const h = hueco(u); if (!h) return;
+  const d = Math.hypot(h.x - u.x, h.y - u.y), enRuta = u.pr && u.pr.length;
+  if (d < .1) { u.pr = []; return; }
+  if (enRuta) { if (mover(u, u.pr[0].x, u.pr[0].y, dt)) u.pr.shift(); return; }
+  if (d < 1.5) { mover(u, h.x, h.y, dt); return; }
+  u.rt = (u.rt || 0) - dt; if (u.rt > 0) return; u.rt = 1;
+  u.pr = ruta(u, h.x | 0, h.y | 0, 0);
+}
+function inactivo(u, dt) { // unidad del grupo sin órdenes: empieza la tarea del grupo (si hay cofre) o se reúne con los demás
+  const g = grupos[u.gr];
+  if (g && g.tarea) {
+    u.rt2 = (u.rt2 || 0) - dt;
+    if (u.rt2 <= 0) {
+      u.rt2 = 2;
+      if (!cofreListo(g.tarea)) { g.tarea = null; aviso("Grupo " + (u.gr + 1) + ": falta un cofre con espacio dentro de la zona; tarea detenida"); }
+      else if (u.carry.n) { u.o = { t: "tar", cat: g.tarea, i: -1, f: "vol" }; u.p = []; return; }
+      else { const j = buscarCat(u, CAT[g.tarea]); if (j >= 0) { u.o = { t: "tar", cat: g.tarea, i: j, f: "ir" }; u.p = []; return; } }
+    }
+  }
+  reunir(u, dt);
+}
+function asignarTarea(id, tarea) { // tarea: "madera", "mineral" o null (detener y reunir)
+  const g = grupos[id]; if (!g) return;
+  if (tarea) {
+    if (!nPostes) return aviso("Necesitas un poste de imperio");
+    if (!cofreListo(tarea)) return aviso("Falta un cofre con espacio dentro de la zona del imperio (" + (tarea == "madera" ? "baúl o cajón de madera" : "baúl o cajón de minerales") + ")");
+  }
+  g.tarea = tarea;
+  us.forEach((u) => { if (u.gr === id) { u.o = null; u.p = []; u.pr = []; u.reu = true; u.rt2 = 0; } });
+  aviso("Grupo " + (id + 1) + ": " + (tarea == "madera" ? "recoge madera" : tarea ? "recoge minerales y piedra" : "reunido"));
+}
 // ----- Control directo del personaje: flechas / WASD para moverse, barra espaciadora o clic para atacar -----
 // Un golpe del personaje a un árbol, roca o mineral: a los 10 golpes se rompe y da 4 unidades. Devuelve false si ya no hay nada que picar.
 function golpeRes(u, i) {
@@ -310,6 +402,7 @@ function tick(dt) {
   }
   us = us.filter((u) => u.hp > 0); eds = eds.filter((b) => { if (b.hp > 0) return true; for (let i = 0; i < b.w; i++) for (let j = 0; j < b.w; j++) bloq[(b.y + j) * N + b.x + i] = 0; return false; });
   if (sel && sel.hp <= 0) sel = null;
+  const np = eds.filter((b) => b.k == "poste").length; if (np != nPostes) { nPostes = np; recalcZona(); }
   fx.forEach((f) => (f.t -= dt)); fx = fx.filter((f) => f.t > 0);
   if (!us.some((u) => u.k == "h")) { fin = true; $("fin").hidden = false; $("finTxt").textContent = "Tu personaje fue derrotado."; }
   vis.fill(0);
@@ -332,9 +425,10 @@ function dibujar() {
     const a = P(x, y); if (a[0] < -TW * z * 2 || a[0] > W + TW * z * 2 || a[1] < -TH * z * 2 || a[1] > H + TH * z * 2) continue;
     const b = bio[i], v = (x * 7 + y * 13) % 5, col = b == 3 ? "hsl(205,55%," + (30 + 3 * Math.sin(tReloj * 1.5 + x + y)) + "%)" : b == 4 ? "hsl(45,40%," + (58 + v) + "%)" : b == 1 ? "hsl(120,30%," + (23 + v) + "%)" : b == 2 ? "hsl(30,8%," + (38 + v) + "%)" : "hsl(92,38%," + (36 + v) + "%)";
     poly([a, P(x + 1, y), P(x + 1, y + 1), P(x, y + 1)], col);
+    if (zona[i]) poly([a, P(x + 1, y), P(x + 1, y + 1), P(x, y + 1)], "rgba(255,215,90,.16)"); // zona del imperio
     if (!vis[i]) poly([a, P(x + 1, y), P(x + 1, y + 1), P(x, y + 1)], "rgba(5,7,13,.55)");
   }
-  if (colocar) { const t = tileMouse; if (t) { const ok = libre(t.x, t.y); poly([P(t.x, t.y), P(t.x + 1, t.y), P(t.x + 1, t.y + 1), P(t.x, t.y + 1)], ok ? "rgba(80,255,120,.5)" : "rgba(255,70,70,.5)"); } }
+  if (colocar) { const t = tileMouse; if (t) { const ok = libre(t.x, t.y) && zonaOk(t.y * N + t.x, colocar); poly([P(t.x, t.y), P(t.x + 1, t.y), P(t.x + 1, t.y + 1), P(t.x, t.y + 1)], ok ? "rgba(80,255,120,.5)" : "rgba(255,70,70,.5)"); } }
   const L = [];
   res.forEach((r, i) => { if (r && expl[i]) L.push({ d: i % N + ((i / N) | 0) + 1, f: () => dibRes(i % N, (i / N) | 0, r) }); });
   eds.forEach((b) => L.push({ d: b.x + b.y + b.w, f: () => dibEd(b) }));
@@ -351,6 +445,14 @@ function dibRes(x, y, r) {
   if (r.t != "roca") { cx.fillStyle = d.c; [[-5, -7], [3, -9], [5, -4], [-2, -3]].forEach(([a, b]) => { cx.beginPath(); cx.arc(c[0] + a * z, c[1] + b * z, 2.6 * z, 0, 7); cx.fill(); }); }
 }
 function dibEd(b) {
+  if (b.k == "poste") { // poste con bandera
+    const z = cam.z, c = P(b.x + .5, b.y + .5);
+    cx.strokeStyle = "#6d4c2f"; cx.lineWidth = 3 * z; cx.beginPath(); cx.moveTo(c[0], c[1]); cx.lineTo(c[0], c[1] - 34 * z); cx.stroke();
+    cx.fillStyle = "#e53935"; cx.beginPath(); cx.moveTo(c[0], c[1] - 34 * z); cx.lineTo(c[0] + 16 * z, c[1] - 29 * z); cx.lineTo(c[0], c[1] - 24 * z); cx.closePath(); cx.fill();
+    if (b.hp < b.mh) barra(c[0], c[1] - 40 * z, b.hp / b.mh, "#59d96b");
+    if (sel === b) { cx.strokeStyle = "#fff"; cx.lineWidth = 2; cx.strokeRect(c[0] - 12 * z, c[1] - 38 * z, 24 * z, 42 * z); }
+    return;
+  }
   const z = cam.z, d = ED[b.k], h = b.k == "torre" ? 40 : b.k == "centro" ? 26 : 14;
   cx.globalAlpha = b.prog < 1 ? .6 : 1; caja(b.x + .1, b.y + .1, b.w - .2, h * (b.prog < 1 ? .4 + b.prog * .6 : 1), d.c); cx.globalAlpha = 1;
   const c = P(b.x + b.w / 2, b.y + b.w / 2); if (b.hp < b.mh) barra(c[0], c[1] - (h + 14) * z, b.hp / b.mh, "#59d96b");
@@ -387,7 +489,7 @@ const MOV = { ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1, KeyW: 1, Ke
 const teclas = new Set(), escribiendo = (e) => /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
 addEventListener("keydown", (e) => {
   if (!jugando || escribiendo(e) || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.code == "Escape" && colocar) { colocar = null; panel(); return; }
+  if (e.code == "Escape" && (colocar || moverGrupo != null)) { colocar = null; moverGrupo = null; panel(); return; }
   if (!MOV[e.code]) return;
   e.preventDefault(); teclas.add(e.code);
   if (e.code == "Space" && document.activeElement && document.activeElement.tagName == "BUTTON") document.activeElement.blur(); // que la barra no «pulse» el último botón
@@ -397,11 +499,18 @@ addEventListener("blur", () => teclas.clear());
 function zoom(f) { const nz = Math.min(2, Math.max(.5, cam.z * f)), k = nz / cam.z, mx = W / 2, my = H / 2; cam.x = mx - (mx - cam.x) * k; cam.y = my - (my - cam.y) * k; cam.z = nz; }
 function toque(w, raton) {
   if (fin) return; const tx = Math.floor(w.x), ty = Math.floor(w.y), i = ty * N + tx;
-  if (colocar && ES_CONT.includes(colocar) && heroe()) { // baúl o cajón: lo coloca el personaje
-    const h = heroe();
+  if (moverGrupo != null) { // nuevo punto de reunión del grupo
+    if (tx < 0 || ty < 0 || tx >= N || ty >= N || !expl[i] || bloq[i]) return aviso("Ahí no pueden ir: elige una casilla libre y explorada");
+    const id = moverGrupo, g = grupos[id]; moverGrupo = null; g.x = tx + .5; g.y = ty + .5; return asignarTarea(id, null);
+  }
+  if (colocar && colocar in COSTO_FAB && heroe()) { // poste, baúl o cajón: lo coloca el personaje
+    const h = heroe(), costo = COSTO_FAB[colocar], poste = colocar == "poste";
     if (!libre(tx, ty) || Math.hypot(tx + .5 - h.x, ty + .5 - h.y) > 6) return aviso("Ahí no se puede: elige una casilla libre y cerca");
-    if (cuenta(h.inv, "tablon") < 4) { colocar = null; panel(); return aviso("Necesitas 4 tablones"); }
-    quitar(h.inv, "tablon", 4); const b = ponerEdificio(colocar, tx, ty, true); b.inv = []; colocar = null; invHud(); return panel();
+    if (!zonaOk(i, colocar)) return aviso(poste ? "El poste debe ir dentro de la zona del imperio (junto a otro poste)" : "Los cofres solo van dentro de la zona del imperio: pon primero un poste");
+    if (cuenta(h.inv, "tablon") < costo) { colocar = null; panel(); return aviso("Necesitas " + costo + " tablones"); }
+    quitar(h.inv, "tablon", costo); const b = ponerEdificio(colocar, tx, ty, true);
+    if (poste) { nPostes++; recalcZona(); aviso("Zona del imperio ampliada"); } else b.inv = [];
+    colocar = null; invHud(); return panel();
   }
   if (colocar && sel && sel.k == "c") {
     if (!libre(tx, ty)) return aviso("Ahí no se puede construir");
@@ -431,7 +540,12 @@ function aviso(t) { $("aviso").textContent = t; $("aviso").hidden = false; clear
 function panel(soloTexto) {
   const z = $("acciones"); if (!soloTexto) z.innerHTML = "";
   const boton = (t, f, off) => { const b = document.createElement("button"); b.className = "btn"; b.textContent = t; b.disabled = !!off; b.addEventListener("click", f); z.appendChild(b); };
-  if (!soloTexto) ["r", "c", "g"].forEach((k) => boton("+ " + UN[k].nom + " $" + UN[k].costo, () => { if (dinero < UN[k].costo) return aviso("No alcanza el dinero"); dinero -= UN[k].costo; sel = crearUnidad(k); colocar = null; panel(); }));
+  if (!soloTexto) ["r", "c", "g"].forEach((k) => boton((nPostes ? "+ " : "🔒 ") + UN[k].nom + " $" + UN[k].costo, () => {
+    if (!nPostes) return aviso("Necesitas un poste de imperio (fabrícalo en 🛠️ Creaciones)");
+    if (dinero < UN[k].costo) return aviso("No alcanza el dinero");
+    const nu = crearUnidad(k); if (!nu) return aviso("No hay espacio libre para crearla");
+    dinero -= UN[k].costo; sel = nu; colocar = null; panel();
+  }));
   if (!soloTexto) boton("Siguiente libre", () => { const l = us.filter((u) => !u.o); if (!l.length) return aviso("Todos están ocupados"); const j = l.indexOf(sel); sel = l[(j + 1) % l.length]; const c = P(sel.x, sel.y); cam.x += W / 2 - c[0]; cam.y += H / 2 - c[1]; panel(); });
   if (!soloTexto && sel && sel.k == "c") ["almacen", "torre"].forEach((k) => boton((colocar == k ? "Toca el mapa: " : "") + ED[k].nom + " $" + ED[k].costo, () => { colocar = colocar == k ? null : k; panel(); }));
   if (!soloTexto && sel && sel.inv && sel.w) {
@@ -440,11 +554,12 @@ function panel(soloTexto) {
     boton("Sacar todo", () => { if (!cerca()) return aviso("Acércate (a menos de 2 casillas)"); pasar(sel.inv, heroe().inv, () => true); invHud(); panel(); });
   }
   const s = $("seleccion");
-  if (!sel) s.textContent = us.length ? "Toca una unidad para elegirla y luego toca el mapa para darle una orden." : "Compra tu primer soldado con los botones de abajo: cuestan $10 cada uno.";
+  if (!sel) s.textContent = us.length ? "Toca una unidad para elegirla y luego toca el mapa para darle una orden." : (nPostes ? "Compra tu primer soldado con los botones de abajo: cuestan $10 cada uno." : "Primero fabrica un poste de imperio en 🛠️ Creaciones: sin él no puedes crear soldados ni cofres.");
   else if (sel.w && sel.inv) s.textContent = ED[sel.k].nom + " · " + (sel.inv.length ? sel.inv.map((x) => ITEM[x.t] + " ×" + x.n).join(", ") : "vacío") + " · " + sel.inv.length + "/" + capac(sel) + " ranuras (hasta " + STACK + " por ranura)";
   else if (sel.w) s.textContent = ED[sel.k].nom + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
   else s.textContent = UN[sel.k].nom + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + " · golpe " + UN[sel.k].dmg + " · " + ({ r: "toca un recurso para juntarlo", c: "toca una obra o edificio dañado; o elige qué construir", g: "toca el mapa para explorar o un animal para atacar", h: "flechas o WASD para moverte · barra espaciadora o clic para atacar y picar (10 golpes por árbol o roca) · en pantalla táctil, toca el mapa" })[sel.k];
-  if (colocar && ES_CONT.includes(colocar)) s.textContent = "Toca una casilla libre y cercana para colocar: " + ED[colocar].nom + " (Esc para cancelar)";
+  if (colocar && colocar in COSTO_FAB) s.textContent = "Toca una casilla libre y cercana (dentro de la zona del imperio, salvo el primer poste) para colocar: " + ED[colocar].nom + " (Esc para cancelar)";
+  if (moverGrupo != null) s.textContent = "Toca el mapa para mandar al grupo " + (moverGrupo + 1) + " (Esc para cancelar)";
 }
 function invHud() {
   const h = heroe(), z = $("inv"); z.innerHTML = ""; if (!h) return;
@@ -468,33 +583,59 @@ function reino(forzar) {
   if (!us.length) { const p = document.createElement("p"); p.textContent = "Todavía no tienes soldados. Compra el primero con los botones de abajo."; z.appendChild(p); }
   us.forEach((u) => {
     const b = document.createElement("button"); b.className = "soldado" + (u === sel ? " activo" : "");
-    b.textContent = UN[u.k].ico + " " + UN[u.k].nom + " · vida " + Math.ceil(u.hp) + "/" + u.mh + " · " + ESTADO(u);
+    b.textContent = UN[u.k].ico + " " + UN[u.k].nom + (u.gr != null ? " (G" + (u.gr + 1) + ")" : "") + " · vida " + Math.ceil(u.hp) + "/" + u.mh + " · " + ESTADO(u);
     b.addEventListener("click", () => { sel = u; colocar = null; const c = P(u.x, u.y); cam.x += W / 2 - c[0]; cam.y += H / 2 - c[1]; z.hidden = true; panel(); });
     z.appendChild(b);
   });
 }
-$("bReino").addEventListener("click", () => { $("reino").hidden = !$("reino").hidden; if (!$("reino").hidden) $("crea").hidden = true; reino(true); });
+const alternar = (id) => { const v = $(id).hidden; ["reino", "crea", "tropas"].forEach((p) => ($(p).hidden = true)); $(id).hidden = !v; }; // solo un panel abierto a la vez
+$("bReino").addEventListener("click", () => { alternar("reino"); reino(true); });
 // ----- Creaciones: fabricar tablones y contenedores con lo que lleva el personaje -----
 let sigCrea = "";
 function crea(forzar) {
   const z = $("crea"); if (z.hidden) return;
-  const h = heroe(), sig = h ? JSON.stringify(h.inv) + colocar : "";
+  const h = heroe(), sig = h ? JSON.stringify(h.inv) + colocar + nPostes : "";
   if (!forzar && sig == sigCrea) return; sigCrea = sig; z.innerHTML = ""; if (!h) return;
-  const t = document.createElement("div"); t.className = "resumen"; t.textContent = "Troncos: " + cuenta(h.inv, "tronco") + "  ·  Tablones: " + cuenta(h.inv, "tablon"); z.appendChild(t);
+  const t = document.createElement("div"); t.className = "resumen"; t.textContent = "Troncos: " + cuenta(h.inv, "tronco") + "  ·  Tablones: " + cuenta(h.inv, "tablon") + "  ·  Postes: " + nPostes; z.appendChild(t);
   const boton = (txt, f, off) => { const b = document.createElement("button"); b.className = "soldado"; b.textContent = txt; b.disabled = !!off; b.addEventListener("click", f); z.appendChild(b); };
   boton("🪵 Fabricar 4 tablones (1 tronco)", () => {
     const v = h.inv; if (!cuenta(v, "tronco")) return aviso("Necesitas 1 tronco");
     quitar(v, "tronco", 1); if (espacio(v, "tablon") < 4) { anadir(v, "tronco", 1); return aviso("Inventario lleno"); }
     anadir(v, "tablon", 4); invHud(); crea(true); aviso("+4 Tablones");
   }, !cuenta(h.inv, "tronco"));
-  [["baul", "📦 Baúl · 20 espacios, cualquier material (4 tablones)"], ["cajonM", "Cajón de madera · 10 espacios (4 tablones)"], ["cajonN", "Cajón de minerales · 10 espacios (4 tablones)"]].forEach(([k, n]) =>
+  [["poste", "🚩 Poste de imperio · marca la zona (2 tablones)"], ["baul", "📦 Baúl · 20 espacios, cualquier material (4 tablones)"], ["cajonM", "Cajón de madera · 10 espacios (4 tablones)"], ["cajonN", "Cajón de minerales · 10 espacios (4 tablones)"]].forEach(([k, n]) =>
     boton((colocar == k ? "✔ Toca el mapa: " : "") + n, () => {
-      if (cuenta(h.inv, "tablon") < 4) return aviso("Necesitas 4 tablones");
+      if (cuenta(h.inv, "tablon") < COSTO_FAB[k]) return aviso("Necesitas " + COSTO_FAB[k] + " tablones");
+      if (k != "poste" && !nPostes) return aviso("Primero pon un poste de imperio: los cofres solo van dentro de su zona");
       colocar = colocar == k ? null : k; if (colocar) { z.hidden = true; aviso("Toca una casilla libre y cercana para colocarlo"); } panel(); crea(true);
-    }, cuenta(h.inv, "tablon") < 4 && colocar != k));
-  const p = document.createElement("p"); p.textContent = "Para guardar objetos, acércate al baúl, tócalo y usa Guardar / Sacar todo."; z.appendChild(p);
+    }, cuenta(h.inv, "tablon") < COSTO_FAB[k] && colocar != k));
+  const p = document.createElement("p"); p.textContent = "Cada poste marca una zona de " + RADIO_ZONA + " casillas (se ve dorada). Sin poste no puedes crear tropas; los cofres y los postes nuevos van dentro de la zona: pon más postes para agrandarla. Para guardar objetos, acércate al cofre, tócalo y usa Guardar / Sacar todo."; z.appendChild(p);
 }
-$("bCrea").addEventListener("click", () => { const z = $("crea"); z.hidden = !z.hidden; if (!z.hidden) $("reino").hidden = true; crea(true); });
+$("bCrea").addEventListener("click", () => { alternar("crea"); crea(true); });
+// ----- Seleccionar tropas: elegir un grupo y darle una tarea -----
+let sigTropas = "";
+function tropas(forzar) {
+  const z = $("tropas"); if (z.hidden) return;
+  const cu = (id, k) => us.filter((u) => u.gr === id && (!k || u.k === k)).length, lista = grupos.map((g) => g.id).filter((id) => cu(id) > 0);
+  if (grSel == null && lista.length == 1) grSel = lista[0];
+  if (grSel != null && !lista.includes(grSel)) grSel = null;
+  const sig = lista.map((id) => id + ":" + cu(id) + ":" + grupos[id].tarea).join("|") + "#" + grSel + "#" + nPostes;
+  if (!forzar && sig == sigTropas) return; sigTropas = sig; z.innerHTML = "";
+  const t = document.createElement("div"); t.className = "resumen"; t.textContent = "Grupos: " + lista.length + "  ·  tropas: " + us.filter((u) => u.gr != null).length + " (máx. " + MAX_GRUPO + " por grupo)"; z.appendChild(t);
+  const boton = (txt, f, cls) => { const b = document.createElement("button"); b.className = "soldado" + (cls ? " " + cls : ""); b.textContent = txt; b.addEventListener("click", f); z.appendChild(b); };
+  const texto = (txt) => { const p = document.createElement("p"); p.textContent = txt; z.appendChild(p); };
+  if (!lista.length) return texto("Todavía no tienes tropas. Pon un poste de imperio y crea soldados o trabajadores con los botones de abajo.");
+  lista.forEach((id) => boton("Grupo " + (id + 1) + " · " + cu(id) + "/" + MAX_GRUPO + " · 🔨" + cu(id, "c") + " ⚔️" + cu(id, "g") + " ⛏️" + cu(id, "r") + " · " + ({ madera: "recoge madera", mineral: "recoge minerales" }[grupos[id].tarea] || "en espera"),
+    () => { grSel = id; const c = P(grupos[id].x, grupos[id].y); cam.x += W / 2 - c[0]; cam.y += H / 2 - c[1]; tropas(true); }, id === grSel ? "activo" : ""));
+  if (grSel == null) return texto("Elige un grupo para darle una tarea.");
+  const g = grSel;
+  boton("🪵 Recoger madera (guardar en baúl o cajón de madera)", () => { asignarTarea(g, "madera"); tropas(true); });
+  boton("⛏️ Recoger minerales y piedra (guardar en baúl o cajón de minerales)", () => { asignarTarea(g, "mineral"); tropas(true); });
+  boton("📍 Mover el grupo (toca el mapa)", () => { moverGrupo = g; $("tropas").hidden = true; aviso("Toca el mapa para mandar al grupo " + (g + 1)); panel(); });
+  boton("🛑 Detener y reunir", () => { asignarTarea(g, null); tropas(true); });
+  texto("La tarea solo empieza si hay un cofre con espacio dentro de la zona del imperio.");
+}
+$("bTropas").addEventListener("click", () => { alternar("tropas"); tropas(true); });
 $("zmas").addEventListener("click", () => zoom(1.2)); $("zmenos").addEventListener("click", () => zoom(.83));
 $("otra").addEventListener("click", () => { nuevo(); guardar(); entrar(); });
 let ult = performance.now(), th = 0, ta = 0;
@@ -506,16 +647,19 @@ const escribir = (l) => { try { localStorage.setItem(CLAVE, JSON.stringify(l)); 
 function estado() {
   return { dinero, oleada, tReloj, tOleada, muertes, cam, expl: Array.from(expl).join(""), bio: Array.from(bio).join(""),
     res: res.map((r, i) => r && [i, r.t, r.n, r.g || 0]).filter(Boolean),
-    us: us.map((u) => [u.k, u.x, u.y, u.hp, u.carry.t, u.carry.n, u.o && u.o.t == "rec" ? [u.o.i, u.o.tipo] : 0, u.inv || 0]),
-    anim: anim.map((a) => [a.k, a.x, a.y, a.hp, a.g || 0]), stock, eds: eds.map((b) => [b.k, b.x, b.y, b.hp, b.prog, b.inv || 0]), enem: enem.map((e) => [e.x, e.y, e.hp, e.mh]) };
+    us: us.map((u) => [u.k, u.x, u.y, u.hp, u.carry.t, u.carry.n, u.o && u.o.t == "rec" ? [u.o.i, u.o.tipo] : 0, u.inv || 0, u.gr == null ? -1 : u.gr, u.reu ? 1 : 0]),
+    anim: anim.map((a) => [a.k, a.x, a.y, a.hp, a.g || 0]), stock, eds: eds.map((b) => [b.k, b.x, b.y, b.hp, b.prog, b.inv || 0]), enem: enem.map((e) => [e.x, e.y, e.hp, e.mh]), grupos: grupos.map((g) => [g.x, g.y, g.tarea || 0]) };
 }
 function cargar(s) {
   res = new Array(N * N).fill(null); bloq = new Uint8Array(N * N); vis = new Uint8Array(N * N); expl = Uint8Array.from(s.expl.split(""), Number);
   bio = s.bio ? Uint8Array.from(s.bio.split(""), Number) : new Uint8Array(N * N); bio.forEach((v, i) => v == 3 && (bloq[i] = 1)); // partidas viejas: todo llanura
   s.res.forEach(([i, t, n, g]) => { res[i] = { t, n, g: g || 0 }; bloq[i] = 1; });
   eds = []; s.eds.forEach(([k, x, y, hp, prog, inv]) => { const b = ponerEdificio(k, x, y, true); b.hp = hp; b.prog = prog; if (inv) b.inv = inv; });
-  us = s.us.map(([k, x, y, hp, ct, cn, o, inv]) => ({ k, x, y, hp, mh: UN[k].hp, p: [], cd: 0, inv: inv || (k == "h" ? [] : null), carry: { t: ct, n: cn }, o: o ? { t: "rec", i: o[0], tipo: o[1], f: cn >= 5 ? "vol" : "ir" } : null }));
+  us = s.us.map(([k, x, y, hp, ct, cn, o, inv, gr, reu]) => ({ k, x, y, hp, gr: k == "h" || gr == null || gr < 0 ? null : gr, reu: reu === undefined ? true : !!reu, mh: UN[k].hp, p: [], cd: 0, inv: inv || (k == "h" ? [] : null), carry: { t: ct, n: cn }, o: o ? { t: "rec", i: o[0], tipo: o[1], f: cn >= 5 ? "vol" : "ir" } : null }));
   enem = s.enem.map(([x, y, hp, mh]) => ({ k: "e", x, y, hp, mh, cd: 0 }));
+  grupos = (s.grupos || []).map(([x, y, t], id) => ({ id, x, y, tarea: t || null })); grSel = null; moverGrupo = null;
+  nPostes = eds.filter((b) => b.k == "poste").length; recalcZona();
+  us.forEach((u) => { if (u.k != "h" && (u.gr == null || !grupos[u.gr])) u.gr = asignarGrupo(); }); // partidas viejas: las tropas se reparten en grupos
   ({ dinero, oleada, tReloj, tOleada, muertes, cam } = s); anim = (s.anim || []).map(([k, x, y, hp, g]) => ({ ...nuevoAnimal(k, x, y), hp, g })); stock = s.stock || { carne: 0, piel: 0, cuero: 0 };
   if (!us.some((u) => u.k == "h")) crearUnidad("h"); sel = heroe(); fx = []; colocar = null; fin = false; pend = 0; // partidas viejas: se agrega el personaje
 }
@@ -523,7 +667,7 @@ function guardar() {
   if (!slot) return; const l = leer(), i = l.findIndex((p) => p.id == slot.id), p = { id: slot.id, nombre: slot.nombre, fecha: Date.now(), estado: estado() };
   if (i < 0) l.push(p); else l[i] = p; escribir(l);
 }
-function pantalla(id) { $("menu").hidden = !id; ["mPrincipal", "mPers", "mNiv"].forEach((m) => ($(m).hidden = m != id)); $("datos").hidden = !!id; $("bMenu").hidden = !!id; $("bReino").hidden = !!id; $("bCrea").hidden = !!id; teclas.clear(); if (id) { $("reino").hidden = true; $("crea").hidden = true; } if (id == "mPers") listar(); }
+function pantalla(id) { $("menu").hidden = !id; ["mPrincipal", "mPers", "mNiv"].forEach((m) => ($(m).hidden = m != id)); $("datos").hidden = !!id; $("bMenu").hidden = !!id; $("bReino").hidden = !!id; $("bCrea").hidden = !!id; $("bTropas").hidden = !!id; teclas.clear(); if (id) { $("reino").hidden = true; $("crea").hidden = true; $("tropas").hidden = true; } if (id == "mPers") listar(); }
 function entrar() { $("fin").hidden = true; jugando = true; pantalla(null); ult = performance.now(); panel(); }
 function listar() {
   const z = $("partidas"), l = leer().sort((a, b) => b.fecha - a.fecha); z.innerHTML = "";
@@ -551,7 +695,7 @@ ajustar(); pantalla("mPrincipal");
   const dt = Math.min(.05, (n - ult) / 1000); ult = n;
   if (jugando) {
     tick(dt); dibujar();
-    if ((th += dt) > .25) { th = 0; hud(); if (sel) panel(true); reino(); crea(); }
+    if ((th += dt) > .25) { th = 0; hud(); if (sel) panel(true); reino(); crea(); tropas(); }
     if ((ta += dt) > 5) { ta = 0; if (!fin) guardar(); }
   }
   requestAnimationFrame(bucle);
