@@ -8,8 +8,11 @@ const R_INICIAL = 22;
 const CRECIMIENTO = 0.35;  // cuánto crece el hoyo al tragar (más = más rápido)
 const OBJETOS = 620;       // objetos por defecto (cada mapa puede traer los suyos con «objetos»)
 let totalObjetos = OBJETOS, duracionMapa = DURACION;
+const PISO_DESPRENDE = 0.35; // probabilidad de que, al tragar un piso, el piso de arriba se desprenda y quede tirado como bloque
 const R_PEQUENO = 15;      // los objetos con radio hasta este valor cuentan como «pequeños» (los que come el hoyo inicial)
 const PEQUENOS = 0.4;      // cuántos objetos pequeños quedan respecto a antes (0.4 = 60 % menos; 1 = como antes)
+const rComer = (o) => (o.pisos ? o.rp : o.r); // radio que cuenta para poder comerse un objeto (en edificios, el de un piso)
+let reloj = 0;
 const pesoTipo = (t) => t.w * (t.r <= R_PEQUENO ? PEQUENOS : 1);
 
 // ----- Ajustes de los bots (más tontos) -----
@@ -66,7 +69,12 @@ const MAPAS = {
       { e: "🌷", r: 7, w: 30 }, { e: "🧍", r: 7, w: 14 }, { e: "🐈", r: 9, w: 8 },
       { e: "🚧", r: 10, w: 20, calle: true }, { e: "🪑", r: 12, w: 12 }, { e: "🛢️", r: 13, w: 14 },
       { e: "🚗", r: 22, w: 22, calle: true }, { e: "🌳", r: 28, w: 14 }, { e: "🚚", r: 34, w: 8, calle: true },
-      { e: "🚌", r: 40, w: 5, calle: true }, { e: "🏠", r: 55, w: 9 }, { e: "🏢", r: 80, w: 4 },
+      { e: "🚌", r: 40, w: 5, calle: true },
+      // objetos 3D: cajas y edificios por pisos (cada piso se traga por separado)
+      { caja: true, r: 11, w: 12, col: "#c98b4a", alt: 0.85 }, { caja: true, r: 26, w: 5, col: "#2f7fd1", alt: 0.7 },
+      { est: true, r: 48, w: 8, pisos: 2, fh: 26, pf: 0.66, col: "#d9534f" },
+      { est: true, r: 62, w: 5, pisos: 4, fh: 28, pf: 0.6, col: "#c62f3a" },
+      { est: true, r: 78, w: 3, pisos: 6, fh: 28, pf: 0.55, col: "#4b6cb7" },
     ],
     preparar() {},
     colocar(t) {
@@ -104,7 +112,9 @@ const MAPAS = {
     tipos: [
       { e: "🐚", r: 7, w: 30 }, { e: "🥥", r: 7, w: 20 }, { e: "🦀", r: 8, w: 14 }, { e: "🏐", r: 10, w: 14 },
       { e: "⛱️", r: 14, w: 16 }, { e: "🛶", r: 22, w: 12, agua: true }, { e: "🌴", r: 28, w: 22 },
-      { e: "🚤", r: 34, w: 6, agua: true }, { e: "⛵", r: 40, w: 5, agua: true }, { e: "🛖", r: 55, w: 10 }, { e: "🏨", r: 80, w: 3 },
+      { e: "🚤", r: 34, w: 6, agua: true }, { e: "⛵", r: 40, w: 5, agua: true }, { caja: true, r: 11, w: 12, col: "#a0693a", alt: 0.85 },
+      { est: true, r: 46, w: 10, pisos: 2, fh: 24, pf: 0.66, col: "#e8c98a" },
+      { est: true, r: 74, w: 3, pisos: 5, fh: 26, pf: 0.58, col: "#2aa6c9" },
     ],
     preparar() {
       islas = [];
@@ -147,7 +157,10 @@ const MAPAS = {
       { e: "🌾", r: 7, w: 30 }, { e: "🌻", r: 7, w: 18 }, { e: "🐔", r: 8, w: 14 }, { e: "🐑", r: 11, w: 14 },
       { e: "🪵", r: 12, w: 10 }, { e: "🐄", r: 15, w: 12 }, { e: "🐎", r: 18, w: 8 },
       { e: "🚜", r: 26, w: 12, calle: true }, { e: "🌳", r: 28, w: 16 }, { e: "🛖", r: 40, w: 8 },
-      { e: "🏠", r: 55, w: 7 }, { e: "🏭", r: 80, w: 3 },
+      { caja: true, r: 12, w: 14, col: "#d8b84a", alt: 0.8 },
+      { est: true, r: 50, w: 8, pisos: 2, fh: 26, pf: 0.62, col: "#b3412f" },
+      { est: true, r: 46, w: 6, pisos: 2, fh: 24, pf: 0.66, col: "#ece0b3" },
+      { est: true, r: 78, w: 3, pisos: 5, fh: 28, pf: 0.56, col: "#7a7f8c" },
     ],
     preparar() {},
     colocar(t) {
@@ -192,7 +205,11 @@ function nuevoObjeto() {
   let k = Math.random() * total, t = tipos[0];
   for (const x of tipos) { if ((k -= pesoTipo(x)) < 0) { t = x; break; } }
   const p = mapa.colocar(t);
-  return p ? { e: t.e, r: t.r, x: p[0], y: p[1] } : null;
+  if (!p) return null;
+  const o = { e: t.e, r: t.r, x: p[0], y: p[1] };
+  if (t.est) Object.assign(o, { pisos: t.pisos, fh: t.fh, rp: t.r * t.pf, col: t.col, lift: 0, cd: 0 });
+  else if (t.caja) Object.assign(o, { caja: true, col: t.col, alt: t.alt, vent: !!t.vent });
+  return o;
 }
 
 // ----- Estado -----
@@ -285,7 +302,7 @@ function pensar(b) {
   } else {
     let mejor = null, d2 = BOT_VISION_OBJETOS * BOT_VISION_OBJETOS;
     for (const o of objetos) {
-      if (o.r >= b.r * 0.8) continue;
+      if (rComer(o) >= b.r * 0.8) continue;
       const d = (o.x - b.x) ** 2 + (o.y - b.y) ** 2;
       if (d < d2) { d2 = d; mejor = o; }
     }
@@ -298,7 +315,7 @@ const velocidad = (h) => Math.min(V_MAX, V_BASE * Math.pow(h.r / R_INICIAL, V_EX
 
 function actualizar(dt) {
   if (!jugando) return;
-  tiempo -= dt;
+  tiempo -= dt; reloj += dt;
   if (tiempo <= 0) return terminar();
 
   [yo.dx, yo.dy] = direccionJugador();
@@ -316,6 +333,24 @@ function actualizar(dt) {
 
     for (let i = objetos.length - 1; i >= 0; i--) {
       const o = objetos[i];
+      if (o.pisos) { // edificio: el hoyo se traga un piso a la vez (el de abajo); los de arriba bajan
+        const d = Math.hypot(o.x - h.x, o.y - h.y);
+        if (o.rp < h.r * 0.8 && d < h.r - o.rp * 0.3 && reloj >= o.cd) {
+          o.cd = reloj + 0.45;
+          caidas.push({ piso: { w: o.r, h: o.fh, col: o.col }, r: o.r, x: o.x, y: o.y, t: 0, h });
+          const k = h.esBot ? BOT_COMER : 1;
+          h.r = Math.sqrt(h.r * h.r + o.rp * o.rp * CRECIMIENTO * k);
+          h.puntos += Math.round(o.rp * k);
+          o.pisos--; o.lift = o.fh;
+          if (o.pisos >= 2 && Math.random() < PISO_DESPRENDE) { // se desprende el piso de arriba y cae al suelo
+            o.pisos--;
+            const a = rnd(0, 6.2832), dist = o.r * 1.3;
+            objetos.push({ e: "🧱", r: o.rp * 0.8, x: Math.max(60, Math.min(MUNDO - 60, o.x + Math.cos(a) * dist)), y: Math.max(60, Math.min(MUNDO - 60, o.y + Math.sin(a) * dist)), caja: true, col: o.col, alt: 0.9, vent: true, drop: o.fh * 3 });
+          }
+          if (o.pisos <= 0) { objetos[i] = objetos[objetos.length - 1]; objetos.pop(); }
+        }
+        continue;
+      }
       if (o.r < h.r * 0.8 && Math.hypot(o.x - h.x, o.y - h.y) < h.r - o.r * 0.3) {
         objetos[i] = objetos[objetos.length - 1]; objetos.pop();
         caidas.push({ e: o.e, r: o.r, x: o.x, y: o.y, t: 0, h });
@@ -347,6 +382,41 @@ function actualizar(dt) {
 }
 
 // ----- Dibujo -----
+// ----- Objetos 3D (cajas y edificios por pisos), dibujados con caras sombreadas en la vista isométrica -----
+function tono(hex, f) {
+  const n = parseInt(hex.slice(1), 16), c = (s) => Math.max(0, Math.min(255, Math.round(((n >> s) & 255) * f)));
+  return "rgb(" + c(16) + "," + c(8) + "," + c(0) + ")";
+}
+function poli(pts, fill) {
+  ctx.beginPath(); ctx.moveTo(pts[0], pts[1]);
+  for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
+  ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+}
+// Caja: w = semiancho del rombo de la base, h = alto, y0 = altura de la base (0 = en el suelo, negativo = más arriba)
+function bloque(w, h, col, y0, vent, puerta) {
+  const top = y0 - h, v = w / 2;
+  poli([-w, top, 0, top + v, 0, y0 + v, -w, y0], tono(col, 1));      // cara izquierda
+  poli([0, top + v, w, top, w, y0, 0, y0 + v], tono(col, 0.7));      // cara derecha (más oscura)
+  poli([0, top - v, w, top, 0, top + v, -w, top], tono(col, 1.3));   // tapa
+  ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = Math.max(1, w * 0.03);
+  ctx.beginPath(); ctx.moveTo(-w, top); ctx.lineTo(0, top + v); ctx.lineTo(w, top); ctx.stroke();
+  if (!vent && !puerta) return;
+  for (const izq of [true, false]) {
+    ctx.save();
+    if (izq) ctx.transform(1, 0.5, 0, 1, -w, top); else ctx.transform(1, -0.5, 0, 1, 0, top + v);
+    if (vent) {
+      ctx.fillStyle = izq ? "#cfeeff" : "#86b4d8"; ctx.strokeStyle = "rgba(255,255,255,.9)"; ctx.lineWidth = Math.max(1, w * 0.025);
+      for (const ux of [w * 0.14, w * 0.6]) { ctx.fillRect(ux, h * 0.2, w * 0.26, h * 0.42); ctx.strokeRect(ux, h * 0.2, w * 0.26, h * 0.42); }
+    }
+    if (puerta && !izq) { ctx.fillStyle = "#5a3b2a"; ctx.fillRect(w * 0.38, h * 0.5, w * 0.24, h * 0.5); }
+    ctx.restore();
+  }
+}
+function dibujarEdificio(o) {
+  o.lift = o.lift > 0.5 ? o.lift * 0.82 : 0; // al tragarse el piso de abajo, los de arriba bajan
+  for (let i = 0; i < o.pisos; i++) bloque(o.r, o.fh, o.col, -i * o.fh - o.lift, true, i === 0);
+  bloque(o.r * 1.06, o.fh * 0.16, "#f4f0e8", -o.pisos * o.fh - o.lift, false, false); // techo
+}
 function emoji(e, r, alfa) {
   ctx.globalAlpha = alfa; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.font = Math.max(4, r * 2) + "px serif"; ctx.fillStyle = "#000";
@@ -365,7 +435,7 @@ function dibujar() {
 
   const vw = W / 2 / cam.z + 200, vh = H / 2 / cam.z + 200;
   const visible = (o) => {
-    const [px, py] = proj(o.x, o.y), m = (o.r || 0) * 2;
+    const [px, py] = proj(o.x, o.y), m = (o.r || 0) * 2 + (o.pisos ? o.pisos * o.fh : 0);
     return Math.abs(px - cx) < vw + m && Math.abs(py - cy) < vh + m;
   };
 
@@ -382,7 +452,8 @@ function dibujar() {
     const h = c.h, k = c.t, x = c.x + (h.x - c.x) * k, y = c.y + (h.y - c.y) * k;
     ctx.save();
     ctx.beginPath(); ctx.arc(h.x, h.y, h.r, 0, 7); ctx.clip();
-    recto(x, y, () => { ctx.translate(0, -c.r * 0.8 * (1 - k)); emoji(c.e, c.r * (1 - k * 0.9), 1 - k * 0.4); });
+    if (c.piso) recto(x, y, () => { ctx.scale(1 - k * 0.85, 1 - k * 0.85); bloque(c.piso.w, c.piso.h, c.piso.col, 0, true, false); });
+    else recto(x, y, () => { ctx.translate(0, -c.r * 0.8 * (1 - k)); emoji(c.e, c.r * (1 - k * 0.9), 1 - k * 0.4); });
     ctx.restore();
   }
   // objetos en el suelo, de atrás hacia adelante (x + y = profundidad en isométrico)
@@ -391,7 +462,13 @@ function dibujar() {
     ctx.fillStyle = "rgba(0,0,0,.22)";
     ctx.beginPath(); ctx.arc(o.x, o.y, o.r * 0.8, 0, 7); ctx.fill();
   }
-  for (const o of vis) recto(o.x, o.y, () => { ctx.translate(0, -o.r * 0.8); emoji(o.e, o.r, 1); });
+  for (const o of vis) {
+    if (o.pisos) recto(o.x, o.y, () => dibujarEdificio(o));
+    else if (o.caja) {
+      if (o.drop) o.drop = o.drop > 0.5 ? o.drop * 0.8 : 0; // los bloques desprendidos caen desde arriba
+      recto(o.x, o.y, () => bloque(o.r, o.r * o.alt, o.col, -(o.drop || 0), o.vent, false));
+    } else recto(o.x, o.y, () => { ctx.translate(0, -o.r * 0.8); emoji(o.e, o.r, 1); });
+  }
   // nombres
   for (const h of hoyos) {
     if (!visible(h)) continue;
