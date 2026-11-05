@@ -25,16 +25,18 @@ const ANI = { // vel en puntos (humano = 10); ag = a qué distancia notan a un s
 };
 const nuevoAnimal = (k, x, y) => ({ k, x, y, hp: ANI[k].hp, mh: ANI[k].hp, cd: 0, dest: null, esp: 0, obj: null });
 const ITEM = { tronco: "Tronco", tablon: "Tablón", roca: "Piedra", carbon: "Carbón", cobre: "Cobre", hierro: "Hierro", oro: "Oro", diamante: "Diamante" };
-const MADERA = ["tronco", "tablon"], STACK = 20, RANURAS = 10; // cada ranura guarda un solo material, hasta 20
-const espacio = (inv, t) => inv.filter((s) => s.t == t).reduce((a, s) => a + STACK - s.n, 0) + (RANURAS - inv.length) * STACK;
+const MADERA = ["tronco", "tablon"], STACK = 20, RANURAS = 10; // cada ranura guarda un solo material, hasta 20 (el personaje tiene 10 ranuras; el baúl, 20)
+const ES_CONT = ["baul", "cajonM", "cajonN"]; // cosas que el personaje fabrica con 4 tablones y que guardan objetos
+const espacio = (inv, t, r = RANURAS) => inv.filter((s) => s.t == t).reduce((a, s) => a + STACK - s.n, 0) + (r - inv.length) * STACK;
 const cuenta = (inv, t) => inv.filter((s) => s.t == t).reduce((a, s) => a + s.n, 0);
 function anadir(inv, t, n) { for (const s of inv) if (s.t == t && n > 0) { const k = Math.min(n, STACK - s.n); s.n += k; n -= k; } while (n > 0) { const k = Math.min(n, STACK); inv.push({ t, n: k }); n -= k; } }
 function quitar(inv, t, n) { for (let i = inv.length - 1; i >= 0 && n > 0; i--) { const s = inv[i]; if (s.t != t) continue; const k = Math.min(n, s.n); s.n -= k; n -= k; if (!s.n) inv.splice(i, 1); } }
-function pasar(de, a, ok) { de.slice().forEach((s) => { if (!ok(s.t)) return; const k = Math.min(cuenta(de, s.t), espacio(a, s.t)); if (k > 0) { quitar(de, s.t, k); anadir(a, s.t, k); } }); }
+function pasar(de, a, ok, r = RANURAS) { de.slice().forEach((s) => { if (!ok(s.t)) return; const k = Math.min(cuenta(de, s.t), espacio(a, s.t, r)); if (k > 0) { quitar(de, s.t, k); anadir(a, s.t, k); } }); }
 const heroe = () => us.find((u) => u.k == "h");
 const ED = {
-  cajonM: { nom: "Cajón de madera", w: 1, hp: 60, c: "#a1763f" }, cajonN: { nom: "Cajón de minerales", w: 1, hp: 60, c: "#6b7280" }, centro: { nom: "Centro", w: 2, hp: 400, c: "#c9a66b" }, almacen: { nom: "Almacén", costo: 60, w: 1, hp: 150, c: "#a47148" }, torre: { nom: "Torre", costo: 120, w: 1, hp: 200, c: "#8a8fa3" } };
+  baul: { nom: "Baúl", w: 1, hp: 80, c: "#8b5a2b", ran: 20 }, cajonM: { nom: "Cajón de madera", w: 1, hp: 60, c: "#a1763f" }, cajonN: { nom: "Cajón de minerales", w: 1, hp: 60, c: "#6b7280" }, centro: { nom: "Centro", w: 2, hp: 400, c: "#c9a66b" }, almacen: { nom: "Almacén", costo: 60, w: 1, hp: 150, c: "#a47148" }, torre: { nom: "Torre", costo: 120, w: 1, hp: 200, c: "#8a8fa3" } };
 const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const capac = (b) => ED[b.k].ran || RANURAS; // ranuras de un contenedor
 const cv = $("lienzo"), cx = cv.getContext("2d");
 let W, H, cam, anim, stock, bio, res, bloq, vis, expl, us, eds, enem, fx, dinero, oleada, tReloj, tOleada, sel, colocar, fin, muertes, pend;
 
@@ -165,14 +167,7 @@ function actualizar(u, dt) {
     const i = o.i, r = res[i], rx = i % N, ry = (i / N) | 0; if (!r) { u.o = null; return; }
     if (distRect(u, rx, ry, 1) < 1.6) {
       o.t0 = (o.t0 || 0) + dt;
-      if (o.t0 >= 1) {
-        o.t0 = 0; r.g = (r.g || 0) + 1;
-        if (r.g >= 10) {
-          const it = r.t == "arbol" ? "tronco" : r.t;
-          if (espacio(u.inv, it) < 4) { r.g = 9; aviso("Inventario lleno"); u.o = null; return; }
-          anadir(u.inv, it, 4); res[i] = null; bloq[i] = 0; u.o = null; aviso("+4 " + ITEM[it]);
-        }
-      }
+      if (o.t0 >= 1) { o.t0 = 0; if (!golpeRes(u, i)) u.o = null; }
     } else if (!paso(u, dt)) { u.p = ruta(u, rx, ry, 1); if (!u.p.length) u.o = null; }
     return;
   }
@@ -249,9 +244,60 @@ function iaEnemigo(e, dt) {
   else if (!e.cd) { golpe(e, t, 8); e.cd = 1; }
 }
 function puntos(n) { pend += n; if (pend >= 10 || (fin && pend > 0)) { const p = pend; pend = 0; import("../compartido/jugador.js").then((m) => m.sumarPuntos("imperio", p)).catch(() => {}); } }
+// ----- Control directo del personaje: flechas / WASD para moverse, barra espaciadora o clic para atacar -----
+// Un golpe del personaje a un árbol, roca o mineral: a los 10 golpes se rompe y da 4 unidades. Devuelve false si ya no hay nada que picar.
+function golpeRes(u, i) {
+  const r = res[i]; if (!r) return false;
+  r.g = (r.g || 0) + 1;
+  if (r.g < 10) return true;
+  const it = r.t == "arbol" ? "tronco" : r.t;
+  if (espacio(u.inv, it) < 4) { r.g = 9; aviso("Inventario lleno"); return false; }
+  anadir(u.inv, it, 4); res[i] = null; bloq[i] = 0; aviso("+4 " + ITEM[it]); return false;
+}
+// Ataca a lo más cercano al alcance (animal, bandido, árbol, roca o mineral). Con clic (w) elige lo que está junto al clic; con la barra, lo que está hacia donde miras.
+function atacar(h, w) {
+  if (h.cd > 0) return;
+  const ALC = 1.7;
+  if (w) { const dx = w.x - h.x, dy = w.y - h.y, d = Math.hypot(dx, dy); if (d > .2) h.dir = { x: dx / d, y: dy / d }; }
+  const dir = h.dir || { x: .7, y: .7 };
+  const puntaje = (x, y, dist) => {
+    if (dist > ALC) return null;
+    if (w) { const d = Math.hypot(x - w.x, y - w.y); return d < 1.4 ? d : null; }
+    const d = Math.hypot(x - h.x, y - h.y) || 1, dot = ((x - h.x) * dir.x + (y - h.y) * dir.y) / d;
+    return dot < -.3 && dist > .7 ? null : dist - dot * .8;
+  };
+  let mejor = null, ms = 1e9;
+  enem.concat(anim).forEach((e) => { // los seres vivos tienen prioridad sobre los recursos
+    if (!vis[(e.y | 0) * N + (e.x | 0)]) return;
+    const s = puntaje(e.x, e.y, Math.hypot(e.x - h.x, e.y - h.y)); if (s != null && s - 1 < ms) { ms = s - 1; mejor = { e }; }
+  });
+  for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) {
+    const x = (h.x | 0) + i, y = (h.y | 0) + j; if (x < 0 || y < 0 || x >= N || y >= N) continue;
+    const k = y * N + x; if (!res[k] || !expl[k]) continue;
+    const s = puntaje(x + .5, y + .5, distRect(h, x, y, 1)); if (s != null && s < ms) { ms = s; mejor = { k }; }
+  }
+  if (!mejor) return;
+  h.cd = .6;
+  if (mejor.e) golpe(h, mejor.e, UN.h.dmg);
+  else { fx.push({ x1: h.x, y1: h.y, x2: mejor.k % N + .5, y2: ((mejor.k / N) | 0) + .5, t: .15 }); golpeRes(h, mejor.k); }
+}
+function controlHeroe(dt) {
+  const h = heroe(); if (!h) return;
+  const t = (...c) => c.some((k) => teclas.has(k));
+  const sx = t("ArrowRight", "KeyD") - t("ArrowLeft", "KeyA"), sy = t("ArrowDown", "KeyS") - t("ArrowUp", "KeyW");
+  if (sx || sy) { // la pantalla es isométrica: arriba/abajo/izquierda/derecha de la pantalla equivalen a diagonales del mapa
+    let wx = sx + sy, wy = sy - sx; const d = Math.hypot(wx, wy); wx /= d; wy /= d;
+    h.o = null; h.p = []; h.dir = { x: wx, y: wy };
+    const v = UN.h.vel * VEL * dt, nx = h.x + wx * v, ny = h.y + wy * v;
+    if (!bloqueado(h, nx, h.y)) h.x = nx;
+    if (!bloqueado(h, h.x, ny)) h.y = ny;
+    const c = P(h.x, h.y), k = Math.min(1, dt * 5); cam.x += (W / 2 - c[0]) * k; cam.y += (H / 2 - c[1]) * k; // la cámara te sigue
+  }
+  if (teclas.has("Space")) atacar(h, null);
+}
 function tick(dt) {
   if (fin) return;
-  tReloj += dt;
+  tReloj += dt; controlHeroe(dt);
   us.forEach((u) => actualizar(u, dt)); enem.forEach((e) => actualizar(e, dt)); anim.forEach((a) => iaAnimal(a, dt));
   eds.forEach((b) => { // las torres disparan
     if (b.k != "torre" || b.prog < 1) return; b.cd = Math.max(0, b.cd - dt);
@@ -288,7 +334,7 @@ function dibujar() {
     poly([a, P(x + 1, y), P(x + 1, y + 1), P(x, y + 1)], col);
     if (!vis[i]) poly([a, P(x + 1, y), P(x + 1, y + 1), P(x, y + 1)], "rgba(5,7,13,.55)");
   }
-  if (colocar && sel) { const t = tileMouse; if (t) { const ok = libre(t.x, t.y); poly([P(t.x, t.y), P(t.x + 1, t.y), P(t.x + 1, t.y + 1), P(t.x, t.y + 1)], ok ? "rgba(80,255,120,.5)" : "rgba(255,70,70,.5)"); } }
+  if (colocar) { const t = tileMouse; if (t) { const ok = libre(t.x, t.y); poly([P(t.x, t.y), P(t.x + 1, t.y), P(t.x + 1, t.y + 1), P(t.x, t.y + 1)], ok ? "rgba(80,255,120,.5)" : "rgba(255,70,70,.5)"); } }
   const L = [];
   res.forEach((r, i) => { if (r && expl[i]) L.push({ d: i % N + ((i / N) | 0) + 1, f: () => dibRes(i % N, (i / N) | 0, r) }); });
   eds.forEach((b) => L.push({ d: b.x + b.y + b.w, f: () => dibEd(b) }));
@@ -334,14 +380,28 @@ cv.addEventListener("pointermove", (e) => {
   if (!arrastre) return; const dx = e.clientX - arrastre.x, dy = e.clientY - arrastre.y;
   if (arrastre.mov || Math.hypot(dx, dy) > 8) { arrastre.mov = true; cam.x = arrastre.cx + dx; cam.y = arrastre.cy + dy; }
 });
-cv.addEventListener("pointerup", (e) => { if (arrastre && !arrastre.mov) { const r = cv.getBoundingClientRect(); toque(aMundo(e.clientX - r.left, e.clientY - r.top)); } arrastre = null; });
+cv.addEventListener("pointerup", (e) => { if (arrastre && !arrastre.mov) { const r = cv.getBoundingClientRect(); toque(aMundo(e.clientX - r.left, e.clientY - r.top), e.pointerType != "touch"); } arrastre = null; });
 cv.addEventListener("wheel", (e) => { e.preventDefault(); zoom(e.deltaY < 0 ? 1.1 : .9); }, { passive: false });
+// Teclado: flechas / WASD mueven al personaje; barra espaciadora ataca; Esc cancela una colocación
+const MOV = { ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1, KeyW: 1, KeyA: 1, KeyS: 1, KeyD: 1, Space: 1 };
+const teclas = new Set(), escribiendo = (e) => /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+addEventListener("keydown", (e) => {
+  if (!jugando || escribiendo(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.code == "Escape" && colocar) { colocar = null; panel(); return; }
+  if (!MOV[e.code]) return;
+  e.preventDefault(); teclas.add(e.code);
+  if (e.code == "Space" && document.activeElement && document.activeElement.tagName == "BUTTON") document.activeElement.blur(); // que la barra no «pulse» el último botón
+});
+addEventListener("keyup", (e) => { if (!MOV[e.code]) return; teclas.delete(e.code); if (jugando && !escribiendo(e)) e.preventDefault(); });
+addEventListener("blur", () => teclas.clear());
 function zoom(f) { const nz = Math.min(2, Math.max(.5, cam.z * f)), k = nz / cam.z, mx = W / 2, my = H / 2; cam.x = mx - (mx - cam.x) * k; cam.y = my - (my - cam.y) * k; cam.z = nz; }
-function toque(w) {
+function toque(w, raton) {
   if (fin) return; const tx = Math.floor(w.x), ty = Math.floor(w.y), i = ty * N + tx;
-  if (colocar && colocar.startsWith("cajon") && sel && sel.k == "h") {
-    if (!libre(tx, ty) || Math.hypot(tx + .5 - sel.x, ty + .5 - sel.y) > 6) return aviso("Ahí no se puede: elige una casilla libre y cerca");
-    quitar(sel.inv, "tablon", 4); const b = ponerEdificio(colocar, tx, ty, true); b.inv = []; colocar = null; return panel();
+  if (colocar && ES_CONT.includes(colocar) && heroe()) { // baúl o cajón: lo coloca el personaje
+    const h = heroe();
+    if (!libre(tx, ty) || Math.hypot(tx + .5 - h.x, ty + .5 - h.y) > 6) return aviso("Ahí no se puede: elige una casilla libre y cerca");
+    if (cuenta(h.inv, "tablon") < 4) { colocar = null; panel(); return aviso("Necesitas 4 tablones"); }
+    quitar(h.inv, "tablon", 4); const b = ponerEdificio(colocar, tx, ty, true); b.inv = []; colocar = null; invHud(); return panel();
   }
   if (colocar && sel && sel.k == "c") {
     if (!libre(tx, ty)) return aviso("Ahí no se puede construir");
@@ -351,6 +411,11 @@ function toque(w) {
   const u = us.filter((u) => Math.hypot(u.x - w.x, u.y - w.y - .3) < .8)[0];
   if (u) { sel = u; return panel(); }
   const b = eds.find((b) => tx >= b.x && tx < b.x + b.w && ty >= b.y && ty < b.y + b.w);
+  const hh = heroe();
+  if (raton && hh && (!sel || !us.includes(sel) || sel === hh)) { // con ratón, el clic del personaje es un ataque (los edificios se siguen eligiendo)
+    if (b) { sel = b; return panel(); }
+    atacar(hh, w); return;
+  }
   if (!sel || !us.includes(sel)) { sel = b || null; return panel(); }
   const en = enem.concat(anim).find((e) => Math.hypot(e.x - w.x, e.y - w.y - .3) < .9 && vis[(e.y | 0) * N + (e.x | 0)]);
   if (en) { sel.o = { t: "atk", e: en }; }
@@ -369,20 +434,17 @@ function panel(soloTexto) {
   if (!soloTexto) ["r", "c", "g"].forEach((k) => boton("+ " + UN[k].nom + " $" + UN[k].costo, () => { if (dinero < UN[k].costo) return aviso("No alcanza el dinero"); dinero -= UN[k].costo; sel = crearUnidad(k); colocar = null; panel(); }));
   if (!soloTexto) boton("Siguiente libre", () => { const l = us.filter((u) => !u.o); if (!l.length) return aviso("Todos están ocupados"); const j = l.indexOf(sel); sel = l[(j + 1) % l.length]; const c = P(sel.x, sel.y); cam.x += W / 2 - c[0]; cam.y += H / 2 - c[1]; panel(); });
   if (!soloTexto && sel && sel.k == "c") ["almacen", "torre"].forEach((k) => boton((colocar == k ? "Toca el mapa: " : "") + ED[k].nom + " $" + ED[k].costo, () => { colocar = colocar == k ? null : k; panel(); }));
-  if (!soloTexto && sel && sel.k == "h") {
-    boton("Hacer 2 tablones (1 tronco)", () => { const v = sel.inv; if (!cuenta(v, "tronco")) return aviso("Necesitas 1 tronco"); quitar(v, "tronco", 1); if (espacio(v, "tablon") < 2) { anadir(v, "tronco", 1); return aviso("Inventario lleno"); } anadir(v, "tablon", 2); invHud(); });
-    [["cajonM", "Cajón de madera"], ["cajonN", "Cajón de minerales"]].forEach(([k, n]) => boton((colocar == k ? "Toca el mapa: " : "") + n + " (4 tablones)", () => { if (cuenta(sel.inv, "tablon") < 4) return aviso("Necesitas 4 tablones"); colocar = colocar == k ? null : k; panel(); }));
-  }
   if (!soloTexto && sel && sel.inv && sel.w) {
-    const acepta = (t) => (sel.k == "cajonM") == MADERA.includes(t), cerca = () => { const h = heroe(); return h && Math.hypot(h.x - sel.x - .5, h.y - sel.y - .5) < 2.5; };
-    boton("Guardar", () => { if (!cerca()) return aviso("Acércate al cajón"); pasar(heroe().inv, sel.inv, acepta); invHud(); panel(); });
-    boton("Sacar todo", () => { if (!cerca()) return aviso("Acércate al cajón"); pasar(sel.inv, heroe().inv, () => true); invHud(); panel(); });
+    const acepta = (t) => sel.k == "baul" || (sel.k == "cajonM") == MADERA.includes(t), cerca = () => { const h = heroe(); return h && Math.hypot(h.x - sel.x - .5, h.y - sel.y - .5) < 2.5; };
+    boton("Guardar", () => { if (!cerca()) return aviso("Acércate (a menos de 2 casillas)"); pasar(heroe().inv, sel.inv, acepta, capac(sel)); invHud(); panel(); });
+    boton("Sacar todo", () => { if (!cerca()) return aviso("Acércate (a menos de 2 casillas)"); pasar(sel.inv, heroe().inv, () => true); invHud(); panel(); });
   }
   const s = $("seleccion");
   if (!sel) s.textContent = us.length ? "Toca una unidad para elegirla y luego toca el mapa para darle una orden." : "Compra tu primer soldado con los botones de abajo: cuestan $10 cada uno.";
-  else if (sel.inv) s.textContent = ED[sel.k].nom + " · " + (sel.inv.length ? sel.inv.map((x) => ITEM[x.t] + " ×" + x.n).join(", ") : "vacío") + " · " + sel.inv.length + "/" + RANURAS + " ranuras (hasta " + STACK + " por ranura)";
+  else if (sel.w && sel.inv) s.textContent = ED[sel.k].nom + " · " + (sel.inv.length ? sel.inv.map((x) => ITEM[x.t] + " ×" + x.n).join(", ") : "vacío") + " · " + sel.inv.length + "/" + capac(sel) + " ranuras (hasta " + STACK + " por ranura)";
   else if (sel.w) s.textContent = ED[sel.k].nom + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
-  else s.textContent = UN[sel.k].nom + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + " · golpe " + UN[sel.k].dmg + " · " + ({ r: "toca un recurso para juntarlo", c: "toca una obra o edificio dañado; o elige qué construir", g: "toca el mapa para explorar o un animal para atacar", h: "toca el mapa para moverte, un árbol o roca para picarlo (10 golpes) o un animal para atacar" })[sel.k];
+  else s.textContent = UN[sel.k].nom + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + " · golpe " + UN[sel.k].dmg + " · " + ({ r: "toca un recurso para juntarlo", c: "toca una obra o edificio dañado; o elige qué construir", g: "toca el mapa para explorar o un animal para atacar", h: "flechas o WASD para moverte · barra espaciadora o clic para atacar y picar (10 golpes por árbol o roca) · en pantalla táctil, toca el mapa" })[sel.k];
+  if (colocar && ES_CONT.includes(colocar)) s.textContent = "Toca una casilla libre y cercana para colocar: " + ED[colocar].nom + " (Esc para cancelar)";
 }
 function invHud() {
   const h = heroe(), z = $("inv"); z.innerHTML = ""; if (!h) return;
@@ -411,7 +473,28 @@ function reino(forzar) {
     z.appendChild(b);
   });
 }
-$("bReino").addEventListener("click", () => { $("reino").hidden = !$("reino").hidden; reino(true); });
+$("bReino").addEventListener("click", () => { $("reino").hidden = !$("reino").hidden; if (!$("reino").hidden) $("crea").hidden = true; reino(true); });
+// ----- Creaciones: fabricar tablones y contenedores con lo que lleva el personaje -----
+let sigCrea = "";
+function crea(forzar) {
+  const z = $("crea"); if (z.hidden) return;
+  const h = heroe(), sig = h ? JSON.stringify(h.inv) + colocar : "";
+  if (!forzar && sig == sigCrea) return; sigCrea = sig; z.innerHTML = ""; if (!h) return;
+  const t = document.createElement("div"); t.className = "resumen"; t.textContent = "Troncos: " + cuenta(h.inv, "tronco") + "  ·  Tablones: " + cuenta(h.inv, "tablon"); z.appendChild(t);
+  const boton = (txt, f, off) => { const b = document.createElement("button"); b.className = "soldado"; b.textContent = txt; b.disabled = !!off; b.addEventListener("click", f); z.appendChild(b); };
+  boton("🪵 Fabricar 4 tablones (1 tronco)", () => {
+    const v = h.inv; if (!cuenta(v, "tronco")) return aviso("Necesitas 1 tronco");
+    quitar(v, "tronco", 1); if (espacio(v, "tablon") < 4) { anadir(v, "tronco", 1); return aviso("Inventario lleno"); }
+    anadir(v, "tablon", 4); invHud(); crea(true); aviso("+4 Tablones");
+  }, !cuenta(h.inv, "tronco"));
+  [["baul", "📦 Baúl · 20 espacios, cualquier material (4 tablones)"], ["cajonM", "Cajón de madera · 10 espacios (4 tablones)"], ["cajonN", "Cajón de minerales · 10 espacios (4 tablones)"]].forEach(([k, n]) =>
+    boton((colocar == k ? "✔ Toca el mapa: " : "") + n, () => {
+      if (cuenta(h.inv, "tablon") < 4) return aviso("Necesitas 4 tablones");
+      colocar = colocar == k ? null : k; if (colocar) { z.hidden = true; aviso("Toca una casilla libre y cercana para colocarlo"); } panel(); crea(true);
+    }, cuenta(h.inv, "tablon") < 4 && colocar != k));
+  const p = document.createElement("p"); p.textContent = "Para guardar objetos, acércate al baúl, tócalo y usa Guardar / Sacar todo."; z.appendChild(p);
+}
+$("bCrea").addEventListener("click", () => { const z = $("crea"); z.hidden = !z.hidden; if (!z.hidden) $("reino").hidden = true; crea(true); });
 $("zmas").addEventListener("click", () => zoom(1.2)); $("zmenos").addEventListener("click", () => zoom(.83));
 $("otra").addEventListener("click", () => { nuevo(); guardar(); entrar(); });
 let ult = performance.now(), th = 0, ta = 0;
@@ -434,13 +517,13 @@ function cargar(s) {
   us = s.us.map(([k, x, y, hp, ct, cn, o, inv]) => ({ k, x, y, hp, mh: UN[k].hp, p: [], cd: 0, inv: inv || (k == "h" ? [] : null), carry: { t: ct, n: cn }, o: o ? { t: "rec", i: o[0], tipo: o[1], f: cn >= 5 ? "vol" : "ir" } : null }));
   enem = s.enem.map(([x, y, hp, mh]) => ({ k: "e", x, y, hp, mh, cd: 0 }));
   ({ dinero, oleada, tReloj, tOleada, muertes, cam } = s); anim = (s.anim || []).map(([k, x, y, hp, g]) => ({ ...nuevoAnimal(k, x, y), hp, g })); stock = s.stock || { carne: 0, piel: 0, cuero: 0 };
-  if (!us.some((u) => u.k == "h")) crearUnidad("h"); sel = heroe(); // partidas viejas: se agrega el personaje fx = []; sel = null; colocar = null; fin = false; pend = 0;
+  if (!us.some((u) => u.k == "h")) crearUnidad("h"); sel = heroe(); fx = []; colocar = null; fin = false; pend = 0; // partidas viejas: se agrega el personaje
 }
 function guardar() {
   if (!slot) return; const l = leer(), i = l.findIndex((p) => p.id == slot.id), p = { id: slot.id, nombre: slot.nombre, fecha: Date.now(), estado: estado() };
   if (i < 0) l.push(p); else l[i] = p; escribir(l);
 }
-function pantalla(id) { $("menu").hidden = !id; ["mPrincipal", "mPers", "mNiv"].forEach((m) => ($(m).hidden = m != id)); $("datos").hidden = !!id; $("bMenu").hidden = !!id; $("bReino").hidden = !!id; if (id) $("reino").hidden = true; if (id == "mPers") listar(); }
+function pantalla(id) { $("menu").hidden = !id; ["mPrincipal", "mPers", "mNiv"].forEach((m) => ($(m).hidden = m != id)); $("datos").hidden = !!id; $("bMenu").hidden = !!id; $("bReino").hidden = !!id; $("bCrea").hidden = !!id; teclas.clear(); if (id) { $("reino").hidden = true; $("crea").hidden = true; } if (id == "mPers") listar(); }
 function entrar() { $("fin").hidden = true; jugando = true; pantalla(null); ult = performance.now(); panel(); }
 function listar() {
   const z = $("partidas"), l = leer().sort((a, b) => b.fecha - a.fecha); z.innerHTML = "";
@@ -468,7 +551,7 @@ ajustar(); pantalla("mPrincipal");
   const dt = Math.min(.05, (n - ult) / 1000); ult = n;
   if (jugando) {
     tick(dt); dibujar();
-    if ((th += dt) > .25) { th = 0; hud(); if (sel) panel(true); reino(); }
+    if ((th += dt) > .25) { th = 0; hud(); if (sel) panel(true); reino(); crea(); }
     if ((ta += dt) > 5) { ta = 0; if (!fin) guardar(); }
   }
   requestAnimationFrame(bucle);
