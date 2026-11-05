@@ -3,9 +3,19 @@
 // Todo el dinero y la carga se guardan como {u: unidades, w: valor en dólares de esas unidades}.
 export const AJ = {
   WALK: 1.04, VEL_CAM: 2, DIST_A: 2, WH_CAM: 7,                        // segundos base de cada fase (cada tramo de caminata del minero dura WALK (velocidad de caminata VEL_CAM = 2); cada tramo del ascensor dura DIST_A × pozos ÷ su velocidad de movimiento; la cava dura capacidad ÷ velocidad de extracción)
-  CAP_M: 20, EXT_M: 5, CREC_M: 1.1, CAP_A: 600, VEL_CARGA_A: 150, CREC_A: 1.33, MOV_A: 0.5, CREC_MOV_A: 1.03, CAP_W: 1000, VEL_CARGA_W: 250, CREC_W: 1.3, // minero nivel 1: carga 20 y extrae 5/s; ambos crecen ×1.1 por nivel (redondeo hacia abajo). ascensor nivel 1: carga 600, velocidad de carga 150/s (ambas ×1.33 por nivel) y velocidad de movimiento 0.5 (×1.03 por nivel, redondeo hacia abajo a 2 decimales); CAP_W, VEL_CARGA_W, CREC_W: almacén nivel 1 (carga 1000 y velocidad de carga 250/s, ×1.3 por nivel; cada tramo de caminata dura WH_CAM)
-  VALOR: 1, VALOR_X: 1, POZO_BASE_X: 50,                             // valor de una unidad (1 en todos los pozos: el dinero por viaje ya va en la capacidad) y POZO_BASE_X: cada pozo siguiente empieza con capacidad y velocidad de extracción ×50 (pozo 2: 1000 y 250/s)
-  POZO1: 10, POZO0: 2600, POZO_X: 4.6, MAX_POZOS: 30,     // precio del pozo 1, del pozo 2 y su crecimiento
+  CAP_M: 20, EXT_M: 5, CREC_M: 1.1, CREC_M2: 1.1075, NIV_CREC2: 100, CAP_A: 600, VEL_CARGA_A: 150, CREC_A: 1.33, MOV_A: 0.5, CREC_MOV_A: 1.03, CAP_W: 1000, VEL_CARGA_W: 250, CREC_W: 1.3, // minero nivel 1: carga 20 y extrae 5/s; ambos crecen ×1.1 por nivel (redondeo hacia abajo). ascensor nivel 1: carga 600, velocidad de carga 150/s (ambas ×1.33 por nivel) y velocidad de movimiento 0.5 (×1.03 por nivel, redondeo hacia abajo a 2 decimales); CAP_W, VEL_CARGA_W, CREC_W: almacén nivel 1 (carga 1000 y velocidad de carga 250/s, ×1.3 por nivel; cada tramo de caminata dura WH_CAM)
+  VALOR: 1, VALOR_X: 1,                             // valor de una unidad (1 en todos los pozos: el dinero por viaje ya va en la capacidad)
+  POZO1: 10, POZO0: 2600, MAX_POZOS: 200,                 // precio del pozo 1 y del pozo 2 (los siguientes salen de la tabla de abajo)
+  // ----- Escala por pozo (calibrada con las capturas del juego original: pozos 1, 5, 10 y 20) -----
+  // Cada pozo nuevo multiplica por 10^paso su producción, su costo de niveles y su precio. Los pasos crecen con el número
+  // de pozo (como en el original) y se frenan en PASO_MAX para que 200 pozos quepan en los números del navegador (< 1e308).
+  PASO_P2: 1.699,                  // pozo 2: ×50 (medido: capacidad 1000 y 250/s)
+  PASO_K: 0.13, PASO_MAX: 1.1,     // producción: paso(i) = mín(PASO_MAX, PASO_K × i) para i ≥ 2 (i = número de pozo menos 1)
+  COSTO_NIV_K: 1.0,                // costo de niveles: su paso es COSTO_NIV_K × el paso de producción (1 = cada pozo cuesta lo mismo por unidad producida)
+  // Precio del pozo i (desde el 3.º): PRECIO_T segundos de lo que produce el pozo anterior en un nivel de referencia que sube con el número de pozo
+  PRECIO_T: 600, REF0: 12, REF_K: 0.2, REF_MAX: 400,
+  COSTO_GF: 1.1203, COSTO_TAU: 100, // costo de niveles del pozo 1: ×1.28 tras el nivel 10, baja hacia ×COSTO_GF (constante de tiempo TAU niveles)
+  PREST_SUAVE: 100, PREST_LOG: 20, // estrellas: raíz hasta PREST_SUAVE y después solo +PREST_LOG por cada ×10 (si no, con 200 pozos salen 1e90 estrellas)
   NIV_M: 10.23, NIV_A: 1041.67, NIV_W: 1041.67, G_M: 1.28, G_A: 1.2, G_W: 1.2, NIV_MAX_M: 800, NIV_MAX_AW: 2400,
   ASESOR: 100, NIV_ASESOR: 5, GER_M1: 150, GER: [2, 60, 2500], GER_A: 400, GER_W: 400, VEL_GER: [1, 1.5, 2.5, 4], // rangos: 1.º Asesor (automatiza; cuesta ASESOR (en los pozos ×2 por cada pozo: 100, 200, 400…) y se desbloquea cuando el pozo 1 llega al nivel NIV_ASESOR), 2.º Sénior, 3.º Ejecutivo
   DIN0: 10, BONO_ESTRELLA: 0.15, PRESTIGIO: 1e8, OFFLINE_MAX: 6 * 3600,
@@ -20,6 +30,19 @@ export function nuevoEstado(estrellas = 0) {
   };
 }
 
+// ----- Tablas por pozo (se calculan una vez) -----
+// LOG_P[i], LOG_Z[i]: logaritmo en base 10 del factor de producción y de costo de niveles del pozo i (0 = el primero)
+const LOG_P = [0], LOG_Z = [0];
+for (let i = 1; i < AJ.MAX_POZOS; i++) {
+  const paso = i === 1 ? AJ.PASO_P2 : Math.min(AJ.PASO_MAX, AJ.PASO_K * i);
+  LOG_P[i] = LOG_P[i - 1] + paso;
+  LOG_Z[i] = LOG_Z[i - 1] + (i === 1 ? 0.663 : AJ.COSTO_NIV_K * paso);   // pozo 2: ×4.6 como antes
+}
+export const factorProd = (i) => Math.pow(10, LOG_P[i]);
+const factorCosto = (i) => Math.pow(10, LOG_Z[i]);
+// Crecimiento por nivel de producción (carga y extracción): ×CREC_M hasta el nivel NIV_CREC2 y ×CREC_M2 después
+const crecNiv = (n) => Math.pow(AJ.CREC_M, Math.min(n, AJ.NIV_CREC2) - 1) * Math.pow(AJ.CREC_M2, Math.max(0, n - AJ.NIV_CREC2));
+
 // ----- Niveles -----
 // Mineros por pozo (como en el juego original): uno más en los niveles 10, 50, 100, 200 y 400 (máximo 6).
 export const trabajadores = (n) => 1 + (n >= 10) + (n >= 50) + (n >= 100) + (n >= 200) + (n >= 400);
@@ -31,8 +54,8 @@ export const hitos = (n) => (n >= 10) + (n >= 25) + (n >= 50) + (n >= 100 ? 1 + 
 export const mult = (n) => Math.pow(2, hitos(n));
 export const proxHito = (n) => (n < 10 ? 10 : n < 25 ? 25 : n < 50 ? 50 : n < 100 ? 100 : (Math.floor(n / 100) + 1) * 100);
 // Pozos: capacidad y velocidad de extracción del nivel n (medidas del juego original: 20 y 5/s en el nivel 1, ×1.1 por nivel, redondeo hacia abajo)
-export const capBase = (n, i = 0) => Math.floor(AJ.CAP_M * Math.pow(AJ.POZO_BASE_X, i) * Math.pow(AJ.CREC_M, n - 1) + 1e-9);
-export const velExt = (n, i = 0) => Math.floor(AJ.EXT_M * Math.pow(AJ.POZO_BASE_X, i) * Math.pow(AJ.CREC_M, n - 1) + 1e-9);
+export const capBase = (n, i = 0) => Math.floor(AJ.CAP_M * factorProd(i) * crecNiv(n) + 1e-9);
+export const velExt = (n, i = 0) => Math.floor(AJ.EXT_M * factorProd(i) * crecNiv(n) + 1e-9);
 export const tiempoCava = (w, i = 0) => capBase(w.n, i) / velExt(w.n, i);
 export const capM = (w, i = 0) => capBase(w.n, i) * mult(w.n);
 // Ascensor: carga, velocidad de carga y de movimiento del nivel n (medidas del juego original)
@@ -48,20 +71,29 @@ export const velCargaW = (n) => AJ.VEL_CARGA_W * Math.pow(AJ.CREC_W, n - 1);
 export const tCargaAlm = (w) => capWbase(w.n) / velCargaW(w.n);
 export const capW = (w) => capWbase(w.n) * mult(w.n);
 export const valorPozo = (i) => AJ.VALOR * Math.pow(AJ.VALOR_X, i);
-export const costoPozo = (i) => (i === 0 ? AJ.POZO1 : AJ.POZO0 * Math.pow(AJ.POZO_X, i - 1));
+// Precio del pozo i (0 = el primero). Desde el tercero: PRECIO_T segundos de la producción del pozo anterior en el nivel de referencia nivRef(i)
+export const nivRef = (i) => Math.min(AJ.REF_MAX, Math.round(AJ.REF0 + AJ.REF_K * i));
+const tasaRef = (j, n) => { const w = { n }; return cargaPozo(w, j) / (tiempoCava(w, j) + 2 * AJ.WALK); };
+export const costoPozo = (i) => (i === 0 ? AJ.POZO1 : i === 1 ? AJ.POZO0 : AJ.PRECIO_T * tasaRef(i - 1, nivRef(i)));
 export const mejoraGlobal = (E) => 1 + AJ.BONO_ESTRELLA * E.estrellas;
 
-const BASE = { m: (i) => AJ.NIV_M * Math.pow(AJ.POZO_X, i), a: () => AJ.NIV_A, w: () => AJ.NIV_W };
+const BASE = { m: () => AJ.NIV_M, a: () => AJ.NIV_A, w: () => AJ.NIV_W };
 const G = { m: AJ.G_M, a: AJ.G_A, w: AJ.G_W };
 export const trab = (E, tipo, i) => (tipo === "m" ? E.pozos[i] : tipo === "a" ? E.asc : E.alm);
-// Pozos: costo de subir del nivel n al n+1 en el pozo 1 (tabla medida de los niveles 1 a 10; después crece ×G_M por nivel). Cada pozo siguiente multiplica por POZO_X.
+// Pozos: costo de subir del nivel n al n+1 en el pozo 1 (tabla medida de los niveles 1 a 10; después baja de ×G_M a ×COSTO_GF). Cada pozo siguiente multiplica por factorCosto(i).
 const COSTO_M = [13, 17.6, 23, 30.2, 39.7, 49.6, 62.8, 77.5, 98.8, 113];
-const costoM1 = (n) => (n <= COSTO_M.length ? COSTO_M[n - 1] : COSTO_M[COSTO_M.length - 1] * Math.pow(AJ.G_M, n - COSTO_M.length));
+// Desde el nivel 10 el crecimiento por nivel baja de ×1.28 a ×COSTO_GF (en el original el pozo 1 cuesta 4.33e39 en el nivel 650)
+const COSTO_M1 = [0, ...COSTO_M];
+for (let n = COSTO_M.length + 1; n <= AJ.NIV_MAX_M; n++) {
+  const k = n - 1 - COSTO_M.length;
+  COSTO_M1[n] = COSTO_M1[n - 1] * (AJ.COSTO_GF + (AJ.G_M - AJ.COSTO_GF) * Math.exp(-k / AJ.COSTO_TAU));
+}
+const costoM1 = (n) => COSTO_M1[n];
 export const costoNiv = (tipo, i, n, k) => {
-  if (tipo === "m") { let s = 0; for (let j = 0; j < k; j++) s += costoM1(n + j); return s * Math.pow(AJ.POZO_X, i); }
+  if (tipo === "m") { let s = 0; for (let j = 0; j < k; j++) s += costoM1(n + j); return s * factorCosto(i); }
   const g = G[tipo]; return BASE[tipo](i) * Math.pow(g, n) * (Math.pow(g, k) - 1) / (g - 1); };
 export function maxNiv(tipo, i, n, din) {
-  if (tipo === "m") { const f = Math.pow(AJ.POZO_X, i); let k = 0, s = 0; while (n + k < nivMax(tipo)) { s += costoM1(n + k) * f; if (s > din) break; k++; } return k; }
+  if (tipo === "m") { const f = factorCosto(i); let k = 0, s = 0; while (n + k < nivMax(tipo)) { s += costoM1(n + k) * f; if (s > din) break; k++; } return k; }
   const g = G[tipo], b = BASE[tipo](i) * Math.pow(g, n);
   let k = Math.max(0, Math.min(nivMax(tipo) - n, Math.floor(Math.log(1 + din * (g - 1) / b) / Math.log(g))));
   while (k > 0 && costoNiv(tipo, i, n, k) > din) k--;
@@ -177,7 +209,10 @@ export function fuera(E, seg) {
   const g = ingreso(E) * Math.min(seg, AJ.OFFLINE_MAX);
   E.din += g; E.run += g; return g;
 }
-export const estrellasGanables = (E) => Math.floor(Math.sqrt(E.run / AJ.PRESTIGIO));
+export function estrellasGanables(E) {
+  const s = Math.sqrt(E.run / AJ.PRESTIGIO);
+  return Math.floor(s <= AJ.PREST_SUAVE ? s : AJ.PREST_SUAVE + AJ.PREST_LOG * Math.log10(s / AJ.PREST_SUAVE));
+}
 export function prestigio(E) {
   const g = estrellasGanables(E);
   return g < 1 ? null : nuevoEstado(E.estrellas + g);

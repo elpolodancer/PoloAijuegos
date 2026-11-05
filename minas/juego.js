@@ -102,6 +102,9 @@ bPres.onclick = () => {
 };
 
 // ----- Dibujo -----
+// Con hasta 200 pozos solo se actualizan las filas que se ven (más un margen): cada fila mide H px y la fila q empieza en q × H dentro de #escena
+const ventana = () => { const t = escena.getBoundingClientRect().top; return [-t - 2 * H, -t + innerHeight + 2 * H]; };
+const visible = (q, v) => (q + 1) * H > v[0] && q * H < v[1];
 const x = (p) => 20 + 65 * p;                   // posición horizontal en % (20 = depósito, 85 = roca/banco)
 function pintar() {
   const N = E.pozos.length, a = E.asc;
@@ -113,7 +116,10 @@ function pintar() {
   bPres.style.opacity = g >= 1 ? 1 : 0.55;
   nuevo.textContent = N >= L.AJ.MAX_POZOS ? "Mina completa" : (N === 0 ? "🔒 Desbloquear pozo 1 (carbón) · $" : "➕ Nuevo pozo (" + (N + 1) + ") · $") + fmt(L.costoPozo(N));
   nuevo.classList.toggle("no", N < L.AJ.MAX_POZOS && L.costoPozo(N) > E.din);
-  for (const r of filas) {
+  const vent = ventana();
+  for (let q = 0; q < filas.length; q++) {
+    if (!visible(q, vent)) continue;
+    const r = filas[q];
     const w = L.trab(E, r.tipo, r.i), k = cantidad(r, w), c = L.costoNiv(r.tipo, r.i, w.n, k);
     const nt = r.tipo === "m" ? L.trabajadores(w.n) : 1, pt = r.tipo === "m" ? L.proxTrab(w.n) : 0;
     r.niv.textContent = "Nv " + w.n + " · ×" + L.mult(w.n) + (nt > 1 ? " · 👷" + nt : "") + " (→" + L.proxHito(w.n) + (pt && pt !== L.proxHito(w.n) ? " 👷" + pt : "") + ")" + (w.ger ? " · ⚡" + L.vel(w) : "");
@@ -131,7 +137,10 @@ function pintar() {
 }
 function mover() {                                // posiciones (cada cuadro)
   const N = E.pozos.length, a = E.asc;
-  for (const r of filas) {
+  const vent = ventana();
+  for (let q = 0; q < filas.length; q++) {
+    if (!visible(q, vent)) continue;
+    const r = filas[q];
     const w = L.trab(E, r.tipo, r.i), p = w.f ? Math.min(1, w.t / L.dur(E, r.tipo, r.i)) : 0;
     if (r.tipo === "m") r.pjs.forEach((e, k) => { e.style.left = (w.f === 2 ? x(1 - p) : w.f === 3 ? x(p) : x(1)) - k * 4.5 + "%"; e.classList.toggle("dig", w.f === 1); });
     else if (r.tipo === "w") r.pjs[0].style.left = (w.f === 2 ? x(p) : w.f === 3 ? x(1 - p) : x(0)) + "%";
@@ -154,6 +163,7 @@ function bucle(ahora) {
   mover();
   requestAnimationFrame(bucle);
 }
+addEventListener("scroll", () => pintar(), { passive: true });
 cargar(); armar();
 setInterval(guardar, 5000);
 addEventListener("pagehide", () => { guardar(); enviar(1); });
