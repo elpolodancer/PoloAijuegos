@@ -12,7 +12,7 @@
     body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
     .barra { padding: 8px 12px; flex: 0 0 auto; }
     .barra h1 { font-size: 1.05rem; }
-    .datos { display: flex; gap: 14px; align-items: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .datos { display: flex; gap: 10px; align-items: center; font-weight: 700; font-variant-numeric: tabular-nums; }
     #escena { position: relative; flex: 1 1 auto; min-height: 0; }
     #lienzo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
     #velo { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 18, 32, .78); overflow: auto; }
@@ -23,6 +23,10 @@
     #velDatos b { color: var(--texto); }
     .acciones { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
     .btn.sec { background: transparent; border: 1px solid var(--borde); color: var(--texto); }
+    .selnivel { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 14px; }
+    .selnivel div { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+    .selnivel small { color: var(--suave); }
+    .selnivel .btn { padding: 8px 12px; }
     #ranking { margin-top: 14px; text-align: left; font-size: .9rem; color: var(--suave); }
     #ranking h3 { margin: 0 0 4px; font-size: .95rem; color: var(--texto); }
     #ranking ol { margin: 0; padding-left: 22px; }
@@ -32,6 +36,7 @@
   <header class="barra">
     <a class="volver" href="../">← Juegos</a>
     <div class="datos">
+      <span id="stNivel" title="Nivel">Nv 1</span>
       <span id="stTerr" title="Territorio">▦ 0 %</span>
       <span id="stBajas" title="Bajas">☠ 0</span>
       <span id="stMejor" title="Mejor territorio">🏆 0 %</span>
@@ -43,6 +48,11 @@
       <div class="panel">
         <h2 id="velTitulo">Paperio</h2>
         <p id="velTexto">Sal de tu territorio y regresa para quedarte con todo lo que encierres. Si alguien toca tu estela, pierdes; si tú tocas la suya, pierde él. Mantén el dedo pulsado y arrástralo hacia donde quieras ir, o usa las flechas / WASD.</p>
+        <div class="selnivel">
+          <button class="btn sec" id="nivelAnt" type="button" aria-label="Nivel anterior">◀</button>
+          <div><small id="nivelNum">Nivel 1</small><b id="nivelNom">Colina</b></div>
+          <button class="btn sec" id="nivelSig" type="button" aria-label="Nivel siguiente">▶</button>
+        </div>
         <ul id="velDatos"></ul>
         <div class="acciones">
           <button class="btn" id="jugar" type="button">Jugar</button>

@@ -2,18 +2,23 @@
 // «Paperio» (estilo Paper.io 2): sales de tu territorio dejando una estela y, al volver, te quedas con todo lo que encerraste.
 // - Si alguien toca tu estela (o tú la tuya), pierdes todo; si tú tocas la estela de otro, pierde él.
 // - Si te quedas sin territorio, pierdes. Los bots reaparecen solos; tú no (se acaba la partida).
-// - El mapa es un círculo y todos se mueven LIBRES (por ángulo), girando en curvas, no en esquinas de 90°.
+// - Cada nivel tiene un mapa con una forma distinta (ver niveles.js). Todos se mueven LIBRES (por ángulo), girando en curvas.
+// - Para pasar de nivel hay que conquistar el % de mapa que pide el nivel («meta»).
 // - El territorio vive en una rejilla fina (cada casilla es muy pequeña) que se dibuja estirada y suavizada,
 //   así los bordes se ven redondeados y no «cuadrados».
+import { NIVELES, crearForma } from "./niveles.js";
 const ID = "paperio";
 
 // ----- Ajustes -----
-const RADIO = 300;                    // radio del mapa circular, en casillas finas
+const RADIO = 300;                    // «tamaño» de los mapas: el cuadrado de -1 a 1 de niveles.js mide 2·RADIO casillas finas
 const VEL = 38;                       // velocidad (casillas por segundo)
-const GIRO = 3.4;                     // qué tan rápido gira (radianes por segundo): más alto = giros más cerrados
+const GIRO = 5.5;                     // giro de los bots (radianes por segundo): más alto = giros más cerrados
 const ANGULO_CHOQUE = 15;             // grados: si llegas al borde con menos de esto respecto a ir «de frente», mueres; si no, te deslizas
 const COS_CHOQUE = Math.cos(ANGULO_CHOQUE * Math.PI / 180);
 const GIRO_JUGADOR = 8;               // giro del jugador (más alto = responde más rápido y preciso a las teclas/dedo)
+const MARGEN_PARED = 2.5;             // distancia a la pared a la que ya cuenta como roce
+const PUNTOS_POR_NIVEL = 50;          // puntos extra por pasar un nivel
+const DESBLOQUEAR_TODOS = false;      // true = todos los niveles disponibles desde el inicio (útil para probar)
 const R_CABEZA = 3;                   // tamaño de la cabeza (para choques)
 const R_RASTRO = 2;                   // grosor de la estela
 const R_INICIO = 9;                   // radio del territorio inicial
@@ -28,21 +33,17 @@ const TONOS = [255, 5, 38, 135, 178, 300, 340, 55]; // color de cada uno (el pri
 const TEXTO_AYUDA = "Sal de tu territorio y regresa para quedarte con todo lo que encierres. Si alguien toca tu estela, pierdes; si tú tocas la suya, pierde él. Mantén el dedo pulsado y arrástralo hacia donde quieras ir, o usa las flechas / WASD.";
 
 // ----- Estado -----
-const G = 2 * RADIO + 8, C = G / 2;   // lado de la rejilla y su centro
+const G = 2 * RADIO + 40, C = G / 2;  // lado de la rejilla y su centro (con un margen alrededor del mapa)
 const N = G * G;
 const SIM = 1 / 60;                   // paso fijo de simulación
 const TAU = Math.PI * 2;
 const dueno = new Uint8Array(N);      // id del dueño de cada casilla (0 = nadie)
 const rastro = new Uint8Array(N);     // id de quien dejó estela en la casilla (0 = ninguna)
 const rastroIdx = new Int32Array(N);  // número de paso en que se dejó esa estela
-const dentro = new Uint8Array(N);     // 1 = casilla dentro del círculo
+const dentro = new Uint8Array(N);     // 1 = casilla dentro del mapa del nivel
+const distM = new Float32Array(N);    // distancia de cada casilla a la pared más cercana (0 fuera del mapa)
 const etiqueta = new Int32Array(N), cola2 = new Int32Array(N); // memoria de trabajo para cerrar zonas
-let AREA = 0;
-for (let y = 0; y < G; y++)
-  for (let x = 0; x < G; x++) {
-    const dx = x + 0.5 - C, dy = y + 0.5 - C;
-    if (dx * dx + dy * dy < RADIO * RADIO) { dentro[y * G + x] = 1; AREA++; }
-  }
+let AREA = 0;                         // casillas que tiene el mapa del nivel actual
 const cuenta = new Int32Array(NUM_BOTS + 2);
 
 function disco(r) {
@@ -56,6 +57,8 @@ let ents = [], yo = null;
 let estado = "demo";                  // demo | jugando | fin
 let sucio = true, bajas = 0, maxPct = 0, tiempo = 0, mejorPct = 0;
 let fx = [];
+let nivelActual = 0, nivelConstruido = -1, desbloqueado = 0, ganado = false;
+let reloj = 0;                        // pasos de simulación transcurridos (60 por segundo)
 const cam = { x: C, y: C };
 
 const $ = (id) => document.getElementById(id);
@@ -63,6 +66,8 @@ const cv = $("lienzo"), ctx = cv.getContext("2d");
 let vw = 300, vh = 300, cs = 4;
 
 try { mejorPct = Number(localStorage.getItem("paperio_mejor")) || 0; } catch (e) {}
+try { desbloqueado = Math.min(NIVELES.length - 1, Number(localStorage.getItem("paperio_nivel")) || 0); } catch (e) {}
+const nivelMax = () => (DESBLOQUEAR_TODOS ? NIVELES.length - 1 : desbloqueado);
 
 // ----- Sesión y puntos (opcional: sin conexión el juego funciona igual) -----
 let J = null, usuario = null;
@@ -108,7 +113,83 @@ function hslRgb(h, s, l) {
 }
 const pack = (c) => ((255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0; // ABGR (little endian)
 
+// ----- Mapa del nivel -----
+// Capas del fondo: M = suelo claro, S = su sombra (más oscura, se dibuja un poco más abajo)
+const cvM = document.createElement("canvas"), cvS = document.createElement("canvas");
+cvM.width = cvM.height = cvS.width = cvS.height = G;
+const ctxM = cvM.getContext("2d"), ctxS = cvS.getContext("2d");
+const imgM = ctxM.createImageData(G, G), imgS = ctxS.createImageData(G, G);
+const u32M = new Uint32Array(imgM.data.buffer), u32S = new Uint32Array(imgS.data.buffer);
+const tmpD = new Float32Array(N);
+
+function chamfer(d) { // distancia (aprox.) al origen más cercano, en dos pasadas
+  const D2 = 1.4142;
+  for (let y = 1; y < G; y++)
+    for (let x = 1; x < G - 1; x++) {
+      const i = y * G + x;
+      d[i] = Math.min(d[i], d[i - 1] + 1, d[i - G] + 1, d[i - G - 1] + D2, d[i - G + 1] + D2);
+    }
+  for (let y = G - 2; y >= 0; y--)
+    for (let x = G - 2; x >= 1; x--) {
+      const i = y * G + x;
+      d[i] = Math.min(d[i], d[i + 1] + 1, d[i + G] + 1, d[i + G + 1] + D2, d[i + G - 1] + D2);
+    }
+}
+function construirNivel(n) {
+  const f = crearForma(NIVELES[n].forma);
+  dentro.fill(0);
+  for (let y = 0; y < G; y++)
+    for (let x = 0; x < G; x++) {
+      const u = (x + 0.5 - C) / RADIO, v = (y + 0.5 - C) / RADIO;
+      if (u > -1 && u < 1 && v > -1 && v < 1 && f(u, v)) dentro[y * G + x] = 1;
+    }
+  // quedarse solo con la pieza más grande (por si la forma deja pedacitos sueltos)
+  etiqueta.fill(0);
+  let nEt = 0, mayor = 0, tam = 0;
+  for (let s0 = 0; s0 < N; s0++) {
+    if (!dentro[s0] || etiqueta[s0]) continue;
+    nEt++;
+    let h = 0, t = 0;
+    cola2[t++] = s0; etiqueta[s0] = nEt;
+    while (h < t) {
+      const i = cola2[h++], x = i % G;
+      let j;
+      if (x > 0) { j = i - 1; if (dentro[j] && !etiqueta[j]) { etiqueta[j] = nEt; cola2[t++] = j; } }
+      if (x < G - 1) { j = i + 1; if (dentro[j] && !etiqueta[j]) { etiqueta[j] = nEt; cola2[t++] = j; } }
+      j = i - G; if (j >= 0 && dentro[j] && !etiqueta[j]) { etiqueta[j] = nEt; cola2[t++] = j; }
+      j = i + G; if (j < N && dentro[j] && !etiqueta[j]) { etiqueta[j] = nEt; cola2[t++] = j; }
+    }
+    if (t > tam) { tam = t; mayor = nEt; }
+  }
+  AREA = 0;
+  for (let i = 0; i < N; i++) {
+    if (dentro[i] && etiqueta[i] !== mayor) dentro[i] = 0;
+    if (dentro[i]) AREA++;
+  }
+  // distancia a la pared (dentro) y al mapa (fuera): sirve para los roces, los bots y para suavizar el borde al dibujar
+  for (let i = 0; i < N; i++) { distM[i] = dentro[i] ? 1e4 : 0; tmpD[i] = dentro[i] ? 0 : 1e4; }
+  chamfer(distM); chamfer(tmpD);
+  for (let i = 0; i < N; i++) {
+    const sd = dentro[i] ? distM[i] - 0.5 : -(tmpD[i] - 0.5);
+    const a = Math.max(0, Math.min(1, 0.5 + sd * 0.8)), a8 = Math.round(a * 255);
+    u32M[i] = a8 ? ((a8 << 24) | (247 << 16) | (255 << 8) | 236) >>> 0 : 0;
+    u32S[i] = a8 ? ((a8 << 24) | (195 << 16) | (214 << 8) | 169) >>> 0 : 0;
+  }
+  ctxM.putImageData(imgM, 0, 0);
+  ctxS.putImageData(imgS, 0, 0);
+}
+function distEn(x, y) {
+  const cx = x | 0, cy = y | 0;
+  return cx >= 0 && cy >= 0 && cx < G && cy < G ? distM[cy * G + cx] : 0;
+}
+
 // ----- Entidades -----
+// Qué tan agresivos son los bots en este nivel (0 a 1). Sube sola con el número de nivel;
+// un nivel puede fijarla con «dificultad: 0.8» en niveles.js.
+function dificultad() {
+  const nv = NIVELES[nivelActual];
+  return typeof nv.dificultad === "number" ? Math.max(0, Math.min(1, nv.dificultad)) : Math.min(1, 0.4 + nivelActual * 0.07);
+}
 function crear(id) {
   const tono = TONOS[id - 1];
   return {
@@ -119,7 +200,7 @@ function crear(id) {
     x: 0, y: 0, px: 0, py: 0, ang: 0, meta: 0,
     cola: [], ruta: [], seq: 0, vivo: false, espera: 0,
     plan: null, wp: 0, vuelta: false, casa: null, casaT: 0, vagar: 0, desv: 0, ia: 0,
-    caza: null, cazaT: 0, agr: 0.3 + Math.random() * 0.7,
+    caza: null, cazaT: 0, defiende: false, alarma: null, agr: 0.5 + Math.random() * 0.5, dif: dificultad(),
   };
 }
 
@@ -137,18 +218,28 @@ function lejos(cx, cy, r) {
 }
 function aparecer(e) {
   let cx = C, cy = C, ok = false;
-  for (let k = 0; k < 500 && !ok; k++) {
-    const a = Math.random() * TAU, d = Math.sqrt(Math.random()) * (RADIO - 45);
-    cx = Math.round(C + Math.cos(a) * d); cy = Math.round(C + Math.sin(a) * d);
-    ok = discoLibre(cx, cy, R_INICIO + 5) && lejos(cx, cy, 60);
+  for (let k = 0; k < 2500 && !ok; k++) {
+    cx = Math.round(C + (Math.random() * 2 - 1) * RADIO); cy = Math.round(C + (Math.random() * 2 - 1) * RADIO);
+    ok = distM[cy * G + cx] > R_INICIO + 8 && discoLibre(cx, cy, R_INICIO + 5) && lejos(cx, cy, k < 1200 ? 60 : 30);
+  }
+  for (let k = 0; k < 6000 && !ok; k++) { // plan B: cualquier lugar despejado
+    cx = Math.round(C + (Math.random() * 2 - 1) * RADIO); cy = Math.round(C + (Math.random() * 2 - 1) * RADIO);
+    ok = distM[cy * G + cx] > R_INICIO + 3;
   }
   for (let k = 0; k < D_INICIO.length; k += 2) {
     const i = (cy + D_INICIO[k + 1]) * G + cx + D_INICIO[k];
     if (dentro[i]) { dueno[i] = e.id; pix(i); }
   }
   e.x = e.px = cx + 0.5; e.y = e.py = cy + 0.5;
-  e.ang = e.meta = Math.atan2(C - cy, C - cx) + (Math.random() - 0.5); // mira hacia el centro
-  e.cola = []; e.ruta = []; e.seq = 0; e.plan = null; e.caza = null; e.casa = null; e.vuelta = false;
+  let mejorA = 0, mejorS = -1; // mira hacia donde hay más espacio libre
+  for (let k = 0; k < 16; k++) {
+    const a = k * TAU / 16 + Math.random() * 0.2;
+    let sc = 1e9;
+    for (const d of [30, 60, 90]) sc = Math.min(sc, distEn(cx + Math.cos(a) * d, cy + Math.sin(a) * d));
+    if (sc > mejorS) { mejorS = sc; mejorA = a; }
+  }
+  e.ang = e.meta = mejorA;
+  e.cola = []; e.ruta = []; e.seq = 0; e.plan = null; e.caza = null; e.casa = null; e.vuelta = false; e.alarma = null; e.defiende = false;
   e.vivo = true;
   sucio = true;
 }
@@ -173,10 +264,35 @@ function matar(v, por) {
   else v.espera = REAPARECE_BOT[0] + Math.random() * (REAPARECE_BOT[1] - REAPARECE_BOT[0]);
 }
 
+// Si el territorio de alguien quedó partido en pedazos sueltos, se queda solo con el más grande
+// y los pedazos aislados se vuelven zona vacía.
+function podar(id) {
+  etiqueta.fill(0);
+  let nEt = 0, mayor = 0, tam = 0;
+  for (let s = 0; s < N; s++) {
+    if (dueno[s] !== id || etiqueta[s]) continue;
+    nEt++;
+    let h = 0, t = 0;
+    cola2[t++] = s; etiqueta[s] = nEt;
+    while (h < t) {
+      const i = cola2[h++], x = i % G;
+      let j;
+      if (x > 0) { j = i - 1; if (dueno[j] === id && !etiqueta[j]) { etiqueta[j] = nEt; cola2[t++] = j; } }
+      if (x < G - 1) { j = i + 1; if (dueno[j] === id && !etiqueta[j]) { etiqueta[j] = nEt; cola2[t++] = j; } }
+      j = i - G; if (j >= 0 && dueno[j] === id && !etiqueta[j]) { etiqueta[j] = nEt; cola2[t++] = j; }
+      j = i + G; if (j < N && dueno[j] === id && !etiqueta[j]) { etiqueta[j] = nEt; cola2[t++] = j; }
+    }
+    if (t > tam) { tam = t; mayor = nEt; }
+  }
+  if (nEt <= 1) return;
+  for (let s = 0; s < N; s++) if (etiqueta[s] && etiqueta[s] !== mayor) { dueno[s] = 0; pix(s); }
+}
+
 // Cierra el bucle: la estela pasa a ser territorio y se queda con las zonas encerradas.
 // Se separan las zonas «no mías» en grupos; el grupo más grande es el exterior y todos los demás quedan encerrados.
 function cerrar(e) {
-  for (const i of e.cola) { if (rastro[i] === e.id) rastro[i] = 0; dueno[i] = e.id; pix(i); }
+  const afectados = new Set(); // dueños a los que esta captura les quita casillas
+  for (const i of e.cola) { const o = dueno[i]; if (o && o !== e.id) afectados.add(o); if (rastro[i] === e.id) rastro[i] = 0; dueno[i] = e.id; pix(i); }
   e.cola = []; e.ruta = [];
   etiqueta.fill(0);
   let nEt = 0, mayor = 0, tam = 0;
@@ -197,8 +313,13 @@ function cerrar(e) {
   }
   for (let s = 0; s < N; s++) {
     const l = etiqueta[s];
-    if (l && l !== mayor) { dueno[s] = e.id; pix(s); }
+    if (l && l !== mayor) { const o = dueno[s]; if (o && o !== e.id) afectados.add(o); dueno[s] = e.id; pix(s); }
   }
+  for (const id of afectados) { // a quien le quitan territorio se entera y irá a revisar
+    const v = ents[id - 1];
+    if (v && v.vivo && !v.jugador) v.alarma = { por: e, hasta: reloj + 60 * 8 };
+  }
+  for (const id of afectados) podar(id); // lo que les quedó suelto, desaparece
   recontar();
   for (const o of ents) if (o !== e && o.vivo && cuenta[o.id] === 0) matar(o, e); // sin territorio = fuera
 }
@@ -216,9 +337,12 @@ function sellar(e) {
 }
 
 // ----- Bots -----
-function lim(x, y) { // mantiene un punto dentro del círculo
-  const dx = x - C, dy = y - C, d = Math.hypot(dx, dy), m = RADIO - 16;
-  return d > m ? [C + dx * m / d, C + dy * m / d] : [x, y];
+function lim(ox, oy, x, y) { // acerca un punto a (ox,oy) hasta que quede lejos de las paredes
+  for (let t = 1; t > 0; t -= 0.1) {
+    const px = ox + (x - ox) * t, py = oy + (y - oy) * t;
+    if (px > 2 && py > 2 && px < G - 3 && py < G - 3 && distM[(py | 0) * G + (px | 0)] >= 14) return [px, py];
+  }
+  return [ox, oy];
 }
 function esMia(e, x, y) {
   const cx = x | 0, cy = y | 0;
@@ -227,8 +351,8 @@ function esMia(e, x, y) {
 function libre(e, a) { // ¿puedo seguir en esta dirección sin chocar con la pared o con mi propia estela?
   const c = Math.cos(a), s = Math.sin(a);
   for (const d of [6, 12, 18]) {
-    const px = e.x + c * d, py = e.y + s * d, dx = px - C, dy = py - C;
-    if (dx * dx + dy * dy > (RADIO - 7) * (RADIO - 7)) return false;
+    const px = e.x + c * d, py = e.y + s * d;
+    if (distEn(px, py) < 7) return false;
     const i = (py | 0) * G + (px | 0);
     if (rastro[i] === e.id && e.seq - rastroIdx[i] > GRACIA) return false;
   }
@@ -250,11 +374,17 @@ function casaCercana(e) { // punto de mi territorio al que volver (un poco hacia
   return [mx + dx / l * m, my + dy / l * m];
 }
 function empezarPlan(e) { // excursión: salir recto, girar de lado y volver
-  const s = Math.random() < 0.5 ? 1 : -1, a = e.ang;
+  const s = Math.random() < 0.5 ? 1 : -1;
+  let a = e.ang;
+  const j = estado === "jugando" && yo && yo.vivo ? yo : null;
+  if (j && Math.random() < 0.15 + 0.6 * e.dif * e.agr) { // a veces sale directo a rondar al jugador
+    const dj = Math.hypot(j.x - e.x, j.y - e.y);
+    if (dj > 20 && dj < 300) a = Math.atan2(j.y - e.y, j.x - e.x) + (Math.random() - 0.5) * 0.5;
+  }
   const L = 22 + Math.random() * 60, W = 18 + Math.random() * 50;
-  const A = lim(e.x + Math.cos(a) * L, e.y + Math.sin(a) * L);
+  const A = lim(e.x, e.y, e.x + Math.cos(a) * L, e.y + Math.sin(a) * L);
   const b = a + s * Math.PI / 2;
-  const B = lim(A[0] + Math.cos(b) * W, A[1] + Math.sin(b) * W);
+  const B = lim(A[0], A[1], A[0] + Math.cos(b) * W, A[1] + Math.sin(b) * W);
   e.plan = [A, B]; e.wp = 0; e.vuelta = false; e.casa = null;
 }
 function pensarBot(e) {
@@ -262,20 +392,40 @@ function pensarBot(e) {
   let meta = e.ang;
   const larga = e.cola.length > 700;
 
-  // cazar la estela de otro que ande cerca
-  if (e.caza && (!e.caza.vivo || e.cazaT-- <= 0 || larga || e.caza.ruta.length < 26)) e.caza = null;
-  if (!e.caza && !larga && Math.random() < 0.04 * e.agr) {
-    for (const o of ents) if (o !== e && o.vivo && o.ruta.length > 30 && Math.hypot(o.x - e.x, o.y - e.y) < 60) { e.caza = o; e.cazaT = 40; break; }
+  const dif = e.dif * (0.6 + 0.4 * e.agr); // agresividad de este bot
+
+  // 1) DEFENSA: si alguien está dentro de su territorio o le quitó un pedazo, va a revisar y a cortarle la estela.
+  //    Reacciona mucho más rápido contra el jugador que contra otros bots.
+  let amenaza = null;
+  for (const o of ents) if (o !== e && o.vivo && dueno[(o.y | 0) * G + (o.x | 0)] === e.id) { amenaza = o; break; }
+  if (!amenaza && e.alarma && reloj < e.alarma.hasta && e.alarma.por.vivo) amenaza = e.alarma.por;
+  if (amenaza && !larga && !(e.caza && e.defiende) && Math.random() < (amenaza.jugador ? 0.4 + 0.6 * dif : 0.25 * dif)) {
+    e.caza = amenaza; e.cazaT = 70; e.defiende = true;
+  }
+
+  // 2) ATAQUE: sigue de cerca al jugador (bastante más que a otros bots) y le corta la estela
+  if (e.caza && (!e.caza.vivo || e.cazaT-- <= 0 || larga || Math.hypot(e.caza.x - e.x, e.caza.y - e.y) > 220)) { e.caza = null; e.defiende = false; }
+  if (!e.caza && !larga && e.cola.length < 350) {
+    let presa = null, mejorP = 0;
+    for (const o of ents) {
+      if (o === e || !o.vivo || o.ruta.length < 30) continue;
+      const rad = o.jugador ? 120 : 40, d = Math.hypot(o.x - e.x, o.y - e.y);
+      if (d > rad) continue;
+      const pt = (o.jugador ? 3 : 1) * (1 - d / rad);
+      if (pt > mejorP) { mejorP = pt; presa = o; }
+    }
+    if (presa && Math.random() < 0.05 * dif * (presa.jugador ? 3 : 0.5)) { e.caza = presa; e.cazaT = 45; e.defiende = false; }
   }
   let cazando = false;
   if (e.caza) {
-    const r = e.caza.ruta;
-    let mejor = 1e12, tx = 0, ty = 0;
+    const o = e.caza, r = o.ruta;
+    let mejor = 1e12, tx = o.x, ty = o.y;
     for (let k = 0; k < r.length - 24; k += 8) {
       const d = (r[k] - e.x) * (r[k] - e.x) + (r[k + 1] - e.y) * (r[k + 1] - e.y);
       if (d < mejor) { mejor = d; tx = r[k]; ty = r[k + 1]; }
     }
-    if (mejor < 1e12) { meta = Math.atan2(ty - e.y, tx - e.x); cazando = true; } else e.caza = null;
+    if (mejor < 1e12 || e.defiende) { meta = Math.atan2(ty - e.y, tx - e.x); cazando = true; } // sin estela que cortar: va hacia el intruso
+    else { e.caza = null; e.defiende = false; }
   }
 
   if (!cazando) {
@@ -289,14 +439,14 @@ function pensarBot(e) {
       }
       if (e.vuelta || larga) {
         e.vuelta = true;
-        if (!e.casa || --e.casaT <= 0) { e.casa = casaCercana(e); e.casaT = 6; }
+        e.casa = casaCercana(e); // se recalcula en cada decisión: así no persigue un punto viejo
         obj = e.casa;
       }
       meta = Math.atan2(obj[1] - e.y, obj[0] - e.x);
     } else { // en casa: pasea y sale cuando llega a la orilla
       if (--e.vagar <= 0) { e.vagar = 8 + Math.random() * 12; e.desv = (Math.random() - 0.5) * 1.6; }
       meta = e.ang + e.desv * 0.5;
-      if (!esMia(e, e.x + Math.cos(e.ang) * 10, e.y + Math.sin(e.ang) * 10) || Math.random() < 0.02) empezarPlan(e);
+      if (!esMia(e, e.x + Math.cos(e.ang) * 10, e.y + Math.sin(e.ang) * 10) || Math.random() < 0.02 + 0.03 * e.dif) empezarPlan(e);
     }
   }
 
@@ -308,6 +458,7 @@ function pensarBot(e) {
 
 // ----- Un paso de juego -----
 function paso() {
+  reloj++;
   for (const e of ents) {
     if (!e.vivo) continue;
     if (e.jugador) e.meta = metaTeclas !== null ? metaTeclas : metaDedo !== null ? metaDedo : e.ang;
@@ -323,15 +474,18 @@ function paso() {
     e.x += Math.cos(e.ang) * VEL * SIM;
     e.y += Math.sin(e.ang) * VEL * SIM;
 
-    const dx = e.x - C, dy = e.y - C, dist = Math.hypot(dx, dy), tope = RADIO - 2.5;
-    if (dist > tope) { // tocó el borde
-      const nx = dx / dist, ny = dy / dist, hx = Math.cos(e.ang), hy = Math.sin(e.ang);
+    const xi = e.x | 0, yi = e.y | 0, d0 = distM[yi * G + xi];
+    if (d0 < MARGEN_PARED) { // tocó una pared (el borde del mapa o un hueco)
+      const gx = distM[yi * G + xi + 2] - distM[yi * G + xi - 2], gy = distM[(yi + 2) * G + xi] - distM[(yi - 2) * G + xi];
+      const gl = Math.hypot(gx, gy);
+      if (gl < 1e-3) { matar(e, null); continue; }
+      const nx = -gx / gl, ny = -gy / gl, hx = Math.cos(e.ang), hy = Math.sin(e.ang); // (nx,ny) apunta hacia la pared
       const dot = hx * nx + hy * ny;                       // 1 = de frente contra la pared, 0 = paralelo
       if (dot > COS_CHOQUE) { matar(e, null); continue; }  // muy de frente: muere
-      e.x = C + nx * tope; e.y = C + ny * tope;            // si no, se queda en el borde y se desliza
-      e.ang = Math.atan2(hy - dot * ny, hx - dot * nx);    // su rumbo se alinea con la pared
+      const sale = MARGEN_PARED - d0;                      // si no, lo saca de la pared y se desliza
+      e.x -= nx * sale; e.y -= ny * sale;
+      if (dot > 0) e.ang = Math.atan2(hy - dot * ny, hx - dot * nx); // su rumbo se alinea con la pared
     }
-
     const i = (e.y | 0) * G + (e.x | 0), r = rastro[i];
     if (r) {
       if (r !== e.id) matar(ents[r - 1], e);                       // cortaste la estela de otro
@@ -359,8 +513,10 @@ function iniciar(demo) {
   dueno.fill(0); rastro.fill(0); rastroIdx.fill(0); u32A.fill(0); u32B.fill(0);
   sx0 = 0; sy0 = 0; sx1 = G - 1; sy1 = G - 1;
   fx = []; metaDedo = null;
+  if (nivelConstruido !== nivelActual) { construirNivel(nivelActual); nivelConstruido = nivelActual; }
+  const nBots = Math.max(1, Math.min(NUM_BOTS, NIVELES[nivelActual].bots || 4));
   ents = [];
-  for (let id = 1; id <= NUM_BOTS + 1; id++) ents.push(crear(id));
+  for (let id = 1; id <= nBots + 1; id++) ents.push(crear(id));
   yo = ents[0];
   bajas = 0; maxPct = 0; tiempo = 0;
   estado = demo ? "demo" : "jugando";
@@ -369,12 +525,39 @@ function iniciar(demo) {
   if (!demo) { cam.x = yo.x; cam.y = yo.y; }
 }
 
+function etiquetaNivel() {
+  const nv = NIVELES[nivelActual];
+  $("nivelNum").textContent = "Nivel " + (nivelActual + 1) + " de " + NIVELES.length;
+  $("nivelNom").textContent = nv.nombre + " · meta " + nv.meta + " %";
+  $("nivelAnt").disabled = nivelActual <= 0;
+  $("nivelSig").disabled = nivelActual >= nivelMax();
+  $("stNivel").textContent = "Nv " + (nivelActual + 1);
+}
+function elegirNivel(i) {
+  if (i < 0 || i > nivelMax() || i >= NIVELES.length) return;
+  nivelActual = i; ganado = false;
+  iniciar(true);
+  mostrarVelo("Paperio", TEXTO_AYUDA, []);
+}
+$("nivelAnt").addEventListener("click", () => elegirNivel(nivelActual - 1));
+$("nivelSig").addEventListener("click", () => elegirNivel(nivelActual + 1));
+
 function fmtTiempo(s) { s = Math.floor(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
 
-async function terminar() {
+async function terminar(gano) {
   estado = "fin";
+  ganado = !!gano;
+  if (gano) { // se detiene al jugador (conserva su territorio) y se desbloquea el siguiente nivel
+    yo.vivo = false;
+    for (const i of yo.cola) if (rastro[i] === 1) { rastro[i] = 0; pix(i); }
+    yo.cola = []; yo.ruta = [];
+    if (nivelActual + 1 < NIVELES.length && nivelActual + 1 > desbloqueado) {
+      desbloqueado = nivelActual + 1;
+      try { localStorage.setItem("paperio_nivel", String(desbloqueado)); } catch (e) {}
+    }
+  }
   const pct = Math.max(maxPct, 0);
-  const puntos = Math.round(pct * PUNTOS_POR_PCT) + bajas * PUNTOS_POR_BAJA;
+  const puntos = Math.round(pct * PUNTOS_POR_PCT) + bajas * PUNTOS_POR_BAJA + (gano ? PUNTOS_POR_NIVEL : 0);
   if (pct > mejorPct) {
     mejorPct = pct;
     try { localStorage.setItem("paperio_mejor", String(pct)); } catch (e) {}
@@ -385,7 +568,7 @@ async function terminar() {
   } else if (puntos > 0 && !usuario) guardado = "entra con Google para guardarlos";
   setTimeout(() => {
     if (estado !== "fin") return;
-    mostrarVelo("Te eliminaron", "", [
+    mostrarVelo(gano ? "¡Nivel superado!" : "Te eliminaron", "", [
       ["Territorio máximo", pct.toFixed(1) + " %"],
       ["Bajas", String(bajas)],
       ["Tiempo", fmtTiempo(tiempo)],
@@ -408,14 +591,19 @@ function mostrarVelo(titulo, texto, datos) {
     li.append(k + ": ", b);
     ul.appendChild(li);
   }
-  $("jugar").textContent = estado === "fin" ? "Jugar otra vez" : "Jugar";
+  $("jugar").textContent = estado === "fin" ? (ganado && nivelActual + 1 < NIVELES.length ? "Siguiente nivel" : "Jugar otra vez") : "Jugar";
+  etiquetaNivel();
   marcarEntrar();
   $("velo").hidden = false;
 }
 
 function marcarEntrar() { $("entrar").hidden = !J || !!usuario; }
 $("entrar").addEventListener("click", () => { if (J) J.entrar().catch((e) => alert(e.message)); });
-$("jugar").addEventListener("click", () => { $("velo").hidden = true; iniciar(false); });
+$("jugar").addEventListener("click", () => {
+  if (ganado && nivelActual + 1 < NIVELES.length) nivelActual++;
+  ganado = false;
+  $("velo").hidden = true; iniciar(false);
+});
 
 async function cargarRanking() {
   const caja = $("ranking");
@@ -506,16 +694,12 @@ function dibujar(k) {
   ctx.fillStyle = "#2c6e9e";
   ctx.fillRect(0, 0, vw, vh);
 
-  // el mapa circular, con un borde de sombra abajo
-  const mx = SX(C), my = SY(C), rr = RADIO * cs;
-  ctx.fillStyle = "#a9d6c3";
-  ctx.beginPath(); ctx.arc(mx, my + Math.max(3, cs * 1.6), rr, 0, TAU); ctx.fill();
-  ctx.fillStyle = "#ecfff7";
-  ctx.beginPath(); ctx.arc(mx, my, rr, 0, TAU); ctx.fill();
-
-  // territorio y estelas (capas estiradas y suavizadas: bordes redondeados)
+  // el suelo del mapa (con su sombra abajo) y, encima, territorio y estelas.
+  // Todas son capas finas estiradas y suavizadas: por eso los bordes se ven redondeados.
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(cvS, SX(0), SY(0) + Math.max(3, cs * 1.6), G * cs, G * cs);
+  ctx.drawImage(cvM, SX(0), SY(0), G * cs, G * cs);
   ctx.drawImage(cvB, SX(0), SY(0) + Math.max(2, cs * 1.1), G * cs, G * cs);
   ctx.drawImage(cvA, SX(0), SY(0), G * cs, G * cs);
 
@@ -585,6 +769,7 @@ function bucle(ts) {
   if (estado === "jugando" && yo.vivo) tiempo += dt;
   for (const e of ents) if (!e.vivo && !e.jugador) { e.espera -= dt; if (e.espera <= 0) aparecer(e); }
   if (sucio) recontar();
+  if (estado === "jugando" && yo.vivo && cuenta[1] * 100 / AREA >= NIVELES[nivelActual].meta) terminar(true);
   for (const f of fx) f.t += dt;
   fx = fx.filter((f) => f.t < 0.6);
 
