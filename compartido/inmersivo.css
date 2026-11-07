@@ -1,0 +1,81 @@
+/* Ruta: compartido/inmersivo.css */
+/* Modo «pantalla completa e inmersivo» para los juegos: sin fondo azul, sin bordes, sin scroll,
+   y botones 3D tipo caricatura que flotan sobre el juego.
+   Uso: <link rel="stylesheet" href="../compartido/inmersivo.css"> DESPUÉS de estilos.css y <html class="inmersivo"> <body class="inmersivo"> */
+
+html.inmersivo { --fondo-juego: #000; background: var(--fondo-juego); }
+html.inmersivo, body.inmersivo { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
+body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+
+/* Escena: ocupa toda la ventana y centra el marco del juego sin recortarlo */
+.inmersivo .escena { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; touch-action: none; }
+.inmersivo .marco {
+  position: relative; aspect-ratio: 4 / 3; /* proporción del juego (Zuma: 640×480) */
+  width: min(100vw, calc(100vh * 4 / 3));
+  width: min(100vw, calc(100dvh * 4 / 3));
+}
+.inmersivo .lienzo { width: 100%; height: 100%; max-width: none; margin: 0; border: 0; border-radius: 0; background: #000; }
+.inmersivo #velo { border-radius: 0; }
+.solo-lector { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ----- Capas flotantes (HUD) pegadas a la ventana, respetando muescas y barras del sistema ----- */
+.hud { position: fixed; z-index: 5; display: flex; align-items: center; gap: 12px; pointer-events: none; }
+.hud > * { pointer-events: auto; }
+.hud-izq  { top: max(8px, env(safe-area-inset-top));    left: max(8px, env(safe-area-inset-left)); }
+.hud-der  { top: max(8px, env(safe-area-inset-top));    right: max(8px, env(safe-area-inset-right)); }
+.hud-abajo{ bottom: max(14px, env(safe-area-inset-bottom)); left: max(10px, env(safe-area-inset-left)); }
+
+/* Etiqueta tipo píldora (monedas, puntos, nivel…) */
+.chip { display: inline-flex; align-items: center; height: 34px; padding: 0 12px; font-weight: 800; font-size: 15px; color: #fff4c2;
+  background: linear-gradient(180deg, #4a4f57, #2b2f35); border: 2px solid #15171a; border-radius: 999px;
+  box-shadow: 0 3px 0 #15171a, inset 0 2px 0 rgba(255,255,255,.2); text-shadow: 0 2px 0 rgba(0,0,0,.5); }
+.chip:empty { display: none; }
+.chip small { margin-right: 6px; font-size: 11px; font-weight: 600; color: #c9ccd3; }
+
+/* ----- Botón 3D caricaturesco ----- */
+/* Tamaño: --t. Color: una clase b-* (el color indica el nivel/poder del botón) */
+.b3d {
+  --t: 52px; --c1: #c9ced6; --c2: #8b93a0; --c3: #4f5662;
+  position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: var(--t); height: var(--t); padding: 0; margin: 0 0 5px; font: inherit; font-size: calc(var(--t) * .5); line-height: 1;
+  color: #fff; text-decoration: none; cursor: pointer; touch-action: manipulation;
+  background: linear-gradient(180deg, var(--c1) 0%, var(--c2) 55%, var(--c3) 140%);
+  border: 2px solid var(--c3); border-radius: 15px;
+  box-shadow: 0 5px 0 var(--c3), 0 8px 10px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.6), inset 0 -3px 0 rgba(0,0,0,.14);
+  transition: transform .07s, box-shadow .07s, filter .15s;
+}
+.b3d::before { /* brillo superior */
+  content: ""; position: absolute; left: 12%; right: 12%; top: 5%; height: 36%; border-radius: 10px 10px 40% 40%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0)); pointer-events: none;
+}
+.b3d:hover:not(:disabled) { filter: brightness(1.08); }
+.b3d:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 1px 0 var(--c3), 0 2px 4px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.5); }
+.b3d:disabled { filter: grayscale(.85) brightness(.7); cursor: default; }
+.b3d:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.b3d .b-ico { position: relative; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+.b3d.chico { --t: 40px; border-radius: 12px; }
+
+/* Variantes: .txt = botón con texto (ancho automático), .grande = más grande, .on = botón elegido (hundido y con aro) */
+.b3d { text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+.b3d.txt { width: auto; min-width: var(--t); padding: 0 14px; font-size: 15px; font-weight: 800; white-space: nowrap; }
+.b3d.txt .b-ico { font-size: 1.15em; }
+.b3d.grande { --t: 68px; border-radius: 18px; }
+.b3d.on { transform: translateY(4px); filter: brightness(1.12);
+  box-shadow: 0 1px 0 var(--c3), 0 0 0 3px #fff, 0 0 14px rgba(255,255,255,.55), inset 0 2px 0 rgba(255,255,255,.5); }
+
+/* Etiqueta pequeña (cantidad «×2» o precio «30🪙») en la esquina del botón */
+.b3d .b-info { position: absolute; top: -8px; right: -8px; min-width: 22px; padding: 1px 6px; font-size: 11px; font-weight: 800; line-height: 16px; text-align: center; white-space: nowrap;
+  color: #fff; background: #1b1d22; border: 2px solid #fff; border-radius: 999px; box-shadow: 0 2px 0 rgba(0,0,0,.4); }
+.b3d.sin .b-info { background: #7a4a00; color: #ffe9a8; }       /* aún no lo tienes: se compra al usarlo */
+.b3d.activo { animation: latido .6s ease-in-out infinite alternate; }
+@keyframes latido { to { filter: brightness(1.3); } }
+
+/* Colores = nivel del boost (de menor a mayor poder) */
+.b-verde  { --c1: #b6f7a6; --c2: #3fcf4a; --c3: #1d7f2a; }
+.b-azul   { --c1: #a8e2ff; --c2: #2f9bff; --c3: #14589f; }
+.b-morado { --c1: #e3bcff; --c2: #a14df0; --c3: #62209f; }
+.b-oro    { --c1: #fff08c; --c2: #ffb020; --c3: #a85d00; }
+.b-rojo   { --c1: #ffb3a8; --c2: #f0483a; --c3: #8f1c12; }
+.b-gris   { --c1: #d5d9e0; --c2: #8b93a0; --c3: #4f5662; }
+
+@media (max-height: 420px) { .b3d { --t: 44px; } .b3d.chico { --t: 36px; } }

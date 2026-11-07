@@ -1,0 +1,58 @@
+<!doctype html>
+<!-- Ruta: buscaminas/index-buscaminas.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Buscaminas</title>
+  <meta name="theme-color" content="#15161a" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 30%, #2a2c33, #131417 75%); }
+    body.inmersivo { touch-action: manipulation; }
+    .bm { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: calc(8px + env(safe-area-inset-top, 0px)) 10px calc(8px + env(safe-area-inset-bottom, 0px)); }
+    .cab, .bm-info { display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap; }
+    .bm-nivel { display: flex; gap: 8px; align-items: center; }
+    .bm-dato { font-variant-numeric: tabular-nums; min-width: 4.6em; justify-content: center; }
+    #tablero { --t: 36px; display: grid; gap: 2px; padding: 6px; border-radius: 12px; background: #1a1b20; box-shadow: 0 6px 0 #0c0d0f, 0 12px 20px rgba(0,0,0,.5); touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+    .c { width: var(--t); height: var(--t); padding: 0; border: 0; border-radius: 6px; font: 800 calc(var(--t) * .56)/1 system-ui, sans-serif; display: grid; place-items: center;
+      background: linear-gradient(180deg, #9bbf5f, #6f9440); color: #fff; cursor: pointer; box-shadow: inset 0 2px 0 rgba(255,255,255,.35), inset 0 -3px 0 rgba(0,0,0,.28); }
+    .c:focus-visible { outline: 2px solid #ffd54a; outline-offset: 1px; }
+    .c.ab { background: #2c2e35; box-shadow: none; cursor: default; }
+    .c.ab[data-n="0"] { background: #24262c; }
+    .c[data-n="1"] { color: #6ec1ff; } .c[data-n="2"] { color: #7bd88f; } .c[data-n="3"] { color: #ff8a80; }
+    .c[data-n="4"] { color: #b39ddb; } .c[data-n="5"] { color: #ffb74d; } .c[data-n="6"] { color: #4dd0e1; }
+    .c[data-n="7"] { color: #f48fb1; } .c[data-n="8"] { color: #cfd8dc; }
+    .c.mina { background: #5a2a33; } .c.boom { background: #d9344a; } .c.mal { background: #5a2a33; }
+    .bm-msg { min-height: 1.4em; max-width: 34ch; text-align: center; color: var(--suave); font-size: .85rem; }
+    .bm-msg b { color: var(--texto); }
+    @media (prefers-reduced-motion: no-preference) { .c { transition: background .12s; } }
+    /* Pantalla horizontal: tablero a la izquierda, controles a la derecha */
+    @media (min-aspect-ratio: 23/20) {
+      .bm { display: grid; grid-template-columns: auto 280px; grid-template-rows: auto auto auto 1fr; grid-template-areas: "tab cab" "tab info" "tab acc" "tab msg"; align-content: center; justify-content: center; gap: 12px 22px; }
+      #tablero { grid-area: tab; align-self: center; } .cab { grid-area: cab; } .bm-info:not(.acc) { grid-area: info; } .acc { grid-area: acc; } .bm-msg { grid-area: msg; align-self: start; }
+    }
+  </style>
+</head>
+<body class="inmersivo" data-pantalla-auto>
+  <main class="bm">
+    <div class="cab">
+      <a class="b3d chico b-gris" href="../" aria-label="Volver al portal"><span class="b-ico">←</span></a>
+      <div class="bm-nivel" id="niveles"></div>
+    </div>
+    <div class="bm-info">
+      <span class="chip bm-dato" id="minas">💣 0</span>
+      <button class="b3d b-oro" id="cara" type="button" aria-label="Reiniciar">🙂</button>
+      <span class="chip bm-dato" id="tiempo">⏱ 0</span>
+    </div>
+    <div id="tablero" role="grid" aria-label="Tablero"></div>
+    <div class="bm-info acc">
+      <button class="b3d b-rojo" id="modo" type="button" aria-pressed="false" aria-label="Modo bandera" title="Modo bandera (toca para poner banderas)"><span class="b-ico">🚩</span></button>
+    </div>
+    <div class="bm-msg" id="msg"></div>
+  </main>
+  <script type="module" src="juego-buscaminas.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>

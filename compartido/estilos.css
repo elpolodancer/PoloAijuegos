@@ -1,6 +1,6 @@
 /* Ruta: compartido/estilos.css */
 /* Estilos comunes a todos los juegos */
-:root { --fondo: #0f1220; --tarjeta: #1b2036; --borde: #333a5c; --texto: #eef1ff; --suave: #aab2d8; --acento: #7c5cff; }
+:root { --fondo: #121316; --tarjeta: #1e2025; --borde: #3b3e46; --texto: #f1f2f4; --suave: #b0b4bd; --acento: #7c5cff; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 body { margin: 0; font-family: system-ui, sans-serif; color: var(--texto); background: var(--fondo); }

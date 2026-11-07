@@ -14,7 +14,8 @@ const NIVELES = [
   { nombre: "Avanzado",     icono: "🦉", desc: "Juega con táctica y casi no regala nada.",        prof: 4, tiempo: 1800, azar: 0,    ruido: 5,  puntos: 60 },
   { nombre: "Experto",      icono: "👑", desc: "El más fuerte: puede tardar unos segundos.",      prof: 8, tiempo: 3000, azar: 0,    ruido: 0,  puntos: 100 },
 ];
-const TAM_MAX = 64;     // tamaño máximo de casilla (px)
+const TAM_MAX = 84;     // tamaño máximo de casilla (px)
+const COLOR_NIVEL = ["b-verde", "b-azul", "b-morado", "b-oro", "b-rojo"]; // color del botón de cada nivel (de fácil a difícil)
 // ===================
 
 const GLIFO = { 1: "♟", 2: "♞", 3: "♝", 4: "♜", 5: "♛", 6: "♚" };
@@ -46,10 +47,12 @@ tab.addEventListener("click", (e) => {
   if (b) tocarCasilla(+b.dataset.sq);
 });
 
+const horizontal = matchMedia("(min-aspect-ratio: 23/20)"); // mismo punto de corte que el CSS
 function ajustarTam() {
-  const ancho = Math.min(document.querySelector("main").clientWidth - 24, 520);
-  const alto = window.innerHeight - 300;
-  const t = Math.max(34, Math.floor(Math.min(ancho, Math.max(alto, 300), TAM_MAX * 8) / 8));
+  const h = horizontal.matches;
+  const ancho = h ? innerWidth - 340 : innerWidth - 20;
+  const alto = h ? innerHeight - 24 : innerHeight - 250;
+  const t = Math.max(30, Math.floor(Math.min(ancho, alto, TAM_MAX * 8) / 8));
   tab.style.setProperty("--t", t + "px");
 }
 window.addEventListener("resize", ajustarTam);
@@ -91,8 +94,8 @@ function botonesNivel() {
   z.innerHTML = "";
   NIVELES.forEach((n, i) => {
     const b = document.createElement("button");
-    b.className = "btn" + (i + 1 === nivel ? " on" : "");
-    b.textContent = n.icono + " " + (i + 1) + (g[i + 1] ? " ⭐" : "");
+    b.className = "b3d chico " + COLOR_NIVEL[i] + (i + 1 === nivel ? " on" : "");
+    b.innerHTML = '<span class="b-ico">' + n.icono + '</span><span class="b-info">' + (i + 1) + (g[i + 1] ? "⭐" : "") + "</span>";
     b.title = n.nombre;
     b.setAttribute("aria-label", "Nivel " + (i + 1) + ", " + n.nombre + (g[i + 1] ? ", ya vencido" : ""));
     b.addEventListener("click", () => cambiar(() => { nivel = i + 1; localStorage.setItem(ID + ":nivel", nivel); }));
@@ -102,9 +105,17 @@ function botonesNivel() {
 
 // Cambiar nivel o color empieza otra partida (pide confirmar si hay una en curso)
 function cambiar(fn) {
-  if (pila.length && !fin && !confirm("Esto empieza una partida nueva. ¿Seguro?")) return;
+  if (pila.length && !fin) return preguntar("Esto empieza una partida nueva. ¿Seguro?", () => { fn(); nueva(); });
   fn();
   nueva();
+}
+
+// Pregunta dentro de la página (confirm() del navegador saca de la pantalla completa)
+function preguntar(texto, siFn) {
+  $("avisoTxt").textContent = texto;
+  $("aviso").hidden = false;
+  $("avisoSi").onclick = () => { $("aviso").hidden = true; siFn(); };
+  $("avisoNo").onclick = () => { $("aviso").hidden = true; };
 }
 
 // ----- Partida -----
@@ -179,7 +190,7 @@ function pedirCoronacion(ms) {
   z.innerHTML = "";
   ms.forEach((m) => {
     const b = document.createElement("button");
-    b.className = "btn " + (jugador === 1 ? "bl" : "ng");
+    b.className = "b3d b-gris " + (jugador === 1 ? "bl" : "ng");
     b.textContent = GLIFO[m.prom] + "\uFE0E";
     b.setAttribute("aria-label", "Coronar a " + NOMBRE[m.prom]);
     b.addEventListener("click", () => jugar(m));

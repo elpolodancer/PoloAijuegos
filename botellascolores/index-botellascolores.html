@@ -1,22 +1,20 @@
 <!doctype html>
 <!-- Ruta: botellascolores/index-botellascolores.html -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Botellas de colores</title>
-  <meta name="theme-color" content="#1b2330" />
+  <meta name="theme-color" content="#0a0f33" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
     [hidden] { display: none !important; }
     :root { --f1: #1d2570; --f2: #121a52; --f3: #0a0f33; --vidrio: #1b2260; --luna: #2d3b9a; --vidrio-borde: rgba(190, 205, 255, .6); }
 
-    /* ----- Fondo: noche, luna y pinos ----- */
-    html { min-height: 100%; }
-    body {
-      min-height: 100vh;
-      background: radial-gradient(ellipse at 50% 30%, var(--f1) 0%, var(--f2) 45%, var(--f3) 100%) fixed;
-    }
+    /* ----- Fondo: cada estado trae sus colores (variables --f1..--f3 que pone el juego), luna y pinos ----- */
+    html.inmersivo { background: none; }
+    body.inmersivo { background: radial-gradient(ellipse at 50% 30%, var(--f1) 0%, var(--f2) 45%, var(--f3) 100%) fixed; }
     body::before { /* luna */
       content: ""; position: fixed; z-index: -1; left: 7%; bottom: 14%;
       width: 38px; height: 38px; border-radius: 50%;
@@ -28,38 +26,45 @@
       background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 90'%3E%3Cg fill='%23070b26'%3E%3Cpath d='M20 10 L30 34 H25 L35 58 H28 L40 80 H0 L12 58 H5 L15 34 H10Z'/%3E%3Crect x='18' y='80' width='4' height='10'/%3E%3Cg transform='translate(58 28) scale(.7)'%3E%3Cpath d='M20 10 L30 34 H25 L35 58 H28 L40 80 H0 L12 58 H5 L15 34 H10Z'/%3E%3Crect x='18' y='80' width='4' height='10'/%3E%3C/g%3E%3Cg transform='translate(84 40) scale(.55)'%3E%3Cpath d='M20 10 L30 34 H25 L35 58 H28 L40 80 H0 L12 58 H5 L15 34 H10Z'/%3E%3Crect x='18' y='80' width='4' height='10'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") repeat-x left bottom / auto 110px;
       pointer-events: none;
     }
-    .barra { background: rgba(10, 14, 50, .65); border-bottom-color: rgba(120, 140, 230, .25); backdrop-filter: blur(4px); }
 
-    .zona { position: relative; max-width: 480px; margin: 0 auto; padding: 12px 12px 120px; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+    /* La pantalla no se desplaza; si las botellas no caben, esta zona hace scroll por dentro */
+    .zona { position: fixed; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: calc(58px + env(safe-area-inset-top, 0px)) 12px calc(24px + env(safe-area-inset-bottom, 0px)); }
+    .zona > section { width: 100%; max-width: 480px; margin: 0 auto; }
 
-    #pista { margin: 0; font-size: .85rem; color: rgba(220, 230, 255, .85); text-align: center; }
+    #pista { margin: 0; font-size: .85rem; color: rgba(220, 230, 255, .9); text-align: center; }
     .seg.oculto { display: flex; align-items: center; justify-content: center; background: #2b3270; color: rgba(255,255,255,.6); font-weight: 800; font-size: 14px; }
 
-    /* ----- Inicio y mapa de niveles ----- */
-    #menu { display: flex; flex-direction: column; gap: 12px; width: 100%; }
-    #menuInfo { margin: 0 0 4px; text-align: center; color: rgba(220, 230, 255, .85); }
-    .btn.grande { display: block; width: 100%; padding: 14px; font-size: 1.05rem; }
-    .btn.sec { background: rgba(10, 14, 50, .55); border: 1px solid var(--vidrio-borde); color: inherit; }
-    #mapa { position: fixed; inset: 0; z-index: 20; display: flex; justify-content: center; padding: 12px; background: rgba(15, 18, 32, .96); overflow: auto; }
+    /* ----- Inicio ----- */
+    #menu { display: flex; flex-direction: column; gap: 14px; align-items: center; justify-content: center; min-height: calc(100dvh - 130px); }
+    #menuInfo { margin: 0 0 4px; text-align: center; color: rgba(220, 230, 255, .9); }
+    #menu .b3d { width: 100%; max-width: 340px; --t: 56px; height: 56px; font-size: 17px; }
+
+    /* ----- Mapa de niveles ----- */
+    #mapa { position: fixed; inset: 0; z-index: 20; display: flex; justify-content: center; padding: calc(12px + env(safe-area-inset-top, 0px)) 12px 12px; background: rgba(16, 17, 20, .97); overflow: auto; }
     .mapa-caja { width: 100%; max-width: 760px; }
-    .menu-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
-    .menu-cab h2 { margin: 0; font-size: 1.4rem; text-align: center; }
+    .menu-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .menu-cab h2 { margin: 0; font-size: 1.3rem; text-align: center; }
     #mapaInfo { margin: 0 0 10px; color: var(--suave); font-size: .85rem; }
-    #mapaLienzo svg { display: block; width: 100%; height: auto; border: 1px solid var(--borde); border-radius: 12px; }
+    #mapaLienzo svg { display: block; width: 100%; height: auto; border-radius: 12px; }
     #mapaLienzo .sel { cursor: pointer; }
     #mapaLienzo [role="button"]:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     #mapaLienzo .pulso { transform-box: fill-box; transform-origin: center; animation: pulso 1.8s ease-out infinite; }
     @keyframes pulso { from { transform: scale(1); opacity: .9; } to { transform: scale(2.4); opacity: 0; } }
     @media (prefers-reduced-motion: reduce) { #mapaLienzo .pulso { animation: none; } }
-    .rejilla-niveles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding-bottom: 12px; }
-    .nv { aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; padding: 0; font: inherit; font-size: 1.05rem; font-weight: 700; color: var(--texto); background: var(--tarjeta); border: 2px solid var(--borde); border-radius: 12px; cursor: pointer; }
-    .nv.hecho { border-color: #3fa66b; background: rgba(63, 166, 107, .15); }
-    .nv.actual { border-color: var(--acento); box-shadow: 0 0 0 2px rgba(124, 92, 255, .35); }
-    .nv.bloq { opacity: .35; cursor: default; }
-    .nv:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+    .rejilla-niveles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding-bottom: 16px; }
+    /* Botones de nivel: 3D como los demás; verde = pasado, dorado = el que sigue, gris = bloqueado */
+    .nv { --c1: #d5d9e0; --c2: #8b93a0; --c3: #4f5662; position: relative; aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; padding: 0; font: inherit; font-size: 1.05rem; font-weight: 800; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35); cursor: pointer;
+      background: linear-gradient(180deg, var(--c1) 0%, var(--c2) 55%, var(--c3) 140%); border: 2px solid var(--c3); border-radius: 13px;
+      box-shadow: 0 4px 0 var(--c3), 0 6px 8px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.55); transition: transform .07s, box-shadow .07s; touch-action: manipulation; }
+    .nv:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--c3), inset 0 2px 0 rgba(255,255,255,.45); }
+    .nv.hecho { --c1: #b6f7a6; --c2: #3fcf4a; --c3: #1d7f2a; }
+    .nv.actual { --c1: #fff08c; --c2: #ffb020; --c3: #a85d00; box-shadow: 0 4px 0 var(--c3), 0 0 0 3px #fff, 0 6px 8px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.55); }
+    .nv.bloq { --c1: #5b5f68; --c2: #3d4048; --c3: #26282d; opacity: .55; cursor: default; box-shadow: 0 4px 0 var(--c3); }
+    .nv:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 
     .fila { display: flex; gap: 8px; width: 100%; justify-content: space-between; align-items: center; }
-    #info { font-weight: 700; }
+    #info { font-weight: 800; }
+    #juego { display: flex; flex-direction: column; gap: 12px; align-items: center; }
     #mesa { display: flex; flex-wrap: wrap; justify-content: center; gap: 26px 12px; width: 100%; padding-top: 22px; }
 
     /* ----- Botella de vidrio ----- */
@@ -89,47 +94,45 @@
     #final b { font-size: 1.2rem; color: #6ee7a8; }
   </style>
 </head>
-<body>
-  <header class="barra">
-    <div class="titulo">
-      <a class="btn" href="../">←</a>
-      <h1>🍾 Botellas</h1>
-    </div>
-  </header>
+<body class="inmersivo" data-pantalla-auto>
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal"><span class="b-ico">←</span></a>
+  </div>
   <main class="zona">
     <section id="menu">
       <p id="menuInfo"></p>
-      <button class="btn grande" id="continuar" type="button">▶ Continuar</button>
-      <button class="btn grande sec" id="verMapa" type="button">🗺️ Niveles</button>
+      <button class="b3d txt b-verde" id="continuar" type="button">▶ Continuar</button>
+      <button class="b3d txt b-azul" id="verMapa" type="button">🗺️ Niveles</button>
     </section>
-    <section id="juego" hidden style="width:100%;display:flex;flex-direction:column;gap:12px;align-items:center">
+    <section id="juego" hidden>
       <div class="fila">
-        <button class="btn" id="volver">☰ Niveles</button>
-        <span id="info"></span>
-        <span style="display:flex;gap:6px">
-          <button class="btn" id="deshacer">↩</button>
-          <button class="btn" id="reiniciar">⟲</button>
+        <button class="b3d chico b-azul" id="volver" type="button" title="Niveles" aria-label="Niveles"><span class="b-ico">🗺️</span></button>
+        <span class="chip" id="info"></span>
+        <span style="display:flex;gap:10px">
+          <button class="b3d chico b-oro" id="deshacer" type="button" title="Deshacer" aria-label="Deshacer"><span class="b-ico">↩</span></button>
+          <button class="b3d chico b-rojo" id="reiniciar" type="button" title="Reiniciar nivel" aria-label="Reiniciar nivel"><span class="b-ico">🔄</span></button>
         </span>
       </div>
       <p id="pista"></p>
       <div id="mesa"></div>
       <div id="final" hidden>
         <b id="textoFinal"></b>
-        <button class="btn" id="siguiente">Siguiente nivel ▶</button>
+        <button class="b3d txt b-verde" id="siguiente" type="button">Siguiente nivel ▶</button>
       </div>
     </section>
   </main>
   <div id="mapa" hidden>
     <div class="mapa-caja">
       <div class="menu-cab">
-        <button class="btn sec" id="mapaAtras" type="button">← Atrás</button>
+        <button class="b3d txt chico b-gris" id="mapaAtras" type="button">← Atrás</button>
         <h2 id="mapaTitulo">Mapa</h2>
-        <button class="btn sec" id="mapaIr" type="button">📍 México</button>
+        <button class="b3d txt chico b-verde" id="mapaIr" type="button">📍 México</button>
       </div>
       <p id="mapaInfo"></p>
       <div id="mapaLienzo"></div>
     </div>
   </div>
   <script type="module" src="juego-botellascolores.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>

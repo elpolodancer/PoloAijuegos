@@ -5,7 +5,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Juegos</title>
-  <meta name="theme-color" content="#1b2330" />
+  <meta name="theme-color" content="#121316" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="iconos/icono-192.png" />
   <link rel="apple-touch-icon" href="iconos/icono-180.png" />
@@ -15,6 +15,9 @@
   <link rel="stylesheet" href="compartido/estilos.css" />
   <style>
     [hidden] { display: none !important; }
+    /* Cabecera sin fondo ni borde: se funde con la página (el portal sí se desplaza porque hay muchos juegos) */
+    .barra { background: transparent; border-bottom: 0; padding-top: max(12px, env(safe-area-inset-top)); }
+    body { background: radial-gradient(ellipse at 50% 0%, #23252b, #101114 70%) fixed; min-height: 100dvh; }
     .titulo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .mini { padding: 3px 8px; font-size: .7rem; color: var(--suave); text-decoration: none; border: 1px dashed var(--borde); border-radius: 999px; opacity: .7; }
     .mini:hover, .mini:focus-visible { opacity: 1; border-color: var(--acento); color: var(--texto); }
@@ -137,5 +140,6 @@
       zona.textContent = "Sesión no disponible sin conexión";
     }
   </script>
+  <script type="module" src="compartido/pantalla-completa.js"></script>
 </body>
 </html>

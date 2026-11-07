@@ -1,51 +1,54 @@
 <!doctype html>
 <!-- Ruta: burbujas/index-burbujas.html -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Burbujas</title>
+  <meta name="theme-color" content="#1d0e38" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #2a1450; font-family: system-ui, sans-serif; color: #fff; }
-    body { display: flex; flex-direction: column; align-items: center; }
-    .hud { width: 100%; max-width: 480px; display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; gap: 8px; font-weight: 700; }
-    .hud a { color: #ffd6f5; text-decoration: none; font-size: 15px; }
-    .hud .dato { text-align: center; line-height: 1.1; font-size: 13px; opacity: .9; }
-    .hud .dato b { display: block; font-size: 20px; }
-    #zona { position: relative; flex: 1; min-height: 0; width: 100%; max-width: 480px; display: flex; justify-content: center; }
-    canvas { height: 100%; max-width: 100%; touch-action: none; border-radius: 18px 18px 0 0; box-shadow: 0 0 40px #0008; }
-    .velo { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: #1b0a3acc; text-align: center; padding: 24px; border-radius: 18px 18px 0 0; }
+    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 20%, #3a1c6b, #1d0e38 75%); }
+    body.inmersivo { display: flex; flex-direction: column; align-items: center; font-family: system-ui, sans-serif; color: #fff; touch-action: none;
+      padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px); }
+    .sup { width: 100%; max-width: 640px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px 2px; }
+    .datos { display: flex; gap: 8px; }
+    .dato { min-width: 62px; padding: 3px 10px 4px; text-align: center; line-height: 1.05; font-size: 11px; opacity: .95; background: linear-gradient(180deg, #4a2a82, #2f1658); border: 2px solid #170a2c; border-radius: 12px; box-shadow: 0 3px 0 #170a2c, inset 0 2px 0 rgba(255,255,255,.2); }
+    .dato b { display: block; font-size: 17px; }
+    #zona { position: relative; flex: 1; min-height: 0; width: 100%; display: flex; justify-content: center; align-items: center; container-type: size; }
+    /* El lienzo mantiene su proporción (462×760) y cabe entero en la pantalla */
+    canvas { width: min(100cqw, calc(100cqh * 462 / 760)); height: auto; aspect-ratio: 462 / 760; touch-action: none; }
+    .velo { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(20, 8, 42, .82); text-align: center; padding: 24px; }
     .velo.activo { display: flex; }
     .velo h2 { margin: 0; font-size: 30px; }
-    .velo p { margin: 0; opacity: .9; max-width: 300px; line-height: 1.4; }
-    .velo button { font: inherit; font-weight: 700; font-size: 18px; padding: 12px 32px; border: 0; border-radius: 999px; color: #3a0f5c; background: linear-gradient(#ffe27a, #ffb347); box-shadow: 0 4px 0 #b86b00; cursor: pointer; }
-    .velo button:active { transform: translateY(3px); box-shadow: 0 1px 0 #b86b00; }
-    .sonido { font-size: 20px; background: #ffffff22; border: 0; border-radius: 50%; width: 38px; height: 38px; color: #fff; cursor: pointer; }
-    button:focus-visible, a:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+    .velo p { margin: 0; opacity: .9; max-width: 320px; line-height: 1.4; }
   </style>
 </head>
-<body>
-  <div class="hud">
-    <a href="../index.html">← Juegos</a>
-    <div class="dato">Nivel<b id="nivel">1</b></div>
-    <div class="dato">Puntos<b id="puntos">0</b></div>
-    <div class="dato">Récord<b id="record">0</b></div>
-    <button id="sonido" class="sonido" aria-label="Silenciar">🔊</button>
+<body class="inmersivo" data-pantalla-auto>
+  <div class="sup">
+    <a class="b3d chico b-gris" href="../index.html" aria-label="Volver al portal"><span class="b-ico">←</span></a>
+    <div class="datos">
+      <div class="dato">Nivel<b id="nivel">1</b></div>
+      <div class="dato">Puntos<b id="puntos">0</b></div>
+      <div class="dato">Récord<b id="record">0</b></div>
+    </div>
+    <button id="sonido" class="b3d chico b-gris" type="button" aria-label="Silenciar">🔊</button>
   </div>
   <div id="zona">
     <canvas id="lienzo"></canvas>
     <div id="inicio" class="velo activo">
       <h2>🫧 Burbujas</h2>
       <p>Apunta con el dedo y suelta para disparar. Junta 3 o más del mismo color para reventarlas. Toca la burbuja de abajo a la izquierda para cambiarla.<br>Si revientas muchas de un tiro, haces caer varias o encadenas 3 tiros seguidos, ganas una bomba 💣, un arcoíris 🌈 o un rayo ⚡.<br>Las piedras grises no se revientan: deja que se queden sin apoyo para que caigan.</p>
-      <button id="jugar">Jugar</button>
+      <button class="b3d txt grande b-oro" id="jugar" type="button" style="--t:56px"><span class="b-ico">▶</span>&nbsp;Jugar</button>
     </div>
     <div id="fin" class="velo">
       <h2 id="finTitulo">Se acabó</h2>
       <p id="finTexto"></p>
-      <button id="otra">Jugar otra vez</button>
+      <button class="b3d txt grande b-oro" id="otra" type="button" style="--t:56px"><span class="b-ico">🔄</span>&nbsp;Jugar otra vez</button>
     </div>
   </div>
   <script type="module" src="juego-burbujas.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>

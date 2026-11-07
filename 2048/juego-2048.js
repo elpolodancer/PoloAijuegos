@@ -8,6 +8,7 @@ const PROB_4 = 0.1;           // probabilidad de que salga un 4 en vez de un 2
 const MAX_DESHACER = 30;
 const PUNTOS_POR_PERFIL = 25; // al perfil se envía 1 punto por cada 25 del juego (jugador.js limita a 1000 por envío)
 const ID_JUEGO = "2048";
+const COLOR_TAM = { 4: "b-verde", 5: "b-azul", 6: "b-morado" }; // color del botón de cada tamaño (más grande = más difícil)
 
 const $ = (id) => document.getElementById(id);
 const tablero = $("tablero");
@@ -28,7 +29,7 @@ function colorDe(v) {
 
 // ----- Tamaño del tablero (se ajusta a la pantalla) -----
 function ajustar() {
-  const lado = Math.max(220, Math.min(innerWidth - 24, innerHeight - 250, 520));
+  const lado = Math.max(220, Math.min(innerWidth - 24, innerHeight - 280, 520));
   document.documentElement.style.setProperty("--ancho", lado + "px");
   hueco = Math.max(6, Math.round(lado * (N > 4 ? 0.02 : 0.03)));
   celda = (lado - hueco * (N + 1)) / N;
@@ -195,7 +196,7 @@ function velo(titulo, texto, botones) {
   const cont = $("veloBotones"); cont.innerHTML = "";
   for (const [t, fn, principal] of botones) {
     const b = document.createElement("button");
-    b.className = principal ? "btn" : "btn2"; b.textContent = t; b.addEventListener("click", fn);
+    b.className = "b3d txt " + (principal ? "b-verde" : "b-gris"); b.textContent = t; b.addEventListener("click", fn);
     cont.appendChild(b);
   }
   $("velo").hidden = false;
@@ -230,11 +231,11 @@ function cargarTamano() {
     if (terminado) revisar();
   } else nueva();
 }
-function marcarTamanos() { document.querySelectorAll("#tamanos .btn2").forEach((b) => b.classList.toggle("sel", +b.dataset.n === N)); }
+function marcarTamanos() { document.querySelectorAll("#tamanos .b3d").forEach((b) => b.classList.toggle("on", +b.dataset.n === N)); }
 
 for (const n of TAMANOS) {
   const b = document.createElement("button");
-  b.className = "btn2"; b.dataset.n = n; b.textContent = n + "×" + n;
+  b.className = "b3d chico txt " + COLOR_TAM[n]; b.dataset.n = n; b.textContent = n + "×" + n;
   b.addEventListener("click", () => n !== N && cambiarTamano(n));
   $("tamanos").appendChild(b);
 }

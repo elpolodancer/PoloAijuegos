@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- Ruta: cadenanumeros/index-cadenanumeros.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Cadena de números</title>
+  <meta name="theme-color" content="#131417" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    html.inmersivo { --fondo-juego: #131417; }
+    /* Lienzo fijo 360×480 (vertical): franja libre arriba para los marcadores y abajo para 🔀 y 🔄 */
+    .inmersivo .escena { padding: calc(54px + env(safe-area-inset-top)) 0 calc(66px + env(safe-area-inset-bottom)); }
+    .inmersivo .marco {
+      aspect-ratio: 360 / 480;
+      width: min(100vw, calc((100vh - 120px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 360 / 480));
+      width: min(100vw, calc((100dvh - 120px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 360 / 480));
+    }
+    .hud-izq { flex-wrap: wrap; gap: 8px; max-width: calc(100vw - 16px); }
+    .chip b { color: #fff; }
+  </style>
+</head>
+<body class="inmersivo" data-pantalla-auto>
+  <div class="escena">
+    <div class="marco">
+      <canvas id="lienzo" class="lienzo" width="360" height="480" aria-label="Tablero de números. Desliza el dedo por números pegados: dos iguales y luego iguales o dobles."></canvas>
+    </div>
+  </div>
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal"><span class="b-ico">←</span></a>
+    <span class="chip" title="Puntos"><small>Pts</small><b id="puntos">0</b></span>
+    <span class="chip" title="Bloque más alto"><small>Máx</small><b id="maximo">2</b></span>
+    <span class="chip" title="Récord"><small>Rec</small><b id="record">2</b></span>
+  </div>
+  <div class="hud hud-abajo">
+    <button class="b3d b-morado" id="mezclar" type="button" title="Mezclar" aria-label="Mezclar"><span class="b-ico">🔀</span></button>
+    <button class="b3d b-rojo" id="reiniciar" type="button" title="Reiniciar" aria-label="Reiniciar"><span class="b-ico">🔄</span></button>
+  </div>
+  <script type="module" src="juego-cadenanumeros.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>

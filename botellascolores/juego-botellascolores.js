@@ -67,9 +67,18 @@ function jugar(i) {
   $("menu").hidden = true;
   $("juego").hidden = false;
   $("final").hidden = true;
-  $("mesa").style.setProperty("--alto", (ALTO_CAPA[cap] || 24) + "px");
   pintar();
+  encajar();
 }
+
+// Achica las botellas lo necesario para que quepan en la pantalla sin hacer scroll
+function encajar() {
+  const z = document.querySelector(".zona"), m = $("mesa");
+  let a = ALTO_CAPA[cap] || 24;
+  m.style.setProperty("--alto", a + "px");
+  while (z.scrollHeight > z.clientHeight + 1 && a > 14) { a -= 2; m.style.setProperty("--alto", a + "px"); }
+}
+addEventListener("resize", () => { if (!$("juego").hidden) encajar(); });
 
 function pintar() {
   $("info").textContent = "Nivel " + numEnEtapa(nivel);

@@ -1,0 +1,98 @@
+<!doctype html>
+<!-- Ruta: cavar/index-cavar.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Cavar</title>
+  <meta name="theme-color" content="#15161a" />
+  <link rel="icon" href="../iconos/icono-192.png" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    html.inmersivo { --fondo-juego: #15161a; }
+    :root { --panel: #1e2025; --acento: #f2b441; --malo: #ff6b5b; }
+
+    /* El terreno ocupa toda la pantalla; los botones flotan encima */
+    #escena { position: absolute; inset: 0; overflow: hidden; }
+    #lienzo { display: block; width: 100%; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none; }
+    .hud-izq { flex-wrap: wrap; gap: 6px 8px; max-width: calc(100vw - 80px); }
+    .hud-der { flex-direction: column; align-items: flex-end; gap: 6px; }
+    .chip.bolsa { position: relative; overflow: hidden; }
+    #barraBolsa { position: absolute; left: 0; bottom: 0; height: 4px; width: 0; background: var(--acento); transition: width .15s; }
+    #barraBolsa.llena { background: var(--malo); }
+    #aviso { position: absolute; left: 50%; top: 22%; transform: translate(-50%, -8px); max-width: 90%; padding: 8px 14px;
+      border-radius: 12px; background: rgba(15,15,18,.88); border: 1px solid var(--acento); text-align: center; font-size: .95rem;
+      opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; }
+    #aviso.ver { opacity: 1; transform: translate(-50%, 0); }
+
+    /* Cruceta táctil: botones 3D grises que se hunden al pulsar */
+    #pad { display: none; position: absolute; left: calc(12px + env(safe-area-inset-left, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+      width: 150px; height: 150px; grid-template: repeat(3, 1fr) / repeat(3, 1fr); touch-action: none; }
+    @media (pointer: coarse) { #pad { display: grid; } }
+    #pad .b3d { --t: auto; width: 100%; height: 100%; margin: 2px; font-size: 22px; touch-action: none; border-radius: 14px; box-shadow: 0 4px 0 var(--c3), 0 6px 8px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.6); }
+    #pad .b3d.activo { animation: none; transform: translateY(4px); filter: brightness(1.25); box-shadow: 0 0 0 var(--c3), inset 0 2px 0 rgba(255,255,255,.5); }
+    #pad .u { grid-area: 1 / 2; } #pad .l { grid-area: 2 / 1; } #pad .r { grid-area: 2 / 3; } #pad .d { grid-area: 3 / 2; }
+    @media (max-height: 420px) { #pad { width: 126px; height: 126px; } }
+
+    /* Hoja de mejoras */
+    #panel { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; background: rgba(8,8,10,.6); }
+    .hoja { width: min(560px, 100%); max-height: 88dvh; overflow-y: auto; padding: 14px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+      background: var(--panel); border: 1px solid var(--borde); border-radius: 18px 18px 0 0; }
+    .hoja-cab { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .hoja h2 { margin: 0; font-size: 1.25rem; }
+    .hoja h3 { margin: 16px 0 6px; font-size: 1rem; color: var(--suave); font-weight: 600; }
+    .fila { display: grid; grid-template-columns: 34px 1fr auto; gap: 4px 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--borde); }
+    .fila:first-of-type { border-top: 0; }
+    .fila .ico { font-size: 1.6rem; text-align: center; }
+    .fila .det { font-size: .85rem; color: var(--suave); }
+    .niveles { display: flex; gap: 3px; margin-top: 3px; }
+    .niveles i { width: 14px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.18); }
+    .niveles i.on { background: var(--acento); }
+    .mins { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+    .min { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border: 1px solid var(--borde); border-radius: 10px; font-size: .88rem; }
+    .gema { width: 22px; height: 22px; border-radius: 50%; flex: none; box-shadow: inset -3px -3px 0 rgba(0,0,0,.25), inset 2px 2px 0 rgba(255,255,255,.4); }
+    .min small { display: block; color: var(--suave); }
+    .pie { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--suave); font-size: .85rem; }
+    @media (prefers-reduced-motion: reduce) { #aviso, #barraBolsa { transition: none; } }
+  </style>
+</head>
+<body class="inmersivo" data-pantalla-auto>
+  <main id="escena">
+    <canvas id="lienzo" aria-label="Terreno con la zona de excavación"></canvas>
+    <div id="aviso" role="status" aria-live="polite"></div>
+    <div id="pad" aria-hidden="true">
+      <button class="b3d b-gris u" data-d="arriba" tabindex="-1"><span class="b-ico">▲</span></button>
+      <button class="b3d b-gris l" data-d="izq" tabindex="-1"><span class="b-ico">◀</span></button>
+      <button class="b3d b-gris r" data-d="der" tabindex="-1"><span class="b-ico">▶</span></button>
+      <button class="b3d b-gris d" data-d="abajo" tabindex="-1"><span class="b-ico">▼</span></button>
+    </div>
+  </main>
+
+  <!-- Capas flotantes -->
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
+    <div class="chip">💰 <b id="dinero">$0</b></div>
+    <div class="chip">⬇ <b id="prof">0 m</b></div>
+    <div class="chip bolsa">🎒 <b id="bolsa">0/8</b><small id="bolsaValor">$0</small><i id="barraBolsa"></i></div>
+  </div>
+  <div class="hud hud-der">
+    <button class="b3d chico b-oro" id="btnMejoras" type="button" title="Mejoras" aria-label="Mejoras"><span class="b-ico">🧰</span></button>
+    <button class="b3d chico b-azul" id="btnCuerda" type="button" title="Subir con la cuerda" aria-label="Subir con la cuerda" hidden><span class="b-ico">🪢</span></button>
+    <button class="b3d chico b-gris" id="btnSonido" type="button" aria-label="Sonido"><span class="b-ico">🔊</span></button>
+  </div>
+
+  <div id="panel" hidden role="dialog" aria-modal="true" aria-labelledby="panelTitulo">
+    <div class="hoja">
+      <div class="hoja-cab">
+        <h2 id="panelTitulo">Mejoras</h2>
+        <button class="b3d chico b-rojo" id="cerrarPanel" type="button" aria-label="Cerrar"><span class="b-ico">✕</span></button>
+      </div>
+      <div id="panelCuerpo"></div>
+    </div>
+  </div>
+
+  <script type="module" src="juego-cavar.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
