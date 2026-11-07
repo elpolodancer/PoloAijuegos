@@ -320,7 +320,7 @@ function marco(ms) {
   const dt = Math.min(0.05, (ms - ultimo) / 1000);
   ultimo = ms;
   if (p && p.estado === "jugando") {
-    avanzarEv(avanzar(p, dt));
+    avanzarEv(avanzar(p, dt, [carga, sig]));
     if (p.estado === "jugando") {
       moverTiros(dt);
       recarga -= dt;

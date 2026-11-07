@@ -3,12 +3,17 @@
 // a la CABEZA (s mayor, la más cercana al hoyo). «s» = distancia recorrida por el trayecto en px.
 // d, ox, oy son solo animación (desfase visual que se va a 0).
 
+import { ANCHO, ALTO } from "./niveles-zuma.js";
+
 export const R = 16;      // radio de una bola
 export const D = 2 * R;   // distancia entre centros de bolas pegadas
 const PASO = 2;           // separación (px) de los puntos del trayecto ya muestreado
 const V_CIERRE = 260;     // velocidad (px/s) del tramo de atrás cuando corre a cerrar un hueco
 const T_RUSH = 2.5;       // segundos de entrada rápida al empezar
 const ENTRADA = 160;      // si limpias casi toda la pantalla (la cabeza vuelve antes de esta distancia) entra rápida otra vez; si no, la cadena sale a su ritmo
+const POCAS = 5;          // si quedan menos bolas que estas en la cadena y aún faltan por salir, se busca el color del jugador
+const EMPUJE_DETRAS = 2;  // una vez a la vista su color, la entrada rápida sigue hasta que salgan tantas bolas más detrás de esa
+const MARGEN_HOYO = 300;  // sin entrada rápida de este tipo si la cabeza está a menos de esta distancia (px) del hoyo
 
 export function azarSemilla(a) {
   return function () {
@@ -65,7 +70,7 @@ export function secuencia(n, colores, semilla) {
 export function crearPartida(nivel) {
   return {
     nivel, tr: crearTrayecto(nivel.trayecto), cad: [], cola: secuencia(nivel.bolas, nivel.colores, nivel.semilla),
-    azar: azarSemilla((nivel.semilla ^ 0x9e37) | 0), t: 0, puntos: 0, combo: 0, congelado: 0, quitadas: 0, total: nivel.bolas, estado: "jugando",
+    azar: azarSemilla((nivel.semilla ^ 0x9e37) | 0), t: 0, puntos: 0, combo: 0, congelado: 0, buscando: false, empuje: 0, quitadas: 0, total: nivel.bolas, estado: "jugando",
   };
 }
 
@@ -109,8 +114,14 @@ function revisarFin(p, ev) {
   else if (p.cad.length && p.cad[p.cad.length - 1].s >= p.tr.largo - 6) { p.estado = "perdio"; ev.push({ t: "perdio" }); }
 }
 
+// ¿Está esta bola a la vista (dentro del tablero)?
+const visible = (p, b) => { const q = p.tr.pos(b.s); return q.x > 0 && q.x < ANCHO && q.y > 0 && q.y < ALTO; };
+// ¿Hay a la vista una bola de alguno de los colores que el jugador tiene a mano (la cargada o la siguiente)?
+const alAlcance = (p, colores) => p.cad.some((b) => colores.includes(b.c) && visible(p, b));
+
 // Avanza dt segundos. Devuelve eventos: quita, gano, perdio
-export function avanzar(p, dt) {
+// colores (opcional): los colores que el jugador tiene a mano ([carga, sig]); sin ellos no hay entrada rápida por falta de color
+export function avanzar(p, dt, colores) {
   const ev = [];
   if (p.estado !== "jugando") return ev;
   const cad = p.cad;
@@ -123,14 +134,27 @@ export function avanzar(p, dt) {
   p.t += dt;
 
   // Entran bolas nuevas por la cola
+  const antes = p.cola.length;
   if (p.cola.length) {
     const u = cad[0];
     if (!u) cad.unshift(nueva(p.cola.shift(), 0));
     else if (u.s >= D) cad.unshift(nueva(p.cola.shift(), u.s <= 2 * D ? u.s - D : 0));
   }
+  const entro = p.cola.length < antes;
+
+  // Si te quedas con pocas bolas y ninguno de tus colores está a la vista, la cadena entra rápida hasta que salga uno de ellos;
+  // en cuanto sale, el empujón sigue hasta que salgan otras EMPUJE_DETRAS bolas detrás (así no se puede disparar justo al salir)
+  let empuja = false;
+  if (!colores || !cad.length || !p.cola.length || cad[cad.length - 1].s >= p.tr.largo - MARGEN_HOYO) { p.buscando = false; p.empuje = 0; }
+  else if (p.empuje > 0) {
+    if (entro) p.empuje--;
+    empuja = p.empuje > 0;
+  } else if (alAlcance(p, colores)) {
+    if (p.buscando) { p.buscando = false; p.empuje = EMPUJE_DETRAS; empuja = true; }
+  } else if (p.buscando || cad.length < POCAS) { p.buscando = true; empuja = true; }
 
   // Velocidad: el tramo de la cabeza avanza; los tramos de atrás corren a alcanzarlo
-  const vCab = cad.length && (p.t < T_RUSH || cad[cad.length - 1].s < ENTRADA) ? p.nivel.rush : p.nivel.velocidad;
+  const vCab = cad.length && (p.t < T_RUSH || cad[cad.length - 1].s < ENTRADA || empuja) ? p.nivel.rush : p.nivel.velocidad;
   const v = new Array(cad.length);
   const k = Math.exp(-14 * dt);
   for (let i = cad.length - 1; i >= 0; i--) {

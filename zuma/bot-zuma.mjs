@@ -27,7 +27,7 @@ export function jugar(ronda, perfil, azar) {
   const p = crearPartida(ronda);
   let carga = colorDisparo(p), sig = colorDisparo(p), espera = 1;
   while (p.estado === "jugando" && p.t < TOPE_S) {
-    avanzar(p, DT);
+    avanzar(p, DT, [carga, sig]);
     espera -= DT;
     if (espera > 0) continue;
     const hay = coloresDisponibles(p);
