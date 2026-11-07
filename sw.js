@@ -9,8 +9,8 @@
 // Al agregar un juego: añádelo a «JUEGOS» de abajo (carpeta: [archivos extra además de la página]) y sube VERSION.
 // Si el juego tiene imagen de tarjeta, agrégala a «ARCHIVOS» (imagenes/nombre.webp).
 // Subir VERSION fuerza a todos a descargar todo de nuevo y borra las copias viejas (juegos-vN).
-// Última versión: 51 = «botellascolores» con los 3200 niveles de los 32 estados; 50 = «botellascolores» con 2200 niveles (22 estados); 49 = «botellascolores» con mapa (mundo → México → estado, 12 etapas con niveles y 20 por venir); 48 = «botellascolores» con 1200 niveles (12 mundos × 100) y progreso reiniciado; 47 = se agregó «fichas» (Fichas de frutas); 46 = «imperio» sin oleadas y con personaje, inventario y cajones; 45 = «imperio» con menú, partidas guardadas, biomas y animales; 44 = se agregó «imperio»; 43 = el solitario guarda también sus hojas de estilo (estilos-solitario.css, mesa-solitario.css), niveles y victoria; 42 = todos los archivos se llaman «tipo-carpeta» (index-ajedrez.html, juego-ajedrez.js…); 41 = se agregaron «2048» y «ajedrez».
-const VERSION = 51;
+// Última versión: 52 = se agregó «zuma» (nivel de prueba); 51 = «botellascolores» con los 3200 niveles de los 32 estados; 50 = «botellascolores» con 2200 niveles (22 estados); 49 = «botellascolores» con mapa (mundo → México → estado, 12 etapas con niveles y 20 por venir); 48 = «botellascolores» con 1200 niveles (12 mundos × 100) y progreso reiniciado; 47 = se agregó «fichas» (Fichas de frutas); 46 = «imperio» sin oleadas y con personaje, inventario y cajones; 45 = «imperio» con menú, partidas guardadas, biomas y animales; 44 = se agregó «imperio»; 43 = el solitario guarda también sus hojas de estilo (estilos-solitario.css, mesa-solitario.css), niveles y victoria; 42 = todos los archivos se llaman «tipo-carpeta» (index-ajedrez.html, juego-ajedrez.js…); 41 = se agregaron «2048» y «ajedrez».
+const VERSION = 52;
 const CACHE = "juegos-v" + VERSION;
 const ESPERA_RED = 3000;
 
@@ -61,6 +61,7 @@ const JUEGOS = {
   "2048": ["juego.js"],
   imperio: ["juego.js"],
   fichas: ["juego.js", "logica.js", "piezas-fichas.js"], // piezas-fichas.js lleva su nombre completo
+  zuma: ["juego.js", "logica.js", "niveles.js"],
   paperio: ["juego.js", "niveles.js", "mapa.js", "michoacan.js", "colima.js", "bajacaliforniasur.js", "campeche.js", "etapas.js"],
 };
 
