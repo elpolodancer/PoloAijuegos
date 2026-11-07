@@ -2,22 +2,26 @@
 // Botellas de colores: vierte los colores de una botella a otra hasta que cada botella tenga un solo color.
 import { crear, verter, puedeVerter, resuelto, racha } from "./logica-botellascolores.js";
 import { NIVELES, PALETA, MUNDOS, NIVELES_POR_MUNDO } from "./niveles-botellascolores.js";
+import { montarMapa, ETAPAS } from "./mapa.js";
 
 // ----- Ajustes -----
 const ID = "botellas-colores";
 const PUNTOS_NIVEL = 10;       // puntos al perfil por nivel, solo la primera vez que se pasa
-const CLAVE = "botellas_progreso";
+const CLAVE = "botellas_progreso_v2"; // v2: mundos de 100 niveles; el progreso anterior (botellas_progreso) ya no se usa
 const ALTO_CAPA = { 3: 34, 4: 32, 5: 30, 6: 27, 7: 24, 8: 22 }; // alto en px de cada capa según la capacidad
 
 const $ = (id) => document.getElementById(id);
 let hechos = [];
 let nivel = 0, cap = 3, est = [], hist = [], sel = -1, acabo = false;
 
+try { localStorage.removeItem("botellas_progreso"); } catch (e) {} // borra el progreso de la versión anterior
 const leer = () => { try { hechos = JSON.parse(localStorage.getItem(CLAVE)) || []; } catch (e) { hechos = []; } };
 const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(hechos)); } catch (e) {} };
 
-// ----- Mundos (cada 25 niveles cambia el fondo) -----
+// ----- Etapas (cada 100 niveles = un estado de México, ver ETAPAS en mapa.js; también cambia el fondo) -----
 const mundoDe = (i) => Math.min(Math.floor(i / NIVELES_POR_MUNDO), MUNDOS.length - 1);
+const etapaDe = (i) => ETAPAS[Math.min(Math.floor(i / NIVELES_POR_MUNDO), ETAPAS.length - 1)];
+const numEnEtapa = (i) => (i % NIVELES_POR_MUNDO) + 1;
 function aplicarMundo(i) {
   const m = MUNDOS[mundoDe(i)];
   const s = document.documentElement.style;
@@ -28,41 +32,27 @@ function aplicarMundo(i) {
   s.setProperty("--luna", m.luna);
 }
 
-// ----- Menú -----
+// ----- Inicio y mapa -----
+const primeroSinPasar = () => { let s = 0; while (s < NIVELES.length && hechos[s]) s++; return Math.min(s, NIVELES.length - 1); };
+
 function menu() {
   $("juego").hidden = true;
   $("menu").hidden = false;
-  let siguiente = 0; // primer nivel sin pasar
-  while (siguiente < NIVELES.length && hechos[siguiente]) siguiente++;
-  if (siguiente >= NIVELES.length) siguiente = NIVELES.length - 1;
-  aplicarMundo(siguiente);
-  const c = $("niveles");
-  c.innerHTML = "";
-  MUNDOS.forEach((m, w) => {
-    const ini = w * NIVELES_POR_MUNDO;
-    const fin = Math.min(ini + NIVELES_POR_MUNDO, NIVELES.length);
-    if (ini >= NIVELES.length) return;
-    let pasados = 0;
-    for (let i = ini; i < fin; i++) if (hechos[i]) pasados++;
-    const det = document.createElement("details");
-    det.className = "mundo";
-    det.open = w === mundoDe(siguiente);
-    const sum = document.createElement("summary");
-    sum.textContent = m.nombre + " · " + pasados + "/" + (fin - ini) + (ini > 0 && !hechos[ini - 1] ? " 🔒" : "");
-    const rej = document.createElement("div");
-    rej.className = "rejilla-niv";
-    for (let i = ini; i < fin; i++) {
-      const b = document.createElement("button");
-      b.textContent = hechos[i] ? "✓ " + (i + 1) : i + 1;
-      b.disabled = i > 0 && !hechos[i - 1];
-      if (hechos[i]) b.className = "hecho";
-      b.addEventListener("click", () => jugar(i));
-      rej.appendChild(b);
-    }
-    det.append(sum, rej);
-    c.appendChild(det);
-  });
+  mapa.cerrar();
+  const s = primeroSinPasar();
+  aplicarMundo(s);
+  const pasados = hechos.filter(Boolean).length;
+  $("menuInfo").textContent = "Niveles pasados: " + pasados + " de " + NIVELES.length;
+  $("continuar").textContent = "▶ " + (pasados ? "Continuar" : "Empezar") + " · " + etapaDe(s).nombre + " · Nivel " + numEnEtapa(s);
 }
+
+const mapa = montarMapa({
+  raiz: $("mapa"), titulo: $("mapaTitulo"), info: $("mapaInfo"), lienzo: $("mapaLienzo"),
+  atras: $("mapaAtras"), ir: $("mapaIr"),
+  hechos: () => hechos, total: () => NIVELES.length,
+  alSalir: () => menu(),
+  jugarNivel: (i) => { mapa.cerrar(); jugar(i); },
+});
 
 // ----- Partida -----
 function jugar(i) {
@@ -82,9 +72,9 @@ function jugar(i) {
 }
 
 function pintar() {
-  $("info").textContent = "Nivel " + (nivel + 1);
+  $("info").textContent = "Nivel " + numEnEtapa(nivel);
   const oculto = !!NIVELES[nivel].oculto; // modo niebla: solo se ve el color de arriba
-  $("pista").textContent = MUNDOS[mundoDe(nivel)].nombre + (oculto ? " · 🌫️ solo ves el color de arriba" : "");
+  $("pista").textContent = etapaDe(nivel).nombre + (oculto ? " · 🌫️ solo ves el color de arriba" : "");
   const m = $("mesa");
   m.innerHTML = "";
   m.style.setProperty("--cap", cap);
@@ -145,8 +135,9 @@ async function ganar() {
   hechos[nivel] = true;
   guardar();
   const ultimo = nivel === NIVELES.length - 1;
-  $("textoFinal").textContent = ultimo ? "🎉 ¡Completaste todos los niveles!" : "🎉 ¡Nivel " + (nivel + 1) + " resuelto!";
-  $("siguiente").textContent = ultimo ? "Ver niveles" : "Siguiente nivel ▶";
+  const cierraEtapa = (nivel + 1) % NIVELES_POR_MUNDO === 0;
+  $("textoFinal").textContent = ultimo ? "🎉 ¡Completaste todos los niveles!" : cierraEtapa ? "🎉 ¡Terminaste " + etapaDe(nivel).nombre + "!" : "🎉 ¡Nivel " + numEnEtapa(nivel) + " resuelto!";
+  $("siguiente").textContent = ultimo ? "Ver niveles" : cierraEtapa ? "Siguiente estado ▶" : "Siguiente nivel ▶";
   $("final").hidden = false;
   if (primera) {
     try {
@@ -156,7 +147,9 @@ async function ganar() {
   }
 }
 
-$("volver").addEventListener("click", () => { menu(); });
+$("volver").addEventListener("click", () => mapa.abrir());
+$("verMapa").addEventListener("click", () => mapa.abrir());
+$("continuar").addEventListener("click", () => jugar(primeroSinPasar()));
 $("deshacer").addEventListener("click", deshacer);
 $("reiniciar").addEventListener("click", () => jugar(nivel));
 $("siguiente").addEventListener("click", () => (nivel < NIVELES.length - 1 ? jugar(nivel + 1) : menu()));

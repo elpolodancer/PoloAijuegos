@@ -32,16 +32,31 @@
 
     .zona { position: relative; max-width: 480px; margin: 0 auto; padding: 12px 12px 120px; display: flex; flex-direction: column; gap: 14px; align-items: center; }
 
-    /* ----- Menú de niveles ----- */
-    #niveles { display: flex; flex-direction: column; gap: 10px; width: 100%; }
-    .mundo { border: 1px solid var(--vidrio-borde); border-radius: 14px; background: rgba(10, 14, 50, .35); padding: 0 10px; }
-    .mundo summary { cursor: pointer; padding: 12px 4px; font-weight: 700; }
-    .rejilla-niv { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding: 4px 0 12px; }
     #pista { margin: 0; font-size: .85rem; color: rgba(220, 230, 255, .85); text-align: center; }
     .seg.oculto { display: flex; align-items: center; justify-content: center; background: #2b3270; color: rgba(255,255,255,.6); font-weight: 800; font-size: 14px; }
-    #niveles button { aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--vidrio-borde); background: rgba(60, 80, 200, .25); color: inherit; font-size: 1.2rem; font-weight: 700; cursor: pointer; }
-    #niveles button:disabled { opacity: .3; cursor: default; }
-    #niveles button.hecho { border-color: #6ee7a8; background: rgba(110, 231, 168, .15); }
+
+    /* ----- Inicio y mapa de niveles ----- */
+    #menu { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+    #menuInfo { margin: 0 0 4px; text-align: center; color: rgba(220, 230, 255, .85); }
+    .btn.grande { display: block; width: 100%; padding: 14px; font-size: 1.05rem; }
+    .btn.sec { background: rgba(10, 14, 50, .55); border: 1px solid var(--vidrio-borde); color: inherit; }
+    #mapa { position: fixed; inset: 0; z-index: 20; display: flex; justify-content: center; padding: 12px; background: rgba(15, 18, 32, .96); overflow: auto; }
+    .mapa-caja { width: 100%; max-width: 760px; }
+    .menu-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+    .menu-cab h2 { margin: 0; font-size: 1.4rem; text-align: center; }
+    #mapaInfo { margin: 0 0 10px; color: var(--suave); font-size: .85rem; }
+    #mapaLienzo svg { display: block; width: 100%; height: auto; border: 1px solid var(--borde); border-radius: 12px; }
+    #mapaLienzo .sel { cursor: pointer; }
+    #mapaLienzo [role="button"]:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    #mapaLienzo .pulso { transform-box: fill-box; transform-origin: center; animation: pulso 1.8s ease-out infinite; }
+    @keyframes pulso { from { transform: scale(1); opacity: .9; } to { transform: scale(2.4); opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { #mapaLienzo .pulso { animation: none; } }
+    .rejilla-niveles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding-bottom: 12px; }
+    .nv { aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; padding: 0; font: inherit; font-size: 1.05rem; font-weight: 700; color: var(--texto); background: var(--tarjeta); border: 2px solid var(--borde); border-radius: 12px; cursor: pointer; }
+    .nv.hecho { border-color: #3fa66b; background: rgba(63, 166, 107, .15); }
+    .nv.actual { border-color: var(--acento); box-shadow: 0 0 0 2px rgba(124, 92, 255, .35); }
+    .nv.bloq { opacity: .35; cursor: default; }
+    .nv:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
 
     .fila { display: flex; gap: 8px; width: 100%; justify-content: space-between; align-items: center; }
     #info { font-weight: 700; }
@@ -82,9 +97,10 @@
     </div>
   </header>
   <main class="zona">
-    <section id="menu" style="width:100%">
-      <p style="text-align:center;margin:0 0 12px">Elige un nivel</p>
-      <div id="niveles"></div>
+    <section id="menu">
+      <p id="menuInfo"></p>
+      <button class="btn grande" id="continuar" type="button">▶ Continuar</button>
+      <button class="btn grande sec" id="verMapa" type="button">🗺️ Niveles</button>
     </section>
     <section id="juego" hidden style="width:100%;display:flex;flex-direction:column;gap:12px;align-items:center">
       <div class="fila">
@@ -103,6 +119,17 @@
       </div>
     </section>
   </main>
+  <div id="mapa" hidden>
+    <div class="mapa-caja">
+      <div class="menu-cab">
+        <button class="btn sec" id="mapaAtras" type="button">← Atrás</button>
+        <h2 id="mapaTitulo">Mapa</h2>
+        <button class="btn sec" id="mapaIr" type="button">📍 México</button>
+      </div>
+      <p id="mapaInfo"></p>
+      <div id="mapaLienzo"></div>
+    </div>
+  </div>
   <script type="module" src="juego-botellascolores.js"></script>
 </body>
 </html>
