@@ -1,45 +1,50 @@
 <!doctype html>
 <!-- Ruta: fusionanumeros/index-fusionanumeros.html -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Fusiona números</title>
-  <meta name="theme-color" content="#1b2330" />
+  <meta name="theme-color" content="#101114" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    main { padding: 8px 12px; }
-    .hud { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; font-size: .9rem; color: var(--suave); }
-    .hud b { color: var(--texto); }
-    #caja { position: relative; width: min(100%, calc((100dvh - 150px) * 0.554), 440px); margin: 8px auto; }
-    #lienzo { width: 100%; max-width: none; aspect-ratio: 360 / 650; height: auto; margin: 0; background: #0f1220; touch-action: none; }
-    #fin { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(10,12,20,.82); border-radius: 16px; text-align: center; padding: 16px; }
+    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 30%, #23252b, #101114 70%); }
+    /* Juego vertical (360×650): se deja libre una franja arriba para los botones flotantes */
+    .inmersivo .escena { padding-top: calc(54px + env(safe-area-inset-top, 0px)); }
+    .inmersivo .marco { aspect-ratio: 360 / 650;
+      width: min(100vw, calc((100vh - 54px) * 360 / 650));
+      width: min(100vw, calc((100dvh - 54px - env(safe-area-inset-top, 0px)) * 360 / 650)); }
+    .hud-der { flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: calc(100vw - 130px); }
+    .hud-der .chip { height: 30px; padding: 0 10px; font-size: 13px; }
+    #fin { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; text-align: center; background: rgba(10,10,12,.86); }
     #fin h2 { margin: 0; font-size: 1.6rem; }
-    .ayuda { text-align: center; font-size: .8rem; color: var(--suave); margin: 2px 0 8px; }
+    #ftexto { color: var(--suave); }
+    .ayuda-flota { position: absolute; left: 8%; right: 8%; top: 42%; margin: 0; padding: 10px 12px; text-align: center; font-size: .85rem; line-height: 1.4; background: rgba(10,10,12,.8); border-radius: 12px; pointer-events: none; animation: desv .6s 8s forwards; }
+    @keyframes desv { to { opacity: 0; visibility: hidden; } }
   </style>
 </head>
-<body>
-  <header class="barra">
-    <a class="volver" href="../">← Juegos</a>
-    <h1>🔢 Fusiona números</h1>
-    <button class="btn" id="reiniciar">↺ Reiniciar</button>
-  </header>
-  <main>
-    <div class="hud">
-      <span>Puntos: <b id="puntos">0</b></span>
-      <span>Bloque más alto: <b id="maximo">2</b></span>
-      <span>Récord: <b id="record">2</b></span>
-    </div>
-    <div id="caja">
+<body class="inmersivo" data-pantalla-auto>
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
+    <button class="b3d chico b-rojo" id="reiniciar" type="button" aria-label="Reiniciar" title="Reiniciar"><span class="b-ico">🔄</span></button>
+  </div>
+  <div class="hud hud-der">
+    <span class="chip" title="Puntos"><small>Pts</small><b id="puntos">0</b></span>
+    <span class="chip" title="Bloque más alto"><small>Máx</small><b id="maximo">2</b></span>
+    <span class="chip" title="Récord (bloque más alto)"><small>Récord</small><b id="record">2</b></span>
+  </div>
+  <div class="escena">
+    <div class="marco" id="caja">
       <canvas id="lienzo" class="lienzo" width="360" height="650"></canvas>
+      <p class="ayuda-flota">Toca una columna (o desliza y suelta) para dejar caer el bloque. Los iguales que quedan pegados se fusionan y suman sus valores.</p>
       <div id="fin" hidden>
         <h2>Sin movimientos</h2>
         <div id="ftexto"></div>
-        <button class="btn" id="otra">Jugar otra vez</button>
+        <button class="b3d txt grande b-verde" id="otra" type="button">Jugar otra vez</button>
       </div>
     </div>
-    <p class="ayuda">Toca una columna (o desliza y suelta) para dejar caer el bloque. Los iguales que quedan pegados se fusionan y suman sus valores.</p>
-  </main>
+  </div>
   <script type="module" src="juego-fusionanumeros.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>

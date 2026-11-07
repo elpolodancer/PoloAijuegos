@@ -17,6 +17,8 @@ const CLAVE_PROGRESO = "defensa_progreso";
 const CLAVE_SONIDO = "defensa_sonido";
 const CLAVE_ULTIMO = "defensa_ultimo";   // último mapa jugado
 const FUENTE = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",system-ui,sans-serif';
+const COLOR_BOTON = { arquero: "b-verde", mago: "b-azul", canon: "b-morado", ballesta: "b-oro", rayos: "b-rojo" }; // color del botón = lo cara y poderosa que es la torre
+const COLOR_DIF = { "Fácil": "b-verde", "Media": "b-azul", "Difícil": "b-morado", "Muy difícil": "b-rojo" };
 const COLOR_TORRE = { arquero: "#8b5a2b", canon: "#555b6b", mago: "#5b3f9e", ballesta: "#2f6f6a", rayos: "#2d4a8a" };
 
 const $ = (id) => document.getElementById(id);
@@ -88,7 +90,7 @@ function empezarNivel(i) {
   p = nuevaPartida(NIVELES[i]);
   tipoSel = null; torreSel = null; modoMeteoro = false; modoQuitar = false;
   finalizado = false; efectos = []; flash = 0; acum = 0; pausa = false; vel = 1;
-  $("btnPausa").textContent = "⏸ Pausa"; $("btnVel").textContent = "⏩ x1";
+  $("btnPausa").firstElementChild.textContent = "⏸"; $("velNum").textContent = "x1";
   $("fin").hidden = true;
   cerrarMenu();
   guardar(CLAVE_ULTIMO, i);
@@ -106,7 +108,7 @@ function abrirMenu() {
   NIVELES.forEach((n, i) => {
     const r = progreso[n.id];
     const b = document.createElement("button");
-    b.className = "btn mapa";
+    b.className = "b3d txt mapa " + (COLOR_DIF[n.dificultad] || "b-gris");
     const t = document.createElement("b"); t.textContent = n.id + " · " + n.nombre;
     const d = document.createElement("small"); d.textContent = (n.dificultad || "") + (r ? " · " + "⭐".repeat(r.estrellas) + " " + r.record : " · sin jugar");
     b.append(t, d);
@@ -186,14 +188,14 @@ cv.addEventListener("pointerdown", (ev) => {
 const tienda = $("tienda");
 for (const [tipo, d] of Object.entries(TORRES)) {
   const b = document.createElement("button");
-  b.className = "btn tor";
+  b.className = "b3d " + COLOR_BOTON[tipo];
+  b.type = "button";
   b.dataset.tipo = tipo;
-  const ico = document.createElement("span"); ico.className = "ico"; ico.textContent = d.icono;
-  ico.style.setProperty("--c", COLOR_TORRE[tipo]);
-  const nom = document.createElement("span"); nom.textContent = d.nombre;
-  const pr = document.createElement("small"); pr.textContent = d.precio + "🪙";
-  b.title = d.desc;
-  b.append(ico, nom, pr);
+  b.setAttribute("aria-label", d.nombre + ", " + d.precio + " monedas");
+  const ico = document.createElement("span"); ico.className = "b-ico"; ico.textContent = d.icono;
+  const pr = document.createElement("span"); pr.className = "b-info"; pr.textContent = d.precio + "🪙";
+  b.title = d.nombre + ": " + d.desc;
+  b.append(ico, pr);
   b.addEventListener("click", () => { tipoSel = tipoSel === tipo ? null : tipo; torreSel = null; modoMeteoro = false; modoQuitar = false; });
   tienda.appendChild(b);
 }
@@ -213,13 +215,13 @@ $("btnMeteoro").addEventListener("click", () => {
   modoMeteoro = !modoMeteoro; tipoSel = null; torreSel = null; modoQuitar = false;
   if (modoMeteoro) mensaje("☄️ Toca el mapa donde quieres que caiga", 3000);
 });
-$("btnVel").addEventListener("click", () => { vel = vel === 1 ? 2 : 1; $("btnVel").textContent = "⏩ x" + vel; });
+$("btnVel").addEventListener("click", () => { vel = vel === 1 ? 2 : 1; $("velNum").textContent = "x" + vel; });
 $("btnPausa").addEventListener("click", () => pausar(!pausa));
-$("btnSonido").addEventListener("click", () => { sonido = !sonido; guardar(CLAVE_SONIDO, sonido); $("btnSonido").textContent = sonido ? "🔊" : "🔇"; });
-$("btnSonido").textContent = sonido ? "🔊" : "🔇";
+$("btnSonido").addEventListener("click", () => { sonido = !sonido; guardar(CLAVE_SONIDO, sonido); $("btnSonido").firstElementChild.textContent = sonido ? "🔊" : "🔇"; });
+$("btnSonido").firstElementChild.textContent = sonido ? "🔊" : "🔇";
 $("finReintentar").addEventListener("click", () => empezarNivel(nivelIdx));
 $("finSiguiente").addEventListener("click", () => empezarNivel(nivelIdx + 1));
-function pausar(v) { pausa = v; $("btnPausa").textContent = pausa ? "▶ Seguir" : "⏸ Pausa"; }
+function pausar(v) { pausa = v; $("btnPausa").firstElementChild.textContent = pausa ? "▶" : "⏸"; }
 document.addEventListener("visibilitychange", () => { if (document.hidden && p.estado === "oleada") pausar(true); });
 
 // ----- Eventos del juego → sonido y efectos -----
@@ -446,23 +448,25 @@ function poner(id, valor, prop = "textContent") { if (memo[id + prop] !== valor)
 function ui() {
   const total = p.nivel.oleadas.length;
   poner("oro", String(Math.floor(p.oro)));
-  $("btnQuitar").classList.toggle("sel", modoQuitar);
+  $("btnQuitar").classList.toggle("on", modoQuitar);
   poner("vida", String(Math.ceil(p.vida)));
   poner("oleada", Math.min(total, p.oleada + 1) + "/" + total);
   for (const b of tienda.children) {
     const t = b.dataset.tipo;
-    b.classList.toggle("sel", tipoSel === t);
-    b.classList.toggle("caro", p.oro < TORRES[t].precio);
+    b.classList.toggle("on", tipoSel === t);
+    b.classList.toggle("sin", p.oro < TORRES[t].precio); // sin monedas suficientes
   }
   const bo = $("btnOleada");
   bo.disabled = p.estado !== "preparando";
-  poner("btnOleada", p.estado === "oleada" ? "🌊 Oleada en curso…" : p.estado === "preparando" ? "▶ Empezar oleada " + (p.oleada + 1) : "Fin", "textContent");
+  poner("btnOleadaIco", p.estado === "oleada" ? "🌊" : p.estado === "preparando" ? "▶" : "🏁");
+  poner("btnOleadaNum", p.estado === "preparando" ? String(p.oleada + 1) : "");   // número de la próxima oleada
+  bo.classList.toggle("activo", !bo.disabled);                                  // late cuando ya puedes empezarla
   const bm = $("btnMeteoro");
   bm.disabled = p.meteoroEspera > 0;
-  bm.classList.toggle("sel", modoMeteoro);
+  bm.classList.toggle("on", modoMeteoro);
   const carga = Math.round((1 - p.meteoroEspera / METEORO.espera) * 100);
   if (memo.carga !== carga) { memo.carga = carga; bm.style.setProperty("--carga", carga + "%"); }
-  poner("btnMeteoro", p.meteoroEspera > 0 ? "☄️ " + Math.ceil(p.meteoroEspera) + " s" : "☄️ Meteoro");
+  poner("btnMeteoroNum", p.meteoroEspera > 0 ? Math.ceil(p.meteoroEspera) + "s" : "");
 
   // panel de la torre elegida
   const panel = $("panel");
@@ -474,6 +478,7 @@ function ui() {
     if (memo.panel !== clave) {
       memo.panel = clave;
       panel.hidden = false;
+      panel.classList.toggle("abajo", torreSel.f < FILAS / 2); // si la torre está arriba, el panel va abajo y viceversa
       panel.textContent = "";
       const el = (tag, cls, txt) => { const x = document.createElement(tag); if (cls) x.className = cls; if (txt !== undefined) x.textContent = txt; return x; };
       const sig = def.niveles[torreSel.nivel + 1];           // datos del siguiente nivel (si lo hay) para mostrar la mejora
@@ -483,24 +488,24 @@ function ui() {
       cab.append(ic, el("span", "nom", def.nombre), el("span", "pips", "●".repeat(torreSel.nivel + 1) + "○".repeat(2 - torreSel.nivel)));
       const chips = el("div", "chips");
       const chip = (ico, v, s, suf = "") => {
-        const c = el("span", "chip", ico + " " + v + suf);
+        const c = el("span", "dato", ico + " " + v + suf);
         if (s !== undefined && s !== v) c.append(" → ", el("em", "", s + suf));
         chips.appendChild(c);
       };
       chip("💥 daño", d.dano, sig && sig.dano);
-      if (d.radio) chips.appendChild(el("span", "chip", "💣 área"));
+      if (d.radio) chips.appendChild(el("span", "dato", "💣 área"));
       chip("🎯 alcance", d.alcance, sig && sig.alcance);
       chip("⏱️ cada", d.cadencia, sig && sig.cadencia, " s");
-      if (d.lento) chips.appendChild(el("span", "chip", "🐌 frena"));
+      if (d.lento) chips.appendChild(el("span", "dato", "🐌 frena"));
       if (d.cadena) chip("⚡ saltos", d.cadena, sig && sig.cadena);
       info.append(cab, chips);
       const fila = document.createElement("div"); fila.className = "fila";
-      const bu = document.createElement("button"); bu.className = "btn";
+      const bu = document.createElement("button"); bu.className = "b3d txt chico " + (torreSel.nivel ? "b-oro" : "b-azul");
       bu.textContent = sube ? "⬆️ Mejorar · " + sube + " 🪙" : "Nivel máximo";
       bu.disabled = !sube || p.oro < sube;
       const t = torreSel;
       bu.addEventListener("click", () => { mejorar(p, t); });
-      const bv = document.createElement("button"); bv.className = "btn sec";
+      const bv = document.createElement("button"); bv.className = "b3d txt chico b-gris";
       bv.textContent = "💰 Vender · +" + Math.floor(t.invertido * REEMBOLSO) + " 🪙";
       bv.addEventListener("click", () => { vender(p, t); torreSel = null; });
       fila.append(bu, bv);

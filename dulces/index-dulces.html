@@ -1,43 +1,67 @@
 <!doctype html>
 <!-- Ruta: dulces/index-dulces.html (página del juego «dulces», estilo Candy Crush) -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Dulces</title>
+  <meta name="theme-color" content="#15161a" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
     [hidden] { display: none !important; }
-    body { background: radial-gradient(circle at 50% 0%, #3b2a7a 0%, #1a1440 55%, #0f1220 100%) fixed; }
-    main { padding: 10px 10px 28px; }
-    .barra .der { display: flex; gap: 8px; align-items: center; }
-    .btn.peq { padding: 4px 10px; font-size: 1rem; }
-    .btn.sec { background: #3a3f66; }
-    .btn.grande { padding: 12px 22px; font-size: 1.1rem; border-radius: 14px; }
+    html.inmersivo { --fondo-juego: radial-gradient(circle at 50% 0%, #3b2a7a 0%, #1c1631 55%, #121316 100%); }
 
-    /* ---- Mapa de niveles ---- */
-    #mapa h2 { margin: 6px 0 4px; }
-    .niveles { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 10px; margin: 12px 0; }
-    .nivel { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; aspect-ratio: 1; font: inherit; font-weight: 800; font-size: 1.25rem; color: #fff; background: linear-gradient(160deg, #ff7eb3, #c13584); border: 3px solid #ffd1e8; border-radius: 50%; cursor: pointer; box-shadow: 0 4px 0 #7d1f55; }
-    .nivel small { font-size: 0.65rem; letter-spacing: 1px; color: #ffe27a; line-height: 1; }
-    .nivel.hecho { background: linear-gradient(160deg, #ffb347, #e8590c); border-color: #ffe0b3; box-shadow: 0 4px 0 #8f3507; }
-    .nivel:disabled { cursor: default; color: #7b7fa6; background: #262b4d; border-color: #3a3f66; box-shadow: none; }
-    .nivel:not(:disabled):active { transform: translateY(3px); box-shadow: 0 1px 0 #7d1f55; }
+    /* ---- Mapa de niveles (con su propio scroll) ---- */
+    #mapa { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+      padding: calc(58px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+    #mapa h2 { margin: 0 0 4px; text-align: center; }
+    .niveles { display: grid; grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 12px; max-width: 560px; margin: 14px auto; }
+    /* Botón 3D por nivel; el color indica el tramo: 1-10 verde, 11-20 azul, 21-30 morado, 31-40 dorado */
+    .nivel { --c1: #b6f7a6; --c2: #3fcf4a; --c3: #1d7f2a; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+      aspect-ratio: 1; padding: 0; font: inherit; font-weight: 800; font-size: 1.25rem; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35); cursor: pointer; touch-action: manipulation;
+      background: linear-gradient(180deg, var(--c1) 0%, var(--c2) 55%, var(--c3) 140%); border: 2px solid var(--c3); border-radius: 16px; margin-bottom: 5px;
+      box-shadow: 0 5px 0 var(--c3), 0 8px 10px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.6), inset 0 -3px 0 rgba(0,0,0,.14); transition: transform .07s, box-shadow .07s; }
+    .nivel:nth-child(n+11) { --c1: #a8e2ff; --c2: #2f9bff; --c3: #14589f; }
+    .nivel:nth-child(n+21) { --c1: #e3bcff; --c2: #a14df0; --c3: #62209f; }
+    .nivel:nth-child(n+31) { --c1: #fff08c; --c2: #ffb020; --c3: #a85d00; }
+    .nivel small { font-size: .62rem; letter-spacing: 1px; color: #fff4c2; line-height: 1; }
+    .nivel:disabled { cursor: default; filter: grayscale(.85) brightness(.7); }
+    .nivel:not(:disabled):active { transform: translateY(4px); box-shadow: 0 1px 0 var(--c3), 0 2px 4px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.5); }
+    .nivel:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
 
-    /* ---- Panel superior ---- */
-    #hud { display: flex; align-items: stretch; justify-content: center; gap: 8px; max-width: 520px; margin: 0 auto 8px; }
-    .caja { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 58px; padding: 4px 6px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 14px; text-align: center; }
-    .caja small { color: var(--suave); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; }
-    .caja b { font-size: 1.5rem; line-height: 1.1; }
+    /* ---- Pantalla de juego: panel arriba, tablero al centro ---- */
+    #juego { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+      padding: calc(56px + env(safe-area-inset-top, 0px)) 10px calc(10px + env(safe-area-inset-bottom, 0px)); }
+    #hud { display: flex; align-items: stretch; justify-content: center; gap: 8px; width: 100%; max-width: 520px; }
+    .caja { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 50px; padding: 3px 6px; text-align: center;
+      background: linear-gradient(180deg, #4a4f57, #2b2f35); border: 2px solid #15171a; border-radius: 14px; box-shadow: 0 3px 0 #15171a, inset 0 2px 0 rgba(255,255,255,.2); }
+    .caja small { color: #c9ccd3; font-size: .65rem; text-transform: uppercase; letter-spacing: .5px; }
+    .caja b { font-size: 1.3rem; line-height: 1.1; color: #fff4c2; }
     #objetivo { flex: 2; }
-    #objetivo .metas { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; justify-content: center; font-weight: 800; font-size: 1.15rem; }
+    #objetivo .metas { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: center; justify-content: center; font-weight: 800; font-size: 1.05rem; color: #fff4c2; }
     .meta { display: flex; align-items: center; gap: 5px; }
-    .meta .forma { width: 24px; height: 24px; flex: none; }
+    .meta .forma { width: 22px; height: 22px; flex: none; }
     .meta.listo { color: #6bff9a; }
     .gelito { width: 22px; height: 22px; border: 2px solid #dff6ff; border-radius: 5px; background: rgba(140, 215, 255, 0.55); }
     #movs.poco { color: #ff7a7a; animation: latido 0.6s ease-in-out infinite alternate; }
+    #juego #barra { width: 100%; flex: none; }
+    #juego #marco { flex: none; }
+    #juego #estado { margin: 0; max-width: 520px; font-size: .78rem; }
+    .panel .botones .b3d { width: 100%; }
+    .panel .botones { align-items: stretch; }
 
-    /* ---- Barra de puntos ---- */
+    /* Celular horizontal: panel y barra a la izquierda, tablero a la derecha con toda la altura */
+    @media (orientation: landscape) and (max-height: 560px) {
+      #juego { display: grid; grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: auto auto 1fr; align-content: start; column-gap: 14px; row-gap: 8px;
+        padding: calc(56px + env(safe-area-inset-top, 0px)) calc(10px + env(safe-area-inset-right, 0px)) 8px calc(10px + env(safe-area-inset-left, 0px)); }
+      #hud { grid-column: 1; grid-row: 1; flex-direction: column; }
+      #juego #barra { grid-column: 1; grid-row: 2; }
+      #juego #estado { grid-column: 1; grid-row: 3; align-self: start; text-align: left; }
+      #juego #marco { grid-column: 2; grid-row: 1 / 4; align-self: center; justify-self: center; }
+    }
+
+/* ---- Barra de puntos ---- */
     #barra { position: relative; max-width: 520px; height: 26px; margin: 0 auto 10px; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 13px; overflow: hidden; }
     #relleno { height: 100%; width: 0; background: linear-gradient(90deg, #ff7eb3, #ffd54f); border-radius: 13px; transition: width 0.4s ease-out; }
     #puntos { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.85rem; text-shadow: 0 1px 3px #000; }
@@ -126,44 +150,46 @@
     .estrellas span.on:nth-child(3) { animation-delay: 0.5s; }
   </style>
 </head>
-<body>
-  <header class="barra">
-    <a class="volver" href="../index.html">‹ Juegos</a>
-    <h1>🍬 Dulces</h1>
-    <div class="der"><button id="sonido" class="btn peq sec" type="button" aria-label="Sonido">🔊</button></div>
-  </header>
-  <main>
-    <section id="mapa">
-      <h2>Elige un nivel</h2>
-      <p id="resumen" style="color: var(--suave); margin: 0"></p>
-      <div id="niveles" class="niveles"></div>
-      <div class="acciones"><button id="entrarMapa" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button></div>
-    </section>
+<body class="inmersivo" data-pantalla-auto>
+  <section id="mapa">
+    <div class="hud hud-izq">
+      <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
+      <span class="chip" id="resumen"></span>
+    </div>
+    <div class="hud hud-der">
+      <button id="entrarMapa" class="b3d chico b-azul" type="button" title="Entrar con Google para guardar puntos" aria-label="Entrar con Google" hidden><span class="b-ico">👤</span></button>
+    </div>
+    <h2>🍬 Elige un nivel</h2>
+    <div id="niveles" class="niveles"></div>
+  </section>
 
-    <section id="juego" hidden>
-      <div id="hud">
-        <div class="caja"><small>Nivel</small><b id="nnivel">1</b></div>
-        <div id="objetivo" class="caja"></div>
-        <div class="caja"><small>Movimientos</small><b id="movs">0</b></div>
+  <section id="juego" hidden>
+    <div class="hud hud-izq">
+      <button id="atras" class="b3d chico b-azul" type="button" title="Niveles" aria-label="Niveles"><span class="b-ico">🗺️</span></button>
+      <button id="reiniciar" class="b3d chico b-oro" type="button" title="Reiniciar nivel" aria-label="Reiniciar nivel"><span class="b-ico">🔄</span></button>
+    </div>
+    <div class="hud hud-der">
+      <button id="entrar" class="b3d chico b-azul" type="button" title="Entrar con Google para guardar puntos" aria-label="Entrar con Google" hidden><span class="b-ico">👤</span></button>
+      <button id="sonido" class="b3d chico b-gris" type="button" aria-label="Sonido"><span class="b-ico">🔊</span></button>
+    </div>
+    <div id="hud">
+      <div class="caja"><small>Nivel</small><b id="nnivel">1</b></div>
+      <div id="objetivo" class="caja"></div>
+      <div class="caja"><small>Movs</small><b id="movs">0</b></div>
+    </div>
+    <div id="barra"><div id="relleno"></div><div id="puntos">0</div></div>
+    <div id="marco">
+      <div id="tablero">
+        <div id="fondo"></div>
+        <div id="dulces"></div>
+        <div id="efectos"></div>
       </div>
-      <div id="barra"><div id="relleno"></div><div id="puntos">0</div></div>
-      <div id="marco">
-        <div id="tablero">
-          <div id="fondo"></div>
-          <div id="dulces"></div>
-          <div id="efectos"></div>
-        </div>
-        <div id="aviso"></div>
-      </div>
-      <div class="acciones">
-        <button id="reiniciar" class="btn" type="button">Reiniciar</button>
-        <button id="atras" class="btn sec" type="button">Niveles</button>
-        <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
-      </div>
-      <p id="estado">Desliza un dulce hacia otro (o toca dos dulces juntos) para intercambiarlos. Junta 3 o más del mismo color.</p>
-    </section>
-  </main>
+      <div id="aviso"></div>
+    </div>
+    <p id="estado">Desliza un dulce hacia otro (o toca dos dulces juntos) para intercambiarlos. Junta 3 o más del mismo color.</p>
+  </section>
   <div id="modal" class="modal" hidden><div id="panel" class="panel"></div></div>
   <script type="module" src="juego-dulces.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>

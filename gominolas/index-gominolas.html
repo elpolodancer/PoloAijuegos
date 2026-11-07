@@ -1,53 +1,57 @@
 <!doctype html>
 <!-- Ruta: gominolas/index-gominolas.html -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Conecta gominolas</title>
+  <meta name="theme-color" content="#101114" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    .caja { max-width: 440px; margin: 0 auto; padding: 10px; user-select: none; -webkit-user-select: none; }
-    .hud { display: flex; justify-content: space-between; align-items: end; gap: 8px; margin: 4px 2px 8px; }
-    .hud div { display: flex; flex-direction: column; font-size: 12px; opacity: .8; }
-    .hud b { font-size: 26px; line-height: 1; opacity: 1; font-variant-numeric: tabular-nums; }
-    .tiempo { height: 12px; border-radius: 99px; background: #0003; overflow: hidden; margin-bottom: 10px; }
+    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 30%, #23252b, #101114 70%); }
+    /* Columna: franja de botones (fija) + marcadores + barra de movimientos + tablero 6×8 */
+    .inmersivo .escena { flex-direction: column; gap: 8px; padding: calc(54px + env(safe-area-inset-top, 0px)) 0 calc(8px + env(safe-area-inset-bottom, 0px)); }
+    .fila-chips { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; flex: none; width: min(100vw, 520px); padding: 0 8px; }
+    .fila-chips .chip { height: 30px; padding: 0 10px; font-size: 13px; }
+    .tiempo { flex: none; width: min(calc(100vw - 24px), 480px); height: 14px; background: rgba(255,255,255,.14); border: 2px solid #15171a; border-radius: 99px; overflow: hidden; }
     #barra { height: 100%; width: 100%; border-radius: 99px; background: linear-gradient(90deg, #ff7aa8, #ffd24d); transition: width .1s linear; }
     #barra.poco { background: #ff4d5e; }
-    .tablero { position: relative; border-radius: 22px; overflow: hidden; background: linear-gradient(160deg, #6a3d9a, #3b2a73); box-shadow: 0 8px 0 #251a4d; touch-action: none; }
+    .tablero { position: relative; flex: none; overflow: hidden; border-radius: 22px; background: linear-gradient(160deg, #6a3d9a, #3b2a73); box-shadow: 0 8px 0 #251a4d, 0 14px 22px rgba(0,0,0,.5); touch-action: none; user-select: none; -webkit-user-select: none;
+      width: min(calc(100vw - 24px), calc((100vh - 170px) * 0.75), 480px);
+      width: min(calc(100vw - 24px), calc((100dvh - 170px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * 0.75), 480px); }
     canvas { display: block; width: 100%; touch-action: none; }
-    .ovl { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; background: #251a4dd9; color: #fff; }
+    .ovl { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; background: rgba(10,10,12,.84); color: #fff; }
     .ovl.oculto { display: none; }
-    .ovl h2 { margin: 0; font-size: 30px; }
-    .ovl p { margin: 0; max-width: 34ch; line-height: 1.4; }
-    .ovl .btn { font-size: 18px; padding: 10px 26px; }
+    .ovl h2 { margin: 0; font-size: 1.7rem; }
+    .ovl p { margin: 0; max-width: 34ch; font-size: .9rem; line-height: 1.45; color: #e3e5ea; }
   </style>
 </head>
-<body>
-  <header class="barra">
-    <a class="volver" href="../index.html">‹ Juegos</a>
-    <h1>🐻 Conecta gominolas</h1>
-  </header>
-  <main>
-    <div class="caja">
-      <div class="hud">
-        <div>Puntos<b id="pts">0</b></div>
-        <div>Movimientos<b id="movs">0</b></div>
-        <div>Negras<b id="negras">0</b></div>
-        <div>Nivel<b id="nivel">1</b></div>
-      </div>
-      <div class="tiempo"><div id="barra"></div></div>
-      <div class="tablero">
-        <canvas id="lienzo"></canvas>
-        <div class="ovl" id="ovl">
-          <h2 id="ovlTitulo">Conecta gominolas</h2>
-          <p id="ovlTexto">Arrastra el dedo por 3 o más gominolas iguales y juntas (también en diagonal). Rompe las que rodean a las negras para eliminarlas antes de quedarte sin movimientos.</p>
-          <button class="btn" id="ovlBtn">Jugar</button>
-        </div>
-      </div>
-      <button id="entrar" class="btn" type="button" hidden style="margin-top:10px">Entrar con Google para guardar puntos</button>
+<body class="inmersivo" data-pantalla-auto>
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
+  </div>
+  <div class="hud hud-der">
+    <button class="b3d chico txt b-azul" id="entrar" type="button" title="Entrar con Google para guardar puntos" hidden>👤 Entrar con Google</button>
+  </div>
+  <div class="escena">
+    <div class="fila-chips">
+      <span class="chip"><small>Puntos</small><b id="pts">0</b></span>
+      <span class="chip"><small>Movs</small><b id="movs">0</b></span>
+      <span class="chip"><small>Negras</small><b id="negras">0</b></span>
+      <span class="chip"><small>Nivel</small><b id="nivel">1</b></span>
     </div>
-  </main>
+    <div class="tiempo" title="Movimientos que quedan"><div id="barra"></div></div>
+    <div class="tablero">
+      <canvas id="lienzo"></canvas>
+      <div class="ovl" id="ovl">
+        <h2 id="ovlTitulo">Conecta gominolas</h2>
+        <p id="ovlTexto">Arrastra el dedo por 3 o más gominolas iguales y juntas (también en diagonal). Rompe las que rodean a las negras para eliminarlas antes de quedarte sin movimientos.</p>
+        <button class="b3d txt grande b-verde" id="ovlBtn" type="button">Jugar</button>
+      </div>
+    </div>
+  </div>
   <script type="module" src="juego-gominolas.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>

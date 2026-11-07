@@ -422,19 +422,20 @@ function hud() {
   if (botones.mesa) botones.mesa.classList.toggle("sel", !$("mesa").hidden);
   const f = $("fab"); f.innerHTML = "<h3>⚒️ Fabricar</h3>";
   [["hacha", "🪓 Hacha (tala ×3)"], ["pico", "⛏️ Pico (mina ×3)"]].forEach(([n, t]) => {
-    const b = document.createElement("button"); b.className = "btn"; b.disabled = herr[n] || !puede(RECETAS[n]);
+    const b = document.createElement("button"); b.type = "button"; b.className = "b3d txt b-oro"; b.disabled = herr[n] || !puede(RECETAS[n]);
     b.textContent = herr[n] ? "✔ " + t : t + " — " + etq(RECETAS[n]); b.onclick = () => fabricar(n); f.appendChild(b);
   });
   pintarInv();
   pintarMesa();
 }
 const botones = {};
+const COLOR_IT = { n: "b-gris", pisoM: "b-verde", paredM: "b-verde", pisoP: "b-azul", paredP: "b-azul", dem: "b-rojo" };   // madera verde, piedra azul, demoler rojo
 ITEMS.forEach(([id, ico, nom]) => {
-  const b = document.createElement("button"); b.className = "it"; b.title = nom;
+  const b = document.createElement("button"); b.type = "button"; b.className = "b3d it " + (COLOR_IT[id] || "b-gris"); b.title = nom;
   b.innerHTML = "<span>" + ico + "</span><small>" + (COSTES[id] ? etq(COSTES[id]) : nom) + "</small>";
   b.onclick = () => elegir(id); $("barra").appendChild(b); botones[id] = b;
 });
-{ const b = document.createElement("button"); b.className = "it"; b.innerHTML = "<span>⚒️</span><small>Fabricar</small>"; b.onclick = () => { $("fab").hidden = !$("fab").hidden; $("invp").hidden = true; $("mesa").hidden = true; hud(); }; $("barra").appendChild(b); botones.fab = b; }
+{ const b = document.createElement("button"); b.type = "button"; b.className = "b3d it b-oro"; b.innerHTML = "<span>⚒️</span><small>Fabricar</small>"; b.onclick = () => { $("fab").hidden = !$("fab").hidden; $("invp").hidden = true; $("mesa").hidden = true; hud(); }; $("barra").appendChild(b); botones.fab = b; }
 
 // ----- Inventario (8 casillas en 2 filas de 4) y crafteo 2×2 -----
 // «inv» sigue siendo la cuenta real de recursos (la usan las construcciones). Las casillas la muestran;
@@ -457,7 +458,7 @@ function recetaLista() {
   return null;
 }
 function casilla(it, fn, sel) {
-  const b = document.createElement("button"); b.className = "cas" + (sel ? " sel" : "");
+  const b = document.createElement("button"); b.type = "button"; b.className = "b3d cas b-gris" + (sel ? " sel" : "");
   if (it) { b.title = NOM[it.r]; b.innerHTML = "<span>" + (ICO[it.r] || ICO_H[it.r]) + "</span>" + (it.n > 1 ? "<i>" + it.n + "</i>" : ""); }
   b.onclick = fn; return b;
 }
@@ -494,7 +495,7 @@ function pintarInv() {
   p.appendChild(fila);
   const nota = document.createElement("small"); nota.textContent = "Hacha: " + etq(RECETAS.hacha) + " · Pico: " + etq(RECETAS.pico); p.appendChild(nota);
 }
-{ const b = document.createElement("button"); b.className = "it"; b.innerHTML = "<span>🎒</span><small>Inventario</small>"; b.onclick = () => { const v = $("invp").hidden; $("invp").hidden = !v; $("fab").hidden = true; $("mesa").hidden = true; hud(); }; $("barra").appendChild(b); botones.inv = b; }
+{ const b = document.createElement("button"); b.type = "button"; b.className = "b3d it b-morado"; b.innerHTML = "<span>🎒</span><small>Inventario</small>"; b.onclick = () => { const v = $("invp").hidden; $("invp").hidden = !v; $("fab").hidden = true; $("mesa").hidden = true; hud(); }; $("barra").appendChild(b); botones.inv = b; }
 
 // ----- Mesa de creaciones (cuadrícula 3×3) -----
 // Funciona como el crafteo 2×2, pero con 9 casillas: toca un material del inventario y luego una casilla para ponerlo (un toque = una unidad);
@@ -541,7 +542,7 @@ function pintarMesa() {
   p.appendChild(fila);
   const nota = document.createElement("small"); nota.textContent = "Lanza: 🪨 🪨 arriba, 🪢 en medio y 🪵 abajo en diagonal (" + USOS_LANZA + " usos)"; p.appendChild(nota);
 }
-{ const b = document.createElement("button"); b.className = "it"; b.innerHTML = "<span>🛠️</span><small>Mesa</small>"; b.onclick = () => { const v = $("mesa").hidden; $("mesa").hidden = !v; $("invp").hidden = true; $("fab").hidden = true; hud(); }; $("barra").appendChild(b); botones.mesa = b; }
+{ const b = document.createElement("button"); b.type = "button"; b.className = "b3d it b-oro"; b.innerHTML = "<span>🛠️</span><small>Mesa</small>"; b.onclick = () => { const v = $("mesa").hidden; $("mesa").hidden = !v; $("invp").hidden = true; $("fab").hidden = true; hud(); }; $("barra").appendChild(b); botones.mesa = b; }
 
 // ----- Puntos al perfil (1 por cada 5 recursos, por lotes) -----
 async function enviar(min) {
@@ -573,7 +574,12 @@ function iniciar(nueva) {
   camx = iso(pj.x, pj.y)[0]; camy = iso(pj.x, pj.y)[1];
   hud();
 }
-$("nueva").onclick = () => { if (confirm("¿Crear una isla nueva? Se perderá la actual.")) { try { localStorage.removeItem(GUARDA); } catch (e) {} iniciar(true); } };
+function confirmar(texto, alAceptar) {   // confirm() saca al navegador de la pantalla completa: se usa un aviso dentro de la página
+  $("confTxt").textContent = texto; $("confirmar").hidden = false;
+  $("confSi").onclick = () => { $("confirmar").hidden = true; alAceptar(); };
+  $("confNo").onclick = () => { $("confirmar").hidden = true; };
+}
+$("nueva").onclick = () => confirmar("¿Crear una isla nueva? Se perderá la actual.", () => { try { localStorage.removeItem(GUARDA); } catch (e) {} iniciar(true); });
 setInterval(guardar, 10000);
 addEventListener("pagehide", () => { guardar(); enviar(1); });
 document.addEventListener("visibilitychange", () => { if (document.hidden) { guardar(); enviar(1); } });

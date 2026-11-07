@@ -23,6 +23,7 @@ const NIVELES = [
 const TONOS = [0, 22, 48, 120, 165, 198, 225, 265, 300, 335];
 
 const $ = (id) => document.getElementById(id);
+const COLOR_NIVEL = ["b-verde", "b-azul", "b-morado", "b-oro", "b-rojo"];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // Puntos con sesión de Google (si no hay sesión o conexión, el juego funciona igual)
@@ -424,7 +425,8 @@ function hudNiveles() {
   z.innerHTML = "";
   for (let i = 1; i <= NIVELES.length; i++) {
     const b = document.createElement("button");
-    b.className = "btn sec" + (i === nivel ? " on" : "");
+    b.className = "b3d chico txt " + COLOR_NIVEL[i - 1] + (i === nivel ? " on" : ""); // un color por nivel (más difícil = más oscuro/intenso)
+    b.setAttribute("aria-label", "Nivel " + i + (i > prog.max ? " (bloqueado)" : ""));
     b.textContent = i;
     b.disabled = i > prog.max;
     b.addEventListener("click", () => cargarNivel(i));

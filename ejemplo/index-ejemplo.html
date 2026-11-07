@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- Ruta: ejemplo/index-ejemplo.html (página del juego «ejemplo», NO es el portal) -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Reflejos</title>
+  <meta name="theme-color" content="#101114" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 30%, #23252b, #101114 70%); }
+    /* Juego de ventana completa: el área ocupa toda la pantalla */
+    #area { position: fixed; inset: 0; touch-action: none; overflow: hidden; }
+    #blanco { position: absolute; width: 48px; height: 48px; --t: 48px; border-radius: 50%; margin: 0; }
+    #inicio { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; }
+    #inicio:active:not(:disabled) { transform: translate(-50%, calc(-50% + 4px)); }
+    #estado { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 4; margin: 0; max-width: min(90vw, 420px); padding: 8px 14px; font-size: 13px; text-align: center; color: #fff; background: #101114e6; border: 2px solid #3b3e46; border-radius: 12px; pointer-events: none; }
+    #estado:empty { display: none; }
+  </style>
+</head>
+<body class="inmersivo" data-pantalla-auto>
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
+    <span class="chip"><small>Pts</small><b id="marcador">0</b></span>
+    <span class="chip"><small>⏱</small><b id="tiempo">15</b></span>
+  </div>
+  <div class="hud hud-der">
+    <button class="b3d chico b-azul" id="entrar" type="button" hidden aria-label="Entrar con Google para guardar puntos" title="Entrar con Google para guardar puntos"><span class="b-ico">🔑</span></button>
+  </div>
+
+  <div id="area">
+    <button id="blanco" class="b3d b-morado" type="button" hidden aria-label="Blanco"><span class="b-ico">🎯</span></button>
+    <button id="inicio" class="b3d txt grande b-verde" type="button"><span class="b-ico">▶️</span> Jugar</button>
+  </div>
+  <p id="estado"></p>
+
+  <script type="module" src="juego-ejemplo.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>

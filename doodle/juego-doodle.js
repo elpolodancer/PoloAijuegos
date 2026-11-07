@@ -76,6 +76,7 @@ function empezar() {
   preparar();
   dir = 0; vivo = true; ultimo = performance.now();
   jugar.hidden = true;
+  $("velo").hidden = true;
   estado.textContent = "";
   requestAnimationFrame(ciclo);
 }
@@ -272,6 +273,7 @@ async function fin() {
   vivo = false;
   dibujar();
   jugar.hidden = false;
+  $("velo").hidden = false;
   jugar.textContent = "Jugar otra vez";
   const n = puntos();
   estado.textContent = "¡Caíste! Subiste " + metros() + " m, juntaste " + nMonedas + " monedas y derrotaste " + nEnemigos + " enemigos: " + n + " puntos.";

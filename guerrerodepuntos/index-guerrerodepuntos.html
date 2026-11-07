@@ -1,35 +1,53 @@
 <!doctype html>
 <!-- Ruta: guerrerodepuntos/index-guerrerodepuntos.html -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Devorador</title>
-  <meta name="theme-color" content="#1b2330" />
+  <meta name="theme-color" content="#101114" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    #lienzo { background: #12203a; max-width: 400px; cursor: pointer; }
-    .centro { text-align: center; }
-    .botones { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-    #ayuda { font-size: .85rem; color: var(--suave); max-width: 400px; margin: 8px auto; }
+    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 30%, #23252b, #101114 70%); }
+    /* Juego vertical (360×600): se deja libre una franja arriba para los botones flotantes */
+    .inmersivo .escena { padding-top: calc(54px + env(safe-area-inset-top, 0px)); }
+    .inmersivo .marco { aspect-ratio: 360 / 600;
+      width: min(100vw, calc((100vh - 54px) * 0.6));
+      width: min(100vw, calc((100dvh - 54px - env(safe-area-inset-top, 0px)) * 0.6)); }
+    #lienzo { cursor: pointer; }
+    .arriba-centro { position: absolute; left: 0; right: 0; top: 14%; display: flex; justify-content: center; z-index: 3; pointer-events: none; }
+    .arriba-centro .b3d { pointer-events: auto; }
+    .ayuda-flota { position: absolute; left: 6%; right: 6%; top: 8%; margin: 0; padding: 10px 12px; text-align: center; font-size: .8rem; line-height: 1.4; background: rgba(10,10,12,.82); border-radius: 12px; pointer-events: none; animation: desv .6s 10s forwards; }
+    @keyframes desv { to { opacity: 0; visibility: hidden; } }
+    #confirmar { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; text-align: center; background: rgba(10,10,12,.86); }
+    #confirmar p { margin: 0; max-width: 260px; line-height: 1.45; }
+    #confirmar .fila { display: flex; gap: 10px; }
   </style>
 </head>
-<body>
-  <header class="barra">
-    <a class="volver" href="../">← Juegos</a>
-    <h1>🐲 Devorador</h1>
-    <div id="sesion"></div>
-  </header>
-  <main class="centro">
-    <p id="estado"></p>
-    <canvas id="lienzo" class="lienzo" width="360" height="600"></canvas>
-    <div class="botones">
-      <button class="btn" id="mapa">🗺️ Ver mapa</button>
-      <button class="btn" id="accion" hidden>Reintentar</button>
-      <button class="btn" id="reiniciar">Reiniciar nivel</button>
+<body class="inmersivo" data-pantalla-auto>
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
+    <button class="b3d chico b-azul" id="mapa" type="button" aria-label="Ver mapa" title="Ver mapa">🗺️</button>
+    <button class="b3d chico b-rojo" id="reiniciar" type="button" aria-label="Reiniciar nivel" title="Reiniciar nivel"><span class="b-ico">🔄</span></button>
+  </div>
+  <div class="hud hud-der"><span class="chip" id="estado"></span></div>
+  <div class="hud hud-abajo"><div id="sesion"></div></div>
+
+  <div class="escena">
+    <div class="marco">
+      <canvas id="lienzo" class="lienzo" width="360" height="600"></canvas>
+      <p class="ayuda-flota">Toca una zona unida a la tuya para saltar a ella. Si el enemigo tiene un nivel menor que el tuyo, lo vences y sumas su nivel al tuyo. Arrastra para mirar el mapa. Solo ves las zonas junto a las que has estado. Ojo: una zona vacía puede ser una trampa.</p>
+      <div class="arriba-centro"><button class="b3d txt grande b-verde" id="accion" type="button" hidden>Reintentar</button></div>
+      <div id="confirmar" hidden>
+        <p>¿Reiniciar el nivel desde cero? Perderás todo tu avance.</p>
+        <div class="fila">
+          <button class="b3d txt b-rojo" id="confSi" type="button">Sí, reiniciar</button>
+          <button class="b3d txt b-gris" id="confNo" type="button">Cancelar</button>
+        </div>
+      </div>
     </div>
-    <p id="ayuda">Toca una zona unida a la tuya para saltar a ella. Si el enemigo tiene un nivel menor que el tuyo, lo vences y sumas su nivel al tuyo. Arrastra para mirar el mapa. Solo ves las zonas junto a las que has estado. Ojo: una zona vacía puede ser una trampa.</p>
-  </main>
+  </div>
   <script type="module" src="juego-guerrerodepuntos.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>

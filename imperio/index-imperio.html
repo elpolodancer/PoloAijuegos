@@ -1,76 +1,135 @@
 <!doctype html>
 <!-- Ruta: imperio/index-imperio.html -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Imperio</title>
-  <meta name="theme-color" content="#1b2330" />
+  <meta name="theme-color" content="#101114" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    html, body { height: 100%; overflow: hidden; }
-    body { display: flex; flex-direction: column; }
-    .barra { padding: 6px 12px; flex: none; }
-    .datos { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-weight: 700; }
-    #dinero { color: #ffd23f; }
-    #oleada, #pobl, #botin { color: var(--suave); font-weight: 400; font-size: .85rem; }
-    #zona { position: relative; flex: 1; min-height: 0; }
-    #lienzo { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
-    #aviso { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: #000b; padding: 6px 12px; border-radius: 999px; font-size: .85rem; pointer-events: none; }
-    .zoom { position: absolute; top: 8px; right: 8px; display: flex; flex-direction: column; gap: 6px; }
-    #inferior { flex: none; padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); background: var(--tarjeta); border-top: 1px solid var(--borde); }
-    #inv { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
-    .ranura { min-width: 62px; min-height: 1.7em; padding: 3px 6px; font-size: .72rem; color: var(--suave); border: 1px dashed var(--borde); border-radius: 6px; }
-    .ranura.llena { color: var(--texto); background: var(--fondo); border-style: solid; }
-    #seleccion { font-size: .85rem; color: var(--suave); margin-bottom: 6px; min-height: 1.2em; }
-    #acciones { display: flex; flex-wrap: wrap; gap: 6px; }
-    #acciones .btn { padding: 6px 10px; font-size: .82rem; }
-    #bReino { position: absolute; top: 8px; left: 8px; z-index: 3; }
-    #bCrea { position: absolute; top: 50px; left: 8px; z-index: 3; }
-    #bTropas { position: absolute; top: 92px; left: 8px; z-index: 3; }
-    #reino, #crea, #tropas { position: absolute; top: 134px; left: 8px; z-index: 3; width: min(340px, calc(100% - 16px)); max-height: calc(100% - 150px); overflow: auto; display: flex; flex-direction: column; gap: 6px; padding: 10px; background: #1b2036ee; border: 1px solid var(--borde); border-radius: 12px; font-size: .85rem; }
-    #reino .resumen, #crea .resumen, #tropas .resumen { font-weight: 700; } #reino p, #crea p, #tropas p { margin: 0; color: var(--suave); }
+    html.inmersivo { --fondo-juego: #101114; }
+    :root { --safe-t: max(8px, env(safe-area-inset-top)); --safe-l: max(8px, env(safe-area-inset-left)); }
+
+    /* Juego de ventana completa: el lienzo ocupa toda la pantalla y todo lo demás flota encima */
+    #zona { position: fixed; inset: 0; }
+    #lienzo { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; background: #101114; }
+
+    /* Botones .btn creados por el JS (acciones, listas, menú): aspecto 3D de inmersivo.css */
+    .btn { --c1: #b6f7a6; --c2: #3fcf4a; --c3: #1d7f2a; position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; min-height: 38px; margin: 0 0 5px; padding: 0 14px;
+      font: inherit; font-size: 14px; font-weight: 800; white-space: nowrap; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35); cursor: pointer; touch-action: manipulation;
+      background: linear-gradient(180deg, var(--c1) 0%, var(--c2) 55%, var(--c3) 140%); border: 2px solid var(--c3); border-radius: 13px;
+      box-shadow: 0 4px 0 var(--c3), 0 6px 8px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.55); transition: transform .07s, box-shadow .07s; }
+    .btn:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--c3), inset 0 2px 0 rgba(255,255,255,.45); }
+    .btn:disabled { filter: grayscale(.85) brightness(.7); opacity: 1; cursor: default; }
+    .btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+    .btn.sec { --c1: #d5d9e0; --c2: #8b93a0; --c3: #4f5662; }
+    .b-negro { --c1: #8a8f9c; --c2: #3c404a; --c3: #15171a; }
+
+    /* Marcadores */
+    .hud-izq { flex-wrap: wrap; gap: 6px; max-width: calc(100vw - 80px); }
+    .hud .chip { height: 30px; padding: 0 10px; font-size: 13px; }
+    #botin { height: 26px; font-size: 12px; font-weight: 600; color: #e8e9ed; }
+    .hud-sub { top: calc(var(--safe-t) + 42px); }
+    .hud-col { flex-direction: column; align-items: flex-start; gap: 0; }
+    .hud-col.izq { top: calc(var(--safe-t) + 78px); left: var(--safe-l); }
+    .hud-col.der { align-items: flex-end; }
+
+    #aviso { position: fixed; z-index: 6; top: calc(var(--safe-t) + 46px); left: 50%; transform: translateX(-50%); max-width: min(90vw, 460px); padding: 6px 14px; font-size: 13px; text-align: center; color: #fff; background: #101114e6; border: 2px solid #3b3e46; border-radius: 999px; pointer-events: none; }
+
+    /* Paneles de Reino / Creaciones / Tropas: junto a la columna de botones, con scroll interno */
+    #reino, #crea, #tropas { position: fixed; z-index: 5; top: calc(var(--safe-t) + 78px); left: calc(var(--safe-l) + 52px); width: min(330px, calc(100vw - var(--safe-l) - 64px));
+      max-height: calc(100dvh - var(--safe-t) - 78px - 170px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; display: flex; flex-direction: column; gap: 6px; padding: 10px;
+      color: var(--texto); background: #15171af2; border: 2px solid #3b3e46; border-radius: 14px; font-size: .85rem; }
+    #reino .resumen, #crea .resumen, #tropas .resumen { font-weight: 700; }
+    #reino p, #crea p, #tropas p { margin: 0; color: var(--suave); }
+    .soldado { padding: 8px 10px; font: inherit; font-size: .82rem; text-align: left; color: var(--texto); background: #1e2025; border: 2px solid #3b3e46; border-radius: 10px; cursor: pointer; }
     .soldado:disabled { opacity: .5; cursor: default; }
-    .soldado { padding: 8px 10px; font: inherit; font-size: .82rem; text-align: left; color: var(--texto); background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; cursor: pointer; }
-    .soldado.activo { border-color: var(--acento); }
-    #menu { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; padding: 16px; overflow: auto; background: radial-gradient(circle at 50% 30%, #25304a, #0b0e18); }
-    #menu > div { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(420px, 100%); text-align: center; }
+    .soldado.activo { border-color: #fff; background: #2b2f35; }
+
+    /* Barra inferior flotante: inventario, texto de la selección y acciones (con scroll horizontal) */
+    #inferior { position: fixed; z-index: 5; left: var(--safe-l); right: var(--safe-l); bottom: max(8px, env(safe-area-inset-bottom)); padding: 8px 58px 3px 10px; background: #101114e6; border: 2px solid #3b3e46; border-radius: 16px; min-width: 0; }
+    #inv { display: flex; flex-wrap: nowrap; gap: 4px; margin-bottom: 4px; overflow-x: auto; scrollbar-width: none; touch-action: pan-x; }
+    #inv::-webkit-scrollbar, #acciones::-webkit-scrollbar { display: none; }
+    .ranura { flex: none; min-width: 58px; min-height: 1.7em; padding: 3px 6px; font-size: .7rem; color: var(--suave); border: 1px dashed #3b3e46; border-radius: 6px; }
+    .ranura.llena { color: var(--texto); background: #1e2025; border-style: solid; }
+    #seleccion { margin-bottom: 6px; min-height: 1.2em; font-size: .78rem; line-height: 1.3; color: #c9ccd3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    #acciones { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; touch-action: pan-x; }
+    #acciones .btn { min-height: 36px; font-size: 13px; }
+    /* color por unidad: Recolector azul, Constructor naranja, Guerrero morado; «Siguiente libre» gris; lo demás verde */
+    #acciones .btn:nth-child(1) { --c1: #a8e2ff; --c2: #2f9bff; --c3: #14589f; }
+    #acciones .btn:nth-child(2) { --c1: #fff08c; --c2: #ffb020; --c3: #a85d00; }
+    #acciones .btn:nth-child(3) { --c1: #e3bcff; --c2: #a14df0; --c3: #62209f; }
+    #acciones .btn:nth-child(4) { --c1: #d5d9e0; --c2: #8b93a0; --c3: #4f5662; }
+
+    /* Menú y fin de partida */
+    #menu { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: calc(var(--safe-t) + 50px) 16px 24px; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; background: radial-gradient(circle at 50% 30%, #23252b, #101114 70%); }
+    #menu > div { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(420px, 100%); margin: auto; text-align: center; }
     #menu h1 { font-size: 2.4rem; margin: 0 0 12px; } #menu h2 { margin: 0; }
-    .grande { width: 100%; padding: 16px; font-size: 1.1rem; }
-    .sec { background: #2c3350; }
-    .nueva { display: flex; gap: 8px; width: 100%; } .nueva input { flex: 1; min-width: 0; padding: 8px 10px; font: inherit; color: var(--texto); background: var(--fondo); border: 1px solid var(--borde); border-radius: 10px; }
+    .grande { width: 100%; min-height: 58px; font-size: 1.1rem; }
+    #bNiv { --c1: #a8e2ff; --c2: #2f9bff; --c3: #14589f; }
+    .nueva { display: flex; gap: 8px; width: 100%; align-items: flex-start; } .nueva input { flex: 1; min-width: 0; height: 42px; padding: 0 10px; font: inherit; color: var(--texto); background: #1e2025; border: 2px solid #3b3e46; border-radius: 12px; }
     #partidas { width: 100%; display: flex; flex-direction: column; gap: 8px; color: var(--suave); }
-    .fila { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; text-align: left; color: var(--texto); }
+    .fila { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #1e2025; border: 2px solid #3b3e46; border-radius: 12px; text-align: left; color: var(--texto); }
     .fila span { flex: 1; min-width: 0; display: flex; flex-direction: column; } .fila small { color: var(--suave); }
-    #fin { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: #000c; text-align: center; padding: 20px; }
+    .fila .btn { margin-bottom: 5px; }
+    .fila .btn.sec { --c1: #ffb3a8; --c2: #f0483a; --c3: #8f1c12; }
+    #fin, #confirmar { position: fixed; inset: 0; z-index: 7; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; text-align: center; background: #000c; }
+    #confirmar { z-index: 9; }
+    #confirmar .fila { gap: 10px; background: none; border: 0; }
+    #confTxt { max-width: 32ch; margin: 0; font-size: 1.05rem; }
   </style>
 </head>
-<body>
-  <header class="barra">
-    <a class="volver" href="../index.html">← Juegos</a>
-    <div class="datos" id="datos" hidden><span id="dinero">$0</span><span id="pobl"></span><span id="botin"></span></div>
-    <button class="btn" id="bMenu" hidden>Guardar y salir</button>
-  </header>
+<body class="inmersivo" data-pantalla-auto>
+  <!-- Arriba a la izquierda: 🏠 y marcadores (el dinero y los demás solo se ven jugando) -->
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
+    <div class="hud" id="datos" style="position:static;gap:6px" hidden>
+      <span class="chip" id="dinero" title="Dinero">$0</span>
+      <span class="chip" id="pobl" title="Unidades"></span>
+    </div>
+  </div>
+  <div class="hud hud-izq hud-sub" style="left:calc(var(--safe-l) + 46px)"><span class="chip" id="botin" title="Botín de caza"></span></div>
+
+  <!-- Columna izquierda: paneles -->
+  <div class="hud hud-col izq">
+    <button class="b3d chico b-oro" id="bReino" type="button" hidden aria-label="Reino" title="Reino: tus soldados"><span class="b-ico">👑</span></button>
+    <button class="b3d chico b-azul" id="bCrea" type="button" hidden aria-label="Creaciones" title="Creaciones: fabricar y construir"><span class="b-ico">🛠️</span></button>
+    <button class="b3d chico b-rojo" id="bTropas" type="button" hidden aria-label="Seleccionar tropas" title="Seleccionar tropas"><span class="b-ico">🎯</span></button>
+  </div>
+  <!-- Columna derecha: guardar y salir, zoom -->
+  <div class="hud hud-der hud-col der">
+    <button class="b3d chico b-negro" id="bMenu" type="button" hidden aria-label="Guardar y salir" title="Guardar y salir"><span class="b-ico">💾</span></button>
+    <button class="b3d chico b-gris" id="zmas" type="button" aria-label="Acercar" title="Acercar"><span class="b-ico">＋</span></button>
+    <button class="b3d chico b-gris" id="zmenos" type="button" aria-label="Alejar" title="Alejar"><span class="b-ico">－</span></button>
+  </div>
+
   <div id="zona">
     <canvas id="lienzo"></canvas>
     <div id="aviso" hidden></div>
-    <button class="btn" id="bReino" hidden>👑 Reino</button>
-    <button class="btn" id="bCrea" hidden>🛠️ Creaciones</button>
     <div id="reino" hidden></div>
-    <button class="btn" id="bTropas" hidden>🎯 Seleccionar tropas</button>
     <div id="crea" hidden></div>
     <div id="tropas" hidden></div>
-    <div class="zoom"><button class="btn" id="zmas" aria-label="Acercar">+</button><button class="btn" id="zmenos" aria-label="Alejar">−</button></div>
+
     <div id="menu">
-      <div id="mPrincipal"><h1>🏛️ Imperio</h1><button class="btn grande" id="bPers">Partida personalizada</button><button class="btn grande" id="bNiv">Niveles</button></div>
+      <div id="mPrincipal"><h1>🏛️ Imperio</h1><button class="btn grande" id="bPers" type="button">Partida personalizada</button><button class="btn grande" id="bNiv" type="button">Niveles</button></div>
       <div id="mPers" hidden><h2>Partida personalizada</h2>
-        <div class="nueva"><input id="nombre" maxlength="24" placeholder="Nombre de la partida" /><button class="btn" id="crear">Crear partida</button></div>
-        <div id="partidas"></div><button class="btn sec" id="vPers">Volver</button></div>
-      <div id="mNiv" hidden><h2>Niveles</h2><p>Aquí irán los niveles con distintas temáticas. Por ahora no hay ninguno.</p><button class="btn sec" id="vNiv">Volver</button></div>
+        <div class="nueva"><input id="nombre" maxlength="24" placeholder="Nombre de la partida" /><button class="btn" id="crear" type="button">Crear partida</button></div>
+        <div id="partidas"></div><button class="btn sec" id="vPers" type="button">Volver</button></div>
+      <div id="mNiv" hidden><h2>Niveles</h2><p>Aquí irán los niveles con distintas temáticas. Por ahora no hay ninguno.</p><button class="btn sec" id="vNiv" type="button">Volver</button></div>
     </div>
-    <div id="fin" hidden><h2>Fin de la partida</h2><p id="finTxt"></p><button class="btn" id="otra">Empezar de nuevo</button></div>
+    <div id="fin" hidden><h2>Fin de la partida</h2><p id="finTxt"></p><button class="btn" id="otra" type="button">Empezar de nuevo</button></div>
   </div>
+
   <div id="inferior"><div id="inv"></div><div id="seleccion"></div><div id="acciones"></div></div>
+
+  <!-- Sustituye a confirm(): no saca al navegador de la pantalla completa -->
+  <div id="confirmar" hidden>
+    <p id="confTxt"></p>
+    <div class="fila"><button class="btn" id="confSi" type="button">Borrar</button><button class="btn sec" id="confNo" type="button">Cancelar</button></div>
+  </div>
+
   <script type="module" src="juego-imperio.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>

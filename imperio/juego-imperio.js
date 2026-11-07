@@ -669,6 +669,14 @@ function guardar() {
 }
 function pantalla(id) { $("menu").hidden = !id; ["mPrincipal", "mPers", "mNiv"].forEach((m) => ($(m).hidden = m != id)); $("datos").hidden = !!id; $("bMenu").hidden = !!id; $("bReino").hidden = !!id; $("bCrea").hidden = !!id; $("bTropas").hidden = !!id; teclas.clear(); if (id) { $("reino").hidden = true; $("crea").hidden = true; $("tropas").hidden = true; } if (id == "mPers") listar(); }
 function entrar() { $("fin").hidden = true; jugando = true; pantalla(null); ult = performance.now(); panel(); }
+// Sustituye a confirm(): un aviso dentro de la página (confirm() saca al navegador de la pantalla completa)
+function preguntar(texto) {
+  $("confTxt").textContent = texto; $("confirmar").hidden = false;
+  return new Promise((res) => {
+    const fin = (r) => { $("confirmar").hidden = true; $("confSi").onclick = $("confNo").onclick = null; res(r); };
+    $("confSi").onclick = () => fin(true); $("confNo").onclick = () => fin(false);
+  });
+}
 function listar() {
   const z = $("partidas"), l = leer().sort((a, b) => b.fecha - a.fecha); z.innerHTML = "";
   if (!l.length) z.textContent = "Todavía no tienes partidas. Crea la primera.";
@@ -677,7 +685,7 @@ function listar() {
     f.className = "fila"; t.innerHTML = "<b></b><small></small>"; t.firstChild.textContent = p.nombre;
     t.lastChild.textContent = "$" + Math.floor(p.estado.dinero) + " · " + new Date(p.fecha).toLocaleDateString();
     j.className = "btn"; j.textContent = "Jugar"; j.addEventListener("click", () => { slot = { id: p.id, nombre: p.nombre }; cargar(p.estado); entrar(); });
-    d.className = "btn sec"; d.textContent = "Borrar"; d.addEventListener("click", () => { if (confirm("¿Borrar «" + p.nombre + "»?")) { escribir(leer().filter((x) => x.id != p.id)); listar(); } });
+    d.className = "btn sec"; d.textContent = "Borrar"; d.addEventListener("click", async () => { if (await preguntar("¿Borrar «" + p.nombre + "»?")) { escribir(leer().filter((x) => x.id != p.id)); listar(); } });
     f.append(t, j, d); z.appendChild(f);
   });
 }

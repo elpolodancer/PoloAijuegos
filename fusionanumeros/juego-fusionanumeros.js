@@ -142,7 +142,7 @@ function terminar() {
   if (puntos > record.puntos) record.puntos = puntos;
   guardar();
   enviarPuntos();
-  $("ftexto").textContent = "Puntos: " + fmt(puntos) + " · Bloque más alto: " + fmt(maxBloque);
+  $("ftexto").textContent = "Puntos: " + fmt(puntos) + " · Bloque más alto: " + fmt(maxBloque) + " · Récord: " + fmt(record.bloque);
   $("fin").hidden = false;
 }
 
@@ -224,12 +224,12 @@ function bloque(x, y, tam, v, escala, alfa) {
 }
 
 function dibujar() {
-  ctx.fillStyle = "#0f1220";
+  ctx.fillStyle = "#121316";
   ctx.fillRect(0, 0, W, H);
 
   // tablero
   rr(BX - 6, BY - 6, COLS * CELDA + 12, FILAS * CELDA + 12, 14);
-  ctx.fillStyle = "#1b2036";
+  ctx.fillStyle = "#1e2025";
   ctx.fill();
   for (let c = 0; c < COLS; c++) {
     ctx.fillStyle = c === hover && estado === "listo" ? "rgba(124,92,255,.22)" : c % 2 ? "rgba(255,255,255,.03)" : "rgba(255,255,255,.07)";
@@ -265,7 +265,7 @@ function dibujar() {
     if (estado === "listo") bloque(xCol(hover), 24, CELDA, actual, 1, 1);
     ctx.font = "12px system-ui,sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = "#aab2d8";
+    ctx.fillStyle = "#b0b4bd";
     ctx.fillText("Siguiente", 322, 24);
     bloque(300, 28, 44, siguiente, 1, 1);
   }

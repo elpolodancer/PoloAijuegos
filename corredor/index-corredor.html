@@ -1,27 +1,41 @@
 <!doctype html>
 <!-- Ruta: corredor/index-corredor.html (página del juego «corredor») -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Corredor</title>
+  <meta name="theme-color" content="#15161a" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    html.inmersivo { --fondo-juego: #101114; }
+    /* Juego vertical (360×560): el marco se ajusta a la altura de la ventana */
+    .inmersivo .marco { aspect-ratio: 360 / 560;
+      width: min(100vw, calc(100vh * 360 / 560));
+      width: min(100vw, calc(100dvh * 360 / 560)); }
+    #velo { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; text-align: center; background: rgba(10,10,12,.8); overflow-y: auto; }
+    #velo h2 { margin: 0; font-size: 1.6rem; }
+    #velo p { margin: 0; max-width: 320px; font-size: .9rem; line-height: 1.45; }
+    #estado { min-height: 1.2em; }
+    .ayuda { color: var(--suave); }
+  </style>
 </head>
-<body>
-  <header class="barra">
-    <a class="volver" href="../index.html">‹ Juegos</a>
-    <h1>🏃 Corredor</h1>
-  </header>
-  <main>
-    <canvas id="lienzo" class="lienzo" width="360" height="560"></canvas>
-    <p id="estado">Flechas o A/D: cambiar de carril · ↑, W o espacio: saltar · ↓ o S: agacharte. En el celular, desliza el dedo hacia donde quieras ir.</p>
-    <p style="color: var(--suave); font-size: 0.9rem; line-height: 1.5;">
-      Salta las barreras naranjas, agáchate bajo las barras amarillas y cambia de carril para esquivar los trenes.
-      Un golpe te hace tropezar; si chocas otra vez en 2,5 segundos, te atrapan. Junta monedas y el imán 🧲 para atraerlas.
-    </p>
-    <button id="jugar" class="btn" type="button">Jugar</button>
-    <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
-  </main>
+<body class="inmersivo" data-pantalla-auto>
+  <div class="escena">
+    <div class="marco">
+      <canvas id="lienzo" class="lienzo" width="360" height="560"></canvas>
+      <div id="velo">
+        <h2>🏃 Corredor</h2>
+        <p id="estado">Flechas o A/D: cambiar de carril · ↑, W o espacio: saltar · ↓ o S: agacharte. En el celular, desliza el dedo hacia donde quieras ir.</p>
+        <p class="ayuda">Salta las barreras naranjas, agáchate bajo las barras amarillas y cambia de carril para esquivar los trenes. Un golpe te hace tropezar; si chocas otra vez en 2,5 segundos, te atrapan. Junta monedas y el imán 🧲 para atraerlas.</p>
+        <button id="jugar" class="b3d txt grande b-verde" type="button">Jugar</button>
+        <button id="entrar" class="b3d txt chico b-azul" type="button" title="Entrar con Google para guardar puntos" hidden>👤 Entrar con Google</button>
+      </div>
+    </div>
+  </div>
+  <div class="hud hud-abajo"><a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a></div>
   <script type="module" src="juego-corredor.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>

@@ -1,40 +1,41 @@
 <!doctype html>
 <!-- Ruta: hoyo/index-hoyo.html -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Hoyo</title>
-  <meta name="theme-color" content="#1b2330" />
+  <meta name="theme-color" content="#101114" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
-    #c { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; user-select: none; display: block; }
-    a.volver { position: fixed; top: calc(8px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 5; padding: 6px 10px; background: rgba(15,18,32,.7); border-radius: 999px; font-size: .85rem; }
-    #fin { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 20px; text-align: center; background: rgba(15,18,32,.88); }
+    html.inmersivo { --fondo-juego: #101114; }
+    #c { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none; display: block; }
+    #fin { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; text-align: center; background: rgba(10,10,12,.84); overflow-y: auto; }
     #fin h2 { margin: 0; font-size: 1.8rem; }
+    #fin p { margin: 0; max-width: 380px; color: #e3e5ea; font-size: .92rem; line-height: 1.45; }
     #fin ol { margin: 0; padding: 0; list-style: none; color: var(--suave); line-height: 1.7; }
     #fin ol b { color: var(--texto); }
     #mapas { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-    #mapas .btn { opacity: .6; }
-    #mapas .btn.sel { opacity: 1; outline: 2px solid #fff; outline-offset: 2px; }
     #msg { color: var(--suave); font-size: .85rem; min-height: 1.2em; }
   </style>
 </head>
-<body>
+<body class="inmersivo" data-pantalla-auto>
   <canvas id="c"></canvas>
-  <a class="volver" href="../">← Juegos</a>
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
+  </div>
   <div id="fin">
     <h2>🕳️ Hoyo</h2>
     <p>Arrastra el dedo para mover tu hoyo (o usa las flechas / WASD). Traga lo que quepa, crece y devora a los hoyos más chicos.</p>
     <ol id="rank"></ol>
     <div id="mapas" role="group" aria-label="Mapa">
-      <button class="btn sel" data-mapa="ciudad">🏙️ Ciudad</button>
-      <button class="btn" data-mapa="playa">🏝️ Playa con islas</button>
-      <button class="btn" data-mapa="campo">🌾 Campo gigante</button>
+      <button class="b3d txt b-azul on" data-mapa="ciudad" type="button">🏙️ Ciudad</button>
+      <button class="b3d txt b-oro" data-mapa="playa" type="button">🏝️ Playa con islas</button>
+      <button class="b3d txt b-verde" data-mapa="campo" type="button">🌾 Campo gigante</button>
     </div>
     <div id="msg"></div>
-    <button class="btn" id="jugar">Jugar</button>
+    <button class="b3d txt grande b-verde" id="jugar" type="button">Jugar</button>
   </div>
   <script type="module" src="juego-hoyo.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>

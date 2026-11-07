@@ -334,7 +334,8 @@ function modal(titulo, texto, botones) {
   zona.innerHTML = "";
   botones.forEach(([t, fn]) => {
     const b = document.createElement("button");
-    b.className = "btn grande";
+    b.type = "button";
+    b.className = "b3d txt " + (zona.children.length === 0 ? "b-verde" : "b-azul");
     b.textContent = t;
     b.addEventListener("click", fn);
     zona.appendChild(b);
@@ -352,8 +353,10 @@ function abrirMenu() {
   cont.innerHTML = "";
   for (let n = 1; n <= NIVELES; n++) {
     const b = document.createElement("button");
-    b.className = "nv" + (n < progreso ? " ok" : "");
+    b.type = "button";
+    b.className = "b3d chico " + (n < progreso ? "b-verde" : n === progreso ? "b-oro" : "b-gris");
     b.textContent = n;
+    b.setAttribute("aria-label", "Nivel " + n + (n < progreso ? " (pasado)" : n > progreso ? " (bloqueado)" : ""));
     b.disabled = n > progreso;
     b.addEventListener("click", () => empezar(n));
     cont.appendChild(b);
@@ -371,7 +374,7 @@ BOTONES.forEach(([id, , fn]) => $(id).addEventListener("click", () => { ac(); fn
 function actualizarBotones() {
   BOTONES.forEach(([id, k]) => {
     const b = $(id);
-    b.querySelector("i").textContent = usos[k];
+    b.querySelector(".b-info").textContent = usos[k];
     b.disabled = usos[k] <= 0 || estado !== "jugando";
   });
 }
@@ -385,13 +388,9 @@ lienzo.addEventListener("pointerdown", (e) => {
 });
 
 // ----- Tamaño en pantalla -----
-const escena = $("escena");
+const marco = $("marco");
 function ajustar() {
-  const alto = window.innerHeight - $("top").offsetHeight;
-  const ancho = Math.min(window.innerWidth, (alto * W) / H);
-  escena.style.width = ancho + "px";
-  escena.style.height = (ancho * H) / W + "px";
-  escena.style.setProperty("--u", ancho / W + "px");
+  marco.style.setProperty("--u", marco.clientWidth / W + "px");
 }
 window.addEventListener("resize", ajustar);
 ajustar();
@@ -436,14 +435,14 @@ function pintar() {
   c.save();
   c.shadowColor = "rgba(0,0,0,.35)"; c.shadowBlur = 10; c.shadowOffsetY = 4;
   rr(c, TRAY.x, TRAY.y, TRAY.w, TRAY.h, 18);
-  c.fillStyle = "#2a4a72"; c.fill();
+  c.fillStyle = "#3a3d45"; c.fill();
   c.restore();
   rr(c, TRAY.x, TRAY.y, TRAY.w, TRAY.h, 18);
-  c.lineWidth = 4; c.strokeStyle = "#c9dcf2"; c.stroke();
+  c.lineWidth = 4; c.strokeStyle = "#c9ccd3"; c.stroke();
   for (let i = 0; i < RANURAS; i++) {
     const [cx, cy] = centroRanura(i);
     rr(c, cx - SLOT_W / 2 + 3, cy - 27, SLOT_W - 6, 54, 10);
-    c.fillStyle = "rgba(10,25,45,.55)"; c.fill();
+    c.fillStyle = "rgba(10,10,12,.55)"; c.fill();
   }
   // tablero
   for (const f of orden) {

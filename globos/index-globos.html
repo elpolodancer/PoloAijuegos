@@ -1,61 +1,65 @@
 <!doctype html>
 <!-- Ruta: globos/index-globos.html -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Lluvia de globos</title>
+  <meta name="theme-color" content="#101114" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #123a63; font-family: system-ui, sans-serif; color: #fff; }
-    body { display: flex; flex-direction: column; align-items: center; }
-    .hud { width: 100%; max-width: 480px; display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; gap: 8px; font-weight: 700; }
-    .hud a { color: #d6ecff; text-decoration: none; font-size: 15px; }
-    .hud .dato { text-align: center; line-height: 1.1; font-size: 13px; opacity: .95; }
-    .hud .dato b { display: block; font-size: 20px; }
-    #zona { position: relative; flex: 1; min-height: 0; width: 100%; max-width: 480px; display: flex; justify-content: center; }
-    canvas { height: 100%; max-width: 100%; touch-action: none; border-radius: 18px 18px 0 0; box-shadow: 0 0 40px #0008; }
-    .velo { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: #0a2442cc; text-align: center; padding: 24px; border-radius: 18px 18px 0 0; }
-    .velo.activo { display: flex; }
-    .velo h2 { margin: 0; font-size: 30px; }
-    .velo p { margin: 0; opacity: .92; max-width: 320px; line-height: 1.45; }
-    .velo button { font: inherit; font-weight: 700; font-size: 18px; padding: 12px 32px; border: 0; border-radius: 999px; color: #5a1230; background: linear-gradient(#ffe27a, #ffb347); box-shadow: 0 4px 0 #b86b00; cursor: pointer; }
-    .velo button:active { transform: translateY(3px); box-shadow: 0 1px 0 #b86b00; }
-    .sonido { font-size: 20px; background: #ffffff22; border: 0; border-radius: 50%; width: 38px; height: 38px; color: #fff; cursor: pointer; }
-    .nivel { width: 100%; max-width: 480px; display: flex; align-items: center; gap: 10px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); font-weight: 700; font-size: 14px; }
-    .nivelbarra { flex: 1; height: 14px; overflow: hidden; background: #ffffff26; border: 1px solid #ffffff40; border-radius: 999px; }
-    .nivelbarra i { display: block; width: 0; height: 100%; background: linear-gradient(#ffe27a, #ffb347); border-radius: 999px; transition: width .35s ease; }
+    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 30%, #23252b, #101114 70%); }
+    /* Columna: franja de botones (fija) + marcadores + juego (460×760) + barra de nivel */
+    .inmersivo .escena { flex-direction: column; gap: 8px; padding: calc(54px + env(safe-area-inset-top, 0px)) 0 calc(6px + env(safe-area-inset-bottom, 0px)); }
+    .fila-chips, .pie { display: flex; align-items: center; justify-content: center; gap: 8px; flex: none; width: min(100vw, 520px); padding: 0 8px; }
+    .fila-chips .chip { height: 30px; padding: 0 10px; font-size: 13px; }
+    .pie { gap: 10px; }
+    .nivelbarra { flex: 1; height: 16px; overflow: hidden; background: rgba(255,255,255,.14); border: 2px solid #15171a; border-radius: 999px; }
+    .nivelbarra i { display: block; width: 0; height: 100%; background: linear-gradient(#ffe27a, #ffb020); border-radius: 999px; transition: width .35s ease; }
     @media (prefers-reduced-motion: reduce) { .nivelbarra i { transition: none; } }
-    button:focus-visible, a:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+    /* 54 (botones) + 38 (marcadores) + 40 (pie) + márgenes */
+    .inmersivo .marco { aspect-ratio: 460 / 760;
+      width: min(100vw, calc((100vh - 150px) * 460 / 760));
+      width: min(100vw, calc((100dvh - 150px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * 460 / 760)); }
+    .velo { position: absolute; inset: 0; z-index: 4; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; text-align: center; background: rgba(10,10,12,.84); overflow-y: auto; }
+    .velo.activo { display: flex; }
+    .velo h2 { margin: 0; font-size: 1.7rem; }
+    .velo p { margin: 0; max-width: 330px; font-size: .9rem; line-height: 1.45; color: #e3e5ea; }
   </style>
 </head>
-<body>
-  <div class="hud">
-    <a href="../index.html">← Juegos</a>
-    <div class="dato">Cubeta<b id="vidas">0%</b></div>
-    <div class="dato">Trofeos<b id="puntos">0</b></div>
-    <div class="dato">Récord<b id="record">0</b></div>
-    <button id="sonido" class="sonido" aria-label="Silenciar">🔊</button>
+<body class="inmersivo" data-pantalla-auto>
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
+    <button class="b3d chico b-gris" id="sonido" type="button" aria-label="Silenciar" title="Sonido">🔊</button>
   </div>
-  <div id="zona">
-    <canvas id="lienzo"></canvas>
-    <div id="inicio" class="velo activo">
-      <h2>🎈 Lluvia de globos</h2>
-      <p>Desliza el dedo por 3 o más globos del mismo color que se estén tocando para reventarlos: mientras más larga la línea, más trofeos. Con 6 sale una bomba, con 7 un eliminador de color y con 10 uno que elimina todo. Tócalos para usarlos.</p>
-      <p>Los globos con número bajan 1 en cada jugada. Si alguno llega a 0, pierdes.</p>
-      <button id="jugar">Jugar</button>
+  <div class="escena">
+    <div class="fila-chips">
+      <span class="chip" title="Qué tan llena está la cubeta"><small>Cubeta</small><b id="vidas">0%</b></span>
+      <span class="chip" title="Trofeos"><small>Trofeos</small><b id="puntos">0</b></span>
+      <span class="chip" title="Récord"><small>Récord</small><b id="record">0</b></span>
     </div>
-    <div id="fin" class="velo">
-      <h2 id="finTitulo">Se acabó</h2>
-      <p id="finTexto"></p>
-      <button id="otra">Jugar otra vez</button>
+    <div class="marco">
+      <canvas id="lienzo" class="lienzo"></canvas>
+      <div id="inicio" class="velo activo">
+        <h2>🎈 Lluvia de globos</h2>
+        <p>Desliza el dedo por 3 o más globos del mismo color que se estén tocando para reventarlos: mientras más larga la línea, más trofeos. Con 6 sale una bomba, con 7 un eliminador de color y con 10 uno que elimina todo. Tócalos para usarlos.</p>
+        <p>Los globos con número bajan 1 en cada jugada. Si alguno llega a 0, pierdes.</p>
+        <button class="b3d txt grande b-verde" id="jugar" type="button">Jugar</button>
+      </div>
+      <div id="fin" class="velo">
+        <h2 id="finTitulo">Se acabó</h2>
+        <p id="finTexto"></p>
+        <button class="b3d txt grande b-verde" id="otra" type="button">Jugar otra vez</button>
+      </div>
     </div>
-  </div>
-  <div class="nivel">
-    <span id="nivelTxt">Nivel 1</span>
-    <div class="nivelbarra"><i id="nivelRelleno"></i></div>
-    <span id="monedas">🪙 0</span>
+    <div class="pie">
+      <span class="chip" id="nivelTxt">Nivel 1</span>
+      <div class="nivelbarra"><i id="nivelRelleno"></i></div>
+      <span class="chip" id="monedas">🪙 0</span>
+    </div>
   </div>
   <script type="module" src="juego-globos.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>

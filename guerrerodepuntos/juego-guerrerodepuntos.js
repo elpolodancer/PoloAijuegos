@@ -42,7 +42,7 @@ function cargar(i) {
   decir(n.pista || "", 6000);
   calcularVisibles();
   $("accion").hidden = true;
-  $("mapa").textContent = "🗺️ Ver mapa";
+  $("mapa").textContent = "🗺️"; $("mapa").title = "Ver mapa";
   actualizarEstado();
 }
 
@@ -59,7 +59,8 @@ function fmt(n) {
 function actualizarEstado() {
   const n = NIVELES[idx];
   const v = zonas.filter((z) => z.visitada).length;
-  $("estado").textContent = n.nombre + " · Tu nivel: " + jug.nivel.toLocaleString("es-MX") + " · Zonas exploradas: " + v;
+  $("estado").textContent = "🐲 " + jug.nivel.toLocaleString("es-MX") + " · 📍 " + v;
+  $("estado").title = n.nombre + " · Tu nivel: " + jug.nivel.toLocaleString("es-MX") + " · Zonas exploradas: " + v;
 }
 function decir(t, ms = 2600) { aviso = t; avisoHasta = performance.now() + ms; }
 
@@ -121,15 +122,17 @@ cv.addEventListener("pointercancel", () => (arrastre = null));
 $("mapa").addEventListener("click", () => {
   modoMapa = !modoMapa;
   siguiendo = !modoMapa;
-  $("mapa").textContent = modoMapa ? "🎯 Volver a mi dragón" : "🗺️ Ver mapa";
+  $("mapa").textContent = modoMapa ? "🎯" : "🗺️";
+  $("mapa").title = modoMapa ? "Volver a mi dragón" : "Ver mapa";
+  $("mapa").setAttribute("aria-label", $("mapa").title);
 });
 $("accion").addEventListener("click", () => {
   if (estado === "ganado") cargar(idx + 1 < NIVELES.length ? idx + 1 : 0);
   else cargar(idx);
 });
-$("reiniciar").addEventListener("click", () => {
-  if (confirm("¿Reiniciar el nivel desde cero? Perderás todo tu avance.")) cargar(idx);
-});
+$("reiniciar").addEventListener("click", () => { $("confirmar").hidden = false; });
+$("confSi").addEventListener("click", () => { $("confirmar").hidden = true; cargar(idx); });
+$("confNo").addEventListener("click", () => { $("confirmar").hidden = true; });
 
 // ----- Reglas -----
 function volverAlInicio() {
@@ -234,8 +237,8 @@ function lineas(t, max) {
 function dibujar(ahora) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, "#0e1a33");
-  g.addColorStop(1, "#1d3b55");
+  g.addColorStop(0, "#15171c");
+  g.addColorStop(1, "#262b33");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 
@@ -350,8 +353,8 @@ function cuadro(ahora) {
     m.alCambiarSesion((u) => {
       zona.innerHTML = "";
       const b = document.createElement("button");
-      b.className = "btn";
-      b.textContent = u ? "Salir" : "Entrar con Google";
+      b.className = "b3d chico txt " + (u ? "b-gris" : "b-azul");
+      b.textContent = u ? "Salir" : "👤 Entrar con Google";
       b.addEventListener("click", () => (u ? m.salir() : m.entrar().catch((e) => alert(e.message))));
       zona.appendChild(b);
     });

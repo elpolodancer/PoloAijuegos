@@ -783,9 +783,9 @@ async function terminar() {
 }
 
 // ----- Menú: elegir mapa y jugar -----
-document.querySelectorAll("#mapas .btn").forEach((b) =>
+document.querySelectorAll("#mapas .b3d").forEach((b) =>
   b.addEventListener("click", () => {
-    document.querySelectorAll("#mapas .btn").forEach((x) => x.classList.toggle("sel", x === b));
+    document.querySelectorAll("#mapas .b3d").forEach((x) => x.classList.toggle("on", x === b));
     cargarMapa(b.dataset.mapa); // el fondo del menú muestra el mapa elegido
   })
 );

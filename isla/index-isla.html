@@ -1,51 +1,71 @@
 <!doctype html>
 <!-- Ruta: isla/index-isla.html -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Isla</title>
-  <meta name="theme-color" content="#123564" />
+  <meta name="theme-color" content="#101114" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    html, body { height: 100%; overflow: hidden; background: #123564; overscroll-behavior: none; }
+    html.inmersivo { --fondo-juego: #101114; }
     #mundo { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
-    .pildora { background: rgba(15,18,32,.72); border: 1px solid var(--borde); border-radius: 999px; padding: 5px 12px; font-weight: 700; backdrop-filter: blur(4px); }
-    #arriba { position: fixed; top: calc(8px + env(safe-area-inset-top, 0px)); left: 8px; right: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; pointer-events: none; }
+    .b3d.sel { transform: translateY(4px); filter: brightness(1.12); box-shadow: 0 1px 0 var(--c3), 0 0 0 3px #fff, 0 0 14px rgba(255,255,255,.55), inset 0 2px 0 rgba(255,255,255,.5); }
+    .b3d.no, .b3d.no:hover:not(:disabled) { filter: grayscale(.85) brightness(.75); }
+
+    #arriba { position: fixed; z-index: 5; top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; pointer-events: none; }
     #arriba > * { pointer-events: auto; }
     #arriba .sep { flex: 1; pointer-events: none; }
-    #arriba button { color: #fff; font: inherit; cursor: pointer; }
-    #aviso { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 10px; background: rgba(15,18,32,.85); opacity: 0; transition: opacity .3s; pointer-events: none; text-align: center; max-width: 90vw; }
-    #barra { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); }
-    .it { display: flex; flex-direction: column; align-items: center; min-width: 56px; padding: 5px 6px; color: #fff; font: inherit; cursor: pointer; background: rgba(15,18,32,.78); border: 2px solid var(--borde); border-radius: 12px; }
-    .it span { font-size: 1.4rem; line-height: 1.1; } .it small { font-size: .68rem; color: var(--suave); }
-    .it.sel { border-color: #ffd24a; background: rgba(60,50,10,.85); } .it.no { opacity: .45; }
-    #fab { position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; width: min(92vw, 340px); padding: 12px; border-radius: 14px; background: rgba(15,18,32,.92); border: 1px solid var(--borde); }
-    #fab h3 { margin: 0 0 8px; font-size: 1rem; } #fab .btn { display: block; width: 100%; margin: 6px 0; text-align: left; } #fab .btn:disabled { opacity: .45; }
-    #invp, #mesa { position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; padding: 12px; border-radius: 14px; background: rgba(15,18,32,.92); border: 1px solid var(--borde); }
-    #invp h3, #mesa h3 { margin: 0 0 8px; font-size: 1rem; } #invp h4, #mesa h4 { margin: 12px 0 6px; font-size: .8rem; color: var(--suave); font-weight: 600; } #invp small, #mesa small { display: block; margin-top: 8px; color: var(--suave); font-size: .7rem; }
+    #aviso { position: fixed; z-index: 6; top: calc(112px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 10px; background: rgba(15,16,18,.9); opacity: 0; transition: opacity .3s; pointer-events: none; text-align: center; max-width: 90vw; }
+
+    /* Abajo: los paneles (fabricar, inventario, mesa) se apilan encima de la barra, sea cual sea su alto */
+    #abajo { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0 8px max(6px, env(safe-area-inset-bottom)); pointer-events: none; }
+    #abajo > * { pointer-events: auto; }
+    #barra { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; padding-right: 56px; }
+    .b3d.it { --t: 50px; width: auto; min-width: 54px; height: auto; padding: 6px 6px 3px; flex-direction: column; gap: 1px; font-size: 1rem; }
+    .b3d.it span { font-size: 1.45rem; line-height: 1.1; }
+    .b3d.it small { font-size: .66rem; font-weight: 800; color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.5); white-space: nowrap; }
+
+    #fab, #invp, #mesa { width: min(92vw, 360px); padding: 12px; border-radius: 14px; background: rgba(21,23,26,.95); border: 2px solid var(--borde); box-shadow: 0 6px 0 #0c0d0f, 0 10px 18px rgba(0,0,0,.45); }
+    #fab h3, #invp h3, #mesa h3 { margin: 0 0 8px; font-size: 1rem; } #invp h4, #mesa h4 { margin: 12px 0 6px; font-size: .8rem; color: var(--suave); font-weight: 600; } #invp small, #mesa small { display: block; margin-top: 8px; color: var(--suave); font-size: .7rem; }
+    #fab .b3d { display: flex; width: 100%; margin: 0 0 6px; justify-content: flex-start; text-align: left; }
     .cuad { display: grid; gap: 6px; } .c4 { grid-template-columns: repeat(4, 50px); } .c2 { grid-template-columns: repeat(2, 50px); } .c3 { grid-template-columns: repeat(3, 50px); }
     .craft { display: flex; align-items: center; gap: 12px; } .flecha { font-size: 1.4rem; color: var(--suave); }
-    .cas { position: relative; width: 50px; height: 50px; padding: 0; color: #fff; font: inherit; cursor: pointer; background: rgba(255,255,255,.07); border: 2px solid var(--borde); border-radius: 10px; }
-    .cas span { font-size: 1.5rem; line-height: 1; } .cas i { position: absolute; right: 4px; bottom: 2px; font-size: .7rem; font-style: normal; font-weight: 700; text-shadow: 0 0 3px #000; }
-    .cas.sel { border-color: #ffd24a; background: rgba(60,50,10,.85); }
+    .b3d.cas { --t: 50px; border-radius: 10px; margin: 0; }
+    .b3d.cas span { font-size: 1.5rem; line-height: 1; } .b3d.cas i { position: absolute; right: 4px; bottom: 2px; font-size: .7rem; font-style: normal; font-weight: 800; text-shadow: 0 0 3px #000; }
+    #confirmar { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(10,10,12,.8); }
+    .cajaconf { width: min(92vw, 380px); padding: 18px; text-align: center; background: var(--tarjeta); border: 2px solid var(--borde); border-radius: 18px; box-shadow: 0 6px 0 #0c0d0f; }
+    .cajaconf p { margin: 0 0 14px; line-height: 1.45; }
+    .cajaconf .fila-b { display: flex; gap: 10px; justify-content: center; }
   </style>
 </head>
-<body>
+<body class="inmersivo" data-pantalla-auto>
   <canvas id="mundo"></canvas>
   <div id="arriba">
-    <a class="volver pildora" href="../">← Juegos</a>
-    <span class="pildora" id="rec"></span>
+    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
+    <span class="chip" id="rec"></span>
     <span class="sep"></span>
-    <button class="pildora" id="mas" aria-label="Acercar">＋</button>
-    <button class="pildora" id="menos" aria-label="Alejar">－</button>
-    <button class="pildora" id="nueva" aria-label="Nueva isla" title="Nueva isla">🔄</button>
+    <button class="b3d chico b-azul" id="mas" type="button" aria-label="Acercar" title="Acercar">＋</button>
+    <button class="b3d chico b-azul" id="menos" type="button" aria-label="Alejar" title="Alejar">－</button>
+    <button class="b3d chico b-rojo" id="nueva" type="button" aria-label="Nueva isla" title="Nueva isla">🔄</button>
   </div>
   <div id="aviso"></div>
-  <div id="fab" hidden></div>
-  <div id="invp" hidden></div>
-  <div id="mesa" hidden></div>
-  <div id="barra"></div>
+  <div id="abajo">
+    <div id="fab" hidden></div>
+    <div id="invp" hidden></div>
+    <div id="mesa" hidden></div>
+    <div id="barra"></div>
+  </div>
+  <div id="confirmar" hidden>
+    <div class="cajaconf">
+      <p id="confTxt"></p>
+      <div class="fila-b">
+        <button class="b3d txt b-rojo" id="confSi" type="button">Sí</button>
+        <button class="b3d txt b-gris" id="confNo" type="button">Cancelar</button>
+      </div>
+    </div>
+  </div>
   <script type="module" src="juego-isla.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>

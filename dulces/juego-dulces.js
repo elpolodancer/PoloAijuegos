@@ -54,7 +54,7 @@ function tono(freq, dur = 0.12, tipo = "sine", vol = 0.12, retraso = 0) {
   o.connect(g); g.connect(a.destination);
   o.start(t0); o.stop(t0 + dur + 0.02);
 }
-$("sonido").addEventListener("click", () => { mudo = !mudo; $("sonido").textContent = mudo ? "🔇" : "🔊"; });
+$("sonido").addEventListener("click", () => { mudo = !mudo; $("sonido").firstElementChild.textContent = mudo ? "🔇" : "🔊"; });
 
 // ---- Sesión ----
 alCambiarSesion((u) => {
@@ -165,7 +165,9 @@ function actualizarHUD(s) {
 function ajustarTamano() {
   if (!E || juego.hidden) return;
   const ancho = Math.min(marco.clientWidth || 360, 520);
-  const alto = Math.max(240, window.innerHeight - 300);
+  // Celular horizontal: el panel va a la izquierda y el tablero usa casi toda la altura
+  const horizontal = matchMedia("(orientation: landscape) and (max-height: 560px)").matches;
+  const alto = Math.max(160, window.innerHeight - (horizontal ? 24 : 225));
   T = Math.max(28, Math.floor(Math.min(ancho / E.c, alto / E.f)));
   tablero.style.setProperty("--t", T + "px");
   tablero.style.width = T * E.c + "px";
@@ -224,7 +226,7 @@ function modal(titulo, nodos, botones) {
     nodos.forEach((n) => panel.appendChild(n));
     const caja = h("div", "botones");
     botones.forEach((b) => {
-      const bt = h("button", "btn grande" + (b.sec ? " sec" : ""), b.texto);
+      const bt = h("button", "b3d txt " + (b.sec ? "b-gris" : "b-verde"), b.texto);
       bt.type = "button";
       bt.addEventListener("click", () => { modalEl.hidden = true; res(b.id); });
       caja.appendChild(bt);

@@ -1,27 +1,41 @@
 <!doctype html>
 <!-- Ruta: doodle/index-doodle.html (página del juego «doodle») -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Saltarín</title>
+  <meta name="theme-color" content="#15161a" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    html.inmersivo { --fondo-juego: #101114; }
+    /* Juego vertical (360×540): el marco se ajusta a la altura de la ventana */
+    .inmersivo .marco { aspect-ratio: 360 / 540;
+      width: min(100vw, calc(100vh * 360 / 540));
+      width: min(100vw, calc(100dvh * 360 / 540)); }
+    #velo { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; text-align: center; background: rgba(10,10,12,.8); overflow-y: auto; }
+    #velo h2 { margin: 0; font-size: 1.6rem; }
+    #velo p { margin: 0; max-width: 320px; font-size: .9rem; line-height: 1.45; }
+    #estado { min-height: 1.2em; }
+    .ayuda { color: var(--suave); }
+  </style>
 </head>
-<body>
-  <header class="barra">
-    <a class="volver" href="../index.html">‹ Juegos</a>
-    <h1>🦘 Saltarín</h1>
-  </header>
-  <main>
-    <canvas id="lienzo" class="lienzo" width="360" height="540"></canvas>
-    <p id="estado">Flechas o A/D para moverte; en el celular, toca la mitad izquierda o derecha de la pantalla.</p>
-    <p style="color: var(--suave); font-size: 0.9rem; line-height: 1.5;">
-      Verde: normal · Azul: se mueve · Naranja con resorte: salto doble · Café con grietas: se rompe y no rebotas · Blanca: solo sirve una vez.
-      Pisa a los monstruos desde arriba para derrotarlos; si los tocas de lado, caes. Junta monedas y atrapa el gorro 🧢 para volar 100 m sin que nada te toque.
-    </p>
-    <button id="jugar" class="btn" type="button">Jugar</button>
-    <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
-  </main>
+<body class="inmersivo" data-pantalla-auto>
+  <div class="escena">
+    <div class="marco">
+      <canvas id="lienzo" class="lienzo" width="360" height="540"></canvas>
+      <div id="velo">
+        <h2>🦘 Saltarín</h2>
+        <p id="estado">Flechas o A/D para moverte; en el celular, toca la mitad izquierda o derecha de la pantalla.</p>
+        <p class="ayuda">Verde: normal · Azul: se mueve · Naranja con resorte: salto doble · Café con grietas: se rompe y no rebotas · Blanca: solo sirve una vez. Pisa a los monstruos desde arriba; si los tocas de lado, caes. Junta monedas y atrapa el gorro 🧢 para volar 100 m sin que nada te toque.</p>
+        <button id="jugar" class="b3d txt grande b-verde" type="button">Jugar</button>
+        <button id="entrar" class="b3d txt chico b-azul" type="button" title="Entrar con Google para guardar puntos" hidden>👤 Entrar con Google</button>
+      </div>
+    </div>
+  </div>
+  <div class="hud hud-abajo"><a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a></div>
   <script type="module" src="juego-doodle.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>

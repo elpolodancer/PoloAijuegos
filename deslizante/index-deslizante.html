@@ -1,21 +1,31 @@
 <!doctype html>
 <!-- Ruta: deslizante/index-deslizante.html -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Puzle deslizante</title>
-  <meta name="theme-color" content="#1b2330" />
+  <meta name="theme-color" content="#15161a" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    main { max-width: 560px; }
-    .niveles { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 12px; }
-    .niveles .btn { background: var(--tarjeta); border: 1px solid var(--borde); font-size: .85rem; padding: 6px 10px; }
-    .niveles .btn.activo { background: var(--acento); border-color: var(--acento); }
-    .datos { display: flex; justify-content: space-around; gap: 8px; margin-bottom: 12px; text-align: center; color: var(--suave); font-size: .85rem; }
-    .datos b { display: block; color: var(--texto); font-size: 1.25rem; font-variant-numeric: tabular-nums; }
-    #tablero { --n: 3; position: relative; width: min(100%, 78vh, 520px); aspect-ratio: 1 / 1; margin: 0 auto; container-type: inline-size;
-      background: var(--tarjeta); border: 2px solid var(--borde); border-radius: 16px; padding: 6px; touch-action: manipulation; user-select: none; }
+    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 30%, #23252b, #131417 70%); }
+    .b-negro { --c1: #8a8f9c; --c2: #3c404a; --c3: #15171a; }   /* 8×8: el nivel más difícil */
+
+    #juego { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+      padding: calc(56px + env(safe-area-inset-top, 0px)) 12px calc(12px + env(safe-area-inset-bottom, 0px)); }
+    .lado { display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(100%, 520px); }
+    .barra-botones { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; }
+    .niveles { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+    .niveles .b3d.txt { padding: 0 9px; font-size: 13px; }
+    .datos { display: flex; justify-content: center; gap: 8px; width: 100%; }
+    .datos div { flex: 1; max-width: 130px; padding: 4px 8px; text-align: center; color: var(--suave); font-size: .7rem; background: linear-gradient(180deg, #3a3d45, #262830); border: 2px solid #121316; border-radius: 12px; box-shadow: 0 3px 0 #121316, inset 0 2px 0 rgba(255,255,255,.15); }
+    .datos b { display: block; color: var(--texto); font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+    #msg { margin: 0; min-height: 1.3em; text-align: center; font-size: .8rem; }
+
+    #tablero { --n: 3; position: relative; flex: none; width: min(100%, calc(100vh - 235px), 520px); width: min(100%, calc(100dvh - 235px), 520px);
+      aspect-ratio: 1 / 1; container-type: inline-size; background: #1a1b20; border: 2px solid var(--borde); border-radius: 16px; padding: 6px;
+      box-shadow: 0 6px 0 #0c0d0f, 0 12px 20px rgba(0,0,0,.5); touch-action: none; user-select: none; }
     #fichas { position: relative; width: 100%; height: 100%; }
     .ficha { position: absolute; top: 0; left: 0; width: calc(100% / var(--n)); height: calc(100% / var(--n)); padding: 3px;
       transition: transform .16s ease-out; cursor: pointer; }
@@ -23,30 +33,36 @@
       font-weight: 800; color: #fff; font-size: calc(100cqw / var(--n) * .42); text-shadow: 0 2px 3px rgba(0,0,0,.35);
       box-shadow: inset 0 -4px 0 rgba(0,0,0,.25), 0 2px 4px rgba(0,0,0,.3); }
     .ficha.bien > span { outline: 3px solid rgba(255,255,255,.55); outline-offset: -3px; }
-    .acciones { display: flex; gap: 8px; justify-content: center; margin: 14px 0 6px; flex-wrap: wrap; }
-    #msg { text-align: center; min-height: 1.4em; margin: 8px 0 0; }
-    #victoria { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-      background: rgba(15,18,32,.88); border-radius: 14px; text-align: center; padding: 12px; }
+    #victoria { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+      background: rgba(10,10,12,.88); border-radius: 14px; text-align: center; padding: 12px; }
     #victoria h2 { margin: 0; font-size: 1.6rem; }
+    @media (prefers-reduced-motion: reduce) { .ficha { transition: none; } }
+
+    /* Celular horizontal: los controles pasan a la izquierda y el tablero ocupa toda la altura */
+    @media (orientation: landscape) and (max-height: 560px) {
+      #juego { flex-direction: row; gap: 18px; padding: 8px calc(12px + env(safe-area-inset-right, 0px)) 8px calc(12px + env(safe-area-inset-left, 0px)); }
+      .lado { width: 230px; padding-top: 44px; }
+      #tablero { width: min(calc(100vh - 24px), calc(100vw - 280px), 520px); width: min(calc(100dvh - 24px), calc(100vw - 280px), 520px); }
+    }
   </style>
 </head>
-<body>
-  <header class="barra">
-    <div><a class="volver" href="../">← Juegos</a> <h1 style="display:inline;margin-left:8px">🔢 Puzle deslizante</h1></div>
-    <div id="sesion" style="color:var(--suave);font-size:.8rem"></div>
-  </header>
-  <main>
-    <div class="niveles" id="niveles"></div>
-    <div class="datos">
-      <div>Movimientos<b id="movs">0</b></div>
-      <div>Tiempo<b id="tiempo">0:00</b></div>
-      <div>Mejor<b id="mejor">–</b></div>
+<body class="inmersivo" data-pantalla-auto>
+  <div class="hud hud-izq"><a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a></div>
+  <div class="hud hud-der"><span class="chip" id="sesion"></span></div>
+  <main id="juego">
+    <div class="lado">
+      <div class="barra-botones">
+        <div class="niveles" id="niveles" role="group" aria-label="Tamaño del tablero"></div>
+        <button class="b3d chico b-oro" id="nuevo" type="button" title="Mezclar de nuevo" aria-label="Mezclar de nuevo"><span class="b-ico">🔀</span></button>
+      </div>
+      <div class="datos">
+        <div>Movimientos<b id="movs">0</b></div>
+        <div>Tiempo<b id="tiempo">0:00</b></div>
+        <div>Mejor<b id="mejor">–</b></div>
+      </div>
+      <p id="msg">Toca una ficha en la fila o columna del hueco para deslizarla.</p>
     </div>
     <div id="tablero"><div id="fichas"></div></div>
-    <p id="msg">Toca una ficha en la fila o columna del hueco para deslizarla.</p>
-    <div class="acciones">
-      <button class="btn" id="nuevo">🔀 Mezclar de nuevo</button>
-    </div>
   </main>
   <script type="module" src="juego-deslizante.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>

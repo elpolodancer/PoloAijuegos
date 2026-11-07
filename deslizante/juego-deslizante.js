@@ -13,6 +13,7 @@ const NIVELES = [
   { n: 8, nombre: "Genio 8×8",   puntos: 50 },
 ];
 const GUARDA = ID + "_nivel";
+const COLOR_NIVEL = ["b-verde", "b-azul", "b-morado", "b-oro", "b-rojo", "b-negro"]; // un color por dificultad
 
 const $ = (id) => document.getElementById(id);
 let nivel = NIVELES[0], n = 3, t = [];            // t[pos] = número de la ficha (0 = hueco)
@@ -110,7 +111,7 @@ async function ganar() {
   v.id = "victoria";
   v.innerHTML = "<h2>🎉 ¡Resuelto!</h2><div>" + movs + " movimientos · " + fmt(s) + (record ? "<br>⭐ ¡Nuevo récord!" : "") + "</div>";
   const b = document.createElement("button");
-  b.className = "btn"; b.textContent = "Jugar otra vez";
+  b.className = "b3d txt b-verde"; b.textContent = "Jugar otra vez";
   b.addEventListener("click", empezar);
   v.appendChild(b);
   $("tablero").appendChild(v);
@@ -133,13 +134,14 @@ function empezar() {
 function elegir(i) {
   nivel = NIVELES[i];
   try { localStorage.setItem(GUARDA, String(i)); } catch (e) {}
-  document.querySelectorAll("#niveles .btn").forEach((b, j) => b.classList.toggle("activo", j === i));
+  document.querySelectorAll("#niveles .b3d").forEach((b, j) => b.classList.toggle("on", j === i));
   empezar();
 }
 
 NIVELES.forEach((l, i) => {
   const b = document.createElement("button");
-  b.className = "btn"; b.textContent = l.nombre;
+  b.className = "b3d chico txt " + COLOR_NIVEL[i]; b.textContent = l.n + "×" + l.n;
+  b.title = l.nombre; b.setAttribute("aria-label", l.nombre);
   b.addEventListener("click", () => elegir(i));
   $("niveles").appendChild(b);
 });
