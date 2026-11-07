@@ -7,7 +7,8 @@ export const R = 16;      // radio de una bola
 export const D = 2 * R;   // distancia entre centros de bolas pegadas
 const PASO = 2;           // separación (px) de los puntos del trayecto ya muestreado
 const V_CIERRE = 260;     // velocidad (px/s) del tramo de atrás cuando corre a cerrar un hueco
-const T_RUSH = 2.2;       // segundos de entrada rápida al empezar
+const T_RUSH = 2.5;       // segundos de entrada rápida al empezar
+const ENTRADA = 160;      // si limpias casi toda la pantalla (la cabeza vuelve antes de esta distancia) entra rápida otra vez; si no, la cadena sale a su ritmo
 
 export function azarSemilla(a) {
   return function () {
@@ -129,7 +130,7 @@ export function avanzar(p, dt) {
   }
 
   // Velocidad: el tramo de la cabeza avanza; los tramos de atrás corren a alcanzarlo
-  const vCab = p.t < T_RUSH ? p.nivel.rush : p.nivel.velocidad;
+  const vCab = cad.length && (p.t < T_RUSH || cad[cad.length - 1].s < ENTRADA) ? p.nivel.rush : p.nivel.velocidad;
   const v = new Array(cad.length);
   const k = Math.exp(-14 * dt);
   for (let i = cad.length - 1; i >= 0; i--) {
