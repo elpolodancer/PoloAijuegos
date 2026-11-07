@@ -14,7 +14,7 @@
     .inmersivo .escena { flex-direction: column; gap: 8px; padding: calc(54px + env(safe-area-inset-top, 0px)) 0 calc(6px + env(safe-area-inset-bottom, 0px)); }
     .fila-chips, .pie { display: flex; align-items: center; justify-content: center; gap: 8px; flex: none; width: min(100vw, 520px); padding: 0 8px; }
     .fila-chips .chip { height: 30px; padding: 0 10px; font-size: 13px; }
-    .pie { gap: 10px; }
+    .pie { gap: 10px; padding-right: 56px; } /* deja libre el botón ⛶ de pantalla completa (abajo a la derecha) */
     .nivelbarra { flex: 1; height: 16px; overflow: hidden; background: rgba(255,255,255,.14); border: 2px solid #15171a; border-radius: 999px; }
     .nivelbarra i { display: block; width: 0; height: 100%; background: linear-gradient(#ffe27a, #ffb020); border-radius: 999px; transition: width .35s ease; }
     @media (prefers-reduced-motion: reduce) { .nivelbarra i { transition: none; } }

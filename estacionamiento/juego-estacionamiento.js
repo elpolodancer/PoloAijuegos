@@ -100,6 +100,8 @@ function generar(cfg) {
 // ----- Estado -----
 let nivel = 1, autos = [], occ = [], restantes = 0, movs = 0, T = 0, ganado = false;
 let cam = { s: 1, ox: 0, oy: 0 }, camMin = 0.3, camMax = 6;
+let camTocada = false; // true cuando el jugador movió o acercó la vista (así un cambio de tamaño de ventana no se la deshace)
+let ultAutos = "", ultMovs = -1; // últimos textos puestos en pantalla (para no reescribirlos 60 veces por segundo)
 
 function cargarNivel(n) {
   nivel = n;
@@ -244,12 +246,15 @@ function redim() {
   cw = r.width; ch = r.height;
   cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
 }
+const escalaAjustada = () => Math.min(cw / (54 * TW + 30), ch / (54 * TH + 70));
 function ajustarCamara() {
-  const s = Math.min(cw / (54 * TW + 30), ch / (54 * TH + 70));
+  const s = escalaAjustada();
   camMin = s * 0.8; camMax = s * 7;
   cam.s = s; cam.ox = cw / 2; cam.oy = ch / 2 - 25 * TH * s + 10;
+  camTocada = false;
 }
 function zoom(f, mx, my) {
+  camTocada = true;
   const s2 = clamp(cam.s * f, camMin, camMax), k = s2 / cam.s;
   cam.ox = mx - (mx - cam.ox) * k;
   cam.oy = my - (my - cam.oy) * k;
@@ -389,17 +394,23 @@ function actualizar(dt) {
     }
   }
   if (!ganado && restantes <= 0) victoria();
-  $("movs").textContent = movs;
-  $("autos").textContent = restantes + " / " + autos.length;
+  if (movs !== ultMovs) { ultMovs = movs; $("movs").textContent = movs; }
+  const txtAutos = restantes + " / " + autos.length;
+  if (txtAutos !== ultAutos) { ultAutos = txtAutos; $("autos").textContent = txtAutos; }
 }
 
 function victoria() {
   ganado = true;
-  let txt = "Lo lograste en " + movs + " movimientos.";
-  if (nivel > prog.hecho) {
-    const pts = 100 * nivel;
-    prog.hecho = nivel;
-    if (sumarPuntos) { sumarPuntos(ID_JUEGO, pts).catch(() => {}); txt += " +" + pts + " puntos (si tienes sesión)."; }
+  const txt = "Lo lograste en " + movs + " movimientos.";
+  if (nivel > prog.hecho && sumarPuntos) {
+    // Los puntos del nivel se dan una sola vez, y solo se anotan como cobrados si de verdad se guardaron (con sesión y conexión)
+    const mio = nivel, pts = 100 * mio;
+    sumarPuntos(ID_JUEGO, pts).then((ok) => {
+      if (!ok) return;
+      prog.hecho = Math.max(prog.hecho, mio);
+      guardar();
+      if (ganado && nivel === mio && !$("victoria").hidden) $("vtexto").textContent = txt + " +" + pts + " puntos ✓";
+    }).catch(() => {});
   }
   prog.max = Math.max(prog.max, Math.min(NIVELES.length, nivel + 1));
   guardar();
@@ -449,7 +460,7 @@ cv.addEventListener("pointermove", (e) => {
   const nuevo = pos(e), viejo = dedos.get(e.pointerId);
   if (dedos.size === 1) {
     if (!g.moved && Math.hypot(nuevo.x - g.x0, nuevo.y - g.y0) > 8) g.moved = true;
-    if (g.moved) { cam.ox += nuevo.x - viejo.x; cam.oy += nuevo.y - viejo.y; }
+    if (g.moved) { cam.ox += nuevo.x - viejo.x; cam.oy += nuevo.y - viejo.y; camTocada = true; }
     dedos.set(e.pointerId, nuevo);
   } else if (dedos.size === 2) {
     const otro = [...dedos.entries()].find(([id]) => id !== e.pointerId)[1];
@@ -492,7 +503,17 @@ $("centrar").addEventListener("click", ajustarCamara);
 $("reiniciar").addEventListener("click", () => cargarNivel(nivel));
 $("repetir").addEventListener("click", () => cargarNivel(nivel));
 $("siguiente").addEventListener("click", () => cargarNivel(Math.min(NIVELES.length, nivel + 1)));
-addEventListener("resize", () => { redim(); ajustarCamara(); });
+addEventListener("resize", () => {
+  const w0 = cw, h0 = ch;
+  redim();
+  if (!camTocada || (w0 > h0) !== (cw > ch)) ajustarCamara(); // vista sin tocar, o el celular giró: se encuadra de nuevo
+  else { // el jugador ya movió la vista: se conserva y solo se recentra
+    cam.ox += (cw - w0) / 2; cam.oy += (ch - h0) / 2;
+    const s = escalaAjustada();
+    camMin = s * 0.8; camMax = s * 7;
+    cam.s = clamp(cam.s, camMin, camMax);
+  }
+});
 
 // ----- Inicio -----
 redim();

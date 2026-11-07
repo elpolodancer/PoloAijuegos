@@ -306,17 +306,19 @@ function ganar() {
   estado = "fin";
   actualizarBotones();
   SONIDOS.gana();
-  let pts = 0;
   if (nivel === progreso) {
+    const mio = nivel, pts = Math.min(1000, PUNTOS_BASE + PUNTOS_POR_NIVEL * mio);
     progreso = Math.min(progreso + 1, NIVELES + 1);
     guardarProgreso();
-    pts = Math.min(1000, PUNTOS_BASE + PUNTOS_POR_NIVEL * nivel);
-    if (jugador) jugador.sumarPuntos(ID, pts).catch(() => {});
+    // El aviso de puntos solo sale si de verdad se guardaron (hace falta tener sesión)
+    if (jugador) jugador.sumarPuntos(ID, pts).then((ok) => {
+      if (ok && estado === "fin" && nivel === mio && !$("modal").hidden) $("mTxt").textContent = "+" + pts + " puntos ✓";
+    }).catch(() => {});
   }
   const botones = [];
   if (nivel < NIVELES) botones.push(["Siguiente nivel", () => empezar(nivel + 1)]);
   botones.push(["Repetir", () => empezar(nivel)], ["Niveles", abrirMenu]);
-  modal("🎉 ¡Nivel completado!", pts ? "+" + pts + " puntos" : "", botones);
+  modal("🎉 ¡Nivel completado!", "", botones);
 }
 
 function perder() {

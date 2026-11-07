@@ -3,7 +3,9 @@
 // Niveles con límite de movimientos: hay que eliminar todas las gominolas negras de la parte baja.
 // Una negra se elimina cuando se rompe una gominola pegada a ella (también en diagonal).
 // Si un movimiento no elimina ninguna negra, aparece una nueva abajo.
-import { alCambiarSesion, entrar, sumarPuntos } from "../compartido/jugador.js";
+// Perfil y sesión: se cargan aparte para que el juego funcione aunque Firebase no esté disponible
+let sumarPuntos = async () => false;
+let entrar = async () => { throw new Error("Sesión no disponible sin conexión"); };
 
 const ID = "gominolas"; // el mismo id de juegos.js (colección de puntos en Firestore)
 
@@ -98,6 +100,7 @@ let particulas = [];
 let textos = [];
 let tam = 50;           // tamaño de celda en px CSS
 let ultimo = 0;
+let partida = 0;        // número de intento: evita que un aviso tardío del perfil se pegue al texto de otra pantalla
 let usuario = null;     // sesión de Google (null si no ha entrado)
 
 try { mejor = parseInt(localStorage.getItem(CLAVE_MEJOR), 10) || 0; } catch (e) {}
@@ -108,6 +111,7 @@ let ac = null;
 function tono(f, d = 0.12) {
   try {
     ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === "suspended") ac.resume(); // en iPhone/iPad el audio nace «suspendido» hasta un toque
     const o = ac.createOscillator();
     const g = ac.createGain();
     o.type = "sine";
@@ -363,7 +367,7 @@ lienzo.addEventListener("pointerdown", (ev) => {
   const p = celdaEn(ev);
   if (!p) return;
   if (grid[p.f][p.c].k === NEGRA) return; // las negras no se pueden arrastrar
-  lienzo.setPointerCapture(ev.pointerId);
+  try { lienzo.setPointerCapture(ev.pointerId); } catch (e) {}
   cadena = [{ f: p.f, c: p.c }];
   tono(NOTAS[0], 0.08);
 });
@@ -426,6 +430,7 @@ function mostrarInicio() {
 }
 
 function empezar() {
+  partida++;
   puntos = puntosInicioNivel;
   const fijo = NIVELES[nivel - 1];
   const n = fijo ? fijo.negras : negrasDelNivel(nivel);
@@ -476,15 +481,19 @@ function perder() {
 }
 
 // ---------- Sesión y perfil ----------
-alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; });
+import("../compartido/jugador.js").then((m) => {
+  sumarPuntos = m.sumarPuntos;
+  entrar = m.entrar;
+  m.alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; });
+}).catch(() => {});
 btnEntrar.addEventListener("click", () => entrar().catch((e) => { ovlTexto.textContent = e.message; }));
 
 // Guarda en el perfil los puntos del nivel ganado (convertidos con PUNTOS_POR_PERFIL); solo si hay sesión
 async function enviarPuntos(pts) {
-  const sumar = Math.floor(pts / PUNTOS_POR_PERFIL);
+  const sumar = Math.floor(pts / PUNTOS_POR_PERFIL), mia = partida;
   if (!usuario || !sumar) return;
-  try { await sumarPuntos(ID, sumar); ovlTexto.textContent += " · +" + sumar + " al perfil ✓"; }
-  catch (e) { ovlTexto.textContent += " · no se pudieron guardar (" + e.message + ")"; }
+  try { await sumarPuntos(ID, sumar); if (mia === partida) ovlTexto.textContent += " · +" + sumar + " al perfil ✓"; }
+  catch (e) { if (mia === partida) ovlTexto.textContent += " · no se pudieron guardar (" + e.message + ")"; }
 }
 
 ovlBtn.addEventListener("click", empezar);
@@ -621,6 +630,7 @@ function dibujar() {
 
 // ---------- Bucle ----------
 function bucle(ahora) {
+  requestAnimationFrame(bucle);
   const dt = Math.min(0.05, (ahora - ultimo) / 1000 || 0);
   ultimo = ahora;
 
@@ -648,7 +658,6 @@ function bucle(ahora) {
   textos = textos.filter((t) => t.vida > 0);
 
   dibujar();
-  requestAnimationFrame(bucle);
 }
 
 // Arranque: tablero de fondo y pantalla de inicio

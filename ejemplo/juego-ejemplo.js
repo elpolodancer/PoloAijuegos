@@ -6,7 +6,7 @@ const ID = "ejemplo"; // el mismo id de juegos.js: es el nombre de su colección
 const SEGUNDOS = 15;
 const $ = (id) => document.getElementById(id);
 const area = $("area"), blanco = $("blanco"), inicio = $("inicio"), estado = $("estado"), btnEntrar = $("entrar");
-let puntos = 0, restante = 0, reloj = null, usuario = null;
+let puntos = 0, restante = 0, reloj = null, usuario = null, partida = 0;
 
 alCambiarSesion((u) => {
   usuario = u;
@@ -17,10 +17,12 @@ btnEntrar.addEventListener("click", () => entrar().catch((e) => { estado.textCon
 
 function mover() {
   blanco.style.left = Math.random() * (area.clientWidth - 48) + "px";
-  // deja libre la franja de arriba (54 px) para los botones flotantes
-  blanco.style.top = 54 + Math.random() * (area.clientHeight - 48 - 54) + "px";
+  // deja libres la franja de arriba (54 px, botones flotantes) y la de abajo (64 px, botón ⛶ de pantalla completa): ahí el blanco quedaría tapado
+  blanco.style.top = 54 + Math.random() * Math.max(0, area.clientHeight - 48 - 54 - 64) + "px";
 }
 function empezar() {
+  partida++;
+  estado.textContent = ""; // quita el resultado de la partida anterior
   puntos = 0;
   restante = SEGUNDOS;
   $("marcador").textContent = "0";
@@ -35,6 +37,7 @@ function empezar() {
   }, 1000);
 }
 async function terminar() {
+  const mia = partida;
   clearInterval(reloj);
   blanco.hidden = true;
   inicio.hidden = false;
@@ -43,9 +46,9 @@ async function terminar() {
   if (!usuario || !puntos) return;
   try {
     await sumarPuntos(ID, puntos);
-    estado.textContent += " Guardados ✓";
+    if (mia === partida) estado.textContent += " Guardados ✓"; // si ya empezó otra partida, no se mezcla con su mensaje
   } catch (e) {
-    estado.textContent += " No se pudieron guardar (" + e.message + ")";
+    if (mia === partida) estado.textContent += " No se pudieron guardar (" + e.message + ")";
   }
 }
 blanco.addEventListener("pointerdown", () => {

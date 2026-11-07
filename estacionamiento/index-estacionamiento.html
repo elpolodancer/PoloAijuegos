@@ -19,8 +19,9 @@
     .hud-abajo { gap: 8px; }
     .chip small { margin-right: 5px; }
 
-    #msg { position: fixed; z-index: 6; left: 50%; top: calc(60px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); max-width: 92vw; padding: 6px 14px; background: rgba(10,10,12,.82); border: 1px solid var(--borde); border-radius: 999px; font-size: .9rem; pointer-events: none; opacity: 0; transition: opacity .2s; white-space: nowrap; }
+    #msg { position: fixed; z-index: 6; left: 50%; top: calc(60px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); width: max-content; max-width: 92vw; padding: 6px 14px; text-align: center; background: rgba(10,10,12,.82); border: 1px solid var(--borde); border-radius: 16px; font-size: .9rem; pointer-events: none; opacity: 0; transition: opacity .2s; }
     #msg.ver { opacity: 1; }
+    #msg.ver ~ .ayuda { opacity: 0; } /* mientras sale un aviso, la ayuda no se encima */
     /* Ayuda que se desvanece sola a los pocos segundos */
     .ayuda { position: fixed; z-index: 4; left: 50%; top: calc(60px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); width: min(92vw, 420px); margin: 0; padding: 6px 12px; text-align: center; font-size: .78rem; color: #d8dbe2;
       background: rgba(10,10,12,.7); border-radius: 12px; pointer-events: none; animation: desvanece .8s 9s forwards; }

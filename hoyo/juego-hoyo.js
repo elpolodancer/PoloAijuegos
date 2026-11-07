@@ -773,10 +773,12 @@ async function terminar() {
   $("jugar").textContent = "Jugar otra vez";
   $("fin").hidden = false;
   $("msg").textContent = "";
+  const pp = Math.floor(yo.puntos / 1000); // 1 punto de perfil por cada 1000 del juego (1 000 000 = tope de 1000)
+  if (pp < 1) { $("msg").textContent = "Junta 1000 puntos en una partida para sumar 1 al perfil."; return; }
   try {
     const { sumarPuntos } = await import("../compartido/jugador.js");
-    const ok = await sumarPuntos("hoyo", Math.floor(yo.puntos / 1000)); // 1 punto de perfil por cada 1000 del juego (1 000 000 = tope de 1000)
-    $("msg").textContent = ok ? "Puntos guardados en tu perfil." : "Entra con Google en el portal para guardar tus puntos.";
+    const ok = await sumarPuntos("hoyo", pp);
+    $("msg").textContent = ok ? "Puntos guardados en tu perfil (+" + Math.min(pp, 1000) + ")." : "Entra con Google en el portal para guardar tus puntos.";
   } catch (e) {
     $("msg").textContent = "No se pudieron guardar los puntos (sin conexión).";
   }

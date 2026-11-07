@@ -11,7 +11,7 @@
   <style>
     html.inmersivo { --fondo-juego: #101114; }
     #c { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none; display: block; }
-    #fin { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; text-align: center; background: rgba(10,10,12,.84); overflow-y: auto; }
+    #fin { position: fixed; inset: 0; z-index: 4; /* debajo de los botones flotantes (z-index 5): así el 🏠 siempre se puede tocar */ display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; text-align: center; background: rgba(10,10,12,.84); overflow-y: auto; }
     #fin h2 { margin: 0; font-size: 1.8rem; }
     #fin p { margin: 0; max-width: 380px; color: #e3e5ea; font-size: .92rem; line-height: 1.45; }
     #fin ol { margin: 0; padding: 0; list-style: none; color: var(--suave); line-height: 1.7; }

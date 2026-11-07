@@ -29,7 +29,7 @@ const centro = (v) => "calc(var(--t) * " + (v + 0.5) + ")";
 const mapa = $("mapa"), juego = $("juego"), tablero = $("tablero"), fondo = $("fondo"), capa = $("dulces"), efectos = $("efectos");
 const marco = $("marco"), aviso = $("aviso"), estado = $("estado"), modalEl = $("modal"), panel = $("panel");
 
-let E = null, def = null, T = 40, bloqueado = true, sel = null, arrastre = null, usuario = null, guardado = true, pistaT = null, avisoT = null;
+let E = null, def = null, T = 40, bloqueado = true, animando = false, sel = null, arrastre = null, usuario = null, guardado = true, pistaT = null, avisoT = null;
 const el = new Map(); // id del dulce → su elemento
 const gelEl = new Map(); // «r,c» → elemento de gelatina
 let refs = null; // piezas del panel de objetivo
@@ -86,8 +86,9 @@ function guardarProgreso(n, e) {
 }
 
 // ---- Mapa de niveles ----
-async function mostrarMapa() {
-  await guardarPuntos();
+function mostrarMapa() {
+  animando = false;
+  guardarPuntos(); // sin await: si no hay internet, el mapa no debe esperar al guardado
   clearTimeout(pistaT);
   modalEl.hidden = true;
   juego.hidden = true; mapa.hidden = false;
@@ -165,9 +166,9 @@ function actualizarHUD(s) {
 function ajustarTamano() {
   if (!E || juego.hidden) return;
   const ancho = Math.min(marco.clientWidth || 360, 520);
-  // Celular horizontal: el panel va a la izquierda y el tablero usa casi toda la altura
+  // Celular horizontal: el panel va a la izquierda y el tablero usa casi toda la altura (menos los 56 px de arriba para los botones y 8 px de abajo)
   const horizontal = matchMedia("(orientation: landscape) and (max-height: 560px)").matches;
-  const alto = Math.max(160, window.innerHeight - (horizontal ? 24 : 225));
+  const alto = Math.max(160, window.innerHeight - (horizontal ? 72 : 225));
   T = Math.max(28, Math.floor(Math.min(ancho / E.c, alto / E.f)));
   tablero.style.setProperty("--t", T + "px");
   tablero.style.width = T * E.c + "px";
@@ -253,7 +254,8 @@ function textoObjetivo() {
 
 // ---- Empezar un nivel ----
 async function iniciarNivel(n) {
-  await guardarPuntos();
+  animando = false;
+  guardarPuntos(); // sin await (ver mostrarMapa); toma los puntos del nivel anterior antes de crear el nuevo estado
   bloqueado = true;
   clearTimeout(pistaT);
   def = nivel(n);
@@ -268,8 +270,9 @@ async function iniciarNivel(n) {
   bloqueado = false;
   armarPista();
 }
-$("reiniciar").addEventListener("click", () => { if (def) iniciarNivel(def.n); });
-$("atras").addEventListener("click", mostrarMapa);
+// Mientras se reproduce una jugada (o sale la ventana final) estos botones no hacen nada: cambiar de nivel a medias dejaba la animación sin sus dulces
+$("reiniciar").addEventListener("click", () => { if (def && !animando) iniciarNivel(def.n); });
+$("atras").addEventListener("click", () => { if (!animando) mostrarMapa(); });
 
 // ---- Pistas ----
 function limpiarPista() { clearTimeout(pistaT); capa.querySelectorAll(".pista").forEach((d) => d.classList.remove("pista")); }
@@ -326,27 +329,36 @@ for (const t of ["pointerup", "pointercancel"]) tablero.addEventListener(t, () =
 async function intentar(a, b) {
   if (bloqueado) return;
   bloqueado = true;
+  animando = true;
   limpiarPista();
-  const idA = E.tab[a.r][a.c].id, idB = E.tab[b.r][b.c].id;
-  const res = jugada(E, a, b);
-  if (!res.valida) {
-    tono(170, 0.14, "square", 0.05);
-    el.get(idA).style.transitionDuration = ""; el.get(idB).style.transitionDuration = "";
-    el.get(idA).style.transform = pos(b.r, b.c);
-    el.get(idB).style.transform = pos(a.r, a.c);
-    await dormir(MS.cambio);
-    el.get(idA).style.transform = pos(a.r, a.c);
-    el.get(idB).style.transform = pos(b.r, b.c);
-    el.get(idA).classList.add("sacude"); el.get(idB).classList.add("sacude");
-    await dormir(MS.cambio + 60);
-    el.get(idA).classList.remove("sacude"); el.get(idB).classList.remove("sacude");
-    bloqueado = false;
-    armarPista();
-    return;
+  let fin = null;
+  try {
+    const idA = E.tab[a.r][a.c].id, idB = E.tab[b.r][b.c].id;
+    const res = jugada(E, a, b);
+    if (!res.valida) {
+      tono(170, 0.14, "square", 0.05);
+      el.get(idA).style.transitionDuration = ""; el.get(idB).style.transitionDuration = "";
+      el.get(idA).style.transform = pos(b.r, b.c);
+      el.get(idB).style.transform = pos(a.r, a.c);
+      await dormir(MS.cambio);
+      el.get(idA).style.transform = pos(a.r, a.c);
+      el.get(idB).style.transform = pos(b.r, b.c);
+      el.get(idA).classList.add("sacude"); el.get(idB).classList.add("sacude");
+      await dormir(MS.cambio + 60);
+      el.get(idA).classList.remove("sacude"); el.get(idB).classList.remove("sacude");
+    } else {
+      fin = res.fin;
+      await reproducir(res.pasos);
+    }
+  } catch (err) {
+    // Si algo falla al animar, la pantalla se vuelve a dibujar desde el estado real del juego en vez de quedarse trabada
+    console.error(err);
+    dibujarTodo();
+    fin = E.fin;
   }
-  await reproducir(res.pasos);
   actualizarHUD(instantanea(E));
-  if (res.fin) { await terminar(res.fin); return; }
+  if (fin) { await terminar(fin); return; } // «animando» sigue activo hasta que la ventana final lleve a otro nivel o al mapa
+  animando = false;
   bloqueado = false;
   armarPista();
 }
@@ -425,6 +437,7 @@ async function pasoBarajar(p) {
   mostrarAviso("¡Sin jugadas! Mezclando…");
   tono(260, 0.4, "sawtooth", 0.06);
   await dormir(500);
+  if (p.pos.some((x) => !el.get(x.id))) { dibujarTodo(); return; } // caso rarísimo: se repartieron dulces nuevos y se dibuja todo de nuevo
   p.pos.forEach((x) => { const d = el.get(x.id); if (d) { d.style.transitionDuration = "0.55s"; d.style.transform = pos(x.r, x.c); } });
   await dormir(700);
   capa.querySelectorAll(".dulce").forEach((d) => { d.style.transitionDuration = ""; });

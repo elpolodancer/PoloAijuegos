@@ -3,7 +3,7 @@
 // pegados (abajo, a los lados o arriba) se fusionan y suman sus valores, y la fusión puede encadenarse.
 // El juego termina cuando las 5 columnas están llenas y el bloque actual no encaja con ninguna.
 
-const COLS = 5, FILAS = 8, CELDA = 64, BX = 20, BY = 112, W = 360, H = 650;
+const COLS = 5, FILAS = 8, CELDA = 64, BX = 20, BY = 128, W = 360, H = 650;   // BY - 88 = y donde nace el bloque que cae (y donde se ve antes de soltarlo)
 const ID_JUEGO = "fusionanumeros";
 const CLAVE = "fusionanumeros-record";
 const VENTANA = 5;          // cuántos valores distintos pueden salir a la vez (se desplaza al subir el máximo)
@@ -111,7 +111,7 @@ function fusionar() {
   pend++;
   if (pend >= PUNTOS_LOTE) enviarPuntos();
   if (nuevo > maxBloque) maxBloque = nuevo;
-  if (nuevo > record.bloque) record.bloque = nuevo;
+  if (nuevo > record.bloque) { record.bloque = nuevo; guardar(); }   // se guarda al momento: si sales a medias no se pierde
   hud();
   return true;
 }
@@ -152,8 +152,8 @@ function enviarPuntos() {
   pend -= n;
   sumarPuntos(ID_JUEGO, n).catch(() => {});
 }
-document.addEventListener("visibilitychange", () => { if (document.hidden) enviarPuntos(); });
-addEventListener("pagehide", enviarPuntos);
+document.addEventListener("visibilitychange", () => { if (document.hidden) { enviarPuntos(); guardar(); } });
+addEventListener("pagehide", () => { enviarPuntos(); guardar(); });
 
 function hud() {
   $("puntos").textContent = fmt(puntos);
@@ -262,12 +262,13 @@ function dibujar() {
 
   // bloque actual (sobre la columna elegida) y siguiente
   if (estado !== "fin") {
-    if (estado === "listo") bloque(xCol(hover), 24, CELDA, actual, 1, 1);
+    if (estado === "listo") bloque(xCol(hover), BY - 88, CELDA, actual, 1, 1);
+    // «Siguiente» va en la franja de arriba (y de 3 a 37), por encima del bloque actual (que empieza en BY - 88): así nunca se encima, ni en la última columna
     ctx.font = "12px system-ui,sans-serif";
-    ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
     ctx.fillStyle = "#b0b4bd";
-    ctx.fillText("Siguiente", 322, 24);
-    bloque(300, 28, 44, siguiente, 1, 1);
+    ctx.fillText("Siguiente", W - 20 - 34 - 6, 20);
+    bloque(W - 20 - 34, 3, 34, siguiente, 1, 1);
   }
 
   if (aviso) {
@@ -292,6 +293,7 @@ cv.addEventListener("pointerdown", (e) => {
 cv.addEventListener("pointermove", (e) => { hover = colDe(e); });
 cv.addEventListener("pointerup", (e) => { hover = colDe(e); soltar(hover); });
 addEventListener("keydown", (e) => {
+  if (e.target && e.target.closest && e.target.closest("button, a")) return;   // con un botón enfocado, Enter/espacio son para el botón
   if (e.key === "ArrowLeft") hover = Math.max(0, hover - 1);
   else if (e.key === "ArrowRight") hover = Math.min(COLS - 1, hover + 1);
   else if (e.key === " " || e.key === "Enter" || e.key === "ArrowDown") { e.preventDefault(); soltar(hover); }

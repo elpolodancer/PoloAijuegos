@@ -361,6 +361,7 @@ cv.addEventListener("pointerdown", (e) => {
   const [a, b] = tileAt(e.offsetX, e.offsetY); hov = [Math.floor(a), Math.floor(b)];
   if (modo !== "n") { ultimo = hov[0] * N + hov[1]; colocar(hov[0], hov[1]); }
   $("fab").hidden = true; $("invp").hidden = true; $("mesa").hidden = true;
+  hud(); // que los botones de la barra dejen de verse «elegidos» al cerrarse su panel
 });
 cv.addEventListener("pointermove", (e) => {
   const [a, b] = tileAt(e.offsetX, e.offsetY); hov = [Math.floor(a), Math.floor(b)];

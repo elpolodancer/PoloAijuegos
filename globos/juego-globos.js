@@ -57,12 +57,24 @@ const COLORES = [                  // globos [luz, base, sombra]
 // Si tu sumarPuntos recibe otros argumentos, ajústalo SOLO aquí (copia la llamada de gominolas/juego-gominolas.js).
 let sumarPuntos = null;
 import("../compartido/jugador.js").then((m) => { sumarPuntos = m.sumarPuntos; }).catch(() => {});
-let enviadosPerfil = 0;
-function enviarPerfil() {
-  const debe = Math.floor(puntos / PUNTOS_POR_PERFIL) - enviadosPerfil;
-  if (!sumarPuntos || debe <= 0) return;
-  enviadosPerfil += debe;
-  try { Promise.resolve(sumarPuntos(ID, debe)).catch(() => {}); } catch (e) {}
+// Cada partida lleva su propia cuenta de lo ya enviado. «final» guarda los puntos de la partida cuando empieza otra,
+// para que termine de enviar lo que le quedó pendiente.
+let cuenta = { enviados: 0, enviando: false, final: null };
+async function enviarPerfil() {
+  const c = cuenta;
+  if (!sumarPuntos || c.enviando) return;   // si ya hay un envío en marcha, él mismo revisa el total al terminar cada tanda
+  c.enviando = true;
+  try {
+    for (;;) {
+      const total = Math.floor((c === cuenta ? puntos : c.final) / PUNTOS_POR_PERFIL);
+      const debe = total - c.enviados;
+      if (debe <= 0) break;
+      const n = Math.min(debe, 1000);       // jugador.js y las reglas de Firestore aceptan como máximo 1000 por envío
+      if (!(await sumarPuntos(ID, n))) break;   // sin sesión: se intenta otra vez en el siguiente envío
+      c.enviados += n;
+    }
+  } catch (e) { /* sin conexión: queda pendiente para el siguiente envío */ }
+  c.enviando = false;
 }
 
 // ---------- Sonidos (WebAudio, sin archivos) ----------
@@ -217,7 +229,9 @@ function subirNivel() {
 function iniciar() {
   ac();
   globos = []; chispas = []; anillos = []; textos = []; cadena = []; punteroId = null;
-  puntos = 0; reventados = 0; mejorCadena = 0; enviadosPerfil = 0;
+  cuenta.final = puntos; enviarPerfil();   // termina de enviar lo que quedó pendiente de la partida anterior
+  cuenta = { enviados: 0, enviando: false, final: null };
+  puntos = 0; reventados = 0; mejorCadena = 0;
   nivel = 1; numerosActivos = false;
   t = 0; pendientes = INICIAL; destello = 0; aviso = 0; llenado = 0; peligro = 0;
   elPuntos.textContent = 0; pintarCubeta(); pintarNivel();

@@ -74,7 +74,7 @@ function reponer(b) {
 }
 
 function lanzar() {
-  for (const b of balls) if (b.espera > 0) b.espera = 0;
+  for (const b of balls) if (b.espera > 0) b.espera = 1e-4; // casi 0 (no 0): así «actualizar» la lanza con su ángulo al azar y no recta hacia arriba
 }
 
 function crearItem(x, y) {
