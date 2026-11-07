@@ -1,7 +1,7 @@
 // Ruta: botellascolores/mapa.js
 // Pantalla «Niveles» de Botellas de colores: mundo → México → estado (el mismo estilo que el mapa de Paperio).
 // - En el mundo solo se puede entrar a México.
-// - En México cada punto es una ETAPA de 100 niveles (en el orden de ETAPAS). Los 12 primeros ya tienen niveles; los otros 20
+// - En México cada punto es una ETAPA de 100 niveles (en el orden de ETAPAS). Los 22 primeros ya tienen niveles; los otros 10
 //   salen como puntos grises «próximamente» y su número de etapa aparece al tocarlos.
 // - Un estado muestra la cuadrícula de sus 100 niveles. Los niveles se desbloquean de uno en uno (hay que pasar el anterior),
 //   también entre estados: el primer nivel de un estado pide haber pasado el último del estado anterior.
@@ -13,7 +13,7 @@ export const NIVELES_POR_ETAPA = 100;
 // Etapas en orden de juego: la etapa k usa los niveles k·100 + 1 a (k+1)·100 y el fondo MUNDOS[k] de niveles-botellascolores.js.
 // (lon, lat) es la capital, donde se dibuja el punto.
 export const ETAPAS = [
-  { id: "col", nombre: "Colima", lon: -103.72, lat: 19.24 },  // 1 a 12: con niveles
+  { id: "col", nombre: "Colima", lon: -103.72, lat: 19.24 },  // 1 a 22: con niveles
   { id: "bcs", nombre: "Baja California Sur", lon: -110.31, lat: 24.14 },
   { id: "camp", nombre: "Campeche", lon: -90.53, lat: 19.85 },
   { id: "nay", nombre: "Nayarit", lon: -104.89, lat: 21.51 },
@@ -25,7 +25,7 @@ export const ETAPAS = [
   { id: "qroo", nombre: "Quintana Roo", lon: -88.3, lat: 18.5 },
   { id: "yuc", nombre: "Yucatán", lon: -89.62, lat: 20.97 },
   { id: "tab", nombre: "Tabasco", lon: -92.93, lat: 17.99 },
-  { id: "qro", nombre: "Querétaro", lon: -100.39, lat: 20.59 },  // 13 a 32: próximamente (aún sin niveles)
+  { id: "qro", nombre: "Querétaro", lon: -100.39, lat: 20.59 },
   { id: "slp", nombre: "San Luis Potosí", lon: -100.98, lat: 22.15 },
   { id: "son", nombre: "Sonora", lon: -110.96, lat: 29.07 },
   { id: "sin", nombre: "Sinaloa", lon: -107.39, lat: 24.8 },
@@ -35,7 +35,7 @@ export const ETAPAS = [
   { id: "tamps", nombre: "Tamaulipas", lon: -99.14, lat: 23.74 },
   { id: "chih", nombre: "Chihuahua", lon: -106.09, lat: 28.63 },
   { id: "bc", nombre: "Baja California", lon: -115.47, lat: 32.62 },
-  { id: "oax", nombre: "Oaxaca", lon: -96.73, lat: 17.07 },
+  { id: "oax", nombre: "Oaxaca", lon: -96.73, lat: 17.07 },  // 23 a 32: próximamente (aún sin niveles)
   { id: "mich", nombre: "Michoacán", lon: -101.19, lat: 19.7 },
   { id: "chis", nombre: "Chiapas", lon: -93.11, lat: 16.75 },
   { id: "nl", nombre: "Nuevo León", lon: -100.31, lat: 25.67 },

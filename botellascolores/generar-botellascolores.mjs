@@ -10,8 +10,9 @@ import { crear, resolver, puedeVerter, verter, resuelto, azarSemilla } from "./l
 import { ETAPAS } from "./mapa.js"; // solo se usan los nombres de los estados para los comentarios
 
 const ARCHIVO = "./niveles-botellascolores.js";
-const MUNDOS_N = 12, POR_MUNDO = 100, LIMITE = 300000;
-const NIEBLA = [8, 10, 11]; // etapas con modo niebla (la 9, la 11 y la 12); se cuentan desde 0
+const MUNDOS_N = 22, POR_MUNDO = 100, LIMITE = 300000; // etapas con niveles (Colima … Baja California); ver ETAPAS en mapa.js
+const ETAPAS_BASE = 12; // las primeras 12 etapas ya están publicadas: su fórmula NO se toca (así sus niveles no cambian y el progreso guardado sigue valiendo)
+const NIEBLA = [8, 10, 11, 14, 17, 20]; // etapas con modo niebla (la 9, 11, 12, 15, 18 y 21); se cuentan desde 0
 const MIN_FORMAS = 2;
 
 function formas(est, cap) { // primeros movimientos que no arruinan el nivel
@@ -39,12 +40,14 @@ for (let w = 0; w < MUNDOS_N; w++) {
   for (let k = 1; k <= POR_MUNDO; k++) {
     const r = azarSemilla(w * 1000 + k + 7);
     const p = (k - 1) / (POR_MUNDO - 1);
-    let s = 0.6 * (w / (MUNDOS_N - 1)) + 0.4 * p + (r() - 0.5) * 0.2;
+    // Etapas 1 a 12: sube de 0 a 1 a lo largo de las 12. Etapas 13 en adelante: cada una arranca en dificultad media-alta y llega al máximo.
+    let s = (w < ETAPAS_BASE ? 0.6 * (w / (ETAPAS_BASE - 1)) + 0.4 * p : 0.5 + 0.5 * p) + (r() - 0.5) * 0.2;
     if (k % 10 === 0) s += 0.12;
     s = Math.max(0.02, Math.min(1, s));
     let objetivo = 9 + s * 55;       // capas totales: de 9 a 64
     if (niebla) objetivo *= 0.7;     // en niebla se ve menos, así que se piden menos capas
-    const preferidas = w >= 2 && (k % 10 === 0 || (s > 0.55 && r() < 0.25)) ? 1 : 2;
+    const probUna = w < ETAPAS_BASE ? 0.25 : 0.3; // probabilidad de usar una sola botella vacía en los niveles difíciles
+    const preferidas = w >= 2 && (k % 10 === 0 || (s > 0.55 && r() < probUna)) ? 1 : 2;
     let nivel = null;
     // Si con una sola botella vacía no sale un nivel que cumpla, se prueba con 2 vacías
     for (const vacias of preferidas === 1 ? [1, 2] : [2]) {
