@@ -14,7 +14,10 @@
     .inmersivo .marco { aspect-ratio: 360 / 560;
       width: min(100vw, calc(100vh * 360 / 560));
       width: min(100vw, calc(100dvh * 360 / 560)); }
-    #velo { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; text-align: center; background: rgba(10,10,12,.8); overflow-y: auto; }
+    #velo { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 12px; padding: 16px; text-align: center; background: rgba(10,10,12,.8); overflow-y: auto; }
+    #velo > :first-child { margin-top: auto; }   /* centrado vertical que, si no cabe (celular acostado), se desplaza en vez de cortarse */
+    #velo > :last-child { margin-bottom: auto; }
+    @media (max-height: 520px) { #velo { gap: 8px; padding: 12px; } #velo h2 { font-size: 1.3rem; } #velo p { font-size: .8rem; line-height: 1.35; } }
     #velo h2 { margin: 0; font-size: 1.6rem; }
     #velo p { margin: 0; max-width: 320px; font-size: .9rem; line-height: 1.45; }
     #estado { min-height: 1.2em; }

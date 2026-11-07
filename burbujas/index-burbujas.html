@@ -19,7 +19,10 @@
     #zona { position: relative; flex: 1; min-height: 0; width: 100%; display: flex; justify-content: center; align-items: center; container-type: size; }
     /* El lienzo mantiene su proporción (462×760) y cabe entero en la pantalla */
     canvas { width: min(100cqw, calc(100cqh * 462 / 760)); height: auto; aspect-ratio: 462 / 760; touch-action: none; }
-    .velo { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(20, 8, 42, .82); text-align: center; padding: 24px; }
+    .velo { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: flex-start; gap: 12px; overflow-y: auto; background: rgba(20, 8, 42, .82); text-align: center; padding: 24px; }
+    .velo > :first-child { margin-top: auto; }   /* centrado vertical que, si no cabe (celular acostado), se desplaza en vez de cortarse */
+    .velo > :last-child { margin-bottom: auto; }
+    @media (max-height: 520px) { .velo { gap: 8px; padding: 12px 24px; } .velo h2 { font-size: 24px; } .velo p { max-width: 560px; font-size: 14px; line-height: 1.35; } }
     .velo.activo { display: flex; }
     .velo h2 { margin: 0; font-size: 30px; }
     .velo p { margin: 0; opacity: .9; max-width: 320px; line-height: 1.4; }

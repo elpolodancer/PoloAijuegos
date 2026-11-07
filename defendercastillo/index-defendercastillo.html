@@ -49,7 +49,9 @@
     #menuLista { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .b3d.mapa { --t: 56px; height: auto; min-height: var(--t); flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 8px 12px; text-align: left; white-space: normal; font-size: 13px; }
     .b3d.mapa small { font-size: 11px; font-weight: 600; opacity: .9; }
-    #fin { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 20px; text-align: center; background: rgba(10,10,12,.88); }
+    #fin { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 10px; padding: 20px; overflow-y: auto; text-align: center; background: rgba(10,10,12,.88); }
+    #fin > :first-child { margin-top: auto; }   /* centrado vertical que, si no cabe (celular acostado), se desplaza en vez de cortarse */
+    #fin > :last-child { margin-bottom: auto; }
     #fin h2 { margin: 0; font-size: 1.5rem; }
     #fin p { margin: 0; color: var(--suave); }
     #estrellas { font-size: 2rem; letter-spacing: 4px; }
@@ -63,6 +65,14 @@
       #record { display: none; }
     }
     @media (max-height: 420px) { #tienda, #controles { gap: 6px 8px; } #tienda .b3d { --t: 38px; } }
+
+    /* Celular en horizontal: los marcadores van en una columna a la izquierda (así no tapan el mapa) y la tienda a su lado */
+    @media (orientation: landscape) and (max-height: 520px) {
+      .hud-izq { flex-direction: column; flex-wrap: nowrap; align-items: flex-start; gap: 5px; max-width: none; }
+      #mapaNombre { flex-basis: auto; max-width: 78px; }
+      #record { display: none; }
+      #tienda { left: calc(max(8px, env(safe-area-inset-left)) + 84px); }
+    }
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>

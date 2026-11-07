@@ -204,8 +204,16 @@ $("btnQuitar").addEventListener("click", () => {
   modoQuitar = !modoQuitar; tipoSel = null; torreSel = null; modoMeteoro = false;
   if (modoQuitar) mensaje("🪓 Toca un árbol o roca para talarlo (cuesta monedas) o una torre para venderla", 4000);
 });
+let salirListo = false, salirTimer = 0;
 $("btnMapas").addEventListener("click", () => {
-  if ((p.estado === "oleada" || p.torres.length) && p.estado !== "ganado" && p.estado !== "perdido" && !confirm("¿Salir de este mapa? Se pierde la partida en curso.")) return;
+  const enCurso = (p.estado === "oleada" || p.torres.length) && p.estado !== "ganado" && p.estado !== "perdido";
+  if (enCurso && !salirListo) {
+    // Sin confirm(): el cuadro del navegador saca de la pantalla completa. Se pide tocar dos veces.
+    salirListo = true; clearTimeout(salirTimer); salirTimer = setTimeout(() => (salirListo = false), 3000);
+    mensaje("🗺️ Toca otra vez para salir del mapa: se pierde la partida en curso", 3000);
+    return;
+  }
+  salirListo = false; clearTimeout(salirTimer);
   $("fin").hidden = true;
   abrirMenu();
 });

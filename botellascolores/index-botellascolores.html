@@ -28,8 +28,15 @@
     }
 
     /* La pantalla no se desplaza; si las botellas no caben, esta zona hace scroll por dentro */
-    .zona { position: fixed; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: calc(58px + env(safe-area-inset-top, 0px)) 12px calc(24px + env(safe-area-inset-bottom, 0px)); }
+    .zona { position: fixed; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: calc(58px + env(safe-area-inset-top, 0px)) 12px calc(64px + env(safe-area-inset-bottom, 0px)); } /* 64px abajo: así el ⛶ no tapa las botellas */
     .zona > section { width: 100%; max-width: 480px; margin: 0 auto; }
+    /* Celular en horizontal (poco alto): la mesa se ensancha para que las botellas queden en una sola fila y quepan sin scroll */
+    @media (orientation: landscape) and (max-height: 520px) {
+      .zona { padding-top: calc(52px + env(safe-area-inset-top, 0px)); }
+      .zona > section { max-width: 860px; }
+      #juego { gap: 6px; }
+      #mesa { gap: 16px 8px; padding-top: 16px; }
+    }
 
     #pista { margin: 0; font-size: .85rem; color: rgba(220, 230, 255, .9); text-align: center; }
     .seg.oculto { display: flex; align-items: center; justify-content: center; background: #2b3270; color: rgba(255,255,255,.6); font-weight: 800; font-size: 14px; }

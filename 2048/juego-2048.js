@@ -28,8 +28,12 @@ function colorDe(v) {
 }
 
 // ----- Tamaño del tablero (se ajusta a la pantalla) -----
+const apaisado = matchMedia("(orientation: landscape) and (max-height: 520px)"); // mismo corte que el CSS de la página
 function ajustar() {
-  const lado = Math.max(220, Math.min(innerWidth - 24, innerHeight - 280, 520));
+  // En horizontal el tablero va al lado de los controles: se descuenta su columna (280) y el margen del ← (56)
+  const lado = apaisado.matches
+    ? Math.max(140, Math.min(innerHeight - 24, innerWidth - 370, 520))
+    : Math.max(220, Math.min(innerWidth - 24, innerHeight - 280, 520));
   document.documentElement.style.setProperty("--ancho", lado + "px");
   hueco = Math.max(6, Math.round(lado * (N > 4 ? 0.02 : 0.03)));
   celda = (lado - hueco * (N + 1)) / N;

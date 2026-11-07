@@ -19,6 +19,15 @@
     }
     .hud-izq { flex-wrap: wrap; gap: 8px; max-width: calc(100vw - 16px); }
     .chip b { color: #fff; }
+    /* Celular en horizontal (poco alto): casi todo el alto es para el tablero y los marcadores pasan a una columna a la izquierda */
+    @media (orientation: landscape) and (max-height: 520px) {
+      .inmersivo .escena { padding: calc(8px + env(safe-area-inset-top)) 0 calc(8px + env(safe-area-inset-bottom)); }
+      .inmersivo .marco {
+        width: min(100vw, calc((100vh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 360 / 480));
+        width: min(100vw, calc((100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 360 / 480));
+      }
+      .hud-izq { flex-direction: column; align-items: flex-start; flex-wrap: nowrap; gap: 6px; max-width: none; }
+    }
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>
