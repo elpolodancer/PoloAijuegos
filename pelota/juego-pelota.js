@@ -123,6 +123,10 @@ addEventListener("keydown", (e) => {
   tecla[k] = true;
 });
 addEventListener("keyup", (e) => (tecla[e.key.toLowerCase()] = false));
+// Si la ventana pierde el foco (cambiar de pestaña, llamada…) se sueltan todas las teclas y botones para que la pelota no siga rodando sola
+const soltarTodo = () => { for (const k in tecla) tecla[k] = false; toque.izq = toque.der = toque.salto = false; document.querySelectorAll(".ctl-wrap .b3d").forEach((b) => b.classList.remove("on")); };
+addEventListener("blur", soltarTodo);
+document.addEventListener("visibilitychange", () => { if (document.hidden) soltarTodo(); });
 for (const [id, k] of [["izq", "izq"], ["der", "der"], ["salto", "salto"]]) {
   const b = $(id);
   b.addEventListener("pointerdown", (e) => { e.preventDefault(); toque[k] = true; b.classList.add("on"); if (k === "salto") buffer = 0.12; b.setPointerCapture(e.pointerId); });

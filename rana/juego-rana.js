@@ -111,6 +111,13 @@ function saltar(d) {
   rana.salto = { x0: rana.x, y0: cy(rana.fila), x1: nx, f1: nf, t: 0, yAct: cy(rana.fila) };
 }
 
+// Cuando un vehículo, tronco o tortuga ya salió por completo de la pantalla, da la vuelta al otro lado.
+// Usa su ancho para reaparecer justo en el borde (antes los troncos largos de los niveles 11-28 aparecían de golpe dentro de la pantalla).
+function envolver(L, it) {
+  if (L.v > 0 && it.x > LW - it.w) it.x -= LW;
+  else if (L.v < 0 && it.x + it.w < 0) it.x += LW;
+}
+
 function sobrePlataforma(L) { return L.items.find((p) => !p.hundido && rana.x > p.x + 6 && rana.x < p.x + p.w - 6); }
 
 function aterrizar() {
@@ -126,8 +133,7 @@ function paso(dt) {
   // carriles en movimiento
   for (const L of niv.lanes) for (const it of L.items) {
     it.x += L.v * dt;
-    if (L.v > 0 && it.x > COLS * T + 3 * T) it.x -= LW;
-    else if (L.v < 0 && it.x + it.w < -3 * T) it.x += LW;
+    envolver(L, it);
     if (L.sub === "tortuga") { const t = (reloj + it.fase) % 6; it.hundido = t > 4.3 && t < 5.8; it.aviso = t > 3.6 && !it.hundido; }
   }
   // rana
@@ -319,7 +325,7 @@ function bucle(ahora) {
     if (tMuerte > 0.8) { if (vidas <= 0) sinVidas(); else { reiniciarRana(); estado = "jugando"; } }
   } else for (const L of niv.lanes) for (const it of L.items) { // el fondo sigue moviéndose en los menús
     it.x += L.v * dt;
-    if (L.v > 0 && it.x > COLS * T + 3 * T) it.x -= LW; else if (L.v < 0 && it.x + it.w < -3 * T) it.x += LW;
+    envolver(L, it);
   }
   dibujar();
   requestAnimationFrame(bucle);

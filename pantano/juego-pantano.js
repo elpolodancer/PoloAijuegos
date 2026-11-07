@@ -1,6 +1,6 @@
 // Ruta: pantano/juego-pantano.js (lógica del juego «pantano»: defiende la cabaña disparando a los bichos del pantano)
 // Proyecto: Juegos (portal). PAQUETES 1 a 5: disparo, enemigos (de tierra y voladores), jefes cada 5 oleadas, monedas, tienda, 4 armas, gráficos/animaciones y campaña de 5 niveles con fondos y misiones.
-import { alCambiarSesion, entrar, sumarPuntos } from "../compartido/jugador.js";
+// La sesión y los puntos se cargan aparte (más abajo): si Firebase no está disponible (sin conexión la primera vez) el juego igual funciona.
 
 const ID = "pantano"; // el mismo id de juegos.js (colección de puntos en Firestore)
 
@@ -126,10 +126,16 @@ const misionCumplida = () => {
   return M.tipo === "vida" ? minVida >= M.meta : M.tipo === "puntos" ? puntos >= M.meta : misionProg >= M.meta;
 };
 
-alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; });
-btnEntrar.addEventListener("click", () => entrar().catch((e) => { estadoTxt.textContent = e.message; }));
+let sumarPuntos = null, entrarGoogle = null;
+import("../compartido/jugador.js").then((m) => {
+  sumarPuntos = m.sumarPuntos; entrarGoogle = m.entrar;
+  m.alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; });
+}).catch(() => {});
+btnEntrar.addEventListener("click", () => { if (entrarGoogle) entrarGoogle().catch((e) => { estadoTxt.textContent = e.message; }); });
 
 // ---------- Sonido ----------
+// En iPhone el audio solo se activa dentro de un toque: se prepara en el primer toque y se reanuda si quedó dormido
+function activarAudio() { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); if (audio.state === "suspended") audio.resume(); } catch (e) {} }
 function tono(f, d = 0.06, tipo = "square") {
   try {
     audio = audio || new (window.AudioContext || window.webkitAudioContext)();
@@ -204,7 +210,7 @@ async function terminar(gano) {
   estadoTxt.textContent = txt;
   ui();
   const sumar = Math.floor(puntos / PUNTOS_POR_PERFIL);
-  if (!usuario || !sumar) return;
+  if (!usuario || !sumar || !sumarPuntos) return;
   try { await sumarPuntos(ID, sumar); estadoTxt.textContent += " +" + sumar + " al perfil ✓"; }
   catch (e) { estadoTxt.textContent += " No se pudieron guardar (" + e.message + ")"; }
 }
@@ -630,10 +636,10 @@ function apuntar(ev) {
   objetivo.x = Math.max(GX + 20, ((ev.clientX - r.left) / r.width) * W);
   objetivo.y = ((ev.clientY - r.top) / r.height) * H;
 }
-cv.addEventListener("pointerdown", (ev) => { apuntar(ev); apuntando = true; try { cv.setPointerCapture(ev.pointerId); } catch (e) {} });
+cv.addEventListener("pointerdown", (ev) => { activarAudio(); apuntar(ev); apuntando = true; try { cv.setPointerCapture(ev.pointerId); } catch (e) {} });
 cv.addEventListener("pointermove", apuntar);
 ["pointerup", "pointercancel"].forEach((n) => cv.addEventListener(n, () => { apuntando = false; }));
-jugar.addEventListener("click", empezar);
+jugar.addEventListener("click", () => { activarAudio(); empezar(); });
 
 // ---------- Bucle ----------
 function ciclo(t) {

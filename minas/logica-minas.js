@@ -240,7 +240,7 @@ export function paso(E, M, dt) {
   if (U.m > 0) M.pool = suma(M.pool, mulN(U, dt));                                          // pozos con gerente: llenan su depósito
   for (let i = 0; i < M.pozos.length; i++) { const w = M.pozos[i]; if (w.ger === 0 && w.f) avanzar(E, M, "m", i, dt); }
   const a = M.asc, al = M.alm;
-  if (auto(a)) { if (U.m > 0 || M.pool.m > 0) { const mov = tomarDeps(M, mulN(tasaAsc(M), dt)); if (mov.m > 0) al.dep = suma(al.dep, mov); } }
+  if (auto(a)) { const mov = tomarDeps(M, mulN(tasaAsc(M), dt)); if (mov.m > 0) al.dep = suma(al.dep, mov); }   // también recoge los depósitos de pozos manuales (antes no lo hacía si ningún pozo tenía gerente)
   else if (a.f) avanzar(E, M, "a", 0, dt);
   if (auto(al)) { if (al.dep.m > 0) { const v = min(al.dep, mulN(tasaAlm(M), dt)); al.dep = resta(al.dep, v); vender(E, M, v); } }
   else if (al.f) avanzar(E, M, "w", 0, dt);

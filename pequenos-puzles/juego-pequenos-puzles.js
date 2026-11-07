@@ -1,7 +1,6 @@
 // Ruta: pequenos-puzles/juego-pequenos-puzles.js
 import { NIVELES, TOTAL_NIVELES } from "./niveles-pequenos-puzles.js";
 import { celdas } from "./logica-pequenos-puzles.js";
-import { sumarPuntos } from "../compartido/jugador.js";
 
 // ---- Ajustes ----
 const ID = "puzles";             // mismo id que en juegos.js
@@ -33,12 +32,13 @@ const velo = $("velo"), zona = $("zona");
 let numero = 0, nivel = null, piezas = [];   // piezas: {color, celdas, w, h, x, y (pos. en bandeja), colocada:{x,y}|null}
 let c = 40, gridX = 0, gridY = 0, ancho = 0;
 let arrastre = null;                          // {i, ox, oy, px, py}
-let t0 = null, restante = 0, jugando = false, raf = 0;
+let t0 = null, restante = 0, jugando = false, raf = 0, tFin = 0;
+let lateral = false;                          // true = la bandeja va a la derecha del tablero (pantallas anchas y bajas)
 
 // ---- Menú de niveles ----
 const COLOR_TRAMO = ["b-verde", "b-azul", "b-morado", "b-oro", "b-rojo", "b-gris", "b-negro"]; // 1-10 verde … 61-70 negro
 function abrirMenu() {
-  jugando = false; cancelAnimationFrame(raf); velo.classList.remove("ver");
+  jugando = false; cancelAnimationFrame(raf); clearTimeout(tFin); velo.classList.remove("ver");
   juego.hidden = true; menu.hidden = false;
   const hechos = new Set(progreso.hechos);
   $("menu-texto").textContent = "Niveles pasados: " + hechos.size + " de " + TOTAL_NIVELES;
@@ -66,7 +66,7 @@ function jugar(n) {
       w: Math.max(...cs.map((q) => q[0])) + 1, h: Math.max(...cs.map((q) => q[1])) + 1, x: 0, y: 0, colocada: null };
   });
   arrastre = null; t0 = null; restante = nivel.limite || 0;
-  velo.classList.remove("ver");
+  clearTimeout(tFin); velo.classList.remove("ver");
   menu.hidden = true; juego.hidden = false;
   $("titulo-nivel").textContent = "Nivel " + n;
   $("tiempo").textContent = nivel.limite ? nivel.limite + " s" : "";
@@ -77,28 +77,50 @@ function jugar(n) {
 }
 
 // ---- Medidas y bandeja ----
+// Dos acomodos: bandeja ABAJO del tablero (celulares en vertical) o a la DERECHA (pantallas anchas y bajas, p. ej. celular en horizontal).
+// Se elige el que deje las celdas más grandes sin necesidad de scroll.
 function disponer() {
   if (!nivel) return;
-  ancho = Math.min(zona.clientWidth || 360, 520);
-  const maxAlto = zona.clientHeight || 600;
-  c = Math.floor(Math.min((ancho - MARGEN * 2) / nivel.columnas, CELDA_MAX));
-  let alto = colocar();
-  while (alto > maxAlto && c > 10) { c--; alto = colocar(); } // sin scroll: si no cabe, las celdas se achican
+  const zW = zona.clientWidth || 360, zH = zona.clientHeight || 600;
+  const wV = Math.min(zW, 520), wL = Math.min(zW, 900);
+  const cV = mejorCelda(false, wV, zH), cL = mejorCelda(true, wL, zH);
+  lateral = cL > cV;
+  c = lateral ? cL : cV;
+  const [w, alto] = colocar(c, lateral, lateral ? wL : wV);
+  ancho = w;
   const dpr = window.devicePixelRatio || 1;
   lienzo.style.width = ancho + "px"; lienzo.style.height = alto + "px";
   lienzo.width = Math.round(ancho * dpr); lienzo.height = Math.round(alto * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
-// Coloca el tablero y la bandeja con el tamaño de celda actual y devuelve el alto total
-function colocar() {
-  gridX = Math.round((ancho - nivel.columnas * c) / 2); gridY = MARGEN;
-  let x = MARGEN, y = gridY + nivel.filas * c + 28, altoFila = 0;
+// Mayor tamaño de celda (10 a CELDA_MAX px) con el que todo cabe en wMax × zH
+function mejorCelda(lat, wMax, zH) {
+  for (let cs = CELDA_MAX; cs > 10; cs--) {
+    if (nivel.columnas * cs + MARGEN * 2 > wMax) continue;
+    const [w, h] = colocar(cs, lat, wMax);
+    if (w <= wMax && h <= zH) return cs;
+  }
+  return 10;
+}
+// Coloca el tablero y la bandeja con el tamaño de celda cs y devuelve [ancho, alto] totales
+function colocar(cs, lat, wMax) {
+  const bw = nivel.columnas * cs, bh = nivel.filas * cs;
+  let x, y, altoFila = 0, x0, limite;
+  if (!lat) {
+    gridX = Math.round((wMax - bw) / 2); gridY = MARGEN;
+    x0 = MARGEN; x = x0; y = gridY + bh + 28; limite = wMax - MARGEN;
+  } else {
+    gridX = MARGEN; gridY = MARGEN;
+    x0 = MARGEN + bw + 36; x = x0; y = MARGEN; limite = wMax - MARGEN;
+  }
+  let maxX = x0;
   piezas.forEach((p) => {
-    const w = p.w * c, h = p.h * c;
-    if (x > MARGEN && x + w > ancho - MARGEN) { x = MARGEN; y += altoFila + SEPARACION; altoFila = 0; }
-    p.x = x; p.y = y; x += w + SEPARACION; altoFila = Math.max(altoFila, h);
+    const w = p.w * cs, h = p.h * cs;
+    if (x > x0 && x + w > limite) { x = x0; y += altoFila + SEPARACION; altoFila = 0; }
+    p.x = x; p.y = y; x += w + SEPARACION; altoFila = Math.max(altoFila, h); maxX = Math.max(maxX, p.x + w);
   });
-  return y + altoFila + MARGEN;
+  const alto = Math.max(y + altoFila + MARGEN, lat ? gridY + bh + MARGEN : 0);
+  return [lat ? maxX + MARGEN : wMax, alto];
 }
 
 function posicion(i) {
@@ -228,12 +250,14 @@ function ganar() {
   let texto = "Tiempo: " + seg.toFixed(1) + " s";
   if (primera) {
     texto += " · +" + PUNTOS_NIVEL + " puntos";
-    try { const r = sumarPuntos(ID, Math.floor(PUNTOS_NIVEL / PUNTOS_POR_PERFIL)); if (r && r.catch) r.catch(() => {}); } catch (e) {}
+    // Se carga aparte: si Firebase no está disponible (sin conexión la primera vez) el juego igual funciona
+    import("../compartido/jugador.js").then((m) => m.sumarPuntos(ID, Math.floor(PUNTOS_NIVEL / PUNTOS_POR_PERFIL))).catch(() => {});
   }
   const botones = [["Repetir", () => jugar(numero)]];
   if (NIVELES[numero]) botones.unshift(["Siguiente nivel", () => jugar(numero + 1)]);
   botones.push(["Niveles", abrirMenu]);
-  setTimeout(() => mostrar("¡Nivel " + numero + " resuelto!", texto, botones), 350);
+  clearTimeout(tFin);
+  tFin = setTimeout(() => mostrar("¡Nivel " + numero + " resuelto!", texto, botones), 350);
 }
 function perder() {
   jugando = false; cancelAnimationFrame(raf); arrastre = null; dibujar();
