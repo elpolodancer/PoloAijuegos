@@ -1,27 +1,34 @@
 <!doctype html>
 <!-- Ruta: jetpack/index-jetpack.html -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Jetpack</title>
-  <meta name="theme-color" content="#1b2330" />
+  <meta name="theme-color" content="#101114" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    main { max-width: 900px; padding: 8px; }
-    #lienzo { display: block; width: 100%; height: auto; aspect-ratio: 2 / 1; border: 1px solid var(--borde); border-radius: 16px; touch-action: none; user-select: none; -webkit-user-select: none; background: #1a2238; }
-    #info { text-align: center; color: var(--suave); font-size: .85rem; margin: 6px 0; min-height: 1.2em; }
+    html.inmersivo { --fondo-juego: #101114; }
+    /* Juego horizontal (800×400): el marco se ajusta al ancho o al alto de la ventana */
+    .inmersivo .marco { aspect-ratio: 2 / 1;
+      width: min(100vw, calc(100vh * 2));
+      width: min(100vw, calc(100dvh * 2)); }
+    .inmersivo .lienzo { user-select: none; -webkit-user-select: none; touch-action: none; }
+    /* Los marcadores del juego se dibujan en las esquinas del lienzo: los botones van abajo */
+    .hud-abajo { flex-wrap: wrap; gap: 8px; max-width: calc(100vw - 80px); }
+    #info { height: auto; min-height: 30px; padding: 4px 10px; max-width: 60vw; font-size: 12px; font-weight: 700; line-height: 1.25; white-space: normal; color: #e3e5ea; }
   </style>
 </head>
-<body>
-  <header class="barra">
-    <div><a class="volver" href="../">← Juegos</a> <h1 style="display:inline;margin-left:10px">🚀 Jetpack</h1></div>
-    <div id="sesion"></div>
-  </header>
-  <main>
-    <canvas id="lienzo"></canvas>
-    <div id="info"></div>
-  </main>
+<body class="inmersivo" data-pantalla-auto>
+  <div class="escena">
+    <div class="marco"><canvas id="lienzo" class="lienzo"></canvas></div>
+  </div>
+  <div class="hud hud-abajo">
+    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
+    <div id="sesion" style="display:flex;align-items:center;gap:8px"></div>
+    <span class="chip" id="info"></span>
+  </div>
   <script type="module" src="juego-jetpack.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>

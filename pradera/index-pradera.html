@@ -1,60 +1,66 @@
 <!doctype html>
 <!-- Ruta: pradera/index-pradera.html -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Pradera</title>
+  <meta name="theme-color" content="#101114" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    [hidden] { display: none !important; }
-    body { overscroll-behavior: none; }
-    #caja { position: relative; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 4px 4px 16px; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-    #marco { position: relative; line-height: 0; border-radius: 8px; overflow: hidden; box-shadow: 0 0 0 3px #1b2330; }
+    html.inmersivo { --fondo-juego: #101114; }
+    /* Escena: el lienzo se centra en la ventana. Franja libre arriba (🏠 🔊 y el marcador del juego);
+       en vertical además se reserva abajo el espacio de los mandos (en horizontal los mandos flotan sobre el juego). */
+    #caja { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; touch-action: none;
+      padding: calc(54px + env(safe-area-inset-top)) 0 calc(8px + env(safe-area-inset-bottom)); }
+    #caja:not(.sobre) { padding-bottom: calc(160px + env(safe-area-inset-bottom)); }
+    #marco { position: relative; line-height: 0; }
     #lienzo { display: block; touch-action: none; image-rendering: pixelated; }
-    #panel { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px; text-align: center; line-height: 1.35; background: rgba(15, 22, 33, .78); color: #fff; }
+    #panel { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 12px; text-align: center; line-height: 1.35; background: rgba(16, 17, 20, .82); color: #fff; overflow: auto; }
     #panel h2 { margin: 0; font-size: 1.5rem; }
     #panel p { margin: 0; max-width: 34ch; font-size: .95rem; color: #dbe4ec; white-space: pre-line; }
-    #mandos { display: flex; justify-content: space-between; width: 100%; max-width: 560px; padding: 0 8px; touch-action: none; }
+
+    /* Mandos 3D flotantes abajo (◀ ▶ a la izquierda; 💨 ⬆ a la derecha, dejando libre el botón ⛶) */
+    #mandos { position: fixed; z-index: 6; left: 0; right: 0; bottom: max(14px, env(safe-area-inset-bottom)); display: flex; justify-content: space-between; align-items: flex-end;
+      padding: 0 calc(64px + env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left)); pointer-events: none; touch-action: none; }
     .grupo { display: flex; gap: 14px; }
-    .mando { width: 74px; height: 74px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .35); background: rgba(27, 35, 48, .85); color: #fff; font-size: 1.7rem; line-height: 1; display: grid; place-items: center; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; padding: 0; }
-    .mando small { display: block; font-size: .6rem; margin-top: 2px; opacity: .8; }
-    .mando.on { background: var(--acento, #4a90d9); border-color: #fff; }
+    .mando { pointer-events: auto; touch-action: none; }
+    #caja.sobre ~ #mandos .mando { opacity: .85; }
     .mando:focus-visible { outline: 3px solid #ffd54a; }
-    /* En horizontal los mandos se superponen al juego para que quepa más pantalla */
-    #caja.sobre { padding: 2px; }
-    #caja.sobre #mandos { position: absolute; left: 0; right: 0; bottom: 14px; max-width: none; padding: 0 18px; pointer-events: none; }
-    #caja.sobre .mando { pointer-events: auto; width: 66px; height: 66px; opacity: .72; }
   </style>
 </head>
-<body>
-  <header class="barra">
-    <a class="btn" href="../">← Portal</a>
-    <h1>🦊 Pradera</h1>
-    <button class="btn" id="bSonido" aria-label="Sonido">🔊</button>
-  </header>
-  <main>
-    <div id="caja">
-      <div id="marco">
-        <canvas id="lienzo" aria-label="Nivel 1 de Pradera"></canvas>
-        <div id="panel">
-          <h2 id="pTitulo"></h2>
-          <p id="pTexto"></p>
-          <button class="btn" id="pBoton"></button>
-        </div>
-      </div>
-      <div id="mandos" oncontextmenu="return false">
-        <div class="grupo">
-          <button class="mando" data-k="izq" aria-label="Izquierda">◀</button>
-          <button class="mando" data-k="der" aria-label="Derecha">▶</button>
-        </div>
-        <div class="grupo">
-          <button class="mando" data-k="correr" aria-label="Correr">💨<small>correr</small></button>
-          <button class="mando" data-k="salto" aria-label="Saltar">⬆<small>saltar</small></button>
-        </div>
+<body class="inmersivo" data-pantalla-auto>
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../" aria-label="Volver a Juegos" title="Juegos"><span class="b-ico">🏠</span></a>
+  </div>
+  <div class="hud hud-der">
+    <button class="b3d chico b-gris" id="bSonido" type="button" aria-label="Sonido" title="Sonido">🔊</button>
+  </div>
+
+  <div id="caja">
+    <div id="marco">
+      <canvas id="lienzo" aria-label="Nivel 1 de Pradera"></canvas>
+      <div id="panel">
+        <h2 id="pTitulo"></h2>
+        <p id="pTexto"></p>
+        <button class="b3d txt grande b-verde" id="pBoton" type="button"></button>
       </div>
     </div>
-  </main>
+  </div>
+
+  <div id="mandos" oncontextmenu="return false">
+    <div class="grupo">
+      <button class="b3d grande b-azul mando" data-k="izq" type="button" aria-label="Izquierda" title="Izquierda"><span class="b-ico">◀</span></button>
+      <button class="b3d grande b-azul mando" data-k="der" type="button" aria-label="Derecha" title="Derecha"><span class="b-ico">▶</span></button>
+    </div>
+    <div class="grupo">
+      <button class="b3d grande b-oro mando" data-k="correr" type="button" aria-label="Correr" title="Correr"><span class="b-ico">💨</span></button>
+      <button class="b3d grande b-verde mando" data-k="salto" type="button" aria-label="Saltar" title="Saltar"><span class="b-ico">⬆</span></button>
+    </div>
+  </div>
+
   <script type="module" src="juego-pradera.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>

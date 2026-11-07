@@ -115,6 +115,7 @@ function empezar() {
   for (let i = 0; i < 6; i++) filas.push({ c: columna(), y: H - RH * (i + 2), hit: false });
   puntos = 0; avance = 0; inicio = 0; restante = TIEMPO; error = null; vivo = true; ultimo = performance.now();
   jugar.hidden = true; alMenu.hidden = true; menu.hidden = true; cv.hidden = false; scrollTo(0, 0);
+  document.body.classList.add("jugando"); // el CSS usa esta clase para mover el texto y dejar libre el lienzo
   let k = modo; // canción elegida en el menú...
   if (k === null) { do { k = Math.floor(Math.random() * MELODIAS.length); } while (k === ultimaMelodia && MELODIAS.length > 1); } // ...o al azar, sin repetir la anterior
   ultimaMelodia = k;
@@ -124,6 +125,7 @@ function empezar() {
 }
 // Menú principal: botón «Modo aleatorio» y una rejilla de 4 columnas con un cuadro cuadrado (1:1) por canción
 function mostrarMenu() {
+  document.body.classList.remove("jugando");
   menu.hidden = false; cv.hidden = true; jugar.hidden = true; alMenu.hidden = true;
   estado.textContent = "Toca una canción para empezar, o juega al azar. Tienes 1 minuto; si tocas una tecla equivocada, pierdes.";
 }
@@ -187,6 +189,7 @@ function tocar(e) {
 }
 async function fin(motivo) {
   vivo = false;
+  document.body.classList.remove("jugando");
   jugar.hidden = false; alMenu.hidden = false;
   jugar.textContent = "Jugar otra vez"; // repite el mismo modo (aleatorio o la misma canción)
   registrar();

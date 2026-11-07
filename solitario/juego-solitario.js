@@ -27,6 +27,8 @@ const VALS = ["", "A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "
 const $ = (id) => document.getElementById(id);
 const tablero = $("tablero"), estado = $("estado"), btnEntrar = $("entrar");
 const rojo = (c) => c.s === 1 || c.s === 2;
+// Los botones de la partida solo llevan emoji: su texto va en title y aria-label
+function rotular(id, texto) { const b = $(id); b.title = texto; b.setAttribute("aria-label", texto); }
 
 let mazo, descarte, base, tab, puntos, movs, sel, historial, inicioT, reloj, terminado, guardado, usuario = null;
 let cfg = { robar: 1, reciclajes: Infinity }, reciclados = 0, actual = null, pagina = 0;
@@ -81,6 +83,7 @@ function pintarMonedas() { $("monedas-barra").textContent = "🪙 " + leerMoneda
 const VISTAS = ["menu", "dificultad", "niveles", "juego"];
 function mostrar(v) {
   VISTAS.forEach((n) => { $("vista-" + n).hidden = n !== v; });
+  document.body.classList.toggle("jugando", v === "juego"); // los marcadores y botones de la partida solo se ven jugando
   if (v === "niveles") pintarNiveles();
 }
 document.querySelectorAll("[data-volver]").forEach((b) => b.addEventListener("click", () => mostrar(b.dataset.volver)));
@@ -157,11 +160,11 @@ async function nueva(opc) {
     if (!datos) return;
     dif = datos.dificultad; semilla = datos.semilla;
     $("titulo-partida").textContent = "Nivel " + opc.nivel + " · " + DIFICULTADES[dif].emoji + " " + DIFICULTADES[dif].nombre;
-    $("nueva").textContent = "Reiniciar nivel";
+    rotular("nueva", "Reiniciar nivel");
   } else {
     dif = opc.dificultad;
     $("titulo-partida").textContent = "Partida rápida · " + DIFICULTADES[dif].emoji + " " + DIFICULTADES[dif].nombre;
-    $("nueva").textContent = "Nueva partida";
+    rotular("nueva", "Nueva partida");
   }
   cfg = { robar: DIFICULTADES[dif].robar, reciclajes: DIFICULTADES[dif].reciclajes };
   const rnd = semilla !== undefined ? mulberry32(semilla) : Math.random;
@@ -544,7 +547,8 @@ function dibujar() {
   // Botones de deshacer y boost
   const enNivel = !!(actual && actual.nivel);
   $("deshacer").disabled = !historial.length || terminado || llenando || (enNivel && !boost && deshechoSeguido);
-  $("boost").textContent = boost ? "Boost activo ✓" : "Boost: deshacer (" + COSTO_BOOST + " 🪙)";
+  $("boost").classList.toggle("on", boost);
+  rotular("boost", boost ? "Boost activo: deshacer sin límite" : "Boost: deshacer sin límite (" + COSTO_BOOST + " monedas)");
   $("boost").disabled = boost || terminado || llenando;
   $("rellenar").hidden = !planRelleno(); // aparece cuando ya no queda ninguna carta bloqueada y la partida se puede terminar sola
   pintarMonedas();
@@ -552,3 +556,7 @@ function dibujar() {
 
 pintarMonedas();
 mostrar("menu");
+
+// El mensaje de abajo reaparece con cada texto nuevo y se desvanece solo (ver #estado.flota en la página)
+new MutationObserver(() => { estado.classList.remove("flota"); void estado.offsetWidth; estado.classList.add("flota"); })
+  .observe(estado, { childList: true, characterData: true, subtree: true });

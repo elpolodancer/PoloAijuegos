@@ -216,10 +216,12 @@ function empezar() {
 }
 
 // ----- Menú de niveles -----
-function marcarNivel() { document.querySelectorAll("#niveles .btn").forEach((b, i) => b.classList.toggle("sel", i === inicio)); }
+// Color = dificultad: verde → azul → morado → dorado → rojo
+const COLOR_NIVEL = ["b-verde", "b-azul", "b-morado", "b-oro", "b-rojo"];
+function marcarNivel() { document.querySelectorAll("#niveles .b3d").forEach((b, i) => b.classList.toggle("on", i === inicio)); }
 NIVELES.forEach((n, i) => {
   const b = document.createElement("button");
-  b.className = "btn"; b.textContent = i + 1; b.title = n.nombre;
+  b.type = "button"; b.className = "b3d chico " + COLOR_NIVEL[i % COLOR_NIVEL.length]; b.textContent = i + 1; b.title = n.nombre;
   b.addEventListener("click", () => { inicio = i; marcarNivel(); });
   $("niveles").appendChild(b);
 });

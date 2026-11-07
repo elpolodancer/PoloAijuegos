@@ -1,33 +1,38 @@
 <!doctype html>
 <!-- Ruta: ladrillosnumerados/index-ladrillosnumerados.html -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Ladrillos numerados</title>
-  <meta name="theme-color" content="#1b2330" />
+  <meta name="theme-color" content="#101114" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    main { padding: 8px 12px; }
-    .hud { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; font-size: .9rem; color: var(--suave); }
-    .hud b { color: var(--texto); }
-    #lienzo { background: #0b0e1a; aspect-ratio: 9 / 16; width: min(100%, calc((100dvh - 130px) * 0.5625)); max-width: 420px; height: auto; margin: 8px auto; }
+    html.inmersivo { --fondo-juego: #101114; }
+    /* Juego vertical (360×640): se deja libre una franja arriba para los botones; arriba del lienzo hay 56 px vacíos para los marcadores */
+    .inmersivo .escena { padding-top: calc(54px + env(safe-area-inset-top, 0px)); }
+    .inmersivo .marco { aspect-ratio: 360 / 640;
+      width: min(100vw, calc((100vh - 54px) * 360 / 640));
+      width: min(100vw, calc((100dvh - 54px - env(safe-area-inset-top, 0px)) * 360 / 640)); }
+    .inmersivo .lienzo { user-select: none; -webkit-user-select: none; touch-action: none; }
+    .hud-der { flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: calc(100vw - 70px); }
+    .hud-der .chip { height: 28px; padding: 0 10px; font-size: 13px; }
   </style>
 </head>
-<body>
-  <header class="barra">
-    <a class="volver" href="../">← Juegos</a>
-    <h1>🧱 Ladrillos numerados</h1>
-    <div>Puntos: <b id="puntos">0</b></div>
-  </header>
-  <main>
-    <div class="hud">
-      <span>Pelotas: <b id="pelotas">1</b></span>
-      <span>Velocidad: <b id="vel">×1.0</b></span>
-      <span>Nivel: <b id="nivel">1</b></span>
-    </div>
-    <canvas id="lienzo" class="lienzo" width="360" height="640"></canvas>
-  </main>
+<body class="inmersivo" data-pantalla-auto>
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
+  </div>
+  <div class="hud hud-der">
+    <span class="chip" title="Puntos"><small>Pts</small><b id="puntos">0</b></span>
+    <span class="chip" title="Pelotas"><small>🔴</small><b id="pelotas">1</b></span>
+    <span class="chip" title="Velocidad"><small>⚡</small><b id="vel">×1.0</b></span>
+    <span class="chip" title="Nivel"><small>Nv</small><b id="nivel">1</b></span>
+  </div>
+  <div class="escena">
+    <div class="marco"><canvas id="lienzo" class="lienzo" width="360" height="640"></canvas></div>
+  </div>
   <script type="module" src="juego-ladrillosnumerados.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>

@@ -884,7 +884,7 @@ function construirMenu() {
   NIVELES.forEach((nv, i) => {
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "nv" + (i > max ? " bloq" : i === max ? " actual" : " hecho") + (i === nivelActual ? " sel" : "");
+    b.className = "b3d nv" + (i > max ? " bloq" : i === max ? " actual" : " hecho") + (i === nivelActual ? " sel" : "");
     b.disabled = i > max;
     b.title = nv.nombre + (nv.tier ? " · dificultad " + nv.tier + "/10" : "");
     b.setAttribute("aria-label", "Nivel " + (i + 1) + ": " + nv.nombre + (i > max ? " (bloqueado)" : ""));
@@ -970,7 +970,10 @@ function mostrarVelo(titulo, texto, datos) {
 }
 
 function marcarEntrar() { $("entrar").hidden = !J || !!usuario; }
-$("entrar").addEventListener("click", () => { if (J) J.entrar().catch((e) => alert(e.message)); });
+// Aviso dentro de la página: alert() sacaría al navegador de la pantalla completa
+let tAviso = 0;
+function aviso(txt) { const a = $("aviso"); a.textContent = txt; a.classList.add("ver"); clearTimeout(tAviso); tAviso = setTimeout(() => a.classList.remove("ver"), 4000); }
+$("entrar").addEventListener("click", () => { if (J) J.entrar().catch((e) => aviso(e.message)); });
 $("jugar").addEventListener("click", () => {
   if (ganado && nivelActual + 1 < NIVELES.length) nivelActual++;
   ganado = false;
@@ -1224,14 +1227,14 @@ function dibujar(k) {
   const top = ents.filter((e) => e.vivo && cuenta[e.id] > 0).sort((a, b) => cuenta[b.id] - cuenta[a.id]).slice(0, 5);
   if (top.length && !bono) {
     const ancho = 128, alto = 10 + top.length * 17, bx = vw - ancho - 8, by = 8;
-    ctx.fillStyle = "rgba(20,26,46,.6)";
+    ctx.fillStyle = "rgba(16,17,20,.65)";
     ctx.fillRect(bx, by, ancho, alto);
     ctx.font = "12px system-ui, sans-serif";
     ctx.textAlign = "left";
     top.forEach((e, n) => {
       const yy = by + 8 + n * 17;
       ctx.fillStyle = e.cT; ctx.fillRect(bx + 6, yy, 10, 10);
-      ctx.fillStyle = e.jugador ? "#fff" : "#c9d0ee";
+      ctx.fillStyle = e.jugador ? "#fff" : "#cfd2d8";
       ctx.fillText(e.nombre, bx + 22, yy + 9);
       ctx.textAlign = "right";
       ctx.fillText((cuenta[e.id] * 100 / AREA).toFixed(1) + "%", bx + ancho - 6, yy + 9);

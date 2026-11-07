@@ -273,7 +273,7 @@ function colorLadrillo(n) {
 }
 
 function dibujar() {
-  ctx.fillStyle = "#0b0e1a";
+  ctx.fillStyle = "#0e0f12";
   ctx.fillRect(0, 0, W, H);
 
   // ladrillos

@@ -46,7 +46,7 @@ function crearFila(q) {
   const el = document.createElement("div");
   el.className = "fila" + (tipo === "w" ? " sup" : "");
   el.style.top = q * H + "px";
-  el.innerHTML = '<div class="esc"><span class="dep"></span><span class="roca"></span><span class="toca" hidden>👆 toca</span></div><div class="inf"><b></b><small></small><button class="s"></button><button class="g"></button></div>';
+  el.innerHTML = '<div class="esc"><span class="dep"></span><span class="roca"></span><span class="toca" hidden>👆 toca</span></div><div class="inf"><b></b><small></small><button class="s b3d txt chico b-verde"></button><button class="g b3d txt chico b-azul"></button></div>';
   const s = (c) => el.querySelector(c), r = { q, tipo, i: idx, el, pjs: [], dep: s(".dep"), roca: s(".roca"), toca: s(".toca"), nom: s("b"), niv: s("small"), s: s(".s"), g: s(".g") };
   r.roca.textContent = tipo === "m" ? MINERAL[idx % MINERAL.length] : tipo === "w" ? "🏦" : "🏗️";
   if (tipo === "w") r.roca.className = "banco";
@@ -64,7 +64,7 @@ function crearFila(q) {
   filasEl.appendChild(el);
   return r;
 }
-const ventana = () => { const t = filasEl.getBoundingClientRect().top; return [-t - 2 * H, -t + innerHeight + 2 * H]; };   // rango de px visible (más un margen)
+const ventana = () => { const t = filasEl.getBoundingClientRect().top - escena.getBoundingClientRect().top; return [-t - 2 * H, -t + escena.clientHeight + 2 * H]; };   // rango de px visible (más un margen)
 function sincronizar() {                          // crea las filas que entran en pantalla y quita las que salen
   const total = mina().pozos.length + 2, v = ventana();
   filasEl.style.height = total * H + "px";
@@ -77,7 +77,7 @@ function armar() {                                // reconstruye todo (al cambia
   vivas.clear();
   sincronizar(); pintar();
 }
-const nuevo = document.createElement("button"); nuevo.id = "nuevo"; escena.appendChild(nuevo);
+const nuevo = document.createElement("button"); nuevo.id = "nuevo"; nuevo.className = "b3d txt b-oro"; escena.appendChild(nuevo);
 nuevo.onclick = () => {
   const M = mina();
   if (L.comprarPozo(E, M)) { pend += 10; enviar(PUNTOS_LOTE); sincronizar(); pintar(); guardar(); } else aviso("Te falta dinero");
@@ -106,10 +106,10 @@ function armarMinas() {
   cont.innerHTML = ""; pills = [];
   const n = E.minas.length + (E.minas.length < L.AJ.MAX_MINAS ? 1 : 0);
   for (let j = 0; j < n; j++) {
-    const b = document.createElement("button"); b.className = "mp";
+    const b = document.createElement("button"); b.className = "b3d chico txt b-azul mp";
     b.onclick = () => {
-      if (j < E.minas.length) { if (sel === j) return; sel = j; armar(); armarMinas(); pintar(); guardar(); window.scrollTo(0, 0); return; }
-      if (L.comprarMina(E)) { sel = j; pend += 100; enviar(PUNTOS_LOTE); aviso("¡Mina " + (j + 1) + " desbloqueada! El dinero es compartido"); armar(); armarMinas(); pintar(); guardar(); window.scrollTo(0, 0); }
+      if (j < E.minas.length) { if (sel === j) return; sel = j; armar(); armarMinas(); pintar(); guardar(); escena.scrollTo(0, 0); return; }
+      if (L.comprarMina(E)) { sel = j; pend += 100; enviar(PUNTOS_LOTE); aviso("¡Mina " + (j + 1) + " desbloqueada! El dinero es compartido"); armar(); armarMinas(); pintar(); guardar(); escena.scrollTo(0, 0); }
       else aviso("Te falta dinero para la mina " + (j + 1));
     };
     cont.appendChild(b); pills.push(b);
@@ -124,21 +124,29 @@ function pintarMinas() {
   });
 }
 
+// Aviso de confirmación dentro de la página (confirm() saca al navegador de la pantalla completa)
+function confirmar(texto, alAceptar) {
+  $("confTxt").textContent = texto; $("confirmar").hidden = false;
+  $("confSi").onclick = () => { $("confirmar").hidden = true; alAceptar(); };
+  $("confNo").onclick = () => { $("confirmar").hidden = true; };
+}
+
 // ----- Barra inferior -----
 const barra = $("barra"), bModo = [];
 [[1, "x1"], [10, "x10"], [100, "x100"], [0, "Máx"]].forEach(([m, t]) => {
-  const b = document.createElement("button"); b.textContent = t; b.onclick = () => { modo = m; bModo.forEach(([mm, bb]) => bb.classList.toggle("sel", mm === modo)); pintar(); };
+  const b = document.createElement("button"); b.textContent = t; b.className = "b3d txt chico " + ({ 1: "b-verde", 10: "b-azul", 100: "b-morado", 0: "b-rojo" })[m]; b.onclick = () => { modo = m; bModo.forEach(([mm, bb]) => bb.classList.toggle("sel", mm === modo)); pintar(); };
   barra.appendChild(b); bModo.push([m, b]);
 });
 bModo[0][1].classList.add("sel");
-const bPres = document.createElement("button"); barra.appendChild(bPres);
+const bPres = document.createElement("button"); bPres.className = "b3d txt chico b-oro"; barra.appendChild(bPres);
 bPres.onclick = () => {
   const M = mina(), g = L.estrellasGanables(M);
   if (g < 1) { aviso("Necesitas ganar $" + fmt(L.AJ.PRESTIGIO) + " en esta mina para tu primera ⭐"); return; }
-  if (!confirm("¿Hacer prestigio en la mina " + (sel + 1) + "? Ganas " + g + " ⭐ (+" + Math.round(g * L.AJ.BONO_ESTRELLA * 100) + " % de ganancias en esta mina para siempre), pero esta mina se reinicia" + (L.AJ.REINICIA_DIN ? " y el dinero vuelve a $" + L.AJ.DIN0 : "") + " (conservas tus estrellas y las demás minas).")) return;
-  L.prestigio(E, M); pend += 50; enviar(1); armar(); pintar(); guardar();
+  confirmar("¿Hacer prestigio en la mina " + (sel + 1) + "? Ganas " + g + " ⭐ (+" + Math.round(g * L.AJ.BONO_ESTRELLA * 100) + " % de ganancias en esta mina para siempre), pero esta mina se reinicia" + (L.AJ.REINICIA_DIN ? " y el dinero vuelve a $" + L.AJ.DIN0 : "") + " (conservas tus estrellas y las demás minas).", () => {
+    L.prestigio(E, M); pend += 50; enviar(1); armar(); pintar(); guardar();
+  });
 };
-const bFin = document.createElement("button"); bFin.textContent = "⏬"; bFin.title = "Ir al final (nuevo pozo)"; barra.appendChild(bFin);
+const bFin = document.createElement("button"); bFin.className = "b3d chico b-gris"; bFin.textContent = "⏬"; bFin.title = "Ir al final (nuevo pozo)"; barra.appendChild(bFin);
 bFin.onclick = () => nuevo.scrollIntoView({ behavior: "smooth", block: "center" });
 
 // ----- Dibujo -----
@@ -214,7 +222,7 @@ function bucle(ahora) {
   mover();
   requestAnimationFrame(bucle);
 }
-addEventListener("scroll", () => { sincronizar(); pintar(); }, { passive: true });
+escena.addEventListener("scroll", () => { sincronizar(); pintar(); }, { passive: true });
 addEventListener("resize", () => { sincronizar(); pintar(); });
 cargar(); armarMinas(); armar();
 setInterval(guardar, 5000);

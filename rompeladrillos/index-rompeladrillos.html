@@ -1,23 +1,49 @@
 <!doctype html>
 <!-- Ruta: rompeladrillos/index-rompeladrillos.html (página del juego «rompeladrillos») -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Rompe Ladrillos</title>
+  <meta name="theme-color" content="#101114" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 30%, #23252b, #101114 70%); }
+    /* Lienzo fijo 320×480 (vertical) con franja libre arriba */
+    .inmersivo .escena { padding-top: calc(54px + env(safe-area-inset-top)); }
+    .inmersivo .marco {
+      aspect-ratio: 320 / 480;
+      width: min(100vw, calc((100vh - 54px - env(safe-area-inset-top)) * 320 / 480));
+      width: min(100vw, calc((100dvh - 54px - env(safe-area-inset-top)) * 320 / 480));
+    }
+    /* Mensajes y botón «Jugar» flotan en la zona vacía entre los ladrillos y la paleta */
+    .centro { position: absolute; left: 0; right: 0; top: 58%; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 0 16px; pointer-events: none; }
+    .centro > * { pointer-events: auto; }
+    #estado { margin: 0; max-width: 28ch; padding: 8px 12px; font-size: 13px; line-height: 1.35; text-align: center; color: #fff; background: #101114e6; border: 2px solid #3b3e46; border-radius: 12px; pointer-events: none; }
+    #estado:empty { display: none; }
+    @media (prefers-reduced-motion: reduce) { .b3d.activo { animation: none; } }
+  </style>
 </head>
-<body>
-  <header class="barra">
-    <a class="volver" href="../index.html">‹ Juegos</a>
-    <h1>🧱 Rompe Ladrillos</h1>
-  </header>
-  <main>
-    <canvas id="lienzo" class="lienzo" width="320" height="480"></canvas>
-    <p id="estado">Mueve la paleta con el dedo (o con las flechas) y rompe todos los ladrillos. Tienes 3 vidas.</p>
-    <button id="jugar" class="btn" type="button">Jugar</button>
-    <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
-  </main>
+<body class="inmersivo" data-pantalla-auto>
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
+  </div>
+  <div class="hud hud-der">
+    <button class="b3d chico b-azul" id="entrar" type="button" hidden aria-label="Entrar con Google para guardar puntos" title="Entrar con Google para guardar puntos"><span class="b-ico">🔑</span></button>
+  </div>
+
+  <div class="escena">
+    <div class="marco">
+      <canvas id="lienzo" class="lienzo" width="320" height="480"></canvas>
+      <div class="centro">
+        <p id="estado">Mueve la paleta con el dedo (o con las flechas) y rompe todos los ladrillos. Tienes 3 vidas.</p>
+        <button id="jugar" class="b3d txt b-verde" type="button"><span class="b-ico">▶️</span> Jugar</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="juego-rompeladrillos.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>

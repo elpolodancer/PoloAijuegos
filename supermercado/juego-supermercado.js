@@ -984,12 +984,7 @@ ovlBtn.addEventListener("click", () => {
 const tablero = lienzo.parentElement;
 function ajustar() {
   dpr = window.devicePixelRatio || 1;
-  const contenedor = tablero.parentElement;
-  contenedor.style.maxWidth = "";                         // vuelve al máximo del CSS para medir
-  const maxW = tablero.clientWidth;
-  const libre = window.innerHeight - (tablero.getBoundingClientRect().top + window.scrollY) - 12;
-  const w = Math.max(240, Math.min(maxW, (libre * MUNDO.w) / MUNDO.h));
-  contenedor.style.maxWidth = Math.round(w) + 20 + "px";  // 20 = relleno del contenedor
+  // El tamaño del marco lo calcula el CSS (inmersivo): aquí solo se lee el ancho real
   const wReal = lienzo.clientWidth;
   escala = wReal / MUNDO.w;
   lienzo.style.height = MUNDO.h * escala + "px";
@@ -1348,7 +1343,7 @@ if (verAdmin) {
   $("admBtn").hidden = false;
   // botón rápido de dinero, siempre a la vista en la barra de arriba
   const bd = $("dineroBtn");
-  bd.textContent = "💰 +$" + DINERO_RAPIDO;
+  bd.textContent = "💰"; bd.title = "Sumar $" + DINERO_RAPIDO;
   bd.hidden = false;
   bd.addEventListener("click", () => {
     dinero += DINERO_RAPIDO;

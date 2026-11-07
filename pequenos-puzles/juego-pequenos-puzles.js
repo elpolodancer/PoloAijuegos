@@ -27,7 +27,7 @@ let progreso = leerProgreso();
 // ---- Elementos ----
 const $ = (id) => document.getElementById(id);
 const menu = $("menu"), juego = $("juego"), lienzo = $("lienzo"), ctx = lienzo.getContext("2d");
-const velo = $("velo");
+const velo = $("velo"), zona = $("zona");
 
 // ---- Estado de la partida ----
 let numero = 0, nivel = null, piezas = [];   // piezas: {color, celdas, w, h, x, y (pos. en bandeja), colocada:{x,y}|null}
@@ -36,6 +36,7 @@ let arrastre = null;                          // {i, ox, oy, px, py}
 let t0 = null, restante = 0, jugando = false, raf = 0;
 
 // ---- Menú de niveles ----
+const COLOR_TRAMO = ["b-verde", "b-azul", "b-morado", "b-oro", "b-rojo", "b-gris", "b-negro"]; // 1-10 verde … 61-70 negro
 function abrirMenu() {
   jugando = false; cancelAnimationFrame(raf); velo.classList.remove("ver");
   juego.hidden = true; menu.hidden = false;
@@ -44,6 +45,7 @@ function abrirMenu() {
   const cont = $("niveles"); cont.innerHTML = "";
   for (let n = 1; n <= TOTAL_NIVELES; n++) {
     const b = document.createElement("button");
+    b.type = "button"; b.className = "b3d " + COLOR_TRAMO[Math.min(COLOR_TRAMO.length - 1, Math.floor((n - 1) / 10))]; // color = tramo de 10 niveles
     const existe = !!NIVELES[n - 1];
     const abierto = existe && (n === 1 || hechos.has(n - 1) || hechos.has(n));
     b.textContent = abierto ? n : existe ? "🔒" : "·";
@@ -77,8 +79,18 @@ function jugar(n) {
 // ---- Medidas y bandeja ----
 function disponer() {
   if (!nivel) return;
-  ancho = Math.min(juego.clientWidth || 360, 520);
+  ancho = Math.min(zona.clientWidth || 360, 520);
+  const maxAlto = zona.clientHeight || 600;
   c = Math.floor(Math.min((ancho - MARGEN * 2) / nivel.columnas, CELDA_MAX));
+  let alto = colocar();
+  while (alto > maxAlto && c > 10) { c--; alto = colocar(); } // sin scroll: si no cabe, las celdas se achican
+  const dpr = window.devicePixelRatio || 1;
+  lienzo.style.width = ancho + "px"; lienzo.style.height = alto + "px";
+  lienzo.width = Math.round(ancho * dpr); lienzo.height = Math.round(alto * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+// Coloca el tablero y la bandeja con el tamaño de celda actual y devuelve el alto total
+function colocar() {
   gridX = Math.round((ancho - nivel.columnas * c) / 2); gridY = MARGEN;
   let x = MARGEN, y = gridY + nivel.filas * c + 28, altoFila = 0;
   piezas.forEach((p) => {
@@ -86,11 +98,7 @@ function disponer() {
     if (x > MARGEN && x + w > ancho - MARGEN) { x = MARGEN; y += altoFila + SEPARACION; altoFila = 0; }
     p.x = x; p.y = y; x += w + SEPARACION; altoFila = Math.max(altoFila, h);
   });
-  const alto = y + altoFila + MARGEN;
-  const dpr = window.devicePixelRatio || 1;
-  lienzo.style.width = ancho + "px"; lienzo.style.height = alto + "px";
-  lienzo.width = Math.round(ancho * dpr); lienzo.height = Math.round(alto * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return y + altoFila + MARGEN;
 }
 
 function posicion(i) {
@@ -206,7 +214,7 @@ lienzo.addEventListener("pointercancel", soltar);
 function mostrar(titulo, texto, botones) {
   $("velo-titulo").textContent = titulo; $("velo-texto").textContent = texto;
   const cont = $("velo-botones"); cont.innerHTML = "";
-  botones.forEach(([txt, fn]) => { const b = document.createElement("button"); b.className = "btn"; b.textContent = txt; b.addEventListener("click", fn); cont.appendChild(b); });
+  botones.forEach(([txt, fn], k) => { const b = document.createElement("button"); b.type = "button"; b.className = "b3d txt " + (k === 0 ? "b-verde" : "b-gris"); b.textContent = txt; b.addEventListener("click", fn); cont.appendChild(b); });
   velo.classList.add("ver");
 }
 function ganar() {

@@ -1,38 +1,71 @@
 <!doctype html>
 <!-- Ruta: piano/index-piano.html (página del juego «piano») -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Piano</title>
+  <meta name="theme-color" content="#101114" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    #menu:not([hidden]) { display: flex; flex-direction: column; gap: 12px; }
-    #rejilla { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
-    .cuadro { position: relative; aspect-ratio: 1 / 1; min-width: 0; padding: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-align: center; color: #fff; font: inherit; cursor: pointer; border: 0; border-radius: 6px; overflow: hidden; background: linear-gradient(135deg, var(--c1, #5a46c8), var(--c2, #2a2260)); -webkit-tap-highlight-color: transparent; }
-    .cuadro .nota { font-size: 1.4rem; line-height: 1; }
-    .cuadro b { font-size: .62rem; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-    .cuadro small { position: absolute; right: 4px; bottom: 2px; font-size: .6rem; font-weight: 700; text-shadow: 0 0 3px #000; }
-    .cuadro:active { transform: scale(.96); }
-    .cuadro:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 30%, #23252b, #101114 70%); }
+    /* Juego vertical (lienzo 320×520): franja libre arriba y abajo (⛶ abajo a la derecha) */
+    .inmersivo .escena { padding: calc(54px + env(safe-area-inset-top)) 0 calc(54px + env(safe-area-inset-bottom)); }
+    .inmersivo .marco {
+      aspect-ratio: 320 / 520;
+      width: min(100vw, calc((100vh - 108px) * 320 / 520));
+      width: min(100vw, calc((100dvh - 108px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 320 / 520));
+    }
+    .b-negro { --c1: #8a8f9c; --c2: #3c404a; --c3: #15171a; }
+
+    /* Capa de menú / fin de partida dentro del marco */
+    #capa { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 12px; padding: 14px; overflow: auto; pointer-events: none; text-align: center; }
+    #capa > * { pointer-events: auto; }
+    body:not(.jugando) #capa { background: rgba(16,17,20,.86); }
+    body:not(.jugando) #lienzo:not([hidden]) ~ #capa { background: rgba(16,17,20,.6); } /* fin de partida: se sigue viendo la tecla del error */
+    #estado { margin: 0; color: var(--suave); font-size: .9rem; line-height: 1.35; }
+    /* Mientras se juega, el texto pasa a una píldora arriba a la derecha */
+    body.jugando #estado { position: fixed; z-index: 5; top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); max-width: calc(100vw - 150px); padding: 7px 12px; font-size: .78rem; color: #fff4c2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+      background: linear-gradient(180deg, #4a4f57, #2b2f35); border: 2px solid #15171a; border-radius: 999px; box-shadow: 0 3px 0 #15171a; }
+    #estado:empty { display: none; }
+
+    #menu:not([hidden]) { display: flex; flex-direction: column; gap: 12px; align-items: center; width: 100%; }
+    #rejilla { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; width: 100%; }
+    .cuadro { position: relative; aspect-ratio: 1 / 1; min-width: 0; padding: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; color: #fff; font: inherit; cursor: pointer; border: 2px solid #15171a; border-radius: 15px; overflow: hidden;
+      background: linear-gradient(135deg, var(--c1, #5a46c8), var(--c2, #2a2260)); box-shadow: 0 5px 0 #15171a, inset 0 2px 0 rgba(255,255,255,.3); margin-bottom: 5px; -webkit-tap-highlight-color: transparent; transition: transform .07s, box-shadow .07s; }
+    .cuadro .nota { font-size: 1.8rem; line-height: 1; }
+    .cuadro b { font-size: .8rem; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; text-shadow: 0 2px 0 rgba(0,0,0,.4); }
+    .cuadro small { position: absolute; right: 8px; bottom: 4px; font-size: .75rem; font-weight: 700; text-shadow: 0 0 3px #000; }
+    .cuadro:active { transform: translateY(4px); box-shadow: 0 1px 0 #15171a; }
+    .cuadro:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+    .fila-fin { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
   </style>
 </head>
-<body>
-  <header class="barra">
-    <a class="volver" href="../index.html">‹ Juegos</a>
-    <h1>🎹 Piano</h1>
-  </header>
-  <main>
-    <canvas id="lienzo" class="lienzo" width="320" height="520"></canvas>
-    <p id="estado"></p>
-    <div id="menu">
-      <button id="modoAzar" class="btn" type="button">🎲 Modo aleatorio</button>
-      <div id="rejilla"></div>
+<body class="inmersivo" data-pantalla-auto>
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../" aria-label="Volver a Juegos" title="Juegos"><span class="b-ico">🏠</span></a>
+    <button id="entrar" class="b3d chico txt b-oro" type="button" hidden title="Entrar con Google para guardar puntos"><span class="b-ico">🔑</span> Guardar puntos</button>
+  </div>
+
+  <div class="escena">
+    <div class="marco">
+      <canvas id="lienzo" class="lienzo" width="320" height="520" hidden aria-label="Piano: toca las teclas negras"></canvas>
+      <div id="capa">
+        <p id="estado"></p>
+        <div id="menu">
+          <button id="modoAzar" class="b3d txt grande b-morado" type="button"><span class="b-ico">🎲</span> Modo aleatorio</button>
+          <div id="rejilla"></div>
+        </div>
+        <div class="fila-fin">
+          <button id="jugar" class="b3d txt grande b-verde" type="button" hidden>Jugar otra vez</button>
+          <button id="alMenu" class="b3d txt grande b-gris" type="button" hidden>‹ Menú</button>
+        </div>
+      </div>
     </div>
-    <button id="jugar" class="btn" type="button" hidden>Jugar otra vez</button>
-    <button id="alMenu" class="btn" type="button" hidden>‹ Menú</button>
-    <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
-  </main>
+  </div>
+
   <script type="module" src="juego-piano.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>

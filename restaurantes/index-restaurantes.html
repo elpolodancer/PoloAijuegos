@@ -1,40 +1,50 @@
 <!doctype html>
 <!-- Ruta: restaurantes/index-restaurantes.html -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Restaurantes</title>
-  <meta name="theme-color" content="#1b2330" />
+  <meta name="theme-color" content="#101114" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    /* La página es una sola pantalla: barra arriba y, debajo, la escena (el lienzo del juego) ocupando todo el resto.
-       Marcador, «Empleados», mensajes y botones van ENCIMA del lienzo, dentro de la escena. */
-    html, body { height: 100%; }
-    body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
-    .barra { flex: none; padding: 6px 12px; }
-    .barra h1 { font-size: 1.05rem; }
-    main { flex: 1; min-height: 0; max-width: none; margin: 0; padding: 0; }
-    .escena { position: relative; width: 100%; height: 100%; overflow: hidden; background: #8bbf6a; }
+    /* Una sola pantalla sin barra: la escena (el lienzo) ocupa toda la ventana y todo lo demás flota encima. */
+    html.inmersivo { --fondo-juego: #101114; }
+    .b-negro { --c1: #8a8f9c; --c2: #3c404a; --c3: #15171a; }
+    .inmersivo .escena { display: block; position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; background: #8bbf6a; }
     .lienzo { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; margin: 0; background: #8bbf6a; border: 0; border-radius: 0; }
+    /* Los botones que crea el JS usan la clase «btn»: aquí se ven como los botones 3D de inmersivo.css (color por función) */
+    .btn { --c1: #b6f7a6; --c2: #3fcf4a; --c3: #1d7f2a; position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; padding: 6px 14px; margin: 0; font: inherit; font-size: .88rem; font-weight: 800; line-height: 1.1; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35); cursor: pointer; touch-action: manipulation;
+      background: linear-gradient(180deg, var(--c1) 0%, var(--c2) 55%, var(--c3) 140%); border: 2px solid var(--c3); border-radius: 12px;
+      box-shadow: 0 4px 0 var(--c3), 0 7px 9px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.55); transition: transform .07s, box-shadow .07s, filter .15s; }
+    .btn:hover:not(:disabled) { filter: brightness(1.08); }
+    .btn:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--c3), 0 2px 4px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.5); }
+    .btn:disabled { filter: grayscale(.85) brightness(.7); cursor: default; }
+    .btn:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+    .btn.sec, #menuBtn, #alejar, #acercar, #centrar, #atrasJugar, #volverMenu, #cerrarTienda { --c1: #d5d9e0; --c2: #8b93a0; --c3: #4f5662; }
+    #btnEmpleados { --c1: #e3bcff; --c2: #a14df0; --c3: #62209f; }
+    #btnAnuncios, #btnPartidas { --c1: #fff08c; --c2: #ffb020; --c3: #a85d00; }
+    #btnConstruir { --c1: #a8e2ff; --c2: #2f9bff; --c3: #14589f; }
+    #reiniciar, #btnDineroPrueba { --c1: #ffb3a8; --c2: #f0483a; --c3: #8f1c12; }
+    #btnPerfil { --c1: #d5d9e0; --c2: #8b93a0; --c3: #4f5662; }
     .encima { position: absolute; z-index: 5; pointer-events: none; } /* lo de encima deja pasar los toques al lienzo (solo los botones los reciben) */
-    .encima .btn, .encima a { pointer-events: auto; }
+    .encima .btn, .encima .b3d, .encima a { pointer-events: auto; }
     /* Arriba a la izquierda: perfil + dólares + energía */
-    .izq { top: calc(8px + env(safe-area-inset-top, 0px)); left: calc(8px + env(safe-area-inset-left, 0px)); max-width: calc(100% - 165px); flex-wrap: wrap; display: flex; align-items: center; gap: 6px; }
-    .caja { display: flex; align-items: center; gap: 4px; height: 38px; padding: 0 10px; font-size: .85rem; font-weight: 700; white-space: nowrap; background: rgba(15, 18, 32, .68); border-radius: 12px; }
-    .caja b { color: var(--texto); }
-    .btn-perfil { flex: none; display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; padding: 0; overflow: hidden; font-size: 1.2rem; border-radius: 50%; box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
+    .izq { top: calc(8px + env(safe-area-inset-top, 0px)); left: calc(8px + env(safe-area-inset-left, 0px)); max-width: calc(100% - 175px); flex-wrap: wrap; display: flex; align-items: flex-start; gap: 6px 8px; }
+    .caja { display: flex; align-items: center; gap: 4px; height: 36px; padding: 0 12px; font-size: .85rem; font-weight: 800; white-space: nowrap; color: #fff4c2; background: linear-gradient(180deg, #4a4f57, #2b2f35); border: 2px solid #15171a; border-radius: 999px; box-shadow: 0 3px 0 #15171a, inset 0 2px 0 rgba(255,255,255,.2); text-shadow: 0 2px 0 rgba(0,0,0,.5); }
+    .caja b { color: #fff; }
+    .btn-perfil { flex: none; display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; min-height: 0; padding: 0; overflow: hidden; font-size: 1.2rem; border-radius: 50%; }
     .btn-perfil img { display: block; width: 100%; height: 100%; object-fit: cover; }
     /* Arriba a la derecha: récord y tiempo, y debajo Empleados y Cocina */
     .der { top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(8px + env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-    .der .stats { display: flex; flex-direction: column; gap: 1px; padding: 5px 10px; font-size: .8rem; font-weight: 700; text-align: right; background: rgba(15, 18, 32, .68); border-radius: 12px; }
+    .der .stats { display: flex; flex-direction: column; gap: 1px; padding: 6px 12px; font-size: .8rem; font-weight: 700; text-align: right; color: #f1f2f4; background: rgba(30, 32, 37, .9); border: 2px solid #15171a; border-radius: 14px; box-shadow: 0 3px 0 #15171a; }
     .der .stats b { color: var(--texto); }
-    .der .btn { box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
-    #estado { left: 8px; right: 8px; bottom: calc(52px + env(safe-area-inset-bottom, 0px)); margin: 0 auto; width: fit-content; max-width: calc(100% - 64px); padding: 4px 10px; font-size: .75rem; line-height: 1.25; text-align: center; color: var(--texto); background: rgba(15, 18, 32, .68); border-radius: 10px; min-height: 0; }
+        #estado { left: 8px; right: 8px; bottom: calc(100px + env(safe-area-inset-bottom, 0px)); margin: 0 auto; width: fit-content; max-width: calc(100% - 64px); padding: 5px 10px; font-size: .75rem; line-height: 1.25; text-align: center; color: var(--texto); background: rgba(30, 32, 37, .9); border: 2px solid #15171a; border-radius: 12px; min-height: 0; }
     #estado:empty { display: none; }
-    .acciones { left: 8px; right: 56px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; }
-    .acciones .btn { padding: 6px 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, .4); }
-    .tienda { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); overflow-y: auto; position: fixed; z-index: 100; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(92vw, 420px); padding: 14px; background: var(--tarjeta); border: 1px solid var(--acento); border-radius: 16px; box-shadow: 0 8px 30px rgba(0, 0, 0, .5); }
+    .acciones { left: max(8px, env(safe-area-inset-left)); right: 64px; bottom: max(12px, env(safe-area-inset-bottom)); display: flex; justify-content: center; flex-wrap: wrap; gap: 8px 6px; } /* 64px a la derecha: deja libre el botón ⛶ */
+    .acciones .btn { min-height: 34px; padding: 4px 10px; font-size: .8rem; }
+    .tienda { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); overflow-y: auto; position: fixed; z-index: 100; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(92vw, 420px); padding: 14px; background: var(--tarjeta); border: 2px solid #3b3e46; border-radius: 16px; box-shadow: 0 8px 30px rgba(0, 0, 0, .5); }
     .tienda-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
     .tienda-fila { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--borde); }
     .tienda-fila .ico { font-size: 1.8rem; }
@@ -45,29 +55,27 @@
     .menu-caja > div { display: flex; flex-direction: column; gap: 12px; }
     .menu-caja h2 { margin: 0; }
     .menu-caja p { margin: 0; color: var(--suave); }
-    .btn.grande { padding: 14px 18px; font-size: 1.1rem; }
-    .btn.sec { background: var(--tarjeta); border: 1px solid var(--borde); }
+    .btn.grande { min-height: 52px; padding: 12px 18px; font-size: 1.1rem; }
     .ranuras { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; text-align: left; }
     @media (max-width: 420px) { .ranuras { grid-template-columns: 1fr; } }
     .ranura { display: flex; flex-direction: column; gap: 4px; padding: 14px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; }
-    .ranura.llena { border-color: var(--acento); }
+    .ranura.llena { border-color: #ffc83d; }
     .ranura.vacia { justify-content: space-between; min-height: 110px; border-style: dashed; }
     .ranura small { color: var(--suave); }
-    .ranura-botones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+    .ranura-botones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; padding-bottom: 4px; }
+    #confirmar { position: fixed; inset: 0; z-index: 300; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(8,9,11,.8); }
+    #confirmar .caja-conf { width: min(380px, 100%); padding: 18px; text-align: center; background: #1e2025; border: 2px solid #3b3e46; border-radius: 16px; }
+    #confirmar p { margin: 0 0 14px; line-height: 1.4; }
+    #confirmar .fila { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
   </style>
 </head>
-<body>
-  <header class="barra">
-    <div>
-      <a class="volver" href="../">← Juegos</a>
-      <h1>🍽️ Restaurantes</h1>
-    </div>
-    <div id="sesion"></div>
-  </header>
-  <main>
-    <div class="escena">
+<body class="inmersivo" data-pantalla-auto>
+  <!-- La sesión de Google se maneja desde el botón de perfil 👤; este contenedor lo rellena el JS y queda oculto -->
+  <div id="sesion" hidden></div>
+  <div class="escena">
       <canvas id="lienzo" class="lienzo" width="720" height="480" aria-label="Restaurante en vista isométrica con cocina, baño, recepción y cuatro mesas; toca a los clientes que esperan para darles mesa"></canvas>
       <div class="izq encima">
+        <a class="b3d chico b-gris" href="../" aria-label="Volver a Juegos" title="Juegos"><span class="b-ico">🏠</span></a>
         <button class="btn btn-perfil" id="btnPerfil" aria-label="Perfil del jugador" title="Perfil">👤</button>
         <div class="caja" title="Dólares">💵 <span>$<b id="dinero">0</b></span></div>
         <div class="caja" title="Energía">⚡ <b id="energia">22/33</b></div>
@@ -91,7 +99,6 @@
         <button class="btn" id="reiniciar">Reiniciar</button>
       </div>
     </div>
-  </main>
   <div id="menu" class="menu">
     <div class="menu-caja">
       <div id="menuInicio">
@@ -102,16 +109,25 @@
       </div>
       <div id="menuJugar" hidden>
         <h2>▶️ Jugar</h2>
-        <button class="btn grande sec" id="btnPartidas" disabled>💾 Partidas guardadas</button>
+        <button class="btn grande" id="btnPartidas" disabled>💾 Partidas guardadas</button>
         <p id="avisoPartidas">No disponible de momento</p>
         <button class="btn grande" id="btnNueva">🆕 Nueva partida</button>
-        <button class="btn sec" id="atrasJugar">← Atrás</button>
+        <button class="btn" id="atrasJugar">← Atrás</button>
       </div>
       <div id="menuPartidas" hidden>
         <h2 id="tituloPartidas">💾 Partidas guardadas</h2>
         <p id="avisoRanuras"></p>
         <div id="listaPartidas" class="ranuras"></div>
-        <button class="btn sec" id="volverMenu">← Atrás</button>
+        <button class="btn" id="volverMenu">← Atrás</button>
+      </div>
+    </div>
+  </div>
+  <div id="confirmar" hidden>
+    <div class="caja-conf" role="alertdialog" aria-labelledby="confirmarTxt">
+      <p id="confirmarTxt"></p>
+      <div class="fila">
+        <button class="btn" id="confSi" type="button">Sí</button>
+        <button class="btn sec" id="confNo" type="button">Cancelar</button>
       </div>
     </div>
   </div>

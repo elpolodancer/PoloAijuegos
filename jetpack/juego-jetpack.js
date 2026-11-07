@@ -93,12 +93,12 @@ function actualizar(dt) {
 // ---- Dibujo ----
 function dibujar(t) {
   const g = c.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, "#1a2238"); g.addColorStop(1, "#2b3558");
+  g.addColorStop(0, "#15171c"); g.addColorStop(1, "#262b33");
   c.fillStyle = g; c.fillRect(0, 0, W, H);
   c.strokeStyle = "rgba(255,255,255,.06)"; c.lineWidth = 2;
   const off = (dist * 0.5) % 100;
   for (let x = -off; x < W; x += 100) { c.beginPath(); c.moveTo(x, TECHO); c.lineTo(x, SUELO); c.stroke(); }
-  c.fillStyle = "#0e1424"; c.fillRect(0, 0, W, TECHO); c.fillRect(0, SUELO, W, H - SUELO);
+  c.fillStyle = "#0c0d10"; c.fillRect(0, 0, W, TECHO); c.fillRect(0, SUELO, W, H - SUELO);
   c.fillStyle = "#f2c230";
   for (let x = -((dist) % 60); x < W; x += 60) { c.fillRect(x, 0, 30, 6); c.fillRect(x + 30, H - 6, 30, 6); }
 
@@ -136,7 +136,7 @@ function dibujar(t) {
   c.fillStyle = "#fff"; c.textAlign = "left"; c.font = "bold 22px system-ui";
   c.fillText(Math.floor(dist / 50) + " m", 14, 26);
   c.textAlign = "right"; c.fillText("🪙 " + nMon, W - 14, 26);
-  c.textAlign = "center"; c.font = "14px system-ui"; c.fillStyle = "#aab2d8";
+  c.textAlign = "center"; c.font = "14px system-ui"; c.fillStyle = "#b0b4bd";
   c.fillText("Mejor: " + mejor + " m", W / 2, 22);
 
   if (estado !== "juego") {
@@ -184,9 +184,9 @@ addEventListener("keyup", (e) => { if (e.code === "Space" || e.code === "ArrowUp
 const zona = document.getElementById("sesion");
 alCambiarSesion((u) => {
   user = u; zona.innerHTML = "";
-  const b = document.createElement("button"); b.className = "btn";
-  if (!u) { b.textContent = "Entrar con Google"; b.addEventListener("click", () => entrar().catch((e) => alert(e.message))); zona.appendChild(b); info.textContent = "Sin sesión: no se guardan puntos"; return; }
+  const b = document.createElement("button"); b.type = "button"; b.className = "b3d chico txt " + (u ? "b-gris" : "b-azul");
+  if (!u) { b.textContent = "👤 Entrar con Google"; b.addEventListener("click", () => entrar().catch((e) => { info.textContent = e.message; })); zona.appendChild(b); info.textContent = "Sin sesión: no se guardan puntos"; return; }
   b.textContent = "Salir"; b.addEventListener("click", salir);
-  const s = document.createElement("span"); s.textContent = (u.displayName || "Jugador") + " · ";
+  const s = document.createElement("span"); s.className = "chip"; s.textContent = u.displayName || "Jugador";
   zona.append(s, b); info.textContent = "Puntos por partida = metros + 5 por moneda (máx. 1000)";
 });

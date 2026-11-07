@@ -1,25 +1,67 @@
 <!doctype html>
-<!-- Ruta: pantano/index-pantano.html (página del juego «pantano») — proyecto: Juegos (portal) -->
-<html lang="es">
+<!-- Ruta: pantano/index-pantano.html (página del juego «pantano») — proyecto: Juegos (portal) — MODO INMERSIVO -->
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Ataque al pantano</title>
+  <meta name="theme-color" content="#101114" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" /> <!-- DESPUÉS de estilos.css -->
+  <style>
+    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 30%, #23252b, #101114 70%); }
+    /* Este juego es horizontal: el lienzo mide 640×360 (16:9) */
+    .inmersivo .marco { aspect-ratio: 16 / 9; width: min(100vw, calc(100vh * 16 / 9)); width: min(100vw, calc(100dvh * 16 / 9)); }
+
+    /* Panel de menú / tienda: va dentro del marco, tapa el juego mientras no se juega y hace scroll por dentro */
+    #panel { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; gap: 8px; overflow: auto; overscroll-behavior: contain; touch-action: pan-y;
+      padding: 12px 14px calc(64px + env(safe-area-inset-bottom)); background: rgba(16, 17, 20, .95); -webkit-user-select: none; user-select: none; }
+    #panel > * { flex: none; }
+    #panel h2 { margin: 4px 0 0; font-size: 1rem; }
+    #panel h3 { margin: 10px 0 6px; font-size: .9rem; color: var(--suave); }
+    #panel .rejilla { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    #panel .tarjeta { padding: 8px 10px; gap: 4px; font-size: 13px; border-radius: 12px; justify-content: space-between; }
+    #panel .tarjeta small { font-size: 11.5px; line-height: 1.3; }
+    #panel .b3d.txt { --t: 36px; height: auto; min-height: var(--t); padding: 4px 12px; font-size: 13px; white-space: normal; text-align: center; }
+    #panel .acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    #panel .acciones .b3d.txt { --t: 46px; font-size: 15px; }
+    #estado { margin: 0; font-size: 13px; line-height: 1.35; color: var(--suave); }
+    #estado:empty { display: none; }
+    #tienda .siguiente { position: sticky; bottom: 4px; align-self: center; margin-top: 12px; z-index: 2; } /* siempre a la vista, sin buscarlo con scroll */
+
+    /* Mientras se juega: el panel se vuelve transparente y solo deja ver los avisos (ej. «oleada de jefe») */
+    #panel.en-juego { overflow: visible; background: none; padding: 0; pointer-events: none; }
+    #panel.en-juego .acciones { display: none; }
+    #panel.en-juego #estado { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); max-width: 88%; padding: 6px 14px; text-align: center; font-weight: 800; color: #fff4c2;
+      background: rgba(16, 17, 20, .85); border: 2px solid #15171a; border-radius: 999px; box-shadow: 0 3px 0 #15171a; }
+
+    /* En vertical el marco es chico: el menú usa toda la ventana */
+    @media (orientation: portrait) { #panel:not(.en-juego) { position: fixed; } }
+  </style>
 </head>
-<body>
-  <header class="barra">
-    <a class="volver" href="../index.html">‹ Juegos</a>
-    <h1>🐊 Ataque al pantano</h1>
-  </header>
-  <main>
-    <canvas id="lienzo" class="lienzo" width="640" height="360"></canvas>
-    <p id="estado">Defiende tu cabaña: toca o arrastra para apuntar y disparar. Se recarga sola.</p>
-    <button id="jugar" class="btn" type="button">Jugar</button>
-    <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
-    <section id="niveles" style="margin-top:14px" hidden></section>
-    <section id="tienda" style="margin-top:14px" hidden></section>
-  </main>
+<body class="inmersivo" data-pantalla-auto="horizontal">
+  <!-- Botones flotantes -->
+  <div class="hud hud-abajo">
+    <a class="b3d chico b-gris" href="../index.html" title="Volver a Juegos" aria-label="Volver a Juegos"><span class="b-ico" aria-hidden="true">🏠</span></a>
+  </div>
+
+  <div class="escena">
+    <div class="marco">
+      <h1 class="solo-lector">Ataque al pantano</h1>
+      <canvas id="lienzo" class="lienzo" width="640" height="360" aria-label="Ataque al pantano: toca o arrastra para apuntar y disparar"></canvas>
+      <div id="panel">
+        <p id="estado">Defiende tu cabaña: toca o arrastra para apuntar y disparar. Se recarga sola.</p>
+        <div class="acciones">
+          <button id="jugar" class="b3d txt b-verde" type="button"><span class="b-ico" aria-hidden="true">▶</span> Jugar</button>
+          <button id="entrar" class="b3d txt b-azul" type="button" hidden>🔑 Entrar con Google para guardar puntos</button>
+        </div>
+        <section id="niveles" hidden></section>
+        <section id="tienda" hidden></section>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="juego-pantano.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>

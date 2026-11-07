@@ -1,83 +1,197 @@
 <!doctype html>
 <!-- Ruta: solitario/index-solitario.html (página del juego «solitario») -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Solitario</title>
+  <meta name="theme-color" content="#101114" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <link rel="stylesheet" href="estilos-solitario.css" />
   <link rel="stylesheet" href="mesa-solitario.css" />
+  <style>
+    /* Esta hoja va DESPUÉS de estilos-solitario.css y mesa-solitario.css: solo adapta la página al modo inmersivo */
+    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 30%, #23252b, #101114 70%); }
+
+    /* Marcadores: solo se ven durante la partida (body.jugando) */
+    .solo-juego { display: none !important; }
+    body.jugando .solo-juego { display: inline-flex !important; }
+    body.jugando div.solo-juego { display: flex !important; }
+    .hud-izq, .hud-der { gap: 5px; }
+    .hud .chip { height: 30px; padding: 0 7px; font-size: 13px; }
+    .hud .chip small { margin-right: 3px; font-size: 13px; }
+    .hud-sub { top: calc(max(8px, env(safe-area-inset-top)) + 46px); }
+    .hud-sub .chip { height: 24px; padding: 0 9px; font-size: 12px; }
+    .hud .b3d.chico { --t: 36px; }
+    .hud-abajo { gap: 6px; }
+    .hud-abajo .b3d .b-info { top: -9px; right: -9px; min-width: 18px; padding: 0 4px; font-size: 10px; line-height: 14px; }
+    #boost.on .b-info { display: none; }
+
+    /* Mensaje flotante: reaparece con cada texto nuevo y se desvanece solo (lo reinicia el JS) */
+    #estado { position: fixed; z-index: 4; left: 50%; transform: translateX(-50%); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 52px); width: min(92vw, 440px); margin: 0; padding: 8px 12px; font-size: 12.5px; line-height: 1.35; text-align: center; color: #fff; background: #101114e6; border: 2px solid #3b3e46; border-radius: 12px; pointer-events: none; }
+    #estado:empty { display: none; }
+    #estado.flota { animation: desv .6s 8s forwards; }
+    @keyframes desv { to { opacity: 0; visibility: hidden; } }
+    @media (prefers-reduced-motion: reduce) { #estado.flota { animation-duration: .01s; } }
+
+    /* Mesa: ocupa toda la ventana. El ancho de carta (--w) se calcula para que quepan 7 columnas
+       y también las pilas más largas (≈10,6 veces el ancho de una carta) sin scroll. */
+    #tablero {
+      --w: min(calc((100vw - 16px) / 7.6), calc((100vh - 160px) / 10.6), 84px);
+      --w: min(calc((100vw - 16px) / 7.6), calc((100dvh - 160px) / 10.6), 84px);
+      position: fixed; inset: 0; overflow: hidden; border: 0; border-radius: 0; box-shadow: none;
+      align-content: start; justify-content: center;
+      padding: calc(env(safe-area-inset-top, 0px) + 84px) 8px calc(env(safe-area-inset-bottom, 0px) + 64px);
+    }
+
+    /* Menús: capas a pantalla completa con scroll interno */
+    .capa { position: fixed; inset: 0; z-index: 3; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
+      padding: calc(env(safe-area-inset-top, 0px) + 60px) 16px calc(env(safe-area-inset-bottom, 0px) + 24px);
+      background: radial-gradient(ellipse at 50% 30%, #23252b, #101114 70%); }
+    .capa.centrada { display: flex; }
+    .capa.centrada > .panel { margin: auto; width: min(100%, 420px); }
+    #vista-niveles > * { max-width: 560px; margin-left: auto; margin-right: auto; }
+    .capa .panel h2 { color: #fff; }
+
+    /* Botones grandes de menú en 3D */
+    .b3d.menu { width: 100%; height: auto; min-height: 66px; padding: 10px 16px; justify-content: flex-start; gap: 12px; font-size: 17px; font-weight: 800; text-align: left; white-space: normal; }
+    .b3d.menu .ico { font-size: 30px; }
+    .b3d.menu small { display: block; margin-top: 2px; font-size: 12px; font-weight: 600; opacity: .95; }
+    .b3d.menu.txt { padding: 10px 16px; }
+    .b-naranja-oscuro { --c1: #8a8f9c; --c2: #3c404a; --c3: #15171a; }
+
+    /* Niveles: casillas 3D con el color de su dificultad */
+    .rejilla-niveles { grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); gap: 9px; }
+    .nivel { --c1: #b6f7a6; --c2: #3fcf4a; --c3: #1d7f2a; margin-bottom: 4px; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35);
+      background: linear-gradient(180deg, var(--c1), var(--c2) 55%, var(--c3) 140%); border: 2px solid var(--c3); border-radius: 12px;
+      box-shadow: 0 4px 0 var(--c3), inset 0 2px 0 rgba(255,255,255,.5); }
+    .nivel.facil, .nivel.media, .nivel.dificil { border-color: var(--c3); }
+    .nivel.media { --c1: #fff08c; --c2: #ffb020; --c3: #a85d00; }
+    .nivel.dificil { --c1: #ffb3a8; --c2: #f0483a; --c3: #8f1c12; }
+    .nivel.hecho { background: linear-gradient(180deg, var(--c1), var(--c2) 55%, var(--c3) 140%); filter: brightness(.78) saturate(.85); }
+    .nivel small { color: #fff; opacity: .9; }
+    .nivel:active:not(.pronto) { transform: translateY(3px); box-shadow: 0 1px 0 var(--c3); }
+    .leyenda { color: #b0b4bd; }
+    .nivel-pag .b3d { margin-bottom: 5px; }
+    /* ---- Ajustes por tamaño de pantalla (no tocan la lógica) ---- */
+    #titulo-partida { margin: 0; }          /* estilos-solitario.css le daba 8px abajo y lo subía respecto al récord */
+    #titulo-partida:empty { display: none; }
+
+    /* Celulares angostos en vertical (≤ 420 px): marcadores en 2 filas sin pisarse.
+       Fila 1: 🏠 ⭐ 👣 ⏱ a la izquierda y 🪙 a la derecha. Fila 2: título y 🏆 a la izquierda y ↻ a la derecha. */
+    @media (max-width: 420px) and (orientation: portrait) {
+      .hud-izq, .hud-abajo { gap: 4px; }
+      .hud .chip { padding: 0 5px; font-size: 12px; }
+      .hud .chip small { margin-right: 2px; font-size: 12px; }
+      .hud .b3d.chico { --t: 34px; }
+      .hud-der { display: contents; }       /* sus dos chips se colocan solos, cada uno en su fila */
+      #monedas-barra { position: fixed; z-index: 5; top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); }
+      #chip-recic { position: fixed; z-index: 5; height: 24px; top: calc(max(8px, env(safe-area-inset-top)) + 46px); right: max(8px, env(safe-area-inset-right)); }
+      #titulo-partida { display: block; max-width: 46vw; overflow: hidden; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; }
+    }
+
+    /* Celular en horizontal (poco alto): los marcadores y botones pasan a columnas a los lados
+       y la mesa usa casi todo el alto, así las cartas salen mucho más grandes. */
+    @media (orientation: landscape) and (max-height: 520px) {
+      #tablero {
+        --w: min(calc((100vw - 270px) / 7.6), calc((100vh - 14px) / 10.6), 84px);
+        --w: min(calc((100vw - 270px) / 7.6), calc((100dvh - 14px) / 10.6), 84px);
+        padding: calc(env(safe-area-inset-top, 0px) + 6px) 8px calc(env(safe-area-inset-bottom, 0px) + 8px);
+      }
+      .hud-izq:not(.hud-sub), .hud-der { flex-direction: column; gap: 5px; }
+      .hud-izq:not(.hud-sub) { align-items: flex-start; }
+      .hud-der { align-items: flex-end; }
+      .hud-sub { top: calc(max(8px, env(safe-area-inset-top)) + 72px); left: auto; right: max(8px, env(safe-area-inset-right)); flex-direction: column; align-items: flex-end; gap: 4px; }
+      #titulo-partida { display: block; max-width: 120px; height: auto; padding: 3px 9px; line-height: 1.15; white-space: normal; text-align: right; border-radius: 14px; }
+      .hud-abajo { flex-direction: column-reverse; flex-wrap: wrap; align-items: flex-start; gap: 2px 6px;
+        max-height: calc(100vh - 170px); max-height: calc(100dvh - 170px); } /* si hay muchos botones, pasan a una 2.ª columna */
+      #estado { left: auto; transform: none; right: max(8px, env(safe-area-inset-right)); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 50px);
+        width: min(26vw, 220px); font-size: 11.5px; text-align: left; }
+    }
+  </style>
 </head>
-<body>
-  <header class="barra">
-    <a class="volver" href="../index.html">‹ Juegos</a>
-    <h1>🃏 Solitario</h1>
-    <span id="monedas-barra" class="monedas" title="Tus monedas">🪙 0</span>
-  </header>
-  <main>
+<body class="inmersivo" data-pantalla-auto>
+  <!-- Fila 1: 🏠 siempre; marcadores solo en partida -->
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
+    <span class="chip solo-juego" title="Puntos"><small>⭐</small><b id="marcador">0</b></span>
+    <span class="chip solo-juego" title="Movimientos"><small>👣</small><b id="movs">0</b></span>
+    <span class="chip solo-juego" title="Tiempo"><small>⏱</small><b id="tiempo">0:00</b></span>
+  </div>
+  <div class="hud hud-der">
+    <span id="chip-recic" class="chip solo-juego" title="Reciclajes del mazo"><small>↻</small><b id="recic">∞</b></span>
+    <span id="monedas-barra" class="chip" title="Tus monedas">🪙 0</span>
+  </div>
+  <!-- Fila 2: nivel / dificultad y récord -->
+  <div class="hud hud-izq hud-sub solo-juego">
+    <span class="chip" id="titulo-partida"></span>
+    <span class="chip" id="record-wrap" title="Tu mejor tiempo en este nivel" hidden><small>🏆</small><b id="record">–</b></span>
+  </div>
+
+  <!-- Botones de la partida (abajo a la izquierda; el ⛶ queda a la derecha) -->
+  <div class="hud hud-abajo solo-juego">
+    <button id="menu" class="b3d chico b-gris" type="button" aria-label="Menú" title="Menú"><span class="b-ico">☰</span></button>
+    <button id="nueva" class="b3d chico b-azul" type="button" aria-label="Nueva partida" title="Nueva partida"><span class="b-ico">🔄</span></button>
+    <button id="deshacer" class="b3d chico b-oro" type="button" aria-label="Deshacer" title="Deshacer"><span class="b-ico">↩️</span></button>
+    <button id="boost" class="b3d chico b-morado" type="button" hidden aria-label="Boost: deshacer sin límite" title="Boost: deshacer sin límite"><span class="b-ico">⚡</span><span class="b-info">10🪙</span></button>
+    <button id="rellenar" class="b3d chico b-verde" type="button" hidden aria-label="Rellenar todo" title="Rellenar todo"><span class="b-ico">✨</span></button>
+    <button id="siguiente" class="b3d chico b-verde" type="button" hidden aria-label="Siguiente nivel" title="Siguiente nivel"><span class="b-ico">➡️</span></button>
+    <button id="entrar" class="b3d chico b-azul" type="button" hidden aria-label="Entrar con Google para guardar puntos" title="Entrar con Google para guardar puntos"><span class="b-ico">🔑</span></button>
+  </div>
+
+  <main style="padding:0;max-width:none;margin:0">
     <!-- Menú principal -->
-    <section id="vista-menu" class="panel">
-      <h2>¿Cómo quieres jugar?</h2>
-      <button id="ir-rapida" class="btn btn-grande" type="button">
-        <span class="ico">⚡</span><span>Partida rápida<small>Elige la dificultad y juega al instante</small></span>
-      </button>
-      <button id="ir-niveles" class="btn btn-grande" type="button">
-        <span class="ico">🗺️</span><span>Niveles<small>500 niveles, de menos a más reto</small></span>
-      </button>
+    <section id="vista-menu" class="capa centrada">
+      <div class="panel">
+        <h2>¿Cómo quieres jugar?</h2>
+        <button id="ir-rapida" class="b3d menu txt b-verde" type="button">
+          <span class="ico">⚡</span><span>Partida rápida<small>Elige la dificultad y juega al instante</small></span>
+        </button>
+        <button id="ir-niveles" class="b3d menu txt b-morado" type="button">
+          <span class="ico">🗺️</span><span>Niveles<small>500 niveles, de menos a más reto</small></span>
+        </button>
+      </div>
     </section>
 
     <!-- Dificultad de la partida rápida -->
-    <section id="vista-dificultad" class="panel" hidden>
-      <h2>Elige la dificultad</h2>
-      <button class="btn btn-grande" type="button" data-dif="facil">
-        <span class="ico">🟢</span><span>Fácil<small>Robas 1 carta · reciclas el mazo sin límite</small></span>
-      </button>
-      <button class="btn btn-grande" type="button" data-dif="media">
-        <span class="ico">🟡</span><span>Normal<small>Robas 1 carta · 3 reciclajes del mazo</small></span>
-      </button>
-      <button class="btn btn-grande" type="button" data-dif="dificil">
-        <span class="ico">🔴</span><span>Difícil<small>Robas 3 cartas · reciclas el mazo sin límite</small></span>
-      </button>
-      <button class="btn btn-sec" type="button" data-volver="menu">‹ Volver</button>
+    <section id="vista-dificultad" class="capa centrada" hidden>
+      <div class="panel">
+        <h2>Elige la dificultad</h2>
+        <button class="b3d menu txt b-verde" type="button" data-dif="facil">
+          <span class="ico">🟢</span><span>Fácil<small>Robas 1 carta · reciclas el mazo sin límite</small></span>
+        </button>
+        <button class="b3d menu txt b-oro" type="button" data-dif="media">
+          <span class="ico">🟡</span><span>Normal<small>Robas 1 carta · 3 reciclajes del mazo</small></span>
+        </button>
+        <button class="b3d menu txt b-rojo" type="button" data-dif="dificil">
+          <span class="ico">🔴</span><span>Difícil<small>Robas 3 cartas · reciclas el mazo sin límite</small></span>
+        </button>
+        <button class="b3d menu txt b-gris" type="button" data-volver="menu"><span class="ico">‹</span><span>Volver</span></button>
+      </div>
     </section>
 
     <!-- Lista de niveles -->
-    <section id="vista-niveles" hidden>
+    <section id="vista-niveles" class="capa" hidden>
       <div class="nivel-pag">
-        <button id="pag-ant" class="btn btn-sec" type="button" aria-label="Página anterior">‹</button>
+        <button id="pag-ant" class="b3d chico b-gris" type="button" aria-label="Página anterior" title="Página anterior"><span class="b-ico">‹</span></button>
         <span id="pag-texto">Niveles 1–50</span>
-        <button id="pag-sig" class="btn btn-sec" type="button" aria-label="Página siguiente">›</button>
+        <button id="pag-sig" class="b3d chico b-gris" type="button" aria-label="Página siguiente" title="Página siguiente"><span class="b-ico">›</span></button>
       </div>
       <div id="rejilla-niveles" class="rejilla-niveles"></div>
       <p class="leyenda">🟢 fácil · 🟡 normal · 🔴 difícil · ✓ superado · 🔒 supera el nivel anterior · gris: próximamente</p>
       <p id="resumen-niveles" class="leyenda"></p>
-      <div class="acciones"><button class="btn btn-sec" type="button" data-volver="menu">‹ Volver</button></div>
+      <div class="acciones"><button class="b3d txt b-gris" type="button" data-volver="menu"><span class="b-ico">‹</span> Volver</button></div>
     </section>
 
-    <!-- Partida -->
+    <!-- Partida: la mesa ocupa toda la ventana -->
     <section id="vista-juego" hidden>
-      <p id="titulo-partida"></p>
-      <div id="info">
-        <span>Puntos: <span id="marcador">0</span></span>
-        <span>Movimientos: <span id="movs">0</span></span>
-        <span>Reciclajes: <span id="recic">∞</span></span>
-        <span>Tiempo: <span id="tiempo">0:00</span></span>
-        <span id="record-wrap" hidden>Récord: <span id="record">–</span></span>
-      </div>
       <div id="tablero" class="tablero"></div>
       <p id="estado">Arrastra una carta, o tócala y luego toca el lugar donde quieres ponerla. Toca una carta seleccionada otra vez para subirla a la base.</p>
-      <div class="acciones">
-        <button id="rellenar" class="btn" type="button" hidden>✨ Rellenar todo</button>
-        <button id="siguiente" class="btn" type="button" hidden>Siguiente nivel ›</button>
-        <button id="nueva" class="btn" type="button">Nueva partida</button>
-        <button id="deshacer" class="btn" type="button">Deshacer</button>
-        <button id="boost" class="btn btn-sec" type="button" hidden>Boost: deshacer (10 🪙)</button>
-        <button id="menu" class="btn btn-sec" type="button">Menú</button>
-        <button id="entrar" class="btn" type="button" hidden>Entrar con Google para guardar puntos</button>
-      </div>
     </section>
   </main>
+
   <script type="module" src="juego-solitario.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>

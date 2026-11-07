@@ -1,37 +1,40 @@
 <!doctype html>
 <!-- Ruta: rana/index-rana.html -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Rana</title>
-  <meta name="theme-color" content="#1b2330" />
+  <meta name="theme-color" content="#101114" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+    html.inmersivo { --fondo-juego: #101114; }
+    /* Juego de ventana completa */
     #c { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; user-select: none; display: block; }
-    a.volver { position: fixed; top: calc(8px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 5; padding: 6px 10px; background: rgba(15,18,32,.7); border-radius: 999px; font-size: .85rem; }
-    #hud { position: fixed; top: calc(8px + env(safe-area-inset-top, 0px)); right: 10px; z-index: 5; padding: 6px 12px; background: rgba(15,18,32,.7); border-radius: 999px; font-size: .85rem; white-space: nowrap; }
-    #fin { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 20px; text-align: center; background: rgba(15,18,32,.9); overflow: auto; }
+    #fin { position: fixed; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 12px; padding: calc(64px + env(safe-area-inset-top)) 16px calc(70px + env(safe-area-inset-bottom)); text-align: center; background: rgba(16,17,20,.92); overflow: auto; }
     #fin h2 { margin: 0; font-size: 1.8rem; }
     #fin p { margin: 0; max-width: 460px; color: var(--suave); }
-    #niveles { display: grid; grid-template-columns: repeat(10, minmax(30px, 1fr)); gap: 5px; max-width: 460px; width: 100%; }
-    #niveles .btn { padding: 6px 0; font-size: .8rem; opacity: .75; }
-    #niveles .btn:disabled { opacity: .25; }
-    #niveles .btn.sel { opacity: 1; outline: 2px solid #fff; outline-offset: 1px; }
+    #niveles { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px 5px; max-width: 460px; width: 100%; padding-bottom: 5px; }
+    #niveles .b3d { --t: 100%; width: 100%; height: auto; aspect-ratio: 1; margin: 0 0 4px; font-size: .78rem; font-weight: 800; border-radius: 9px; border-width: 1.5px; box-shadow: 0 3px 0 var(--c3), 0 5px 6px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.55); }
+    #niveles .b3d::before { display: none; }
+    #niveles .b3d:disabled { opacity: .45; }
+    #niveles .b3d.on { transform: translateY(3px); box-shadow: 0 0 0 2px #fff, 0 0 10px rgba(255,255,255,.55); }
     #msg { color: var(--suave); font-size: .85rem; min-height: 1.2em; }
   </style>
 </head>
-<body>
+<body class="inmersivo" data-pantalla-auto>
   <canvas id="c"></canvas>
-  <a class="volver" href="../">← Juegos</a>
-  <div id="hud" hidden></div>
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../" aria-label="Volver a Juegos" title="Juegos"><span class="b-ico">🏠</span></a>
+  </div>
+  <div class="hud hud-der"><span class="chip" id="hud" hidden></span></div>
   <div id="fin">
     <h2>🐸 Rana</h2>
     <p id="texto">Cruza la carretera (y los ríos) hasta llegar arriba. Toca la pantalla para saltar adelante, o desliza el dedo hacia donde quieras ir (también flechas o WASD). Tienes 3 vidas por nivel.</p>
     <div id="niveles" role="group" aria-label="Nivel"></div>
     <div id="msg"></div>
-    <button class="btn" id="jugar">Jugar</button>
+    <button class="b3d txt grande b-verde" id="jugar" type="button">Jugar</button>
   </div>
   <script type="module" src="juego-rana.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>

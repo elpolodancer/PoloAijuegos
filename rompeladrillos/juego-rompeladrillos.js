@@ -156,7 +156,7 @@ function mover(dt) {
 
 // ---------- Dibujo ----------
 function dibujar() {
-  cx.fillStyle = "#14102b";
+  cx.fillStyle = "#15171a";
   cx.fillRect(0, 0, W, H);
   ladrillos.forEach((b) => {
     if (!b.vivo) return;

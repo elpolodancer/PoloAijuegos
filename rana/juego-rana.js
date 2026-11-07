@@ -184,11 +184,12 @@ function sinVidas() {
 function empezar() { cargar(inicio); estado = "jugando"; $("fin").hidden = true; $("hud").hidden = false; }
 
 // ----- Menú: elegir nivel (solo los ya desbloqueados) -----
+const COLOR_TRAMO = ["b-verde", "b-azul", "b-morado", "b-oro", "b-rojo"]; // 1-10 verde … 41-50 rojo
 function armarNiveles() {
   const cont = $("niveles"); cont.innerHTML = "";
   for (let i = 1; i <= NIVELES; i++) {
     const b = document.createElement("button");
-    b.className = "btn" + (i === inicio ? " sel" : ""); b.textContent = i; b.disabled = i > progreso;
+    b.type = "button"; b.className = "b3d " + COLOR_TRAMO[Math.min(4, Math.floor((i - 1) / 10))] + (i === inicio ? " on" : ""); b.textContent = i; b.disabled = i > progreso; // color = tramo de 10 niveles
     b.addEventListener("click", () => { inicio = i; armarNiveles(); });
     cont.appendChild(b);
   }

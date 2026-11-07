@@ -26,7 +26,8 @@ function ajustar() {
   const horiz = innerWidth > innerHeight * 1.2;
   caja.classList.toggle("sobre", horiz);
   const aw = Math.min(document.documentElement.clientWidth - 8, 900);
-  const ah = horiz ? innerHeight - 64 : Math.max(200, innerHeight - 64 - 150);
+  // 54 px libres arriba para 🏠 🔊; en vertical, 160 px abajo para los mandos (en horizontal flotan sobre el juego)
+  const ah = horiz ? innerHeight - 54 - 8 : Math.max(200, innerHeight - 54 - 160);
   K = Math.max(1, Math.floor(Math.min(ah / (ALTO * T), aw / 320) * dpr));
   const cs = K / dpr;
   VISTA = Math.min(VISTA_MAX, Math.floor(aw / cs));

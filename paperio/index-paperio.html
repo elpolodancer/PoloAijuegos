@@ -1,128 +1,137 @@
 <!doctype html>
-<!-- Ruta: paperio/index-paperio.html -->
-<html lang="es">
+<!-- Ruta: paperio/index-paperio.html — MODO INMERSIVO -->
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Paperio</title>
-  <meta name="theme-color" content="#1b2330" />
+  <meta name="theme-color" content="#101114" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" /> <!-- DESPUÉS de estilos.css -->
   <style>
-    html, body { height: 100%; }
-    body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
-    .barra { padding: 8px 12px; flex: 0 0 auto; }
-    .barra h1 { font-size: 1.05rem; }
-    .datos { display: flex; gap: 10px; align-items: center; font-weight: 700; font-variant-numeric: tabular-nums; }
-    #escena { position: relative; flex: 1 1 auto; min-height: 0; }
+    html.inmersivo { --fondo-juego: #101114; }
+    /* Juego de ventana completa: el lienzo ocupa toda la pantalla y los menús se abren encima */
+    #escena { position: fixed; inset: 0; }
     #lienzo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-    #velo { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 18, 32, .78); overflow: auto; }
-    .panel { width: 100%; max-width: 380px; padding: 20px; text-align: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; }
-    .panel h2 { margin: 0 0 8px; font-size: 1.5rem; }
-    .panel p { margin: 0 0 12px; color: var(--suave); line-height: 1.4; }
-    #velDatos { margin: 0 0 14px; padding: 0; list-style: none; line-height: 1.7; }
+
+    /* Marcadores arriba a la izquierda (arriba a la derecha el lienzo dibuja el top 5) */
+    .datos { flex-wrap: wrap; gap: 5px; max-width: calc(100vw - 160px); }
+    .datos .chip { height: 26px; padding: 0 9px; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+    .hud-abajo { align-items: flex-end; }
+    #boosts { display: flex; gap: 8px; }
+
+    /* Capas de menú: cubren el juego, hacen scroll por dentro y dejan libres las franjas de los botones flotantes (arriba: marcadores; abajo: 🏠 y ⛶) */
+    #velo, #menu, #inicio, #mapa { position: absolute; inset: 0; display: flex; overflow: auto; overscroll-behavior: contain; touch-action: pan-y;
+      padding: calc(64px + env(safe-area-inset-top, 0px)) 12px calc(64px + env(safe-area-inset-bottom, 0px)); background: rgba(16, 17, 20, .9); }
+    #velo { z-index: 1; } #menu { z-index: 2; background: rgba(16, 17, 20, .96); } #inicio { z-index: 3; } #mapa { z-index: 4; background: rgba(16, 17, 20, .96); }
+    .panel { width: 100%; max-width: 380px; margin: auto; padding: 14px 16px; text-align: center; background: var(--tarjeta); border: 2px solid var(--borde); border-radius: 18px; box-shadow: 0 6px 0 #0c0d0f; }
+    .panel h2 { margin: 0 0 6px; font-size: 1.4rem; }
+    .panel p { margin: 0 0 10px; font-size: .82rem; color: var(--suave); line-height: 1.35; }
+    #velDatos { margin: 0 0 10px; padding: 0; list-style: none; line-height: 1.6; font-size: .95rem; }
     #velDatos b { color: var(--texto); }
-    .acciones { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-    .btn.sec { background: transparent; border: 1px solid var(--borde); color: var(--texto); }
-    .selnivel { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 14px; }
+    .panel .b3d.txt { --t: 40px; height: auto; min-height: var(--t); padding: 5px 12px; font-size: 13px; white-space: normal; text-align: center; }
+    /* Botones de acción siempre a la vista, sin buscarlos con scroll */
+    .acciones { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; position: sticky; bottom: 56px; z-index: 2; padding: 8px 0 2px; background: var(--tarjeta); }
+    .acciones .b3d.txt { --t: 48px; font-size: 15px; }
+    .selnivel { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 10px; }
     .selnivel div { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
     .selnivel small { color: var(--suave); }
-    .selnivel .btn { padding: 8px 12px; }
-    #ranking { margin-top: 14px; text-align: left; font-size: .9rem; color: var(--suave); }
-    #ranking h3 { margin: 0 0 4px; font-size: .95rem; color: var(--texto); }
+    #ranking { margin-top: 10px; text-align: left; font-size: .85rem; color: var(--suave); }
+    #ranking h3 { margin: 0 0 4px; font-size: .9rem; color: var(--texto); }
     #ranking ol { margin: 0; padding-left: 22px; }
-    .tienda { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; }
-    #velMonedas { font-weight: 700; }
-    .tienda small { flex-basis: 100%; color: var(--suave); }
-    #menu { position: absolute; inset: 0; z-index: 5; display: flex; justify-content: center; padding: 12px; background: rgba(15, 18, 32, .95); overflow: auto; }
-    .menu-caja { width: 100%; max-width: 480px; }
-    .menu-cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-    .menu-cab h2 { margin: 0; font-size: 1.4rem; }
-    #menuInfo { margin: 0 0 10px; color: var(--suave); font-size: .85rem; }
-    #menuRejilla { display: grid; gap: 8px; padding-bottom: 12px; }
-    .nv { aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 0; font: inherit; color: var(--texto); background: var(--tarjeta); border: 2px solid var(--borde); border-radius: 12px; cursor: pointer; }
-    .nv b { font-size: 1.05rem; }
-    .nv small { font-size: .7rem; color: var(--suave); }
-    .nv.hecho { border-color: #3fa66b; }
-    .nv.actual { border-color: var(--acento); box-shadow: 0 0 0 2px rgba(124, 92, 255, .35); }
-    .nv.bloq { opacity: .4; cursor: default; }
-    .nv.sel { background: #262d4d; }
-    .estrella { display: inline-block; animation: arcoiris 1.4s linear infinite; }
-    @keyframes arcoiris { from { filter: hue-rotate(0deg) saturate(2.2) drop-shadow(0 0 3px #fff); } to { filter: hue-rotate(360deg) saturate(2.2) drop-shadow(0 0 3px #fff); } }
-    @media (prefers-reduced-motion: reduce) { .estrella { animation: none; } }
-    #boosts { position: absolute; left: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 8px; }
-    .boost { display: flex; align-items: center; gap: 6px; padding: 8px 12px; font: inherit; font-weight: 700; color: var(--texto); background: rgba(27, 32, 54, .85); border: 1px solid var(--borde); border-radius: 999px; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-    .boost .ico { font-size: 1.3rem; line-height: 1; }
-    .boost:disabled { opacity: .4; cursor: default; }
-    .boost.activo { border-color: #ffd54a; box-shadow: 0 0 10px rgba(255, 213, 74, .7); }
-    .nv:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
-    #inicio { position: absolute; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 18, 32, .78); overflow: auto; }
-    .btn.grande { display: block; width: 100%; margin: 0 0 10px; padding: 14px; font-size: 1.05rem; }
-    #inicioSimple .selnivel b { font-size: 1.2rem; }
-    #mapa { position: absolute; inset: 0; z-index: 7; display: flex; justify-content: center; padding: 12px; background: rgba(15, 18, 32, .95); overflow: auto; }
-    .mapa-caja { width: 100%; max-width: 760px; }
-    #mapaInfo { margin: 0 0 10px; color: var(--suave); font-size: .85rem; }
-    #mapaLienzo svg { display: block; width: 100%; height: auto; border: 1px solid var(--borde); border-radius: 12px; }
+    .tienda { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
+    #velMonedas { font-weight: 800; }
+    .tienda small { flex-basis: 100%; font-size: .72rem; color: var(--suave); line-height: 1.3; }
+    .menu-caja { width: 100%; max-width: 480px; margin: auto; }
+    .menu-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+    .menu-cab h2 { margin: 0; font-size: 1.3rem; }
+    #menuInfo, #mapaInfo { margin: 0 0 8px; color: var(--suave); font-size: .8rem; }
+    #menuRejilla { display: grid; gap: 8px; padding-bottom: 8px; }
+    #inicioBotones .b3d.grande { --t: 58px; display: flex; width: 100%; margin: 0 0 8px; font-size: 17px; }
+    #inicioSimple .selnivel b { font-size: 1.15rem; }
+    .mapa-caja { width: 100%; max-width: 760px; margin: auto; }
+    #mapaLienzo svg { display: block; width: 100%; height: auto; max-height: calc(100dvh - 190px); border: 2px solid var(--borde); border-radius: 12px; }
     #mapaLienzo .sel { cursor: pointer; }
     #mapaLienzo [role="button"]:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     #mapaLienzo .pulso { transform-box: fill-box; transform-origin: center; animation: pulso 1.8s ease-out infinite; }
     @keyframes pulso { from { transform: scale(1); opacity: .9; } to { transform: scale(2.4); opacity: 0; } }
-    @media (prefers-reduced-motion: reduce) { #mapaLienzo .pulso { animation: none; } }
-    .rejilla-niveles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding-bottom: 12px; }
-    .nv.c1 small { color: #6fd08c; } .nv.c2 small { color: #b7d65a; } .nv.c3 small { color: #ffd54a; } .nv.c4 small { color: #ff9f4a; } .nv.c5 small { color: #ff6b6b; }
-    .nv.bono { grid-column: 1 / -1; aspect-ratio: auto; flex-direction: row; gap: 10px; padding: 10px; border-color: #ffd54a; background: #2a2a1c; }
-    .nv.bono small { font-size: .8rem; color: #ffe38a; }
-    .tarjeta-estado { padding: 28px 16px; text-align: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; }
-    .tarjeta-estado-ico { font-size: 3rem; }
-    .tarjeta-estado h3 { margin: 6px 0; font-size: 1.3rem; }
-    .tarjeta-estado p { margin: 0; color: var(--suave); }
+    .rejilla-niveles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding-bottom: 8px; }
+
+    /* Casillas de nivel: botones 3D cuadrados. Color = estado (verde pasado, dorado el siguiente, gris bloqueado) o dificultad (c1 a c5 en el mapa) */
+    .b3d.nv { width: 100%; height: auto; aspect-ratio: 1 / 1; flex-direction: column; gap: 1px; margin: 0 0 5px; padding: 0; font-size: 1.05rem; font-weight: 800; border-radius: 12px;
+      --c1: #b6f7a6; --c2: #3fcf4a; --c3: #1d7f2a; }
+    .b3d.nv > * { position: relative; }
+    .b3d.nv small { font-size: .7rem; font-weight: 700; color: #fff; }
+    .nv.actual { --c1: #fff08c; --c2: #ffb020; --c3: #a85d00; }
+    .nv.c1 { --c1: #b6f7a6; --c2: #3fcf4a; --c3: #1d7f2a; }
+    .nv.c2 { --c1: #a8e2ff; --c2: #2f9bff; --c3: #14589f; }
+    .nv.c3 { --c1: #e3bcff; --c2: #a14df0; --c3: #62209f; }
+    .nv.c4 { --c1: #fff08c; --c2: #ffb020; --c3: #a85d00; }
+    .nv.c5 { --c1: #ffb3a8; --c2: #f0483a; --c3: #8f1c12; }
+    .nv.bloq { --c1: #d5d9e0; --c2: #8b93a0; --c3: #4f5662; }
+    .b3d.sel { transform: translateY(4px); filter: brightness(1.12); box-shadow: 0 1px 0 var(--c3), 0 0 0 3px #fff, 0 0 14px rgba(255,255,255,.55), inset 0 2px 0 rgba(255,255,255,.5); }
+    .b3d.nv.bono { --c1: #fff08c; --c2: #ffb020; --c3: #a85d00; grid-column: 1 / -1; aspect-ratio: auto; flex-direction: row; gap: 10px; padding: 8px 12px; text-align: left; font-size: .95rem; }
+    .b3d.nv.bono small { font-size: .78rem; }
+
+    .estrella { display: inline-block; animation: arcoiris 1.4s linear infinite; }
+    @keyframes arcoiris { from { filter: hue-rotate(0deg) saturate(2.2) drop-shadow(0 0 3px #fff); } to { filter: hue-rotate(360deg) saturate(2.2) drop-shadow(0 0 3px #fff); } }
+    @media (prefers-reduced-motion: reduce) { .estrella, #mapaLienzo .pulso { animation: none; } }
+
+    /* Avisos dentro de la página (en vez de alert(), que saca de la pantalla completa) */
+    #aviso { position: fixed; z-index: 30; top: calc(70px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); max-width: 90vw; padding: 8px 14px; text-align: center; font-weight: 700;
+      background: rgba(16, 17, 20, .95); border: 2px solid var(--borde); border-radius: 12px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+    #aviso.ver { opacity: 1; }
   </style>
 </head>
-<body>
-  <header class="barra">
-    <a class="volver" href="../">← Juegos</a>
-    <div class="datos">
-      <span id="stNivel" title="Nivel">Nv 1</span>
-      <span id="stTerr" title="Territorio">▦ 0 %</span>
-      <span id="stBajas" title="Bajas">☠ 0</span>
-      <span id="stMejor" title="Mejor territorio">🏆 0 %</span>
-      <span id="stMonedas" title="Monedas">🪙 0</span>
-    </div>
-  </header>
-  <div id="escena">
-    <canvas id="lienzo"></canvas>
+<body class="inmersivo" data-pantalla-auto>
+  <!-- Marcadores flotantes -->
+  <div class="hud hud-izq datos">
+    <span class="chip" id="stNivel" title="Nivel">Nv 1</span>
+    <span class="chip" id="stTerr" title="Territorio">▦ 0 %</span>
+    <span class="chip" id="stBajas" title="Bajas">☠ 0</span>
+    <span class="chip" id="stMejor" title="Mejor territorio">🏆 0 %</span>
+    <span class="chip" id="stMonedas" title="Monedas">🪙 0</span>
+  </div>
+  <!-- Botones flotantes de abajo: volver y boosts de la partida -->
+  <div class="hud hud-abajo">
+    <a class="b3d chico b-gris" href="../index.html" title="Volver a Juegos" aria-label="Volver a Juegos"><span class="b-ico" aria-hidden="true">🏠</span></a>
     <div id="boosts" hidden>
-      <button class="boost" id="usarInvenc" type="button" aria-label="Activar Invencible (tecla 1)"><span class="ico estrella">⭐</span><span id="nInvenc">×0</span></button>
-      <button class="boost" id="usarVeloz" type="button" aria-label="Activar Velocidad doble (tecla 2)"><span class="ico">⚡</span><span id="nVeloz">×0</span></button>
+      <button class="b3d b-oro" id="usarInvenc" type="button" title="Invencible (tecla 1)" aria-label="Activar Invencible (tecla 1)"><span class="b-ico estrella" aria-hidden="true">⭐</span><span class="b-info" id="nInvenc">×0</span></button>
+      <button class="b3d b-azul" id="usarVeloz" type="button" title="Velocidad doble (tecla 2)" aria-label="Activar Velocidad doble (tecla 2)"><span class="b-ico" aria-hidden="true">⚡</span><span class="b-info" id="nVeloz">×0</span></button>
     </div>
+  </div>
+
+  <div id="escena">
+    <canvas id="lienzo" aria-label="Paperio: mantén pulsado y arrastra para moverte"></canvas>
     <div id="velo">
       <div class="panel">
         <h2 id="velTitulo">Paperio</h2>
         <p id="velTexto">Sal de tu territorio y regresa para quedarte con todo lo que encierres. Si alguien toca tu estela, pierdes; si tú tocas la suya, pierde él. Mantén el dedo pulsado y arrástralo hacia donde quieras ir, o usa las flechas / WASD. Durante la partida activa tus boosts con los botones ⭐ y ⚡ (o las teclas 1 y 2).</p>
         <div class="selnivel" id="selNivel">
-          <button class="btn sec" id="nivelAnt" type="button" aria-label="Nivel anterior">◀</button>
+          <button class="b3d chico b-gris" id="nivelAnt" type="button" aria-label="Nivel anterior">◀</button>
           <div><small id="nivelNum">Nivel 1</small><b id="nivelNom">Colina</b></div>
-          <button class="btn sec" id="nivelSig" type="button" aria-label="Nivel siguiente">▶</button>
+          <button class="b3d chico b-gris" id="nivelSig" type="button" aria-label="Nivel siguiente">▶</button>
         </div>
         <div class="tienda">
-          <span id="velMonedas">🪙 0</span>
-          <button class="btn sec" id="comprarInicio" type="button">Inicio más grande · 50 🪙</button>
-          <button class="btn sec" id="comprarInvenc" type="button"><span class="estrella">⭐</span> <span id="txtInvenc">Invencible · 100 🪙</span></button>
-          <button class="btn sec" id="comprarVeloz" type="button">⚡ <span id="txtVeloz">Velocidad ×2 · 80 🪙</span></button>
+          <span class="chip" id="velMonedas">🪙 0</span>
+          <button class="b3d txt b-verde" id="comprarInicio" type="button">Inicio más grande · 50 🪙</button>
+          <button class="b3d txt b-oro" id="comprarInvenc" type="button"><span class="estrella">⭐</span> <span id="txtInvenc">Invencible · 100 🪙</span></button>
+          <button class="b3d txt b-azul" id="comprarVeloz" type="button">⚡ <span id="txtVeloz">Velocidad ×2 · 80 🪙</span></button>
           <small>Inicio más grande: tu círculo de inicio será 75 % más grande en la próxima partida. Invencible (8 s) y Velocidad ×2 (10 s) se guardan y los activas tú durante la partida.</small>
         </div>
         <ul id="velDatos"></ul>
         <div class="acciones">
-          <button class="btn" id="jugar" type="button">Jugar</button>
-          <button class="btn sec" id="verNiveles" type="button">☰ Niveles</button>
-          <button class="btn sec" id="irInicio" type="button">⌂ Menú</button>
-          <button class="btn sec" id="entrar" type="button" hidden>Entrar con Google</button>
+          <button class="b3d txt b-verde" id="jugar" type="button">Jugar</button>
+          <button class="b3d txt b-azul" id="verNiveles" type="button"><span class="b-ico" aria-hidden="true">☰</span> Niveles</button>
+          <button class="b3d txt b-gris" id="irInicio" type="button"><span class="b-ico" aria-hidden="true">⌂</span> Menú</button>
+          <button class="b3d txt b-morado" id="entrar" type="button" hidden>🔑 Entrar con Google</button>
         </div>
         <div id="ranking" hidden></div>
       </div>
     </div>
     <div id="menu" hidden>
       <div class="menu-caja">
-        <div class="menu-cab"><h2>Niveles</h2><button class="btn sec" id="menuCerrar" type="button">Cerrar</button></div>
+        <div class="menu-cab"><h2>Niveles</h2><button class="b3d txt chico b-rojo" id="menuCerrar" type="button">✕ Cerrar</button></div>
         <p id="menuInfo"></p>
         <div id="menuRejilla"></div>
       </div>
@@ -131,20 +140,20 @@
       <div class="panel">
         <h2>Paperio</h2>
         <div id="inicioBotones">
-          <button class="btn grande" id="btnSimple" type="button">▶ Partida simple</button>
-          <button class="btn grande" id="btnNiveles" type="button">☰ Niveles</button>
-          <button class="btn grande" id="btnMapa" type="button">🗺️ Mapa</button>
+          <button class="b3d txt grande b-verde" id="btnSimple" type="button">▶ Partida simple</button>
+          <button class="b3d txt grande b-azul" id="btnNiveles" type="button">☰ Niveles</button>
+          <button class="b3d txt grande b-oro" id="btnMapa" type="button">🗺️ Mapa</button>
         </div>
         <div id="inicioSimple" hidden>
           <p>Un mundo grande contra los rivales. No tiene meta: juega hasta que te eliminen. Elige la dificultad.</p>
           <div class="selnivel">
-            <button class="btn sec" id="difAnt" type="button" aria-label="Dificultad anterior">◀</button>
+            <button class="b3d chico b-gris" id="difAnt" type="button" aria-label="Dificultad anterior">◀</button>
             <div><small>Dificultad</small><b id="difNombre">Normal</b><small id="difInfo"></small></div>
-            <button class="btn sec" id="difSig" type="button" aria-label="Dificultad siguiente">▶</button>
+            <button class="b3d chico b-gris" id="difSig" type="button" aria-label="Dificultad siguiente">▶</button>
           </div>
           <div class="acciones">
-            <button class="btn" id="simpleJugar" type="button">Jugar</button>
-            <button class="btn sec" id="simpleAtras" type="button">Atrás</button>
+            <button class="b3d txt b-verde" id="simpleJugar" type="button">▶ Jugar</button>
+            <button class="b3d txt b-gris" id="simpleAtras" type="button">Atrás</button>
           </div>
         </div>
       </div>
@@ -152,15 +161,16 @@
     <div id="mapa" hidden>
       <div class="mapa-caja">
         <div class="menu-cab">
-          <button class="btn sec" id="mapaAtras" type="button">← Atrás</button>
+          <button class="b3d txt chico b-gris" id="mapaAtras" type="button">← Atrás</button>
           <h2 id="mapaTitulo">Mapa</h2>
-          <button class="btn sec" id="mapaIr" type="button">📍 México</button>
+          <button class="b3d txt chico b-azul" id="mapaIr" type="button">📍 México</button>
         </div>
         <p id="mapaInfo"></p>
         <div id="mapaLienzo"></div>
       </div>
     </div>
   </div>
+  <div id="aviso" role="status"></div>
   <script type="module" src="juego-paperio.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>

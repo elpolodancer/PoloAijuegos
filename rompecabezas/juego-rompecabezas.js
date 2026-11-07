@@ -73,6 +73,21 @@ let rectL = null;               // posición del lienzo en pantalla (se guarda p
 const fmt = (s) => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 const tiempoActual = () => Math.floor(acum + (t0 ? (Date.now() - t0) / 1000 : 0));
 
+// Sustituyen a confirm() y prompt(): esos sacan al navegador de la pantalla completa
+let resolverPregunta = null;
+function preguntar(texto, si = "Continuar", no = "Cancelar") {
+  $("confTxt").textContent = texto;
+  $("confSi").textContent = si;
+  $("confNo").textContent = no;
+  $("confNo").hidden = !no;
+  $("confirmar").hidden = false;
+  return new Promise((res) => { resolverPregunta = res; });
+}
+const info = (texto) => preguntar(texto, "Entendido", "");
+function cerrarPregunta(r) { $("confirmar").hidden = true; if (resolverPregunta) { const f = resolverPregunta; resolverPregunta = null; f(r); } }
+$("confSi").addEventListener("click", () => cerrarPregunta(true));
+$("confNo").addEventListener("click", () => cerrarPregunta(false));
+
 function aviso(texto, fijo) {
   const m = $("msg");
   m.textContent = texto;
@@ -96,7 +111,7 @@ function texturas() {
   const jean = document.createElement("canvas");
   jean.width = jean.height = 256;
   let x = jean.getContext("2d");
-  x.fillStyle = "#1f4568"; x.fillRect(0, 0, 256, 256);
+  x.fillStyle = "#1c1d21"; x.fillRect(0, 0, 256, 256);
   for (let i = 0; i < 6000; i++) {
     x.fillStyle = r() < 0.5 ? "rgba(255,255,255,.06)" : "rgba(0,0,0,.09)";
     x.fillRect((r() * 256) | 0, (r() * 256) | 0, 1 + ((r() * 2) | 0), 1);
@@ -132,7 +147,7 @@ const PANTALLAS = ["menu", "cat", "cfg", "juego"];
 function pantalla(nombre) {
   for (const p of PANTALLAS) $(p).hidden = p !== nombre;
   document.body.classList.toggle("en-juego", nombre === "juego");
-  if (nombre !== "juego") { scrollTo(0, 0); ocultarFlota(); }
+  if (nombre !== "juego") { $(nombre).scrollTop = 0; ocultarFlota(); }
 }
 
 function carta(marco, nombre, alAbrir) {
@@ -204,9 +219,9 @@ function abrirCategoria(c) {
       const b = carta(marcoImg(s.url), s.cols * s.rows + " piezas · " + s.col + "/" + s.cols * s.rows + " · " + fmt(s.t), () => abrirPartida(s));
       const x = document.createElement("span");
       x.className = "borrar"; x.setAttribute("role", "button"); x.setAttribute("aria-label", "Borrar partida"); x.textContent = "✕";
-      x.addEventListener("click", (e) => {
+      x.addEventListener("click", async (e) => {
         e.stopPropagation();
-        if (!confirm("¿Borrar esta partida guardada?")) return;
+        if (!(await preguntar("¿Borrar esta partida guardada?", "Borrar"))) return;
         borrarPartida(s.id);
         pintarMenu();
         abrirCategoria(c);
@@ -668,18 +683,18 @@ $("pContinuar").addEventListener("click", continuar);
 $("pGuardar").addEventListener("click", () => guardarPartida());
 $("guardarPartida").addEventListener("click", () => guardarPartida());
 $("pGuia").addEventListener("click", () => { guia = !guia; if (arr) arr.fl = null; pedir(); continuar(); });
-$("pMezclar").addEventListener("click", () => {
-  if (colocadas > 0 && !confirm("Se mezclarán de nuevo las piezas. ¿Continuar?")) return;
+$("pMezclar").addEventListener("click", async () => {
+  if (colocadas > 0 && !(await preguntar("Se mezclarán de nuevo las piezas. ¿Continuar?"))) return;
   $("pausaMenu").hidden = true;
   jugar();
 });
-$("pPiezas").addEventListener("click", () => {
-  if (colocadas > 0 && !confirm("Se perderá el avance. ¿Continuar?")) return;
+$("pPiezas").addEventListener("click", async () => {
+  if (colocadas > 0 && !(await preguntar("Se perderá el avance. ¿Continuar?"))) return;
   $("pausaMenu").hidden = true;
   abrirAjustes(volverA);
 });
-$("pSalir").addEventListener("click", () => {
-  if (colocadas > 0 && !confirm("Se perderá el avance. ¿Salir?")) return;
+$("pSalir").addEventListener("click", async () => {
+  if (colocadas > 0 && !(await preguntar("Se perderá el avance. ¿Salir?", "Salir"))) return;
   $("pausaMenu").hidden = true;
   pantalla("menu");
 });
@@ -1090,7 +1105,7 @@ $("guardar").addEventListener("click", () => guardarEnNube(false));
 $("enlace").addEventListener("click", async () => {
   if (!urlNube) return;
   const link = location.origin + location.pathname + "?img=" + encodeURIComponent(urlNube);
-  try { await navigator.clipboard.writeText(link); aviso("Enlace copiado"); } catch (e) { prompt("Copia el enlace:", link); }
+  try { await navigator.clipboard.writeText(link); aviso("Enlace copiado"); } catch (e) { info("Copia el enlace:\n" + link); }
 });
 
 // ---------- GUARDAR Y CONTINUAR PARTIDA ----------

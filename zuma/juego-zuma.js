@@ -75,7 +75,7 @@ function rumorOn() { // retumbo grave de la cadena rodando
 function rumorOff() { if (rumor) { try { rumor.stop(); } catch (e) {} rumor = null; } }
 $("sonido").addEventListener("click", () => {
   mudo = !mudo;
-  $("sonido").textContent = mudo ? "🔇" : "🔊";
+  $("sonido").firstElementChild.textContent = mudo ? "🔇" : "🔊";
   if (mudo) rumorOff(); else if (p && p.estado === "jugando") rumorOn();
 });
 
@@ -168,7 +168,9 @@ function refrescarBarra() {
   const jugando = !!p && p.estado === "jugando";
   for (const [k, id, ico, nom] of [["tiempo", "bTiempo", "⏱", "Detener tiempo"], ["metal", "bMetal", "⚙️", "4 metálicas"]]) {
     const n = datos.boosts[k], b = $(id);
-    b.textContent = ico + " " + nom + (n ? " ×" + n : " · " + COSTE_BOOST + "🪙");
+    b.querySelector(".b-info").textContent = n ? "×" + n : COSTE_BOOST + "🪙";
+    b.classList.toggle("sin", !n);
+    b.title = nom + (n ? " (tienes " + n + ")" : " (cuesta " + COSTE_BOOST + " monedas)");
     b.disabled = !jugando || (!n && datos.monedas < COSTE_BOOST);
   }
 }

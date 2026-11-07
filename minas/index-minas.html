@@ -1,24 +1,31 @@
 <!doctype html>
 <!-- Ruta: minas/index-minas.html -->
-<html lang="es">
+<html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Minero Tycoon</title>
   <meta name="theme-color" content="#2b1d12" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    html, body { margin: 0; background: #2b1d12; color: #fff; overscroll-behavior: none; }
-    button { font: inherit; color: #fff; cursor: pointer; touch-action: manipulation; }
-    #top { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: calc(6px + env(safe-area-inset-top, 0px)) 8px 6px; background: rgba(30,20,12,.96); border-bottom: 1px solid #5a3d22; }
-    .pil { background: rgba(0,0,0,.35); border: 1px solid #5a3d22; border-radius: 999px; padding: 4px 12px; font-weight: 700; }
-    #din { color: #7dff9a; font-size: 1.15rem; } #sep { flex: 1; }
-    #escena { position: relative; margin-bottom: 150px; }
+    html.inmersivo { --fondo-juego: #2b1d12; }
+    button { font: inherit; color: #fff; touch-action: manipulation; }
+    /* Los botones elegidos (.sel) y los que no alcanzan (.no) usan el mismo aspecto 3D que .on */
+    .b3d.sel { transform: translateY(4px); filter: brightness(1.12); box-shadow: 0 1px 0 var(--c3), 0 0 0 3px #fff, 0 0 14px rgba(255,255,255,.55), inset 0 2px 0 rgba(255,255,255,.5); }
+    .b3d.no, .b3d.no:hover:not(:disabled) { filter: grayscale(.85) brightness(.75); }
+
+    /* Pantalla: barra de arriba + lista de filas con scroll propio + barra de abajo (la página no se desplaza) */
+    #app { position: absolute; inset: 0; display: flex; flex-direction: column; }
+    #top { flex: none; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: calc(6px + env(safe-area-inset-top, 0px)) calc(8px + env(safe-area-inset-right, 0px)) 4px calc(8px + env(safe-area-inset-left, 0px)); background: rgba(30,20,12,.96); border-bottom: 1px solid #5a3d22; }
+    #din { color: #7dff9a; font-size: 16px; }
+    #sep { flex: 1; }
+    #minas { flex: 1 0 100%; display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 0; }
+    .mp { flex: none; }
+    #escena { position: relative; flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding-bottom: 24px; }
     #filas { position: relative; }
-    #minas { flex: 1 0 100%; display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
-    .mp { flex: none; border: 2px solid #5a3d22; border-radius: 999px; background: #4a3220; padding: 4px 12px; font-weight: 700; white-space: nowrap; } .mp.sel { border-color: #ffd24a; background: #6a4a20; } .mp.no { opacity: .45; }
     .fila { position: absolute; left: 0; right: 0; display: flex; height: 112px; box-sizing: border-box; border-bottom: 2px solid #1a110a; background: linear-gradient(#5b3d24, #3f2a18); }
-    .fila.sup { background: linear-gradient(#7fb6e8, #cfe6f7 70%, #6aa04a 70%); }
+    .fila.sup { background: linear-gradient(#8a8d93, #cfd1d6 70%, #6aa04a 70%); }
     .esc { position: relative; flex: 1; margin-left: 46px; overflow: hidden; }
     .roca { position: absolute; right: 4%; top: 28px; font-size: 2rem; opacity: .9; } .banco { position: absolute; right: 4%; top: 26px; font-size: 2.2rem; }
     .pj { position: absolute; top: 34px; font-size: 1.7rem; transform: translateX(-50%); } .pj.dig { animation: pico .35s infinite alternate; }
@@ -26,30 +33,44 @@
     .dep { position: absolute; left: 20%; top: 6px; transform: translateX(-50%); font-size: .75rem; background: rgba(0,0,0,.5); border-radius: 8px; padding: 1px 6px; white-space: nowrap; }
     .toca { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); font-size: .8rem; background: #ffd24a; color: #000; border-radius: 8px; padding: 1px 8px; animation: lat .8s infinite alternate; }
     @keyframes lat { to { transform: translateX(-50%) scale(1.15); } }
-    .inf { width: 138px; padding: 3px 6px; display: flex; flex-direction: column; gap: 2px; justify-content: center; background: rgba(0,0,0,.35); }
+    @media (prefers-reduced-motion: reduce) { .pj.dig, .toca { animation: none; } }
+    .inf { width: 138px; padding: 3px 6px; display: flex; flex-direction: column; gap: 1px; justify-content: center; background: rgba(0,0,0,.35); }
     .inf b { font-size: .85rem; } .inf small { font-size: .66rem; color: #e8d3b8; }
-    .inf button { border: 1px solid #5a3d22; border-radius: 8px; background: #8a5a22; padding: 4px; font-size: .75rem; font-weight: 700; min-height: 30px; padding: 2px; white-space: nowrap; }
-    .inf button.no { opacity: .45; } .inf .g { background: #2f5a8a; }
+    .inf .b3d { --t: 28px; width: 100%; margin: 0 0 4px; padding: 0 4px; font-size: 12px; border-radius: 10px; }
     #asc { position: absolute; left: 5px; width: 36px; z-index: 3; font-size: 1.7rem; text-align: center; pointer-events: none; }
     #ascl { position: absolute; left: 22px; width: 4px; background: #1a110a; z-index: 2; top: 48px; }
-    #nuevo { display: block; width: calc(100% - 16px); margin: 10px 8px; padding: 14px; border: 2px dashed #ffd24a; border-radius: 12px; background: rgba(0,0,0,.35); font-weight: 700; } #nuevo.no { opacity: .45; }
-    #barra { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); background: rgba(30,20,12,.96); border-top: 1px solid #5a3d22; }
-    #barra button { border: 2px solid #5a3d22; border-radius: 10px; background: #4a3220; padding: 8px 12px; font-weight: 700; } #barra button.sel { border-color: #ffd24a; background: #6a4a20; } #barra button:disabled { opacity: .4; }
-    #aviso { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); z-index: 9; max-width: 92vw; padding: 8px 14px; border-radius: 10px; background: rgba(15,18,32,.92); text-align: center; opacity: 0; transition: opacity .3s; pointer-events: none; }
+    #nuevo { --t: 52px; display: flex; width: calc(100% - 16px); margin: 12px 8px 5px; white-space: normal; }
+    #barra { flex: none; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; padding: 8px 64px calc(6px + env(safe-area-inset-bottom, 0px)) 8px; background: rgba(30,20,12,.96); border-top: 1px solid #5a3d22; }
+    #aviso { position: fixed; top: 96px; left: 50%; transform: translateX(-50%); z-index: 9; max-width: 92vw; padding: 8px 14px; border-radius: 10px; background: rgba(15,16,18,.94); text-align: center; opacity: 0; transition: opacity .3s; pointer-events: none; }
+    #confirmar { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(10,10,12,.8); }
+    .cajaconf { width: min(92vw, 380px); padding: 18px; text-align: center; background: var(--tarjeta); border: 2px solid var(--borde); border-radius: 18px; box-shadow: 0 6px 0 #0c0d0f; }
+    .cajaconf p { margin: 0 0 14px; line-height: 1.45; }
+    .cajaconf .fila-b { display: flex; gap: 10px; justify-content: center; }
   </style>
 </head>
-<body>
-  <div id="top">
-    <a class="volver pil" href="../">← Juegos</a>
-    <span class="pil" id="din"></span>
-    <span class="pil" id="est" title="Estrellas: +15 % de ganancias cada una"></span>
-    <span id="sep"></span>
-    <span class="pil" id="ips"></span>
-    <div id="minas"></div>
+<body class="inmersivo" data-pantalla-auto>
+  <div id="app">
+    <div id="top">
+      <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
+      <span class="chip" id="din"></span>
+      <span class="chip" id="est" title="Estrellas: +15 % de ganancias cada una"></span>
+      <span id="sep"></span>
+      <span class="chip" id="ips"></span>
+      <div id="minas"></div>
+    </div>
+    <div id="escena"><div id="filas"></div><div id="ascl"></div><div id="asc">🛗</div></div>
+    <div id="barra"></div>
   </div>
-  <div id="escena"><div id="filas"></div><div id="ascl"></div><div id="asc">🛗</div></div>
   <div id="aviso"></div>
-  <div id="barra"></div>
+  <div id="confirmar" hidden>
+    <div class="cajaconf">
+      <p id="confTxt"></p>
+      <div class="fila-b">
+        <button class="b3d txt b-verde" id="confSi" type="button">Sí</button>
+        <button class="b3d txt b-gris" id="confNo" type="button">Cancelar</button>
+      </div>
+    </div>
+  </div>
   <script type="module" src="juego-minas.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>

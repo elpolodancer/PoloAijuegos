@@ -1317,7 +1317,7 @@ function pintarPerfil(lista) {
   const boton = (txt, fn) => { const b = document.createElement("button"); b.className = "btn"; b.textContent = txt; b.disabled = !J; b.addEventListener("click", fn); return b; };
   if (!usuario) {
     lista.appendChild(fila("👤", [negrita("Jugador sin sesión"), peq(J ? "Entra con Google para que tus puntos se guarden en tu perfil. Sin sesión el juego funciona igual, pero no se suman puntos." : "Conectando…")],
-      boton("Entrar con Google", () => J.entrar().catch((e) => alert(e.message)))));
+      boton("Entrar con Google", () => J.entrar().catch((e) => info("⚠️ " + e.message)))));
   } else {
     let avatar = "👤";
     if (usuario.photoURL) { avatar = document.createElement("img"); avatar.src = usuario.photoURL; avatar.alt = ""; avatar.referrerPolicy = "no-referrer"; avatar.style.cssText = "width:40px;height:40px;border-radius:50%;object-fit:cover;display:block"; }
@@ -1597,12 +1597,24 @@ function filaTerreno() {
   fila.append(i, t, col);
   return fila;
 }
+// Pregunta de sí/no dentro de la página (confirm() sacaría al navegador de la pantalla completa)
+function preguntar(txt, si = "Sí") {
+  return new Promise((res) => {
+    const d = $("confirmar");
+    $("confirmarTxt").textContent = txt;
+    $("confSi").textContent = si;
+    d.hidden = false;
+    const fin = (v) => { d.hidden = true; $("confSi").onclick = $("confNo").onclick = null; res(v); };
+    $("confSi").onclick = () => fin(true);
+    $("confNo").onclick = () => fin(false);
+  });
+}
 // Tocaste el cartel de un terreno: pide confirmar la compra (así no se compra por error)
 function pedirTerreno(k) {
   const precio = precioTerreno(), L = datosLote(k);
   if (precio === undefined) return;
   if (dinero < precio) { info("🏷️ El terreno " + L.etiqueta.toLowerCase() + " cuesta " + dolares(precio) + ": todavía no te alcanza."); return; }
-  if (confirm("¿Comprar el terreno " + L.etiqueta.toLowerCase() + " por " + dolares(precio) + "?")) comprarTerreno(k);
+  preguntar("¿Comprar el terreno " + L.etiqueta.toLowerCase() + " por " + dolares(precio) + "?", "Comprar").then((ok) => { if (ok) comprarTerreno(k); });
 }
 function comprarTerreno(k) {
   const precio = precioTerreno();
@@ -2322,7 +2334,7 @@ import("../compartido/jugador.js").then((m) => {
     b.className = "btn";
     if (!u) {
       b.textContent = "Entrar con Google";
-      b.addEventListener("click", () => J.entrar().catch((e) => alert(e.message)));
+      b.addEventListener("click", () => J.entrar().catch((e) => info("⚠️ " + e.message)));
       zona.appendChild(b);
       return;
     }
@@ -2507,8 +2519,8 @@ if (BOTON_DINERO_PRUEBA) {
   const rei2 = $("reiniciar");
   if (rei2 && rei2.parentNode) rei2.parentNode.insertBefore(bp, rei2); else document.body.appendChild(bp);
 }
-$("reiniciar").addEventListener("click", () => {
-  if (!confirm("¿Empezar de cero esta partida?" + (ranura !== null ? " Se perderá lo que tienes guardado en la Partida " + (ranura + 1) + "." : ""))) return;
+$("reiniciar").addEventListener("click", async () => {
+  if (!(await preguntar("¿Empezar de cero esta partida?" + (ranura !== null ? " Se perderá lo que tienes guardado en la Partida " + (ranura + 1) + "." : ""), "Empezar de cero"))) return;
   enviarPuntos(true); // antes de empezar de cero, manda los puntos que falten
   nuevaPartida();     // (actualizar() guarda enseguida la partida en blanco en la misma ranura)
 });
@@ -2571,12 +2583,12 @@ function pintarPartidas() {
       ];
       lineas.forEach((l) => caja.appendChild(minimo("small", "", l)));
       boton("▶️ Continuar", () => empezar(i));
-      if (esNueva) boton("♻️ Empezar de cero", () => {
-        if (!confirm("¿Empezar de cero en la Partida " + (i + 1) + "? Se perderá lo que tienes guardado ahí.")) return;
+      if (esNueva) boton("♻️ Empezar de cero", async () => {
+        if (!(await preguntar("¿Empezar de cero en la Partida " + (i + 1) + "? Se perderá lo que tienes guardado ahí.", "Empezar de cero"))) return;
         crearEn(i);
       }, true);
-      boton("🗑️ Borrar", () => {
-        if (!confirm("¿Borrar la Partida " + (i + 1) + "? No se puede deshacer.")) return;
+      boton("🗑️ Borrar", async () => {
+        if (!(await preguntar("¿Borrar la Partida " + (i + 1) + "? No se puede deshacer.", "Borrar"))) return;
         const x = leerTodo(); x.ranuras[i] = null; escribirTodo(x); pintarPartidas();
       }, true);
     }

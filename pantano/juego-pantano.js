@@ -78,8 +78,7 @@ const NIVELES = [
 // ---------- Elementos ----------
 const $ = (id) => document.getElementById(id);
 const cv = $("lienzo"), cx = cv.getContext("2d"), W = cv.width, H = cv.height;
-const estadoTxt = $("estado"), jugar = $("jugar"), btnEntrar = $("entrar"), zonaTienda = $("tienda"), zonaNiveles = $("niveles");
-cv.style.maxWidth = "760px"; // este juego es horizontal: más ancho que los demás
+const panelMenu = $("panel"), estadoTxt = $("estado"), jugar = $("jugar"), btnEntrar = $("entrar"), zonaTienda = $("tienda"), zonaNiveles = $("niveles");
 cv.style.touchAction = "none";
 
 // ---------- Estado ----------
@@ -368,7 +367,7 @@ function fondoAnimado() {
 // Ayudas de dibujo
 const elipse = (x, y, rx, ry, color, rot = 0) => { cx.fillStyle = color; cx.beginPath(); cx.ellipse(x, y, Math.max(rx, 0.1), Math.max(ry, 0.1), rot, 0, Math.PI * 2); cx.fill(); };
 function rr(x, y, w, h, r) { cx.beginPath(); if (cx.roundRect) cx.roundRect(x, y, w, h, r); else cx.rect(x, y, w, h); }
-function panel(x, y, w, h) { rr(x, y, w, h, 8); cx.fillStyle = "rgba(8,12,20,.5)"; cx.fill(); cx.strokeStyle = "rgba(255,255,255,.12)"; cx.lineWidth = 1; cx.stroke(); }
+function panel(x, y, w, h) { rr(x, y, w, h, 8); cx.fillStyle = "rgba(10,10,12,.55)"; cx.fill(); cx.strokeStyle = "rgba(255,255,255,.12)"; cx.lineWidth = 1; cx.stroke(); }
 function barra(x, y, w, h, f, color) {
   f = Math.max(0, Math.min(1, f));
   rr(x, y, w, h, h / 2); cx.fillStyle = "#1c0f12"; cx.fill();
@@ -547,6 +546,7 @@ function dibujar() {
 
 // ---------- Tienda (se ve antes de jugar, entre oleadas y al terminar) ----------
 function ui() {
+  panelMenu.classList.toggle("en-juego", estado === "jugando"); // jugando: el panel solo deja ver los avisos
   zonaTienda.hidden = estado === "jugando";
   zonaNiveles.hidden = estado === "jugando" || estado === "tienda";
   if (!zonaTienda.hidden) pintarTienda();
@@ -559,7 +559,7 @@ function pintarNiveles() {
   NIVELES.forEach((N, i) => {
     const n = i + 1, bloq = n > progreso.desbloqueado, elegido = n === nivelSel;
     tarjeta(rej, (progreso.estrellas[n] ? "⭐ " : "") + "Nivel " + n + " · " + N.nombre, OLAS_NIVEL + " oleadas y jefe. Misión: " + N.mision.texto,
-      bloq ? "🔒 Bloqueado" : elegido ? "Elegido" : "Elegir", !bloq && !elegido, () => { nivelSel = n; pintarFondo(n); guardar(); ui(); });
+      bloq ? "🔒 Bloqueado" : elegido ? "Elegido" : "Elegir", !bloq && !elegido, () => { nivelSel = n; pintarFondo(n); guardar(); ui(); }, ["b-verde", "b-azul", "b-morado", "b-oro", "b-rojo"][i % 5]);
   });
   zonaNiveles.append(h, rej);
 }
@@ -590,11 +590,11 @@ function comprarArma(id) {
   equipar(id); // la deja puesta y guarda
 }
 function siguiente() { oleada++; estado = "jugando"; empezarOleada(); ui(); }
-function tarjeta(padre, titulo, desc, boton, activo, fn) {
+function tarjeta(padre, titulo, desc, boton, activo, fn, color = "b-verde") {
   const t = document.createElement("div"); t.className = "tarjeta";
   const n = document.createElement("b"); n.textContent = titulo;
   const d = document.createElement("small"); d.textContent = desc;
-  const b = document.createElement("button"); b.type = "button"; b.className = "btn"; b.textContent = boton; b.disabled = !activo;
+  const b = document.createElement("button"); b.type = "button"; b.className = "b3d txt " + color + (boton === "Elegido" || boton === "Equipada" ? " on" : ""); b.textContent = boton; b.disabled = !activo;
   b.addEventListener("click", fn);
   t.append(n, d, b); padre.appendChild(t);
 }
@@ -607,18 +607,18 @@ function pintarTienda() {
   const rejA = document.createElement("div"); rejA.className = "rejilla";
   for (const id in ARMAS) {
     const A = ARMAS[id], mia = armasMias.includes(id), puesta = armaId === id;
-    tarjeta(rejA, A.icono + " " + A.nombre, A.desc, puesta ? "Equipada" : mia ? "Equipar" : "🪙 " + A.precio, !puesta && (mia || monedas >= A.precio), () => (mia ? equipar(id) : comprarArma(id)));
+    tarjeta(rejA, A.icono + " " + A.nombre, A.desc, puesta ? "Equipada" : mia ? "Equipar" : "🪙 " + A.precio, !puesta && (mia || monedas >= A.precio), () => (mia ? equipar(id) : comprarArma(id)), "b-oro");
   }
   for (const k in MEJORAS) {
     const m = MEJORAS[k], tope = mej[k] >= MAXNIV;
-    tarjeta(rej, m.nombre + " · nivel " + mej[k] + "/" + MAXNIV, m.desc, tope ? "Máximo" : "🪙 " + precio(k), !tope && monedas >= precio(k), () => comprar(k));
+    tarjeta(rej, m.nombre + " · nivel " + mej[k] + "/" + MAXNIV, m.desc, tope ? "Máximo" : "🪙 " + precio(k), !tope && monedas >= precio(k), () => comprar(k), "b-azul");
   }
   if (estado === "tienda") {
-    tarjeta(rej, "🔧 Reparar cabaña", "+30 de vida (ahora " + Math.ceil(vida) + "/" + vidaMax() + ")", "🪙 " + COSTO_REPARAR, vida < vidaMax() && monedas >= COSTO_REPARAR, reparar);
+    tarjeta(rej, "🔧 Reparar cabaña", "+30 de vida (ahora " + Math.ceil(vida) + "/" + vidaMax() + ")", "🪙 " + COSTO_REPARAR, vida < vidaMax() && monedas >= COSTO_REPARAR, reparar, "b-rojo");
   }
   zonaTienda.append(h, sub("🔫 Armas"), rejA, sub("⬆️ Mejoras"), rej);
   if (estado === "tienda") {
-    const s = document.createElement("button"); s.type = "button"; s.className = "btn"; s.style.marginTop = "12px";
+    const s = document.createElement("button"); s.type = "button"; s.className = "b3d txt grande b-verde siguiente";
     s.textContent = "Siguiente oleada ▶"; s.addEventListener("click", siguiente);
     zonaTienda.appendChild(s);
   }

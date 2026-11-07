@@ -26,7 +26,7 @@ function cargarEtapa(id) {
 
 const NS = "http://www.w3.org/2000/svg";
 const OCEANO = "#2c6e9e", TIERRA = "#f7ffec", T_BORDE = "#c3d6a9", T_SOMBRA = "#8fae7e", VECINO = "#a9c7a0";
-const MORADO = "hsl(255,55%,66%)", MORADO_OSC = "hsl(255,48%,40%)", BLOQUEADO = "#6b7399";
+const MORADO = "hsl(255,55%,66%)", MORADO_OSC = "hsl(255,48%,40%)", BLOQUEADO = "#70747c";
 
 // ---------- México (de la frontera de Tijuana, hacia el este, y de vuelta por las costas) ----------
 export const MEXICO = [
@@ -242,7 +242,7 @@ function trazo(pts, P) {
 function texto(padre, x, y, s, tam) {
   const t = el("text", {
     x, y, "text-anchor": "middle", "font-size": tam, "font-weight": 700, fill: "#fff", "paint-order": "stroke",
-    stroke: "rgba(15,18,32,.85)", "stroke-width": 3.5, "stroke-linejoin": "round", "pointer-events": "none",
+    stroke: "rgba(16,17,20,.85)", "stroke-width": 3.5, "stroke-linejoin": "round", "pointer-events": "none",
   }, padre);
   t.textContent = s;
   return t;
@@ -330,7 +330,7 @@ export function montarMapa(r) {
     for (const nv of NIVELES_ESTADO) {
       const b = document.createElement("button");
       b.type = "button";
-      b.className = "nv c" + nv.categoria + (nv.listo ? " hecho" : " bloq");
+      b.className = "b3d nv c" + nv.categoria + (nv.listo ? " hecho" : " bloq");
       b.disabled = !nv.listo;
       b.title = (nv.nombre || "Nivel " + nv.n) + " · " + NOMBRES_CATEGORIA[nv.categoria] + (nv.listo ? "" : " (próximamente)");
       b.setAttribute("aria-label", "Nivel " + nv.n + ": " + NOMBRES_CATEGORIA[nv.categoria] + (nv.listo ? "" : " (próximamente)"));
@@ -345,7 +345,7 @@ export function montarMapa(r) {
       if (bono) {
         const c = document.createElement("button");
         c.type = "button";
-        c.className = "nv bono";
+        c.className = "b3d nv bono";
         c.setAttribute("aria-label", bono.nombre + ": " + bono.duracion + " segundos de monedas");
         const t = document.createElement("b");
         t.textContent = "🪙 " + bono.nombre;

@@ -49,6 +49,17 @@ function enviarPuntos(p) {
 
 // ---------------- Avisos y pantallas ----------------
 let tAviso = null;
+// Pregunta de sí/no dentro de la página (confirm() sacaría al navegador de la pantalla completa)
+function preguntar(txt) {
+  return new Promise((res) => {
+    const d = $("confirmar");
+    $("confirmarTxt").textContent = txt;
+    d.hidden = false;
+    const fin = (v) => { d.hidden = true; $("confSi").onclick = $("confNo").onclick = null; res(v); };
+    $("confSi").onclick = () => fin(true);
+    $("confNo").onclick = () => fin(false);
+  });
+}
 function aviso(txt) {
   const a = $("aviso");
   a.textContent = txt;
@@ -350,7 +361,7 @@ function construirPaleta() {
   p.innerHTML = "";
   J.pal.forEach((c, v) => {
     const b = document.createElement("button");
-    b.className = "chip";
+    b.className = "col"; // ficha de color de la paleta (no usar «chip»: es otra clase de inmersivo.css)
     b.type = "button";
     b.textContent = String(v + 1);
     b.style.background = `rgb(${c[0]},${c[1]},${c[2]})`;
@@ -664,7 +675,7 @@ function pintarGaleria() {
     x.type = "button"; x.className = "x"; x.textContent = "✕"; x.title = "Quitar de la galería";
     x.addEventListener("click", async (ev) => {
       ev.stopPropagation();
-      if (!confirm("¿Quitar «" + (it.nombre || "Imagen") + "» de la galería y borrar su avance?")) return;
+      if (!(await preguntar("¿Quitar «" + (it.nombre || "Imagen") + "» de la galería y borrar su avance?"))) return;
       guardarGaleria(leerGaleria().filter((o) => o.url !== it.url));
       for (const n of TAMANOS) { try { await idbDel(idPartida(it.url, n)); } catch (e) {} }
       pintarGaleria();
@@ -684,7 +695,7 @@ async function abrirPreparar(url) {
     try { const r = await idbGet(idPartida(url, N)); if (r) pct = (r.pintadas / (r.W * r.H)) * 100; } catch (e) {}
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "b" + (pct != null ? " fuerte" : "");
+    b.className = "b3d txt " + ["b-verde", "b-azul", "b-morado", "b-oro"][TAMANOS.indexOf(N)]; // color = tamaño (más celdas = más difícil)
     const a = document.createElement("span");
     a.textContent = N + " × " + N;
     const c = document.createElement("small");
@@ -722,8 +733,8 @@ $("volver").addEventListener("click", cerrarJuego);
 document.querySelectorAll("[data-modo]").forEach((b) => b.addEventListener("click", () => ponerModo(b.dataset.modo)));
 $("bVista").addEventListener("click", () => { if (!J) return; J.vista = !J.vista; $("bVista").classList.toggle("on", J.vista); sucio = true; });
 $("bEncajar").addEventListener("click", () => J && encajar());
-$("bReiniciar").addEventListener("click", () => {
-  if (!J || !confirm("¿Borrar todo el avance de esta imagen? (los puntos ya ganados se conservan)")) return;
+$("bReiniciar").addEventListener("click", async () => {
+  if (!J || !(await preguntar("¿Borrar todo el avance de esta imagen? (los puntos ya ganados se conservan)"))) return;
   J.bits.fill(0);
   J.pintadas = 0;
   J.restantes = Uint32Array.from(J.totales);
