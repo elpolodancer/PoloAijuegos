@@ -3,6 +3,8 @@
 // juego-defendercastillo.js solo dibuja y manda órdenes (colocar, mejorar, vender, iniciarOleada, paso).
 // Los números de equilibrio (daño, precios, vida, velocidad) están aquí arriba; las oleadas, en niveles-defendercastillo.js.
 export const CELDA = 45;
+// Tamaño por defecto de la cuadrícula (8 × 12). Un mapa puede traer «cols» y «filas» propios (misma proporción 2:3, p. ej. 12 × 18);
+// la partida los guarda en p.cols, p.filas, p.ancho y p.alto, y el resto del código usa esos.
 export const COLS = 8;
 export const FILAS = 12;
 export const ANCHO = COLS * CELDA;
@@ -75,6 +77,7 @@ export const ENEMIGOS = {
 
 // Un nivel tiene «camino» (una ruta) o «caminos» (varias entradas; los enemigos se reparten entre ellas)
 function prepararMapa(nivel) {
+  const COLS_ = nivel.cols || COLS, FILAS_ = nivel.filas || FILAS;
   const lista = nivel.caminos || [nivel.camino];
   const rutas = lista.map((cam) => {
     const pts = cam.map(([c, f]) => ({ x: c * CELDA, y: f * CELDA }));
@@ -87,12 +90,12 @@ function prepararMapa(nivel) {
     }
     return { segs, largo };
   });
-  const bloq = Array.from({ length: FILAS }, () => Array(COLS).fill(false));
+  const bloq = Array.from({ length: FILAS_ }, () => Array(COLS_).fill(false));
   for (const cam of lista) {
     for (let i = 0; i < cam.length - 1; i++) {
       const [c1, f1] = cam[i], [c2, f2] = cam[i + 1];
-      for (let f = Math.max(0, Math.floor(Math.min(f1, f2))); f <= Math.min(FILAS - 1, Math.floor(Math.max(f1, f2))); f++)
-        for (let c = Math.max(0, Math.floor(Math.min(c1, c2))); c <= Math.min(COLS - 1, Math.floor(Math.max(c1, c2))); c++) bloq[f][c] = true;
+      for (let f = Math.max(0, Math.floor(Math.min(f1, f2))); f <= Math.min(FILAS_ - 1, Math.floor(Math.max(f1, f2))); f++)
+        for (let c = Math.max(0, Math.floor(Math.min(c1, c2))); c <= Math.min(COLS_ - 1, Math.floor(Math.max(c1, c2))); c++) bloq[f][c] = true;
     }
   }
   const k = nivel.castillo;
@@ -114,8 +117,10 @@ export function posicionEnCamino(ruta, d) {
 }
 
 export function nuevaPartida(nivel) {
+  const cols = nivel.cols || COLS, filas = nivel.filas || FILAS;
   return {
     nivel,
+    cols, filas, ancho: cols * CELDA, alto: filas * CELDA,
     mapa: prepararMapa(nivel),
     oro: nivel.oroInicial,
     vida: nivel.vidaCastillo,
@@ -137,7 +142,7 @@ export function nuevaPartida(nivel) {
 }
 
 export const celdaLibre = (p, c, f) =>
-  c >= 0 && c < COLS && f >= 0 && f < FILAS && !p.mapa.bloq[f][c] && !p.torres.some((t) => t.c === c && t.f === f);
+  c >= 0 && c < p.cols && f >= 0 && f < p.filas && !p.mapa.bloq[f][c] && !p.torres.some((t) => t.c === c && t.f === f);
 export const torreEn = (p, c, f) => p.torres.find((t) => t.c === c && t.f === f) || null;
 export const datosTorre = (t) => TORRES[t.tipo].niveles[t.nivel];
 export const valorTorre = (t) => t.invertido;

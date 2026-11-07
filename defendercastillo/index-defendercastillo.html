@@ -14,7 +14,7 @@
     .b-info:empty { display: none; }
 
     /* ----- Marco del juego (360×540 = 2:3). Celular horizontal / PC: ocupa toda la altura ----- */
-    .inmersivo .marco { aspect-ratio: 2 / 3; width: min(100vw, calc(100vh * 2 / 3)); width: min(100vw, calc(100dvh * 2 / 3)); }
+    .inmersivo .marco { aspect-ratio: 2 / 3; height: auto; width: min(100vw, calc((100vh - var(--res-arriba) - var(--res-abajo)) * 2 / 3)); width: min(100vw, calc((100dvh - var(--res-arriba) - var(--res-abajo)) * 2 / 3)); }
     .inmersivo .lienzo { background: #2f5d34; }
 
     /* ----- Textos flotantes ----- */
@@ -25,9 +25,15 @@
       background: rgba(10,10,12,.62); border-radius: 10px; pointer-events: none; }
     #estado:empty { display: none; }
 
-    /* ----- Tienda de torres: el color indica lo cara y poderosa que es ----- */
-    #tienda { position: fixed; z-index: 5; display: flex; gap: 10px; left: max(8px, env(safe-area-inset-left)); top: 50%; transform: translateY(-50%); flex-direction: column; }
-    #controles { position: fixed; z-index: 5; display: grid; grid-template-columns: repeat(2, auto); gap: 8px 10px; right: max(8px, env(safe-area-inset-right)); top: 50%; transform: translateY(-50%); }
+    /* ----- Dock inferior (como las cartas de Clash Royale): torres arriba y acciones debajo, todo junto abajo del mapa.
+       El marco del juego se recorre hacia arriba para dejarle sitio (--res-arriba / --res-abajo = espacio reservado) ----- */
+    :root { --res-arriba: calc(62px + env(safe-area-inset-top, 0px)); --res-abajo: calc(152px + env(safe-area-inset-bottom, 0px)); }
+    .escena { padding: var(--res-arriba) 0 var(--res-abajo); }
+    #dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; gap: 10px;
+      padding: 14px 8px calc(8px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(180deg, #2c2f36, #17181c);
+      border-top: 3px solid #0c0d0f; box-shadow: 0 -6px 16px rgba(0,0,0,.55), inset 0 2px 0 rgba(255,255,255,.08); }
+    #tienda, #controles { display: flex; align-items: center; justify-content: center; gap: 10px; }   /* tienda: el color indica lo cara y poderosa que es la torre */
+    #controles { gap: 8px; }
     #btnOleada { --t: 52px; }
 
     /* ----- Panel de la torre elegida (arriba o abajo, según dónde esté la torre) ----- */
@@ -56,22 +62,27 @@
     #fin p { margin: 0; color: var(--suave); }
     #estrellas { font-size: 2rem; letter-spacing: 4px; }
 
-    /* ----- Celular vertical: tienda y controles en filas abajo; el marco se achica para dejarles sitio ----- */
-    @media (orientation: portrait) {
-      .escena { padding: calc(62px + env(safe-area-inset-top, 0px)) 0 calc(140px + env(safe-area-inset-bottom, 0px)); }
-      .inmersivo .marco { width: min(100vw, calc((100vh - 202px) * 2 / 3)); width: min(100vw, calc((100dvh - 202px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * 2 / 3)); aspect-ratio: 2 / 3; height: auto; }
-      #tienda { left: 0; right: 0; top: auto; bottom: calc(72px + env(safe-area-inset-bottom, 0px)); transform: none; flex-direction: row; justify-content: center; }
-      #controles { left: 8px; right: auto; top: auto; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); transform: none; display: flex; gap: 8px; }
+    /* ----- Horizontal (celular acostado / PC): el dock queda en una sola fila abajo y el mapa ocupa casi toda la altura ----- */
+    @media (orientation: landscape) {
+      :root { --res-arriba: calc(8px + env(safe-area-inset-top, 0px)); --res-abajo: calc(88px + env(safe-area-inset-bottom, 0px)); }
+      #dock { flex-direction: row; justify-content: center; gap: 24px; padding: 14px 12px calc(8px + env(safe-area-inset-bottom, 0px)); }
       #record { display: none; }
     }
-    @media (max-height: 420px) { #tienda, #controles { gap: 6px 8px; } #tienda .b3d { --t: 38px; } }
-
-    /* Celular en horizontal: los marcadores van en una columna a la izquierda (así no tapan el mapa) y la tienda a su lado */
+    /* Celular acostado: botones un poco más chicos y marcadores en una columna a la izquierda (así no tapan el mapa) */
     @media (orientation: landscape) and (max-height: 520px) {
+      :root { --res-abajo: calc(76px + env(safe-area-inset-bottom, 0px)); }
+      #dock { gap: 18px; padding-top: 12px; }
+      #tienda { gap: 8px; } #controles { gap: 6px; }
+      #tienda .b3d, #btnOleada { --t: 44px; }
+      #controles .b3d.chico { --t: 36px; }
       .hud-izq { flex-direction: column; flex-wrap: nowrap; align-items: flex-start; gap: 5px; max-width: none; }
       #mapaNombre { flex-basis: auto; max-width: 78px; }
-      #record { display: none; }
-      #tienda { left: calc(max(8px, env(safe-area-inset-left)) + 84px); }
+    }
+    @media (orientation: landscape) and (max-width: 620px) {
+      #dock { gap: 10px; padding-left: 4px; padding-right: 4px; }
+      #tienda { gap: 5px; } #controles { gap: 4px; }
+      #tienda .b3d, #btnOleada { --t: 38px; }
+      #controles .b3d.chico { --t: 32px; }
     }
   </style>
 </head>
@@ -108,14 +119,17 @@
   <div class="hud hud-der">
     <button class="b3d chico b-gris" id="btnSonido" type="button" aria-label="Sonido" title="Sonido"><span class="b-ico">🔊</span></button>
   </div>
-  <div id="tienda" role="group" aria-label="Torres"></div>
-  <div id="controles">
-    <button class="b3d b-verde" id="btnOleada" type="button" aria-label="Empezar oleada" title="Empezar oleada"><span class="b-ico" id="btnOleadaIco">▶</span><span class="b-info" id="btnOleadaNum"></span></button>
-    <button class="b3d chico b-oro" id="btnMeteoro" type="button" aria-label="Meteoro" title="Meteoro"><span class="b-ico">☄️</span><span class="b-info" id="btnMeteoroNum"></span></button>
-    <button class="b3d chico b-rojo" id="btnQuitar" type="button" aria-label="Quitar: talar o vender" title="Quitar: talar árboles o vender torres"><span class="b-ico">🪓</span></button>
-    <button class="b3d chico b-azul" id="btnMapas" type="button" aria-label="Mapas" title="Mapas"><span class="b-ico">🗺️</span></button>
-    <button class="b3d chico b-morado" id="btnVel" type="button" aria-label="Velocidad" title="Velocidad"><span class="b-ico">⏩</span><span class="b-info" id="velNum">x1</span></button>
-    <button class="b3d chico b-gris" id="btnPausa" type="button" aria-label="Pausa" title="Pausa"><span class="b-ico">⏸</span></button>
+  <!-- Dock inferior: torres y acciones -->
+  <div id="dock">
+    <div id="tienda" role="group" aria-label="Torres"></div>
+    <div id="controles" role="group" aria-label="Acciones">
+      <button class="b3d b-verde" id="btnOleada" type="button" aria-label="Empezar oleada" title="Empezar oleada"><span class="b-ico" id="btnOleadaIco">▶</span><span class="b-info" id="btnOleadaNum"></span></button>
+      <button class="b3d chico b-oro" id="btnMeteoro" type="button" aria-label="Meteoro" title="Meteoro"><span class="b-ico">☄️</span><span class="b-info" id="btnMeteoroNum"></span></button>
+      <button class="b3d chico b-rojo" id="btnQuitar" type="button" aria-label="Quitar: talar o vender" title="Quitar: talar árboles o vender torres"><span class="b-ico">🪓</span></button>
+      <button class="b3d chico b-morado" id="btnVel" type="button" aria-label="Velocidad (x1 a x5)" title="Velocidad: x1, x2, x3, x4, x5"><span class="b-ico">⏩</span><span class="b-info" id="velNum">x1</span></button>
+      <button class="b3d chico b-gris" id="btnPausa" type="button" aria-label="Pausa" title="Pausa"><span class="b-ico">⏸</span></button>
+      <button class="b3d chico b-azul" id="btnMapas" type="button" aria-label="Mapas" title="Mapas"><span class="b-ico">🗺️</span></button>
+    </div>
   </div>
   <script type="module" src="juego-defendercastillo.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>

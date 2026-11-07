@@ -5,7 +5,7 @@
 // meteoro (se recarga solo). Los enemigos caminan por el camino café; si llegan al castillo le quitan vida.
 import { NIVELES } from "./niveles-defendercastillo.js";
 import {
-  CELDA, COLS, FILAS, ANCHO, ALTO, TORRES, ENEMIGOS, METEORO, REEMBOLSO,
+  CELDA, ANCHO, ALTO, TORRES, ENEMIGOS, METEORO, REEMBOLSO,
   nuevaPartida, celdaLibre, torreEn, obstaculoEn, costeTalar, datosTorre, colocar, mejorar, vender, talar, iniciarOleada, meteoro, paso, estrellas,
 } from "./logica-defendercastillo.js";
 
@@ -13,6 +13,8 @@ import {
 const ID = "defensa";            // nombre del juego en el ranking
 const PUNTOS_POR_PERFIL = 25;    // 1 punto al perfil por cada 25 del juego
 const PASO = 1 / 60;             // paso fijo de la simulación (se ve igual en pantallas de 90/120 Hz)
+const VEL_MAX = 5;               // la velocidad del botón ⏩ va de x1 a x5
+const PASOS_MAX = 30;            // tope de pasos por cuadro (a x5 un cuadro lento necesita hasta 30)
 const CLAVE_PROGRESO = "defensa_progreso";
 const CLAVE_SONIDO = "defensa_sonido";
 const CLAVE_ULTIMO = "defensa_ultimo";   // último mapa jugado
@@ -94,6 +96,7 @@ function empezarNivel(i) {
   $("fin").hidden = true;
   cerrarMenu();
   guardar(CLAVE_ULTIMO, i);
+  ajustarLienzo();
   armarFondo();
   const r = progreso[p.nivel.id];
   $("record").textContent = r ? "Récord: " + r.record + " " + "⭐".repeat(r.estrellas) : "";
@@ -120,10 +123,16 @@ function abrirMenu() {
 }
 function cerrarMenu() { $("menu").hidden = true; menuAbierto = false; }
 
+// Cada mapa puede tener su propio tamaño de cuadrícula (8×12, 12×18…): se redimensiona el lienzo y el fondo
+function ajustarLienzo() {
+  cv.width = fondo.width = p.ancho * DPR;
+  cv.height = fondo.height = p.alto * DPR;
+}
+
 function armarFondo() {
   const g = fondo.getContext("2d"), n = p.nivel;
   g.setTransform(DPR, 0, 0, DPR, 0, 0);
-  for (let f = 0; f < FILAS; f++) for (let c = 0; c < COLS; c++) {
+  for (let f = 0; f < p.filas; f++) for (let c = 0; c < p.cols; c++) {
     g.fillStyle = (c + f) % 2 ? "#3b7536" : "#3f7d3a";
     g.fillRect(c * CELDA, f * CELDA, CELDA, CELDA);
   }
@@ -147,7 +156,7 @@ function armarFondo() {
   for (const cam of caminos) {
     const [c, f] = cam[0];
     if (c < 0) g.fillText("➡️", 14, f * CELDA);
-    else if (c > COLS) g.fillText("⬅️", ANCHO - 14, f * CELDA);
+    else if (c > p.cols) g.fillText("⬅️", p.ancho - 14, f * CELDA);
     else if (f < 0) g.fillText("⬇️", c * CELDA, 14);
   }
 }
@@ -155,7 +164,7 @@ function armarFondo() {
 // ----- Entrada -----
 function celdaDe(ev) {
   const r = cv.getBoundingClientRect();
-  const x = ((ev.clientX - r.left) * ANCHO) / r.width, y = ((ev.clientY - r.top) * ALTO) / r.height;
+  const x = ((ev.clientX - r.left) * p.ancho) / r.width, y = ((ev.clientY - r.top) * p.alto) / r.height;
   return { x, y, c: Math.floor(x / CELDA), f: Math.floor(y / CELDA) };
 }
 cv.addEventListener("pointermove", (ev) => { const q = celdaDe(ev); fantasma = { c: q.c, f: q.f }; });
@@ -223,7 +232,7 @@ $("btnMeteoro").addEventListener("click", () => {
   modoMeteoro = !modoMeteoro; tipoSel = null; torreSel = null; modoQuitar = false;
   if (modoMeteoro) mensaje("☄️ Toca el mapa donde quieres que caiga", 3000);
 });
-$("btnVel").addEventListener("click", () => { vel = vel === 1 ? 2 : 1; $("velNum").textContent = "x" + vel; });
+$("btnVel").addEventListener("click", () => { vel = vel >= VEL_MAX ? 1 : vel + 1; $("velNum").textContent = "x" + vel; }); // x1 → x2 → x3 → x4 → x5 → x1
 $("btnPausa").addEventListener("click", () => pausar(!pausa));
 $("btnSonido").addEventListener("click", () => { sonido = !sonido; guardar(CLAVE_SONIDO, sonido); $("btnSonido").firstElementChild.textContent = sonido ? "🔊" : "🔇"; });
 $("btnSonido").firstElementChild.textContent = sonido ? "🔊" : "🔇";
@@ -332,7 +341,7 @@ function etiqueta(txt, x, y, color) {
 }
 function dibujar() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  ctx.drawImage(fondo, 0, 0, ANCHO, ALTO);
+  ctx.drawImage(fondo, 0, 0, p.ancho, p.alto);
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
 
   // alcance de la torre elegida y vista previa al construir
@@ -342,7 +351,7 @@ function dibujar() {
   }
   if (tipoSel && fantasma) {
     const { c, f } = fantasma, ok = celdaLibre(p, c, f);
-    if (c >= 0 && c < COLS && f >= 0 && f < FILAS) {
+    if (c >= 0 && c < p.cols && f >= 0 && f < p.filas) {
       ctx.fillStyle = ok ? "rgba(120,255,120,.35)" : "rgba(255,80,80,.35)";
       ctx.fillRect(c * CELDA, f * CELDA, CELDA, CELDA);
       if (ok) circulo((c + 0.5) * CELDA, (f + 0.5) * CELDA, TORRES[tipoSel].niveles[0].alcance * CELDA, "rgba(255,255,255,.1)", "rgba(255,255,255,.4)");
@@ -442,11 +451,11 @@ function dibujar() {
   ctx.fillStyle = "rgba(0,0,0,.65)"; ctx.fillRect(x0 - 1, y0 - 1, w + 2, 9);
   ctx.fillStyle = fr > 0.5 ? "#4cd964" : fr > 0.25 ? "#ffcc00" : "#ff4d4d";
   ctx.fillRect(x0, y0, w * fr, 7);
-  if (flash > 0) { ctx.fillStyle = "rgba(255,0,0," + (0.3 * flash).toFixed(2) + ")"; ctx.fillRect(0, 0, ANCHO, ALTO); }
+  if (flash > 0) { ctx.fillStyle = "rgba(255,0,0," + (0.3 * flash).toFixed(2) + ")"; ctx.fillRect(0, 0, p.ancho, p.alto); }
   if (modoMeteoro && fantasma) circulo((fantasma.c + 0.5) * CELDA, (fantasma.f + 0.5) * CELDA, METEORO.radio * CELDA, "rgba(255,120,30,.2)", "rgba(255,160,60,.8)");
   if (pausa) {
-    ctx.fillStyle = "rgba(0,0,0,.5)"; ctx.fillRect(0, 0, ANCHO, ALTO);
-    ctx.fillStyle = "#fff"; ctx.font = "bold 30px " + FUENTE; ctx.fillText("⏸ Pausa", ANCHO / 2, ALTO / 2);
+    ctx.fillStyle = "rgba(0,0,0,.5)"; ctx.fillRect(0, 0, p.ancho, p.alto);
+    ctx.fillStyle = "#fff"; ctx.font = "bold 30px " + FUENTE; ctx.fillText("⏸ Pausa", p.ancho / 2, p.alto / 2);
   }
 }
 
@@ -486,7 +495,7 @@ function ui() {
     if (memo.panel !== clave) {
       memo.panel = clave;
       panel.hidden = false;
-      panel.classList.toggle("abajo", torreSel.f < FILAS / 2); // si la torre está arriba, el panel va abajo y viceversa
+      panel.classList.toggle("abajo", torreSel.f < p.filas / 2); // si la torre está arriba, el panel va abajo y viceversa
       panel.textContent = "";
       const el = (tag, cls, txt) => { const x = document.createElement(tag); if (cls) x.className = cls; if (txt !== undefined) x.textContent = txt; return x; };
       const sig = def.niveles[torreSel.nivel + 1];           // datos del siguiente nivel (si lo hay) para mostrar la mejora
@@ -542,8 +551,8 @@ function bucle(ts) {
   if (!pausa && !menuAbierto) {
     acum += dt * vel;
     let n = 0;
-    while (acum >= PASO && n < 12) { paso(p, PASO); acum -= PASO; n++; }
-    if (n >= 12) acum = 0;
+    while (acum >= PASO && n < PASOS_MAX) { paso(p, PASO); acum -= PASO; n++; }
+    if (n >= PASOS_MAX) acum = 0;
     for (const e of efectos) e.t += dt;
     efectos = efectos.filter((e) => e.t < e.dur);
     if (flash > 0) flash = Math.max(0, flash - dt * 3);
