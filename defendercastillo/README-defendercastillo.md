@@ -65,6 +65,12 @@ Con 200 mapas el archivo sería enorme: cuando pasen de ~20 conviene repartirlos
 
 El meteoro ya no se recarga solo, así que **el bot no lo usa** (antes lo lanzaba cada 40 s y los niveles se calibraron contando con él). Se recalibró todo con el bot sin meteoro, con objetivos 3 puntos más fáciles (`objetivo()` en el bot y en el constructor: ~98 % de vida al ganar el primer nivel) y con un **margen para humanos** (`MARGEN_HUMANO` = 0.9 en el generador): la dificultad tiene un «precipicio» (con ~8 % más de vida el bot ya pierde), así que la calibración se baja 10 % para que una persona tenga holgura. Resultado: Michoacán 1 y 2 con calibración 1.507 y 1.383 (antes 2.008 y 1.987, con meteoro gratis) y D1 y D2 con 1.668 y 1.65 (antes 2.019 y 1.834). Si se siente fácil o difícil, cambia `MARGEN_HUMANO` y corre `calibrar` (tarda segundos con 2 niveles). Para ampliar niveles: sube `NIVELES_MICHOACAN` (generador) o `MAPAS_ACTIVOS` (constructor) y corre `calibrar`.
 
+## Torres, enemigos y jefes
+
+- **Cada torre nueva trae un enemigo nuevo en el mismo nivel** (`DESBLOQUEO_TORRES` y `DESBLOQUEO_ENEMIGOS` en el generador): arquero→goblin (1), cañón→lobo (2), mago→murciélago (6), mina→orco (9), hielo→esqueleto (13), cuartel→araña (18), ballesta→slime (24), veneno→caballero (30), rayos→brujo (38), mortero→fantasma (46). Golem (54), jinete (62) y ogro (70) llegan después. En Desbloqueados ya era así: cada mapa suma una torre y enemigos nuevos.
+- **Jefe cada 10 niveles**, al final del nivel (10.ª oleada): siempre **uno solo** (troll jefe; dragón en los niveles 90, 110…) y con su vida multiplicada por `AJUSTES.jefeVida` (0.5), que se guarda en la oleada final (`jefeVida`) y se aplica en `paso()`. Antes eran 2 y el multiplicador de la oleada final lo dejaba en ~12 000 de vida: casi imposible. Si un jefe llega al castillo quita 30 de vida (el dragón, 50), así que fallar una vez no es perder. En pruebas con el bot (nivel 10): lo vence sin perder vida con calibración 1.258; con 0.3 de `jefeVida` ni se acerca y con 1 el bot tiene que bajar toda la calibración para poder ganar.
+- En Desbloqueados solo el mapa 10 trae jefe (dragón ×1); los mapas 5 y 8 ya no tienen (eran un troll y dos trolls).
+
 ## Pendiente
 
 - El bot de solo arqueros también gana en 8 de los 10 mapas (todos menos D1 y D7): las torres nuevas todavía no hacen falta para ganar. Si quieres que obliguen a usar variedad, hay que subir la vida de los enemigos blindados o voladores en esos mapas.

@@ -434,7 +434,7 @@ export function paso(p, dt) {
     p.t += dt;
     const o = p.nivel.oleadas[p.oleada];
     while (p.cola.length && p.cola[0].t <= p.t) {
-      const q = p.cola.shift(), def = ENEMIGOS[q.tipo], hp = Math.round(def.vida * o.vida);
+      const q = p.cola.shift(), def = ENEMIGOS[q.tipo], hp = Math.round(def.vida * o.vida * (def.jefe && o.jefeVida ? o.jefeVida : 1)); // «jefeVida» (solo en la oleada final de un jefe) baja la vida del jefe sin tocar a los demás
       p.enemigos.push(nuevoEnemigo(p, q.tipo, q.r, hp, o.vida, o.oro || 1, 0));
     }
   }

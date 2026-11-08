@@ -19,9 +19,14 @@ export const MARGEN_HUMANO = 0.9;
 
 // Nivel a partir del cual aparece cada torre (la Defensa de Michoacán empieza solo con arqueros)
 export const DESBLOQUEO_TORRES = { arquero: 1, canon: 2, mago: 6, mina: 9, hielo: 13, cuartel: 18, ballesta: 24, veneno: 30, rayos: 38, mortero: 46 };
-// Nivel a partir del cual puede salir cada enemigo (los jefes salen según el nivel, ver oleadasDe)
-export const DESBLOQUEO_ENEMIGOS = { goblin: 1, lobo: 2, murcielago: 5, orco: 8, esqueleto: 12, arana: 16, slime: 20, caballero: 26, brujo: 32, fantasma: 40, golem: 48, jinete: 56, ogro: 64, trollJefe: 20, dragon: 75 };
+// Nivel a partir del cual puede salir cada enemigo (los jefes salen según el nivel, ver oleadasDe).
+// Cada torre nueva trae un enemigo nuevo EN EL MISMO NIVEL (arquero→goblin, cañón→lobo, mago→murciélago, mina→orco, hielo→esqueleto, cuartel→araña,
+// ballesta→slime, veneno→caballero, rayos→brujo, mortero→fantasma); golem, jinete y ogro llegan después, cuando ya no quedan torres por desbloquear.
+export const DESBLOQUEO_ENEMIGOS = { goblin: 1, lobo: 2, murcielago: 6, orco: 9, esqueleto: 13, arana: 18, slime: 24, caballero: 30, brujo: 38, fantasma: 46, golem: 54, jinete: 62, ogro: 70, trollJefe: 20, dragon: 75 };
 const JEFES = ["trollJefe", "dragon"];
+// Jefe final de cada 10 niveles (y del mapa 10 de Desbloqueados): siempre UNO, y su vida se multiplica por «jefeVida» (se guarda en la oleada final)
+// para que sea duro pero se pueda vencer: con todo el multiplicador de la oleada final (~×4 a ×5) un jefe de 2600 de vida base pasaba de 12 000.
+export const AJUSTES = { jefeVida: 0.5 };
 
 const PUEBLOS = ["Morelia", "Pátzcuaro", "Uruapan", "Zamora", "Zitácuaro", "Lázaro Cárdenas", "Apatzingán", "Sahuayo", "Jiquilpan", "Tacámbaro", "Cuitzeo", "Santa Clara del Cobre",
   "Janitzio", "Angangueo", "Tzintzuntzan", "Paracho", "Tangancícuaro", "Los Reyes", "Hidalgo", "Maravatío", "La Piedad", "Zacapu", "Huetamo", "Ario de Rosales", "Tingüindín"];
@@ -116,7 +121,7 @@ export function oleadasDe(n, calib, rng, opc) {
       grupos.push([t, cant, cada, redondea(ini)]);
       ini += cant * cada * 0.5;
     }
-    let jefe = false;
+    let jefe = false, jefeFinal = false;
     if (elite && clase(masFuerte) >= 1) { // oleada fuerte: se suma el enemigo más pesado que ya salió
       const v = ENEMIGOS[masFuerte].vida;
       grupos.push([masFuerte, Math.max(1, Math.round((B * 0.35) / v)), redondea(Math.min(2.6, 0.3 + v / 300)), redondea(ini * 0.5)]);
@@ -124,14 +129,14 @@ export function oleadasDe(n, calib, rng, opc) {
     } else if (elite) for (const g of grupos) g[1] = Math.round(g[1] * 1.3); // al inicio solo hay enemigos ligeros: la oleada trae un enjambre más grande
     if ((opc ? opc.miniJefe : n >= 20) && s >= 19 && (w + 1) % cadaElite === 0 && w !== nW - 1) { grupos.push(["trollJefe", 1, 1, redondea(ini + 2)]); jefe = true; }
     if (opc && opc.jefe && w === nW - 1) { // mapas fijos: jefe final elegido a mano
-      grupos.push([opc.jefe[0], opc.jefe[1], 6, redondea(ini + 2)]);
-      jefe = true;
+      grupos.push([opc.jefe[0], 1, 6, redondea(ini + 2)]); // un solo jefe (con 2 era casi imposible)
+      jefe = true; jefeFinal = true;
     } else if (!opc && w === nW - 1 && n % 10 === 0) { // jefe final: cada 10 niveles
       const dragon = n >= 75 && (n / 10) % 2 === 1;
-      grupos.push(dragon ? ["dragon", 1 + Math.floor((n - 70) / 20), 6, redondea(ini + 2)] : ["trollJefe", 1 + Math.floor(n / 40), 6, redondea(ini + 2)]);
-      jefe = true;
+      grupos.push([dragon ? "dragon" : "trollJefe", 1, 6, redondea(ini + 2)]); // un solo jefe (con 2 era casi imposible)
+      jefe = true; jefeFinal = true;
     }
-    oleadas.push({ vida: redondea(m * calib, 3), oro: redondea(1 + 0.06 * s), bono: Math.round(30 + 3 * s + 0.35 * n), jefe, grupos });
+    oleadas.push({ vida: redondea(m * calib, 3), oro: redondea(1 + 0.06 * s), bono: Math.round(30 + 3 * s + 0.35 * n), jefe, ...(jefeFinal ? { jefeVida: AJUSTES.jefeVida } : {}), grupos });
   }
   return oleadas;
 }
