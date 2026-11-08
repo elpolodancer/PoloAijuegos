@@ -7,20 +7,20 @@ Tower defense: los monstruos caminan (o vuelan) hacia tu castillo y tú construy
 
 - Elige una torre abajo y toca un lugar libre del pasto junto al camino café. Toca una torre para mejorarla (3 niveles) o venderla.
 - ▶ empieza la oleada, ☄️ es un **boost de pago**: cuesta 150 💵 (`METEORO.precio` en `logica-defendercastillo.js`), no tiene espera y se pueden acumular varios. Con el botón en «×0» el toque compra uno y lo deja listo; toca el mapa donde quieras que caiga (otro toque al botón cancela y lo guarda), 🪓 sirve para talar árboles y rocas (cuestan monedas) o vender torres con un toque, ⏩ acelera de x1 a x8, ⏸ pausa y 🗺️ vuelve al menú de mapas.
-- Cada mapa tiene **12 oleadas** (las 4.ª, 8.ª y 12.ª son fuertes). El dinero se ve con un billete verde dibujado (no con el emoji 💵).
+- Cada mapa tiene **10 oleadas** (las 3.ª, 6.ª, 9.ª y 10.ª son fuertes). El dinero se ve con un billete verde dibujado (no con el emoji 💵).
 - Si un enemigo llega al castillo le quita vida (el castillo tiene 100). Terminas con 1 a 3 estrellas según la vida que te queda.
 
 ## Las dos pestañas del menú de mapas
 
 ### 📍 Michoacán (2 niveles por ahora)
-Mapa de 12 × 18 generado por semilla (`generador-defendercastillo.js`), con 12 oleadas cada uno (`OLEADAS`). Se abren de uno en uno y cada nivel puede traer torres y enemigos nuevos. La vida de los enemigos de cada nivel está en `calibracion-defendercastillo.js`.
+Mapa de 12 × 18 generado por semilla (`generador-defendercastillo.js`), con 10 oleadas cada uno (`OLEADAS`). Se abren de uno en uno y cada nivel puede traer torres y enemigos nuevos. La vida de los enemigos de cada nivel está en `calibracion-defendercastillo.js`.
 
 ### 🔓 Desbloqueados (2 mapas publicados por ahora; hay 10 diseños guardados, meta: unos 200)
 Mapas hechos a mano que se **abren al pasar un nivel de Michoacán** (el mapa 1 con el nivel 1, el 2 con el nivel 2…; el campo `req` de cada mapa lo dice) y después se pueden jugar todas las veces que quieras. Con `?todos` en la dirección se abren todos para probar.
 
 - **Tamaño:** de 12 columnas × 18 filas como mínimo a 30 × 30 como máximo. El marco del juego toma la proporción de cada mapa (`--asp` en `index-defendercastillo.html`).
 - **Torres y enemigos:** cada mapa ofrece una torre más que el anterior (el 1 trae arquero y cañón; el 9, las 10) y suma enemigos nuevos (el 1: goblin y lobo; el 9 ya trae golem y ogro). Al empezar un mapa se avisa de lo nuevo.
-- **Oleadas:** 12 en todos los mapas (antes de 20 a 40), con un mini-jefe (troll jefe) en la oleada 8 desde el mapa 6 y un jefe al final en los mapas 5 (troll), 8 (2 trolls) y 10 (2 dragones). La dificultad sube por la vida de los enemigos (calibración) y por lo que trae cada oleada.
+- **Oleadas:** 10 en todos los mapas (`OLEADAS`; antes 12 y antes de 20 a 40), con un mini-jefe (troll jefe) en la oleada 8 desde el mapa 6 y un jefe al final en los mapas 5 (troll), 8 (2 trolls) y 10 (2 dragones). La dificultad sube por la vida de los enemigos (calibración) y por lo que trae cada oleada.
 - **Publicados hoy: D1 y D2.** Los otros 8 diseños siguen en `DISENOS_TODOS` del constructor y se publican subiendo `MAPAS_ACTIVOS`. Los 10 diseños:
 
 | Id | Nombre | Tamaño | Camino | Dificultad |

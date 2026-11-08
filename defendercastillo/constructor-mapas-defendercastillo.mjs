@@ -10,7 +10,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { TORRES, ENEMIGOS, nuevaPartida } from "./logica-defendercastillo.js";
-import { oleadasDe, MARGEN_HUMANO } from "./generador-defendercastillo.js";
+import { oleadasDe, MARGEN_HUMANO, OLEADAS } from "./generador-defendercastillo.js";
 import { jugarBot } from "./bot-defendercastillo.mjs";
 
 const ARCHIVO = new URL("./mapas-desbloqueados-defendercastillo.js", import.meta.url);
@@ -126,16 +126,16 @@ const E = [
 // Para volver a tener más mapas: sube este número y corre «node constructor-mapas-defendercastillo.mjs calibrar».
 export const MAPAS_ACTIVOS = 2;
 export const DISENOS_TODOS = [
-  { nombre: "Valle tranquilo", trazado: () => serpH(12, 18), nW: 12 },
-  { nombre: "Camino del río", trazado: () => transponer(serpH(20, 14)), nW: 12 },
-  { nombre: "Espiral del dragón", trazado: () => espiral(16, 22), nW: 12 },
-  { nombre: "Dos puertas", trazado: () => doble(18, 24), nW: 12 },
-  { nombre: "Laberinto del bosque", trazado: () => volteo(espejo(serpH(20, 20, { paso: 3 }))), nW: 12, jefe: ["trollJefe", 1] },
-  { nombre: "Tres entradas", trazado: () => tres(23, 26, 4), nW: 12, miniJefe: true },
-  { nombre: "Gran espiral", trazado: () => espejo(espiral(24, 28)), nW: 12, miniJefe: true },
-  { nombre: "Cruce de caminos", trazado: () => transponer(doble(28, 26)), nW: 12, miniJefe: true, jefe: ["trollJefe", 2] },
-  { nombre: "Fortaleza de tres puertas", trazado: () => tres(29, 28, 6), nW: 12, miniJefe: true },
-  { nombre: "El gran castillo", trazado: () => espiral(30, 30), nW: 12, miniJefe: true, jefe: ["dragon", 2] },
+  { nombre: "Valle tranquilo", trazado: () => serpH(12, 18), nW: OLEADAS },
+  { nombre: "Camino del río", trazado: () => transponer(serpH(20, 14)), nW: OLEADAS },
+  { nombre: "Espiral del dragón", trazado: () => espiral(16, 22), nW: OLEADAS },
+  { nombre: "Dos puertas", trazado: () => doble(18, 24), nW: OLEADAS },
+  { nombre: "Laberinto del bosque", trazado: () => volteo(espejo(serpH(20, 20, { paso: 3 }))), nW: OLEADAS, jefe: ["trollJefe", 1] },
+  { nombre: "Tres entradas", trazado: () => tres(23, 26, 4), nW: OLEADAS, miniJefe: true },
+  { nombre: "Gran espiral", trazado: () => espejo(espiral(24, 28)), nW: OLEADAS, miniJefe: true },
+  { nombre: "Cruce de caminos", trazado: () => transponer(doble(28, 26)), nW: OLEADAS, miniJefe: true, jefe: ["trollJefe", 2] },
+  { nombre: "Fortaleza de tres puertas", trazado: () => tres(29, 28, 6), nW: OLEADAS, miniJefe: true },
+  { nombre: "El gran castillo", trazado: () => espiral(30, 30), nW: OLEADAS, miniJefe: true, jefe: ["dragon", 2] },
 ].map((d, i) => ({
   ...d, n: i + 1, id: "D" + (i + 1), req: i + 1,
   torres: TODAS.slice(0, Math.min(10, 2 + i)),   // 2 torres en el primero y una nueva por mapa hasta tener las 10

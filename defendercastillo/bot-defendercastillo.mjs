@@ -9,7 +9,7 @@
 // «Bot de arqueros»: solo arqueros y sus mejoras (para comprobar que ninguna torre sola resuelve el nivel).
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { CELDA, TORRES, ENEMIGOS, nuevaPartida, celdaLibre, datosTorre, colocar, mejorar, talar, iniciarOleada, paso, costeTalar } from "./logica-defendercastillo.js";
-import { generarNivel, NIVELES_MICHOACAN, MARGEN_HUMANO } from "./generador-defendercastillo.js";
+import { generarNivel, NIVELES_MICHOACAN, MARGEN_HUMANO, OLEADAS } from "./generador-defendercastillo.js";
 import { CALIB } from "./calibracion-defendercastillo.js";
 
 const PASO = 1 / 60;
@@ -212,7 +212,7 @@ function revisarMapa(n) {
   if (arboles < 2 || cerca < 2) errores.push("faltan árboles de 20 junto al camino");
   const libres = p.mapa.bloq.flat().filter((x) => !x).length;
   if (libres < 40) errores.push("pocos lugares para construir: " + libres);
-  if (v.oleadas.length < 12) errores.push("menos de 12 oleadas");
+  if (v.oleadas.length < OLEADAS) errores.push("menos de " + OLEADAS + " oleadas");
   return { errores, libres, arboles, cerca };
 }
 

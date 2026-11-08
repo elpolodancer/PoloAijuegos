@@ -4,13 +4,13 @@
 // un número que ajusta la vida de los enemigos para que un bot que juega bien gane con ~45 % de vida del castillo.
 // Qué cambia a lo largo de los niveles (todo sale de n):
 //   · caminos: serpentinas de 4 a 8 carriles, a veces con dos entradas, y espejadas o volteadas (castillo arriba o abajo);
-//   · oleadas: 12 por nivel (antes 30), cada una con más monstruos y con más vida;
+//   · oleadas: 10 por nivel (antes 12 y antes 30), cada una con más monstruos y con más vida;
 //   · enemigos y torres: se desbloquean por nivel (ver DESBLOQUEO_*); jefe en el último nivel de cada decena y mini-jefes cada 10 oleadas;
 //   · economía: bono por oleada y oro por enemigo crecen con la vida, y siempre hay árboles de 20 monedas junto a las curvas del camino.
 import { ENEMIGOS, nuevaPartida } from "./logica-defendercastillo.js";
 import { CALIB } from "./calibracion-defendercastillo.js";
 
-export const OLEADAS = 12; // oleadas de cada mapa (Michoacán y Desbloqueados); antes eran 30. La dificultad se reparte en estas 12 (ver «k» en oleadasDe)
+export const OLEADAS = 10; // oleadas de cada mapa (Michoacán y Desbloqueados); antes eran 12 y antes 30. La dificultad se reparte en estas 10 (ver «k» en oleadasDe)
 export const NIVELES_MICHOACAN = 2; // por ahora solo 2 (antes 10, y antes 100). Para ampliar: subir esta cifra y correr «node bot-defendercastillo.mjs calibrar» (el generador ya sabe hacer 100)
 export const COLS_M = 12, FILAS_M = 18;
 // Margen para jugadores humanos: el bot gana con la vida de enemigos más alta posible (la dificultad tiene un «precipicio»: con 8 % más de vida el bot ya pierde).
@@ -18,7 +18,7 @@ export const COLS_M = 12, FILAS_M = 18;
 export const MARGEN_HUMANO = 0.9;
 
 // Nivel a partir del cual aparece cada torre (la Defensa de Michoacán empieza solo con arqueros)
-export const DESBLOQUEO_TORRES = { arquero: 1, canon: 3, mago: 6, mina: 9, hielo: 13, cuartel: 18, ballesta: 24, veneno: 30, rayos: 38, mortero: 46 };
+export const DESBLOQUEO_TORRES = { arquero: 1, canon: 2, mago: 6, mina: 9, hielo: 13, cuartel: 18, ballesta: 24, veneno: 30, rayos: 38, mortero: 46 };
 // Nivel a partir del cual puede salir cada enemigo (los jefes salen según el nivel, ver oleadasDe)
 export const DESBLOQUEO_ENEMIGOS = { goblin: 1, lobo: 2, murcielago: 5, orco: 8, esqueleto: 12, arana: 16, slime: 20, caballero: 26, brujo: 32, fantasma: 40, golem: 48, jinete: 56, ogro: 64, trollJefe: 20, dragon: 75 };
 const JEFES = ["trollJefe", "dragon"];
@@ -81,7 +81,7 @@ export function oleadasDe(n, calib, rng, opc) {
   // Cada oleada «vale» k oleadas del juego original de 30 (enemigos más fuertes, más oro, tipos pesados). Con nW = 30, k = 1 y todo sale como antes;
   // con 12 oleadas k = 1.2 (con más, el número de enemigos crece tan rápido que el mapa 8, de dos entradas, no se podía ganar ni con enemigos casi sin vida).
   const k = Math.min(1.2, 29 / Math.max(1, nW - 1)); // tope 1.2: con 12 oleadas la última equivale a la ~14 del original; la vida calibrada ajusta el final
-  const cadaElite = Math.max(2, Math.round(nW / 3));           // oleada fuerte cada «cadaElite» oleadas (con 12: la 4, la 8 y la 12)
+  const cadaElite = Math.max(2, Math.round(nW / 3));           // oleada fuerte cada «cadaElite» oleadas (con 10: la 3, la 6, la 9 y la 10)
   const ablanda = Math.max(3, Math.round(nW / 3));             // las primeras oleadas son más suaves (con 12: las 4 primeras)
   const unl = opc && opc.enemigos ? opc.enemigos.slice() : Object.keys(DESBLOQUEO_ENEMIGOS).filter((t) => !JEFES.includes(t) && DESBLOQUEO_ENEMIGOS[t] <= n);
   const clase = (t) => (ENEMIGOS[t].vida >= 800 ? 2 : ENEMIGOS[t].vida >= 200 ? 1 : 0); // 0 ligero, 1 medio, 2 pesado
