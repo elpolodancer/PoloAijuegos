@@ -55,6 +55,13 @@
     #menuLista { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .b3d.mapa { --t: 56px; height: auto; min-height: var(--t); flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 8px 12px; text-align: left; white-space: normal; font-size: 13px; }
     .b3d.mapa small { font-size: 11px; font-weight: 600; opacity: .9; }
+    #menuPest { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+    #menuInfo { font-size: 11px; line-height: 1.35; text-align: center; color: var(--suave); }
+    #menuLista.mich { grid-template-columns: repeat(5, 1fr); gap: 8px; }
+    .b3d.nvl { --t: 46px; width: 100%; height: 50px; margin: 0 0 5px; flex-direction: column; gap: 0; font-size: 16px; font-weight: 800; }
+    .b3d.nvl .b-ico { font-size: 16px; }
+    .b3d.nvl small { font-size: 9px; line-height: 9px; min-height: 9px; }
+    .b3d.nvl .b-info { font-size: 12px; padding: 0 4px; min-width: 20px; }
     #fin { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 10px; padding: 20px; overflow-y: auto; text-align: center; background: rgba(10,10,12,.88); }
     #fin > :first-child { margin-top: auto; }   /* centrado vertical que, si no cabe (celular acostado), se desplaza en vez de cortarse */
     #fin > :last-child { margin-bottom: auto; }
@@ -62,8 +69,17 @@
     #fin p { margin: 0; color: var(--suave); }
     #estrellas { font-size: 2rem; letter-spacing: 4px; }
 
+    /* Muchas torres (Michoacán llega a 10): botones más chicos, en dos filas, y el dock reserva más alto */
+    body.muchas { --res-abajo: calc(196px + env(safe-area-inset-bottom, 0px)); }
+    body.muchas #tienda { flex-wrap: wrap; max-width: 330px; gap: 8px 7px; }
+    body.muchas #tienda .b3d { --t: 40px; }
+    body.muchas .escena { padding-bottom: var(--res-abajo); }
+
     /* ----- Horizontal (celular acostado / PC): el dock queda en una sola fila abajo y el mapa ocupa casi toda la altura ----- */
     @media (orientation: landscape) {
+      body.muchas { --res-abajo: calc(88px + env(safe-area-inset-bottom, 0px)); }
+      body.muchas #tienda { flex-wrap: nowrap; max-width: none; gap: 4px; }
+      body.muchas #tienda .b3d { --t: 36px; }
       :root { --res-arriba: calc(8px + env(safe-area-inset-top, 0px)); --res-abajo: calc(88px + env(safe-area-inset-bottom, 0px)); }
       #dock { flex-direction: row; justify-content: center; gap: 24px; padding: 14px 12px calc(8px + env(safe-area-inset-bottom, 0px)); }
       #record { display: none; }
@@ -94,6 +110,11 @@
       <div id="panel" hidden></div>
       <div id="menu">
         <h2>🗺️ Elige un mapa</h2>
+        <div id="menuPest">
+          <button class="b3d txt chico b-gris" id="pestMich" type="button">📍 Michoacán · 100</button>
+          <button class="b3d txt chico b-gris" id="pestClasicos" type="button">Mapas clásicos · 10</button>
+        </div>
+        <div id="menuInfo"></div>
         <div id="menuLista"></div>
       </div>
       <div id="fin" hidden>

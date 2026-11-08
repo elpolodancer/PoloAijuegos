@@ -3,9 +3,12 @@
 // Cómo se juega: elige un mapa; elige una torre abajo y toca un lugar libre del pasto para construirla; toca una torre para
 // mejorarla o venderla; 🪓 Quitar sirve para talar árboles/rocas (cuesta monedas) o vender torres con un toque; ☄️ lanza un
 // meteoro (se recarga solo). Los enemigos caminan por el camino café; si llegan al castillo le quitan vida.
+// El menú tiene dos pestañas: los 10 mapas clásicos y los 100 niveles de Michoacán (generados por generador-defendercastillo.js;
+// se desbloquean de uno en uno y cada nivel nuevo puede traer torres y enemigos nuevos).
 import { NIVELES } from "./niveles-defendercastillo.js";
+import { generarNivel, NIVELES_MICHOACAN, DESBLOQUEO_TORRES } from "./generador-defendercastillo.js";
 import {
-  CELDA, ANCHO, ALTO, TORRES, ENEMIGOS, METEORO, REEMBOLSO,
+  CELDA, ANCHO, ALTO, TORRES, TORRES_CLASICAS, ENEMIGOS, METEORO, REEMBOLSO,
   nuevaPartida, celdaLibre, torreEn, obstaculoEn, costeTalar, datosTorre, colocar, mejorar, vender, talar, iniciarOleada, meteoro, paso, estrellas,
 } from "./logica-defendercastillo.js";
 
@@ -17,11 +20,19 @@ const VEL_MAX = 5;               // la velocidad del botón ⏩ va de x1 a x5
 const PASOS_MAX = 30;            // tope de pasos por cuadro (a x5 un cuadro lento necesita hasta 30)
 const CLAVE_PROGRESO = "defensa_progreso";
 const CLAVE_SONIDO = "defensa_sonido";
-const CLAVE_ULTIMO = "defensa_ultimo";   // último mapa jugado
+const CLAVE_ULTIMO = "defensa_ultimo";   // último mapa jugado: { t: "clasico" | "mich", i }
+const CLAVE_PESTANA = "defensa_pestana";
+const TODOS = /[?&]todos\b/.test(location.search); // «?todos» en la dirección: abre todos los niveles de Michoacán (para probar)
 const FUENTE = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",system-ui,sans-serif';
-const COLOR_BOTON = { arquero: "b-verde", mago: "b-azul", canon: "b-morado", ballesta: "b-oro", rayos: "b-rojo" }; // color del botón = lo cara y poderosa que es la torre
+const COLOR_BOTON = { arquero: "b-verde", mina: "b-oro", hielo: "b-azul", mago: "b-azul", cuartel: "b-gris", canon: "b-morado", veneno: "b-morado", ballesta: "b-oro", mortero: "b-rojo", rayos: "b-rojo" }; // color del botón = lo cara y poderosa que es la torre
 const COLOR_DIF = { "Fácil": "b-verde", "Media": "b-azul", "Difícil": "b-morado", "Muy difícil": "b-rojo" };
-const COLOR_TORRE = { arquero: "#8b5a2b", canon: "#555b6b", mago: "#5b3f9e", ballesta: "#2f6f6a", rayos: "#2d4a8a" };
+const COLOR_TORRE = { arquero: "#8b5a2b", canon: "#555b6b", mago: "#5b3f9e", ballesta: "#2f6f6a", rayos: "#2d4a8a", mortero: "#6b4a3a", hielo: "#3f7fa6", veneno: "#4f7a2a", mina: "#8a6a1c", cuartel: "#7a3b3b" };
+// Lo que hace cada enemigo nuevo (se avisa al empezar el nivel donde aparece)
+const HABILIDAD = {
+  murcielago: "vuela directo al castillo; el cañón y el mortero no le pegan", esqueleto: "revive una vez", arana: "rápida; resiste el veneno", slime: "se parte en 2 al morir",
+  caballero: "blindado: las flechas hacen poco", brujo: "cura a los de alrededor", fantasma: "esquiva algunos disparos", golem: "muy lento y blindado; no se congela",
+  jinete: "rápido y blindado", ogro: "enorme y lento", trollJefe: "jefe: se regenera", dragon: "jefe volador que pega muy fuerte",
+};
 
 const $ = (id) => document.getElementById(id);
 const leer = (k, def) => { try { const v = localStorage.getItem(k); return v == null ? def : JSON.parse(v); } catch (e) { return def; } };
@@ -43,7 +54,11 @@ fondo.width = ANCHO * DPR;
 fondo.height = ALTO * DPR;
 
 // ----- Estado -----
-let nivelIdx = 0, p = null;
+let actual = { t: "clasico", i: 0 }, p = null;
+const nivelDe = (t, i) => (t === "mich" ? generarNivel(i + 1) : NIVELES[i]);
+const totalDe = (t) => (t === "mich" ? NIVELES_MICHOACAN : NIVELES.length);
+const idDe = (t, i) => (t === "mich" ? "M" + (i + 1) : NIVELES[i].id);
+const abierto = (t, i) => t !== "mich" || TODOS || i === 0 || !!progreso[idDe(t, i - 1)];
 let tipoSel = null, torreSel = null, modoMeteoro = false, modoQuitar = false;
 let pausa = false, vel = 1, acum = 0, ultimo = 0, anim = 0;
 let finalizado = false, fantasma = null, flash = 0, menuAbierto = true;
@@ -87,40 +102,80 @@ function resumenOleada() {
 }
 
 // ----- Niveles -----
-function empezarNivel(i) {
-  nivelIdx = i;
-  p = nuevaPartida(NIVELES[i]);
+function empezarNivel(t, i) {
+  actual = { t, i };
+  p = nuevaPartida(nivelDe(t, i));
   tipoSel = null; torreSel = null; modoMeteoro = false; modoQuitar = false;
   finalizado = false; efectos = []; flash = 0; acum = 0; pausa = false; vel = 1;
   $("btnPausa").firstElementChild.textContent = "⏸"; $("velNum").textContent = "x1";
   $("fin").hidden = true;
   cerrarMenu();
-  guardar(CLAVE_ULTIMO, i);
+  guardar(CLAVE_ULTIMO, { t, i });
+  armarTienda();
   ajustarLienzo();
   armarFondo();
   const r = progreso[p.nivel.id];
   $("record").textContent = r ? "Récord: " + r.record + " " + "⭐".repeat(r.estrellas) : "";
   poner("mapaNombre", "Mapa " + p.nivel.id + ": " + p.nivel.nombre + " · " + (p.nivel.dificultad || ""));
-  mensaje("Mapa " + p.nivel.id + ": " + p.nivel.nombre, 3000);
+  const nu = textoNuevos(p.nivel);
+  mensaje(nu ? "Mapa " + p.nivel.id + ": " + p.nivel.nombre + " · " + nu : "Mapa " + p.nivel.id + ": " + p.nivel.nombre, nu ? 7000 : 3000);
+}
+// «🆕 Torre: 🔮 Mago · Enemigo: 🦇 Murciélago (vuela…)» para el nivel de Michoacán que trae algo nuevo
+function textoNuevos(n) {
+  if (!n.nuevas) return "";
+  const a = [];
+  for (const t of n.nuevas.torres) a.push("Torre: " + TORRES[t].icono + " " + TORRES[t].nombre);
+  for (const e of n.nuevas.enemigos) a.push("Enemigo: " + ENEMIGOS[e].icono + " " + ENEMIGOS[e].nombre + " (" + HABILIDAD[e] + ")");
+  return a.length ? "🆕 " + a.join(" · ") : "";
 }
 
 // ----- Menú de mapas -----
+let pestana = leer(CLAVE_PESTANA, "mich");
 function abrirMenu() {
-  const m = $("menu"), lista = $("menuLista");
+  const m = $("menu"), lista = $("menuLista"), info = $("menuInfo");
   lista.textContent = "";
-  NIVELES.forEach((n, i) => {
-    const r = progreso[n.id];
-    const b = document.createElement("button");
-    b.className = "b3d txt mapa " + (COLOR_DIF[n.dificultad] || "b-gris");
-    const t = document.createElement("b"); t.textContent = n.id + " · " + n.nombre;
-    const d = document.createElement("small"); d.textContent = (n.dificultad || "") + (r ? " · " + "⭐".repeat(r.estrellas) + " " + r.record : " · sin jugar");
-    b.append(t, d);
-    b.addEventListener("click", () => empezarNivel(i));
-    lista.appendChild(b);
-  });
+  $("pestClasicos").classList.toggle("on", pestana === "clasico");
+  $("pestMich").classList.toggle("on", pestana === "mich");
+  lista.className = pestana === "mich" ? "mich" : "";
+  if (pestana === "clasico") {
+    info.textContent = "10 mapas con 10 oleadas cada uno, de más fácil a más difícil.";
+    NIVELES.forEach((n, i) => {
+      const r = progreso[n.id];
+      const b = document.createElement("button");
+      b.className = "b3d txt mapa " + (COLOR_DIF[n.dificultad] || "b-gris");
+      const t = document.createElement("b"); t.textContent = n.id + " · " + n.nombre;
+      const d = document.createElement("small"); d.textContent = (n.dificultad || "") + (r ? " · " + "⭐".repeat(r.estrellas) + " " + r.record : " · sin jugar");
+      b.append(t, d);
+      b.addEventListener("click", () => empezarNivel("clasico", i));
+      lista.appendChild(b);
+    });
+  } else {
+    let hechos = 0, sig = -1;
+    for (let i = 0; i < NIVELES_MICHOACAN; i++) { if (progreso["M" + (i + 1)]) hechos++; else if (sig < 0) sig = i; }
+    info.textContent = "Michoacán: " + hechos + " de " + NIVELES_MICHOACAN + " niveles pasados · se desbloquean de uno en uno · 🆕 = torre nueva · cada nivel tiene 30 a 38 oleadas (usa ⏩ para acelerar).";
+    const dif = (i) => (i < 25 ? "b-verde" : i < 55 ? "b-azul" : i < 85 ? "b-morado" : "b-rojo");
+    const torreNueva = Object.keys(DESBLOQUEO_TORRES).reduce((o, t) => { o[DESBLOQUEO_TORRES[t]] = t; return o; }, {});
+    for (let i = 0; i < NIVELES_MICHOACAN; i++) {
+      const r = progreso["M" + (i + 1)], bloq = !abierto("mich", i);
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "b3d nvl " + (bloq ? "b-gris" : dif(i)) + (i === sig && !bloq ? " activo" : "");
+      b.disabled = bloq;
+      const num = document.createElement("span"); num.className = "b-ico"; num.textContent = bloq ? "🔒" : String(i + 1);
+      const est = document.createElement("small"); est.textContent = r ? "⭐".repeat(r.estrellas) : (i + 1) % 10 === 0 ? "👑" : "";
+      b.append(num, est);
+      if (torreNueva[i + 1] && !bloq) { const ib = document.createElement("span"); ib.className = "b-info"; ib.textContent = TORRES[torreNueva[i + 1]].icono; b.appendChild(ib); }
+      b.setAttribute("aria-label", "Nivel " + (i + 1) + (bloq ? " (bloqueado)" : r ? " (pasado, " + r.estrellas + " estrellas)" : ""));
+      b.addEventListener("click", () => empezarNivel("mich", i));
+      lista.appendChild(b);
+    }
+    if (sig >= 0 && !TODOS) setTimeout(() => { const el = lista.children[sig]; if (el && el.scrollIntoView) el.scrollIntoView({ block: "center" }); }, 0);
+  }
   m.hidden = false;
   menuAbierto = true;
 }
+$("pestClasicos").addEventListener("click", () => { pestana = "clasico"; guardar(CLAVE_PESTANA, pestana); abrirMenu(); });
+$("pestMich").addEventListener("click", () => { pestana = "mich"; guardar(CLAVE_PESTANA, pestana); abrirMenu(); });
 function cerrarMenu() { $("menu").hidden = true; menuAbierto = false; }
 
 // Cada mapa puede tener su propio tamaño de cuadrícula (8×12, 12×18…): se redimensiona el lienzo y el fondo
@@ -142,6 +197,13 @@ function armarFondo() {
   trazar(); g.strokeStyle = "#7d5f33"; g.lineWidth = CELDA * 0.98; g.stroke();
   trazar(); g.strokeStyle = "#c9a66b"; g.lineWidth = CELDA * 0.86; g.stroke();
   trazar(); g.strokeStyle = "rgba(255,255,255,.07)"; g.lineWidth = 3; g.setLineDash([8, 12]); g.stroke(); g.setLineDash([]);
+  // línea por donde vuelan murciélagos y dragones (directo de la entrada al castillo): solo en los niveles de Michoacán donde ya salen
+  if (n.n >= 5) {
+    const ck = n.castillo;
+    g.save(); g.setLineDash([3, 9]); g.strokeStyle = "rgba(200,230,255,.28)"; g.lineWidth = 2;
+    for (const cam of caminos) { g.beginPath(); g.moveTo(cam[0][0] * CELDA, cam[0][1] * CELDA); g.lineTo(cam[cam.length - 1][0] * CELDA, cam[cam.length - 1][1] * CELDA); g.stroke(); }
+    g.restore();
+  }
   // castillo
   const k = n.castillo;
   g.fillStyle = "#59606e";
@@ -158,6 +220,7 @@ function armarFondo() {
     if (c < 0) g.fillText("➡️", 14, f * CELDA);
     else if (c > p.cols) g.fillText("⬅️", p.ancho - 14, f * CELDA);
     else if (f < 0) g.fillText("⬇️", c * CELDA, 14);
+    else if (f > p.filas) g.fillText("⬆️", c * CELDA, p.alto - 14);
   }
 }
 
@@ -195,18 +258,24 @@ cv.addEventListener("pointerdown", (ev) => {
 
 // ----- Botones -----
 const tienda = $("tienda");
-for (const [tipo, d] of Object.entries(TORRES)) {
-  const b = document.createElement("button");
-  b.className = "b3d " + COLOR_BOTON[tipo];
-  b.type = "button";
-  b.dataset.tipo = tipo;
-  b.setAttribute("aria-label", d.nombre + ", " + d.precio + " monedas");
-  const ico = document.createElement("span"); ico.className = "b-ico"; ico.textContent = d.icono;
-  const pr = document.createElement("span"); pr.className = "b-info"; pr.textContent = d.precio + "🪙";
-  b.title = d.nombre + ": " + d.desc;
-  b.append(ico, pr);
-  b.addEventListener("click", () => { tipoSel = tipoSel === tipo ? null : tipo; torreSel = null; modoMeteoro = false; modoQuitar = false; });
-  tienda.appendChild(b);
+function armarTienda() { // solo las torres que trae el nivel (los clásicos: las 5 de siempre; Michoacán: las que ya desbloqueaste)
+  tienda.textContent = "";
+  const lista = p.nivel.torres || TORRES_CLASICAS;
+  document.body.classList.toggle("muchas", lista.length > 6);
+  for (const tipo of lista) {
+    const d = TORRES[tipo];
+    const b = document.createElement("button");
+    b.className = "b3d " + COLOR_BOTON[tipo];
+    b.type = "button";
+    b.dataset.tipo = tipo;
+    b.setAttribute("aria-label", d.nombre + ", " + d.precio + " monedas");
+    const ico = document.createElement("span"); ico.className = "b-ico"; ico.textContent = d.icono;
+    const pr = document.createElement("span"); pr.className = "b-info"; pr.textContent = d.precio + "🪙";
+    b.title = d.nombre + ": " + d.desc;
+    b.append(ico, pr);
+    b.addEventListener("click", () => { tipoSel = tipoSel === tipo ? null : tipo; torreSel = null; modoMeteoro = false; modoQuitar = false; });
+    tienda.appendChild(b);
+  }
 }
 $("btnOleada").addEventListener("click", () => { if (iniciarOleada(p)) { tipoSel = null; modoMeteoro = false; modoQuitar = false; } });
 $("btnQuitar").addEventListener("click", () => {
@@ -236,8 +305,8 @@ $("btnVel").addEventListener("click", () => { vel = vel >= VEL_MAX ? 1 : vel + 1
 $("btnPausa").addEventListener("click", () => pausar(!pausa));
 $("btnSonido").addEventListener("click", () => { sonido = !sonido; guardar(CLAVE_SONIDO, sonido); $("btnSonido").firstElementChild.textContent = sonido ? "🔊" : "🔇"; });
 $("btnSonido").firstElementChild.textContent = sonido ? "🔊" : "🔇";
-$("finReintentar").addEventListener("click", () => empezarNivel(nivelIdx));
-$("finSiguiente").addEventListener("click", () => empezarNivel(nivelIdx + 1));
+$("finReintentar").addEventListener("click", () => empezarNivel(actual.t, actual.i));
+$("finSiguiente").addEventListener("click", () => empezarNivel(actual.t, actual.i + 1));
 function pausar(v) { pausa = v; $("btnPausa").firstElementChild.textContent = pausa ? "▶" : "⏸"; }
 document.addEventListener("visibilitychange", () => { if (document.hidden && p.estado === "oleada") pausar(true); });
 
@@ -248,13 +317,16 @@ function eventos() {
       if (e.tipo === "arquero") tono("a", 900, 500, 0.07, "square", 0.02, 70);
       else if (e.tipo === "canon") tono("c", 170, 60, 0.2, "sawtooth", 0.05, 80);
       else if (e.tipo === "ballesta") tono("bb", 260, 90, 0.16, "square", 0.04, 80);
+      else if (e.tipo === "mortero") tono("mo", 120, 45, 0.3, "sawtooth", 0.06, 120);
+      else if (e.tipo === "hielo") tono("hi", 1500, 900, 0.1, "sine", 0.03, 100);
+      else if (e.tipo === "veneno") tono("ve", 300, 220, 0.1, "triangle", 0.03, 100);
       else tono("m", 600, 1200, 0.12, "sine", 0.04, 80);
     } else if (e.t === "muerte") {
       efectos.push({ k: "texto", x: e.x, y: e.y, t: 0, dur: 0.8, txt: "+" + e.oro + " 🪙" });
       tono("x", 520, 220, 0.1, "triangle", 0.035, 50);
     } else if (e.t === "explosion") {
-      efectos.push({ k: "explosion", x: e.x, y: e.y, t: 0, dur: 0.3, r: e.r });
-      tono("e", 130, 40, 0.25, "sawtooth", 0.05, 60);
+      efectos.push({ k: "explosion", x: e.x, y: e.y, t: 0, dur: 0.3, r: e.r, hielo: e.hielo });
+      tono("e", e.hielo ? 900 : 130, e.hielo ? 500 : 40, 0.25, e.hielo ? "sine" : "sawtooth", e.hielo ? 0.03 : 0.05, 60);
     } else if (e.t === "flecha") {
       efectos.push({ k: "chispa", x: e.x, y: e.y, t: 0, dur: 0.15 });
     } else if (e.t === "rayo") {
@@ -267,6 +339,17 @@ function eventos() {
       linea.push(e.pts[e.pts.length - 1]);
       efectos.push({ k: "rayo", linea, t: 0, dur: 0.2 });
       tono("r", 1400, 250, 0.14, "sawtooth", 0.035, 90);
+    } else if (e.t === "esquiva") {
+      efectos.push({ k: "texto", x: e.x, y: e.y, t: 0, dur: 0.6, txt: "💨" });
+    } else if (e.t === "revive") {
+      efectos.push({ k: "texto", x: e.x, y: e.y, t: 0, dur: 0.9, txt: "💀 ¡revive!" });
+      tono("rv", 200, 500, 0.2, "triangle", 0.04, 200);
+    } else if (e.t === "cura") {
+      efectos.push({ k: "texto", x: e.x, y: e.y, t: 0, dur: 0.6, txt: "💚" });
+    } else if (e.t === "cuartelCae") {
+      efectos.push({ k: "texto", x: e.x, y: e.y, t: 0, dur: 1.2, txt: "🏕️ ¡cae!", rojo: true });
+    } else if (e.t === "cuartelListo") {
+      efectos.push({ k: "texto", x: e.x, y: e.y, t: 0, dur: 0.8, txt: "🏕️ ✅" });
     } else if (e.t === "talar") {
       efectos.push({ k: "texto", x: e.x, y: e.y, t: 0, dur: 0.8, txt: "-" + e.coste + " 🪙", rojo: true });
       efectos.push({ k: "chispa", x: e.x, y: e.y, t: 0, dur: 0.25 });
@@ -285,10 +368,11 @@ function eventos() {
       efectos.push({ k: "texto", x: e.x, y: e.y - 14, t: 0, dur: 0.8, txt: "⬆️" });
       melodia([500, 750]);
     } else if (e.t === "oleada") {
-      mensaje("🌊 Oleada " + e.n + " de " + p.nivel.oleadas.length + (e.n === p.nivel.oleadas.length ? " — ¡el jefe! 🧌" : ""), 3000);
+      const ola = p.nivel.oleadas[e.n - 1], fuerte = ola && ola.jefe !== undefined ? ola.jefe : e.n === p.nivel.oleadas.length;
+      mensaje("🌊 Oleada " + e.n + " de " + p.nivel.oleadas.length + (fuerte ? (e.n === p.nivel.oleadas.length ? " — ¡el jefe! 🧌" : " — ¡oleada fuerte! 💪") : ""), 3000);
       tono("o", 220, 440, 0.4, "sawtooth", 0.05);
     } else if (e.t === "oleadaLista") {
-      mensaje("✅ Oleada superada: +" + e.bono + " 🪙", 3000);
+      mensaje("✅ Oleada superada: +" + e.bono + " 🪙" + (e.minas ? " (+" + e.minas + " de tus minas 💰)" : ""), 3000);
       melodia([440, 550]);
     } else if (e.t === "fin") {
       terminar(e.ganado);
@@ -313,8 +397,13 @@ async function terminar(ganado) {
   let txt = (ganado ? "Oleadas superadas: " + p.oleada + "/" + p.nivel.oleadas.length : "Llegaste a la oleada " + (p.oleada + 1) + " de " + p.nivel.oleadas.length) +
     " · Monstruos derrotados: " + p.matados + " · Puntos: " + pts;
   $("finTexto").textContent = txt;
-  $("finSiguiente").hidden = !(ganado && nivelIdx + 1 < NIVELES.length);
-  $("finSiguiente").textContent = "Siguiente mapa ▶";
+  $("finSiguiente").hidden = !(ganado && actual.i + 1 < totalDe(actual.t));
+  $("finSiguiente").textContent = actual.t === "mich" ? "Siguiente nivel ▶" : "Siguiente mapa ▶";
+  if (ganado && actual.t === "mich" && actual.i + 1 < NIVELES_MICHOACAN) { // avisa de lo nuevo que trae el próximo nivel
+    const nu = textoNuevos(generarNivel(actual.i + 2));
+    if (nu) txt += " · Próximo nivel: " + nu;
+  }
+  $("finTexto").textContent = txt;
   $("fin").hidden = false;
   if (jugador && usuario && ganados > 0) {
     try {
@@ -347,14 +436,15 @@ function dibujar() {
   // alcance de la torre elegida y vista previa al construir
   if (torreSel && p.torres.includes(torreSel)) {
     const d = datosTorre(torreSel);
-    circulo(torreSel.x, torreSel.y, d.alcance * CELDA, "rgba(255,255,255,.12)", "rgba(255,255,255,.5)");
+    if (d.alcance) circulo(torreSel.x, torreSel.y, d.alcance * CELDA, "rgba(255,255,255,.12)", "rgba(255,255,255,.5)");
+    if (d.minimo) circulo(torreSel.x, torreSel.y, d.minimo * CELDA, "rgba(255,80,80,.18)", "rgba(255,120,120,.6)"); // zona donde el mortero no dispara
   }
   if (tipoSel && fantasma) {
     const { c, f } = fantasma, ok = celdaLibre(p, c, f);
     if (c >= 0 && c < p.cols && f >= 0 && f < p.filas) {
       ctx.fillStyle = ok ? "rgba(120,255,120,.35)" : "rgba(255,80,80,.35)";
       ctx.fillRect(c * CELDA, f * CELDA, CELDA, CELDA);
-      if (ok) circulo((c + 0.5) * CELDA, (f + 0.5) * CELDA, TORRES[tipoSel].niveles[0].alcance * CELDA, "rgba(255,255,255,.1)", "rgba(255,255,255,.4)");
+      if (ok && TORRES[tipoSel].niveles[0].alcance) circulo((c + 0.5) * CELDA, (f + 0.5) * CELDA, TORRES[tipoSel].niveles[0].alcance * CELDA, "rgba(255,255,255,.1)", "rgba(255,255,255,.4)");
     }
   }
 
@@ -374,6 +464,13 @@ function dibujar() {
     ctx.fillStyle = "#ffd34d";
     for (let i = 0; i <= t.nivel; i++) { ctx.beginPath(); ctx.arc(t.x - t.nivel * 4 + i * 8, t.y + 20, 2.5, 0, Math.PI * 2); ctx.fill(); }
     if (modoQuitar) etiqueta("+" + Math.floor(t.invertido * REEMBOLSO), t.x, t.y - 22, "#9dff9d");
+    if (t.enganchados) { // cuartel: líneas hacia los enemigos que sus soldados frenan; caído = gris
+      if (t.caidoT > 0) { circulo(t.x, t.y, 18, "rgba(30,30,30,.65)"); emoji("💤", t.x, t.y - 14, 14); }
+      else for (const e of t.enganchados) {
+        ctx.strokeStyle = "rgba(255,170,60,.9)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(e.x, e.y); ctx.stroke();
+        emoji("⚔️", (t.x + e.x) / 2, (t.y + e.y) / 2, 13);
+      }
+    }
     // flecha direccional: rodea la torre y apunta al enemigo que tiene fijado (lo sigue mientras se mueve)
     if (t.obj && t.obj.vivo && t.ang !== undefined) {
       const ux = Math.cos(t.ang), uy = Math.sin(t.ang), rx = t.x + ux * 25, ry = t.y + uy * 25;
@@ -386,19 +483,25 @@ function dibujar() {
     }
   }
 
-  // enemigos (los de más abajo se dibujan encima)
+  // enemigos (los de más abajo se dibujan encima; los voladores van más arriba y con sombra en el suelo)
   const orden = p.enemigos.slice().sort((a, b) => a.y - b.y);
   for (const e of orden) {
-    const def = ENEMIGOS[e.tipo], y = e.y + Math.sin(anim * 10 + e.id) * 1.5;
+    const def = ENEMIGOS[e.tipo], vuelo = e.vuela ? 12 : 0, y = e.y + Math.sin(anim * 10 + e.id) * 1.5 - vuelo;
     ctx.fillStyle = "rgba(0,0,0,.25)";
-    ctx.beginPath(); ctx.ellipse(e.x, y + def.tam * 0.45, def.tam * 0.45, def.tam * 0.18, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(e.x, e.y + def.tam * 0.45, def.tam * 0.45, def.tam * 0.18, 0, 0, Math.PI * 2); ctx.fill();
     if (e.lentoT > 0) circulo(e.x, y, def.tam * 0.62, "rgba(110,170,255,.35)", "rgba(150,200,255,.8)");
+    if (e.congT > 0) circulo(e.x, y, def.tam * 0.7, "rgba(200,240,255,.6)", "#fff");
+    if (e.venT > 0) circulo(e.x, y, def.tam * 0.66, "rgba(120,220,80,.25)", "rgba(120,220,80,.8)");
+    if (e.tipo === "fantasma") ctx.globalAlpha = 0.75;
     emoji(def.icono, e.x, y, def.tam);
+    ctx.globalAlpha = 1;
+    if (e.congT > 0) emoji("❄️", e.x, y - def.tam * 0.6, 12);
+    else if (e.bloq) emoji("⚔️", e.x, y - def.tam * 0.6, 12);
     if (e.hp < e.hpMax) {
       const w = Math.max(18, def.tam * 0.9), x0 = e.x - w / 2, y0 = y - def.tam * 0.7;
       ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillRect(x0 - 1, y0 - 1, w + 2, 5);
       ctx.fillStyle = e.hp / e.hpMax > 0.5 ? "#4cd964" : e.hp / e.hpMax > 0.25 ? "#ffcc00" : "#ff4d4d";
-      ctx.fillRect(x0, y0, w * (e.hp / e.hpMax), 3);
+      ctx.fillRect(x0, y0, w * Math.max(0, e.hp / e.hpMax), 3);
     }
   }
 
@@ -417,6 +520,9 @@ function dibujar() {
       ctx.beginPath(); ctx.moveTo(py.x - Math.cos(a) * 9, py.y - Math.sin(a) * 9); ctx.lineTo(py.x + Math.cos(a) * 6, py.y + Math.sin(a) * 6); ctx.stroke();
       ctx.lineCap = "butt";
     } else if (py.tipo === "canon") circulo(py.x, py.y, 5, "#222", "#888");
+    else if (py.tipo === "mortero") circulo(py.x, py.y, 7, "#3a2a22", "#d98b4a");
+    else if (py.tipo === "hielo") { circulo(py.x, py.y, 7, "rgba(170,225,255,.45)"); circulo(py.x, py.y, 4, "#e8f8ff"); }
+    else if (py.tipo === "veneno") { circulo(py.x, py.y, 7, "rgba(110,210,70,.35)"); circulo(py.x, py.y, 4, "#8fe04a"); }
     else { circulo(py.x, py.y, 7, "rgba(190,140,255,.35)"); circulo(py.x, py.y, 4, "#d9b8ff"); }
   }
 
@@ -424,7 +530,7 @@ function dibujar() {
   for (const e of efectos) {
     const k = e.t / e.dur;
     if (e.k === "explosion") {
-      circulo(e.x, e.y, e.r * (0.4 + 0.6 * k), (e.fuego ? "rgba(255,120,30," : "rgba(255,190,60,") + (0.55 * (1 - k)).toFixed(2) + ")", "rgba(255,255,255," + (0.6 * (1 - k)).toFixed(2) + ")");
+      circulo(e.x, e.y, e.r * (0.4 + 0.6 * k), (e.hielo ? "rgba(140,210,255," : e.fuego ? "rgba(255,120,30," : "rgba(255,190,60,") + (0.55 * (1 - k)).toFixed(2) + ")", "rgba(255,255,255," + (0.6 * (1 - k)).toFixed(2) + ")");
     } else if (e.k === "rayo") {
       ctx.globalAlpha = 1 - k;
       ctx.lineJoin = "round";
@@ -509,12 +615,18 @@ function ui() {
         if (s !== undefined && s !== v) c.append(" → ", el("em", "", s + suf));
         chips.appendChild(c);
       };
-      chip("💥 daño", d.dano, sig && sig.dano);
+      if (d.dano !== undefined) chip("💥 daño", d.dano, sig && sig.dano);
       if (d.radio) chips.appendChild(el("span", "dato", "💣 área"));
-      chip("🎯 alcance", d.alcance, sig && sig.alcance);
-      chip("⏱️ cada", d.cadencia, sig && sig.cadencia, " s");
+      if (d.alcance) chip(d.bloqueo ? "🎯 alcance" : "🎯 alcance", d.alcance, sig && sig.alcance);
+      if (d.cadencia) chip("⏱️ cada", d.cadencia, sig && sig.cadencia, " s");
+      if (d.minimo) chips.appendChild(el("span", "dato", "🚫 no pega a menos de " + d.minimo));
+      if (def.noAire) chips.appendChild(el("span", "dato", "🦇 no pega a voladores"));
       if (d.lento) chips.appendChild(el("span", "dato", "🐌 frena"));
+      if (d.congela) chip("❄️ congela", d.congela, sig && sig.congela, " s");
+      if (d.veneno) chip("☠️ veneno/s", d.veneno.dps, sig && sig.veneno.dps);
       if (d.cadena) chip("⚡ saltos", d.cadena, sig && sig.cadena);
+      if (d.oroOla) chip("💰 por oleada", d.oroOla, sig && sig.oroOla, " 🪙");
+      if (d.bloqueo) { chip("🪖 soldados", d.bloqueo, sig && sig.bloqueo); chip("❤️ vida", d.hpSol, sig && sig.hpSol); }
       info.append(cab, chips);
       const fila = document.createElement("div"); fila.className = "fila";
       const bu = document.createElement("button"); bu.className = "b3d txt chico " + (torreSel.nivel ? "b-oro" : "b-azul");
@@ -563,6 +675,11 @@ function bucle(ts) {
 }
 
 // Arranca con el último mapa jugado y muestra el menú de mapas
-empezarNivel(Math.min(NIVELES.length - 1, Math.max(0, +leer(CLAVE_ULTIMO, 0) || 0)));
+{
+  const u = leer(CLAVE_ULTIMO, 0);
+  const t = u && u.t === "mich" ? "mich" : "clasico", i = typeof u === "number" ? u : u && u.i ? u.i : 0;
+  empezarNivel(t, Math.min(totalDe(t) - 1, Math.max(0, +i || 0)));
+  if (t === "mich" && !abierto("mich", actual.i)) empezarNivel("mich", 0);
+}
 abrirMenu();
 requestAnimationFrame(bucle);
