@@ -23,6 +23,8 @@
 // Al terminar de comer, cada cliente va a 0-4 de esos lugares (ver PESOS_VISITAS) y gasta en cada uno.
 // ENERGÍA: la «⚡ sala de generadores» ya viene construida. Empiezas con 22/33 de energía (usada/disponible); tocando la sala compras un generador cuadrado ($10) que se ve dentro y sube la energía disponible de 33 a 48 (ver ENERGIA_*).
 // DECORACIONES: también en «🏗️ Construir»; cada una suma dinero a lo que paga cada cliente (ver DECORACIONES).
+import { encolarPuntos } from "../compartido/cola-puntos.js"; // no usa Firebase: anota puntos aunque no haya internet o sesión
+
 const ID = "restaurantes";
 
 // ----- ESCALA: tamaño de los objetos respecto a la cuadra -----
@@ -411,7 +413,8 @@ let vistaGeneradores = false; // true = el panel abierto es el de la «⚡ sala 
 let vistaEstac = false; // true = el panel abierto es el de la «🅿️ caseta del estacionamiento»
 let vistaOficina = false; // true = el panel abierto es el de la «🕴️ oficina del jefe» (compras de mesas y zonas)
 let vistaConstruir = false; // true = el panel abierto es el de «🏗️ Construir» (habitaciones y decoraciones)
-let puntosEnviados = 0, umbralPuntos = PUNTOS_LOTE, enviando = false; // puntos ya mandados al perfil, cuántos hacen falta para el siguiente envío, envío en curso
+let puntosEnviados = 0; // puntos ya anotados para el perfil (en la cola de cola-puntos.js)
+let nube = null, nubeRecord = null, nubeEspera = null; // sincronización con la cuenta (se llena al cargar compartido/progreso.js)
 let ranura = null; // partida activa (0, 1 o 2); null = estás en el menú y no se guarda nada
 let cocinero = 0, cocinero2 = 0, nMesas = MESAS_BASE.length; // nivel del cocinero (0 = sin contratar, 1 a 10), del segundo cocinero (0 = sin contratar) y mesas que hay en el comedor
 let menuMesaEl = null, tabMesa = "mejoras", cosaSel = "mesa"; // menú de la mesa: su elemento, pestaña abierta (mejoras / personal) y cosa elegida
@@ -480,7 +483,7 @@ function nuevaPartida(datos = null) { // datos: partida guardada que se carga (n
   nEstac = ESTAC_INICIALES; autosPerdidos = 0; proxAuto = PRIMER_AUTO_MS;
   anuncios = {}; paginaWeb = false;
   CAJONES.forEach((k) => { k.usado = false; k.coche = null; k.pendientes = 0; });
-  reloj = 0; proxLlegada = PRIMERA_LLEGADA_MS; ultimoSeg = -1; ultimoMin = -1; ultimoAbierto = null; puntosEnviados = 0; umbralPuntos = PUNTOS_LOTE;
+  reloj = 0; proxLlegada = PRIMERA_LLEGADA_MS; ultimoSeg = -1; ultimoMin = -1; ultimoAbierto = null; puntosEnviados = 0;
   if (datos) aplicarGuardado(datos);
   else { // partida nueva: ya empiezas con un cocinero, una recepcionista, un mesero y un empleado de limpieza (todos de nivel 1)
     cocinero = 1; limpiador = true;
@@ -542,9 +545,55 @@ function instantanea() {
 function guardarPartida() {
   if (ranura === null || !mesas) return;
   const t = leerTodo();
-  t.ranuras[ranura] = instantanea();
+  const s = instantanea(), prev = t.ranuras[ranura];
+  // «t» = cuándo cambió lo COMPRADO (no el dinero ni el tiempo): una copia vieja abierta sin comprar nada no pisa a una más avanzada
+  s.t = prev && huella(prev) === huella(s) ? (num(prev.t) || num(prev.fecha) || Date.now()) : Date.now();
+  t.ranuras[ranura] = s;
   t.ultima = ranura;
-  escribirTodo(t);
+  if (escribirTodo(t)) avisarNube();
+}
+
+// ----- Sincronización con la cuenta: por ranura gana la partida cuyo contenido comprado cambió más tarde -----
+// «huella» = lo comprado y mejorado (mesas, personal, terrenos, habitaciones...); NO incluye dinero, ganado ni tiempo jugado.
+function huella(d) {
+  const o = (v) => { const r = {}; Object.keys(v && typeof v === "object" ? v : {}).sort().forEach((k) => { r[k] = v[k]; }); return r; };
+  const l = (v) => (Array.isArray(v) ? v.slice().sort() : []);
+  return JSON.stringify([
+    (Array.isArray(d.mesas) ? d.mesas : []).map((m) => [m && m.id, m && m.nv, m && m.premios, o(m && m.mejoras)]),
+    d.receps, d.meseros, d.terreno2, l(d.lotes), d.kx, d.bx, o(d.habs), l(d.decos), d.puerta2, d.nEstac,
+    d.cocinero, d.cocinero2, d.limpiador, d.nMesas, o(d.cocina), d.banio, d.generadores, d.paginaWeb,
+  ]);
+}
+function elegirRanura(x, y) {
+  if (!x) return y || null;
+  if (!y) return x;
+  const tx = num(x.t) || num(x.fecha), ty = num(y.t) || num(y.fecha);
+  const gana = huella(x) === huella(y) ? (num(y.reloj) > num(x.reloj) ? y : x) : (ty > tx ? y : x); // misma compra: la que lleva más tiempo jugado
+  // los puntos ya anotados desde cualquiera de las dos copias no se vuelven a dar
+  const enviados = Math.max(num(x.puntosEnviados), num(y.puntosEnviados));
+  return { ...gana, puntosEnviados: Math.max(0, Math.min(enviados, Math.floor(num(gana.ganado) / DOLARES_POR_PUNTO))) };
+}
+function unirPartidas(a, b) {
+  const ok = (v) => v && Array.isArray(v.ranuras);
+  if (!ok(a) && !ok(b)) return null;
+  if (!ok(a)) return b;
+  if (!ok(b)) return a;
+  const bor = {}; // partidas borradas: una copia más vieja que el borrado no la revive
+  for (const o of [a, b]) for (const k in o.borradas || {}) bor[k] = Math.max(bor[k] || 0, num(o.borradas[k]));
+  const ranuras = [];
+  for (let i = 0; i < NUM_PARTIDAS; i++) {
+    let r = elegirRanura(a.ranuras[i], b.ranuras[i]);
+    if (r && bor[i] && (num(r.t) || num(r.fecha)) <= bor[i]) r = null;
+    ranuras.push(r);
+  }
+  const u = { ultima: a.ultima, ranuras };
+  if (Object.keys(bor).length) u.borradas = bor;
+  return u;
+}
+// Avisa a la nube sin saturarla: como mucho una subida cada ~20 s mientras juegas (al salir de la página conectar() también sincroniza)
+function avisarNube() {
+  if ((!nube && !nubeRecord) || nubeEspera) return;
+  nubeEspera = setTimeout(() => { nubeEspera = null; if (nube) nube.guardado(); if (nubeRecord) nubeRecord.guardado(); }, 20000);
 }
 // Pone en el estado del juego lo que había guardado (se llama dentro de nuevaPartida, con el estado ya en blanco). Todo se valida: un dato raro no rompe la partida.
 function aplicarGuardado(d) {
@@ -754,7 +803,7 @@ function resolverRecepcion(g) {
 function cobrar(monto, x, y, miGen) {
   if (miGen !== gen || !(monto > 0)) return;
   dinero += monto; ganado += monto;
-  if (ganado > leerRecord()) { try { localStorage.setItem(KEY_RECORD, String(ganado)); } catch (e) {} } // sin final: el récord se guarda en cuanto lo superas
+  if (ganado > leerRecord()) { try { localStorage.setItem(KEY_RECORD, String(ganado)); } catch (e) {} avisarNube(); } // sin final: el récord se guarda en cuanto lo superas
   monedas.push({ x, y, t0: ahora(), monto });
   actualizar();
   enviarPuntos(false);
@@ -1761,17 +1810,13 @@ async function despedir(c, pu = 0) {
 
 // ----- Puntos al perfil (el juego no tiene final) -----
 // Se mandan por lotes de PUNTOS_LOTE mientras juegas; «todo» manda lo que falte (al reiniciar o al salir de la página).
-async function enviarPuntos(todo) {
-  if (!J || (enviando && !todo)) return;
-  const g = gen, total = Math.floor(ganado / DOLARES_POR_PUNTO), n = total - puntosEnviados;
-  if (n <= 0 || (!todo && n < umbralPuntos)) return;
-  puntosEnviados = total; enviando = true;
-  let ok = false;
-  try { ok = await J.sumarPuntos(ID, n); } catch (e) {}
-  enviando = false;
-  if (g !== gen) return; // se reinició la partida mientras tanto
-  if (ok) umbralPuntos = PUNTOS_LOTE;
-  else { puntosEnviados -= n; umbralPuntos = n + PUNTOS_LOTE; } // sin sesión o con error: se reintenta más adelante
+// Se anotan en la cola local (cola-puntos.js) y se envían al haber internet y sesión: no se pierden si falla la red.
+function enviarPuntos(todo) {
+  const total = Math.floor(ganado / DOLARES_POR_PUNTO), n = total - puntosEnviados;
+  if (n <= 0 || (!todo && n < PUNTOS_LOTE)) return;
+  puntosEnviados = total;
+  encolarPuntos(ID, n);
+  import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {});
 }
 document.addEventListener("visibilitychange", () => { if (document.hidden) { enviarPuntos(true); guardarPartida(); } });
 addEventListener("pagehide", () => { enviarPuntos(true); guardarPartida(); });
@@ -2589,7 +2634,7 @@ function pintarPartidas() {
       }, true);
       boton("🗑️ Borrar", async () => {
         if (!(await preguntar("¿Borrar la Partida " + (i + 1) + "? No se puede deshacer.", "Borrar"))) return;
-        const x = leerTodo(); x.ranuras[i] = null; escribirTodo(x); pintarPartidas();
+        const x = leerTodo(); x.ranuras[i] = null; x.borradas = { ...(x.borradas || {}), [i]: Date.now() }; if (escribirTodo(x)) avisarNube(); pintarPartidas();
       }, true);
     }
     caja.appendChild(botones);
@@ -2621,4 +2666,26 @@ centrarCamara();
 armarFondo();
 nuevaPartida(); // fondo del juego detrás del menú; no se guarda (ranura = null) hasta que elijas «Jugar» o una partida
 mostrarMenu();
+
+// ----- Sincronización con la cuenta (opcional: si falla, el juego sigue igual) -----
+// La nube trajo algo: en el menú solo se repinta la lista; si juegas una partida cuyo contenido comprado cambió allá, se carga esa.
+function alLlegarNube(v) {
+  if (!v || !Array.isArray(v.ranuras)) return;
+  if (!menu.hidden) { if (!$("menuPartidas").hidden) pintarPartidas(); return; }
+  const d = ranura !== null ? v.ranuras[ranura] : null;
+  if (!d || huella(d) === huella(instantanea())) return;
+  enviarPuntos(true);
+  const antes = puntosEnviados;
+  nuevaPartida(d);
+  puntosEnviados = Math.min(Math.max(puntosEnviados, antes), Math.floor(ganado / DOLARES_POR_PUNTO)); // no repetir puntos ya anotados
+  info("☁️ Se cargó el avance más reciente de tu cuenta en la Partida " + (ranura + 1) + ".");
+}
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, { clave: KEY_PARTIDAS, fusionar: unirPartidas, alCambiar: alLlegarNube });
+  nubeRecord = m.conectar(ID + "-record", {
+    clave: KEY_RECORD,
+    fusionar: (a, b) => (a == null && b == null ? null : Math.max(Number(a) || 0, Number(b) || 0)),
+    alCambiar: () => { $("record").textContent = fmt(leerRecord()); },
+  });
+}).catch(() => {});
 requestAnimationFrame(cuadro);

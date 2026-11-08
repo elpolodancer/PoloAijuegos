@@ -1,5 +1,7 @@
 // Ruta: piano/juego-piano.js (lógica del juego «piano»: tocar las teclas negras que bajan, estilo Piano Tiles)
 
+import { encolarPuntos } from "../compartido/cola-puntos.js";
+
 const ID = "piano"; // el mismo id de juegos.js (colección de puntos en Firestore)
 const $ = (id) => document.getElementById(id);
 const cv = $("lienzo"), cx = cv.getContext("2d"), W = cv.width, H = cv.height;
@@ -66,7 +68,23 @@ let actual = 0, vueltas = 0; // canción en juego y vueltas completas de la melo
 // Por canción: mejor puntaje, partidas jugadas y vueltas completas (⭐ si completaste la melodía alguna vez)
 const CLAVE = "piano:progreso";
 const cargarLocal = () => { try { return JSON.parse(localStorage.getItem(CLAVE)) || {}; } catch (e) { return {}; } };
-const guardarLocal = () => { try { localStorage.setItem(CLAVE, JSON.stringify(progreso)); } catch (e) {} };
+let nube = null; // se llena cuando carga compartido/progreso.js (el juego nunca depende de Firebase)
+const guardarLocal = () => { try { localStorage.setItem(CLAVE, JSON.stringify(progreso)); } catch (e) {} if (nube) nube.guardado(); };
+// Une dos progresos {canción: {mejor, partidas, vueltas}}: de cada dato se queda con el mayor (así nada se cuenta dos veces)
+function unirPiano(a, b) {
+  const ok = (x) => x && typeof x === "object" && !Array.isArray(x);
+  if (!ok(a) && !ok(b)) return null;
+  const r = {};
+  for (const x of [b, a]) {
+    if (!ok(x)) continue;
+    for (const k in x) {
+      const q = x[k]; if (!ok(q)) continue;
+      const o = r[k] || { mejor: 0, partidas: 0, vueltas: 0 };
+      r[k] = { mejor: Math.max(o.mejor, Number(q.mejor) || 0), partidas: Math.max(o.partidas, Number(q.partidas) || 0), vueltas: Math.max(o.vueltas, Number(q.vueltas) || 0) };
+    }
+  }
+  return r;
+}
 let progreso = cargarLocal();
 const botones = [];
 // Cada canción es un cuadro del menú: nota, nombre corto (sin el autor entre paréntesis) y, si ya la jugaste, tu mejor puntaje (⭐ si la completaste)
@@ -85,14 +103,12 @@ function registrar() {
   progreso[nombre] = p;
   guardarLocal();
   botones.forEach((b, k) => pintarCuadro(b, k));
-  sincronizarNube();
 }
-function sincronizarNube() {} // gancho: aquí se respaldará el progreso en Firestore cuando haya sesión
 
 // La sesión y los puntos (Firebase) se cargan aparte: si no hay conexión o Firebase falla, el juego igual funciona (solo sin puntos en el perfil)
-let entrarGoogle = null, guardarPuntos = null;
+let entrarGoogle = null;
 import("../compartido/jugador.js").then((m) => {
-  entrarGoogle = m.entrar; guardarPuntos = m.sumarPuntos;
+  entrarGoogle = m.entrar;
   m.alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; });
 }).catch((e) => { console.warn("Piano: sesión no disponible", e); });
 btnEntrar.addEventListener("click", () => { if (entrarGoogle) entrarGoogle().catch((e) => { estado.textContent = e.message; }); });
@@ -194,10 +210,17 @@ async function fin(motivo) {
   jugar.textContent = "Jugar otra vez"; // repite el mismo modo (aleatorio o la misma canción)
   registrar();
   estado.textContent = motivo + " Hiciste " + puntos + " puntos" + (vueltas ? " (" + vueltas + " vuelta" + (vueltas > 1 ? "s" : "") + " completa" + (vueltas > 1 ? "s" : "") + " 🔁)" : "") + ". Tu mejor en esta canción: " + progreso[MELODIAS[actual].nombre].mejor + ".";
-  if (!usuario || !puntos || !guardarPuntos) return;
-  try { await guardarPuntos(ID, puntos); estado.textContent += " Guardados ✓"; }
-  catch (e) { estado.textContent += " No se pudieron guardar (" + e.message + ")"; }
+  if (!puntos) return;
+  // Los puntos se anotan SIEMPRE en el dispositivo y se envían al perfil cuando haya internet y sesión
+  encolarPuntos(ID, puntos);
+  let pendientes = 1;
+  try { pendientes = await (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
+  estado.textContent += pendientes === 0 ? " Guardados ✓" : " Puntos anotados: se enviarán a tu perfil cuando haya internet y sesión.";
 }
+// Nube: el progreso por canción se une con el de la cuenta
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, { clave: CLAVE, fusionar: unirPiano, alCambiar: (v) => { progreso = v; botones.forEach((b, k) => pintarCuadro(b, k)); } });
+}).catch(() => {});
 cv.addEventListener("pointerdown", tocar);
 jugar.addEventListener("click", empezar);
 mostrarMenu();

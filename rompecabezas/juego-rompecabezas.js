@@ -4,6 +4,7 @@
 // mediante un Apps Script (la API key NUNCA va aquí).
 
 import { URL_SUBIDA_IMAGENES } from "../compartido/configs.js";
+import { encolarPuntos } from "../compartido/cola-puntos.js"; // no usa Firebase: anota puntos aunque no haya internet o sesión
 
 // ---------- AJUSTES ----------
 const ID = "rompecabezas";
@@ -709,10 +710,8 @@ async function ganar() {
   const pts = Math.max(1, Math.round(piezas.length / PIEZAS_POR_PUNTO));
   $("finInfo").textContent = piezas.length + " piezas · " + fmt(tiempoActual()) + " · +" + pts + " pts (si tienes sesión)";
   $("finMenu").hidden = false;
-  try {
-    const mod = await import("../compartido/jugador.js");
-    await mod.sumarPuntos(ID, pts);
-  } catch (e) {}
+  encolarPuntos(ID, pts); // se anota siempre; se envía al haber internet y sesión
+  try { (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
 }
 
 // ---------- ZOOM: solo acercar; la vista nunca muestra más que la vista inicial ----------

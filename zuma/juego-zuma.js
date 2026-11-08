@@ -2,11 +2,12 @@
 // Zuma: dispara bolas de colores desde la rana y junta 3 o más del mismo color antes de que la cadena llegue al hoyo.
 import { crearPartida, avanzar, insertar, buscarImpacto, colorDisparo, coloresDisponibles, crearTrayecto, azarSemilla, congelar, destruirEn, R } from "./logica-zuma.js";
 import { NIVELES, PALETA, ANCHO, ALTO, CENTRO, COSTE_BOOST } from "./niveles-zuma.js";
+import { encolarPuntos } from "../compartido/cola-puntos.js"; // no usa Firebase: anota puntos aunque no haya internet o sesión
 
 // ----- Ajustes -----
 const ID = "zuma";
 const PUNTOS_NIVEL = 10;          // puntos al perfil, solo la primera vez que se pasa un nivel (1.ª estrella)
-const CLAVE = "zuma_progreso_v2"; // { monedas, boosts:{tiempo,metal}, niveles:{id:{estrellas,mejor}} }
+const CLAVE = "zuma_progreso_v2"; // { monedas, boosts:{tiempo,metal}, niveles:{id:{estrellas,mejor}}, gastadas }
 const VEL_METAL = 900;            // px/s de las bolas metálicas
 const VEL_DISPARO = 720;          // px/s de la bola disparada
 const RECARGA = 0.28;             // segundos entre disparos
@@ -16,8 +17,37 @@ const cv = $("lienzo"), g = cv.getContext("2d");
 
 // ----- Progreso -----
 let datos = { monedas: 0, boosts: { tiempo: 0, metal: 0 }, niveles: {} };
+let nube = null; // sincronización con la cuenta (se carga aparte al final: si falla, el juego sigue igual)
 try { const d = JSON.parse(localStorage.getItem(CLAVE)); if (d) datos = { ...datos, ...d, boosts: { ...datos.boosts, ...(d.boosts || {}) } }; } catch (e) {}
-const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(datos)); } catch (e) {} };
+const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(datos)); } catch (e) {} if (nube) nube.guardado(); };
+
+// Monedas = lo que pagan las estrellas ya ganadas − lo gastado en boosts («gastadas»). Así dos dispositivos se unen sin inventar ni devolver monedas.
+function ganadasPor(niv) {
+  return NIVELES.reduce((t, n) => { const e = Math.min(3, Math.floor(Number(((niv || {})[n.id] || {}).estrellas)) || 0); return t + (e > 0 ? n.monedas[e - 1] : 0); }, 0);
+}
+function gastadasDe(d) { // partidas de antes no traen «gastadas»: se deduce de lo que faltaba
+  if (d && d.gastadas !== undefined) return Math.max(0, Math.floor(Number(d.gastadas)) || 0);
+  return Math.max(0, ganadasPor(d && d.niveles) - Math.max(0, Number(d && d.monedas) || 0));
+}
+function unirZuma(a, b) {
+  if (!a && !b) return null;
+  a = a || {}; b = b || {};
+  const niveles = {};
+  for (const o of [a, b]) for (const id in o.niveles || {}) {
+    const x = o.niveles[id] || {}, r = niveles[id] || { estrellas: 0, mejor: 0 };
+    niveles[id] = { estrellas: Math.max(r.estrellas, Number(x.estrellas) || 0), mejor: Math.max(r.mejor, Number(x.mejor) || 0) };
+  }
+  const gastadas = Math.max(gastadasDe(a), gastadasDe(b));
+  const bo = (k) => Math.max(Number(a.boosts && a.boosts[k]) || 0, Number(b.boosts && b.boosts[k]) || 0);
+  return { monedas: Math.max(0, ganadasPor(niveles) - gastadas), boosts: { tiempo: bo("tiempo"), metal: bo("metal") }, niveles, gastadas };
+}
+function aplicarNube(v) { // la nube trajo algo nuevo: se toma y se repinta
+  if (!v) return;
+  datos = { ...datos, ...v, boosts: { ...datos.boosts, ...(v.boosts || {}) } };
+  refrescarBarra();
+  if (!p && $("veloNiveles").hidden) inicio(); // en la pantalla de inicio: recalcula el nivel que toca
+}
+if (datos.gastadas === undefined) datos.gastadas = gastadasDe(datos);
 
 // ----- Sonido: todo sintetizado (sin archivos). Golpes secos y ruido filtrado = piedra contra piedra -----
 let ac = null, mudo = false, rumor = null;
@@ -183,6 +213,7 @@ function usarBoost(k) {
   if (!datos.boosts[k]) {
     if (datos.monedas < COSTE_BOOST) return;
     datos.monedas -= COSTE_BOOST;
+    datos.gastadas = (datos.gastadas || 0) + COSTE_BOOST;
     datos.boosts[k] = 1;
   }
   datos.boosts[k]--;
@@ -261,11 +292,9 @@ async function gano() {
     const hay = nivelIdx < NIVELES.length - 1;
     velo("🌟 ¡Nivel perfecto!", txt, hay ? "Siguiente nivel ▶" : "Jugar otra vez", () => (hay ? iniciarNivel(nivelIdx + 1) : iniciarNivel(nivelIdx)), "Menú", inicio);
   }
-  if (previas === 0) {
-    try {
-      const { sumarPuntos } = await import("../compartido/jugador.js");
-      await sumarPuntos(ID, PUNTOS_NIVEL); // solo guarda si hay sesión iniciada
-    } catch (e) {}
+  if (previas === 0) { // se anota siempre; se envía al haber internet y sesión
+    encolarPuntos(ID, PUNTOS_NIVEL);
+    try { (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
   }
 }
 function perdio() {
@@ -402,4 +431,7 @@ addEventListener("keydown", (e) => { if (e.code === "Space") { e.preventDefault(
 document.addEventListener("visibilitychange", () => { if (document.hidden) rumorOff(); else if (p && p.estado === "jugando") rumorOn(); });
 
 inicio();
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, { clave: CLAVE, fusionar: unirZuma, alCambiar: aplicarNube });
+}).catch(() => {});
 requestAnimationFrame(() => { enMarcha = true; ultimo = performance.now(); requestAnimationFrame(marco); });

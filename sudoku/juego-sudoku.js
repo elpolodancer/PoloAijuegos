@@ -1,6 +1,8 @@
 // Ruta: sudoku/juego-sudoku.js
 // Sudoku: tablero generado al azar con solución única, notas, deshacer, pistas y 3 dificultades.
 
+import { encolarPuntos } from "../compartido/cola-puntos.js"; // no usa Firebase: anota puntos aunque no haya internet o sesión
+
 // ----- Ajustes -----
 const ID = "sudoku";
 const PISTAS_INICIALES = { facil: 40, medio: 33, dificil: 27 }; // números que se ven al empezar
@@ -60,7 +62,7 @@ function generar(dif) {
 
 // ----- Estado -----
 let E = null; // { dif, sol, dado, val, notas, hist, seg, errores, pistas, terminado, pagado }
-let sel = -1, lapiz = false, reloj = null;
+let sel = -1, lapiz = false, reloj = null, nube = null; // nube: sincronización de los mejores tiempos con la cuenta (se carga aparte)
 const $ = (id) => document.getElementById(id);
 const celdas = [];
 
@@ -196,6 +198,7 @@ async function ganar() {
   if (!E.pistas && (!mejor[E.dif] || E.seg < mejor[E.dif])) {
     mejor[E.dif] = E.seg;
     try { localStorage.setItem(CLAVE_MEJOR, JSON.stringify(mejor)); } catch (e) {}
+    if (nube) nube.guardado();
     extra = " ¡Nuevo récord!";
   }
   const pts = Math.max(1, PUNTOS[E.dif] - E.pistas * PUNTOS_POR_PISTA);
@@ -205,10 +208,8 @@ async function ganar() {
   if (!E.pagado) {
     E.pagado = true;
     guardar();
-    try {
-      const { sumarPuntos } = await import("../compartido/jugador.js");
-      await sumarPuntos(ID, pts); // solo guarda si hay sesión iniciada
-    } catch (e) {}
+    encolarPuntos(ID, pts); // se anota siempre; se envía al haber internet y sesión
+    try { (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
   }
 }
 
@@ -254,3 +255,14 @@ try {
 } catch (e) {
   nueva("medio");
 }
+
+// ----- Mejores tiempos sincronizados con la cuenta (el menor de cada dificultad; si falla, el juego sigue igual) -----
+function unirMejores(a, b) {
+  if (!a && !b) return null;
+  const r = { ...(b || {}) };
+  for (const k in a || {}) r[k] = k in r ? Math.min(Number(a[k]), Number(r[k])) : Number(a[k]);
+  return r;
+}
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, { clave: CLAVE_MEJOR, fusionar: unirMejores, alCambiar: () => { if (E) pintar(); } });
+}).catch(() => {});

@@ -3,10 +3,12 @@
 // - Toca una carta (🌻 / 🌱) y luego una casilla del pasto para plantar. Toca los soles ☀️ para juntarlos.
 // - Todo lo que se ajusta está en los bloques «Ajustes», «PLANTAS», «ZOMBIS» y «NIVEL» (aquí abajo).
 // - Los niveles están en niveles.js (lista NIVELES): para crear otro, copia un bloque y cambia filas, plantas y oleadas.
-// - La sesión de Google se carga aparte: si no hay internet, el juego funciona igual (solo no suma puntos al perfil).
+// - Los puntos se anotan en la cola local (cola-puntos.js) y el progreso se sincroniza con la cuenta (progreso.js), ambos con import() y catch:
+//   si no hay internet o sesión, el juego funciona igual y se envía todo después.
 
 // ----- Ajustes generales -----
 import { NIVELES } from "./niveles-plantasvszombies.js";
+import { encolarPuntos } from "../compartido/cola-puntos.js"; // no usa Firebase: anota puntos aunque no haya internet o sesión
 
 const ID = "jardin";
 const PUNTOS_POR_PERFIL = 25;   // 1 punto al perfil por cada 25 del juego
@@ -51,14 +53,46 @@ let idx = 0;                 // nivel que se está jugando
 let NIVEL = NIVELES[0];
 let RESUMEN;
 
-// ----- Sesión (opcional) y récord -----
-let sumarPuntos = null;
-import("../compartido/jugador.js").then((m) => (sumarPuntos = m.sumarPuntos)).catch(() => {});
+// ----- Progreso y récord (se guardan en el dispositivo; la cuenta de Google los sincroniza aparte) -----
+let nube = null;                         // se llena al cargar compartido/progreso.js (si falla, el juego sigue igual)
+const CLAVE_NUBE = ID + "_nube";         // copia { p: niveles desbloqueados, r: { nivel: récord } } que sincroniza la nube
 const CLAVE_PROGRESO = ID + "_progreso"; // cuántos niveles están desbloqueados
 let progreso = 1;
 try { progreso = Math.max(1, Number(localStorage.getItem(CLAVE_PROGRESO)) || 1); } catch (err) {}
 let record = 0;                          // récord del nivel actual
 const claveRecord = () => ID + "_record_" + idx;
+
+// ----- Copia para la nube: se une por el MAYOR de cada dato (progreso y récords nunca bajan) -----
+const leerNum = (k) => { try { return Math.max(0, Math.floor(Number(localStorage.getItem(k))) || 0); } catch (err) { return 0; } };
+const recordLocal = (i) => Math.max(leerNum(ID + "_record_" + i), i === 0 ? leerNum(ID + "_record") : 0); // el nivel 1 trae el récord de la versión anterior
+function guardarNube(avisar) {
+  const r = {};
+  for (let i = 0; i < NIVELES.length; i++) { const v = recordLocal(i); if (v > 0) r[i] = v; }
+  const copia = JSON.stringify({ p: progreso, r });
+  try {
+    if (localStorage.getItem(CLAVE_NUBE) === copia) return;
+    localStorage.setItem(CLAVE_NUBE, copia);
+  } catch (err) { return; }
+  if (avisar && nube) nube.guardado();
+}
+function unirJardin(a, b) {
+  if (!a && !b) return null;
+  const r = {};
+  for (const o of [a, b]) for (const k in (o && o.r) || {}) { const v = Math.floor(Number(o.r[k])) || 0; if (v > (r[k] || 0)) r[k] = v; }
+  return { p: Math.min(NIVELES.length, Math.max(Number(a && a.p) || 1, Number(b && b.p) || 1)), r };
+}
+function aplicarNube(v) { // la nube trajo algo nuevo: sube progreso y récords y repinta
+  if (!v) return;
+  const p = Math.min(NIVELES.length, Math.max(1, Math.floor(Number(v.p)) || 1));
+  if (p > progreso) { progreso = p; try { localStorage.setItem(CLAVE_PROGRESO, String(p)); } catch (err) {} }
+  for (const k in v.r || {}) {
+    const i = Number(k), n = Math.floor(Number(v.r[k])) || 0;
+    if (!(i >= 0 && i < NIVELES.length) || n <= recordLocal(i)) continue;
+    try { localStorage.setItem(ID + "_record_" + i, String(n)); } catch (err) {}
+  }
+  record = Math.max(record, recordLocal(idx));
+  textoEstado();
+}
 
 // ----- Canvas -----
 const canvas = document.getElementById("lienzo");
@@ -138,8 +172,12 @@ function terminar(resultado) {
     record = e.puntos;
     try { localStorage.setItem(claveRecord(), String(record)); } catch (err) {}
   }
+  guardarNube(true);
   const pp = Math.floor(e.puntos / PUNTOS_POR_PERFIL);
-  if (pp > 0 && sumarPuntos) sumarPuntos(ID, pp).catch(() => {});
+  if (pp > 0) { // se anota siempre; se envía al haber internet y sesión
+    encolarPuntos(ID, pp);
+    import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {});
+  }
   textoEstado();
 }
 
@@ -436,6 +474,10 @@ function dibujar() {
 
 // ----- Bucle (paso fijo) -----
 cargarNivel(0);
+if (progreso > 1 || NIVELES.some((_, i) => recordLocal(i) > 0)) guardarNube(false); // primera vez: crea la copia solo si ya había algo guardado
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, { clave: CLAVE_NUBE, fusionar: unirJardin, alCambiar: aplicarNube });
+}).catch(() => {});
 let ultimo = performance.now(), acum = 0;
 function bucle(ahora) {
   acum += Math.min(0.25, (ahora - ultimo) / 1000);

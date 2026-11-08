@@ -4,6 +4,8 @@
 // pincel o relleno. Solo se pinta una celda si el color elegido es el que le corresponde.
 
 // ---------------- Ajustes ----------------
+import { encolarPuntos } from "../compartido/cola-puntos.js";
+
 const ID = "pixelart";
 const TAMANOS = [1000, 2500, 5000, 10000];   // celdas del lado más largo
 const PUNTOS_IMAGEN = { 1000: 40, 2500: 100, 5000: 200, 10000: 400 }; // puntos al perfil por terminar la imagen (proporcionales al avance)
@@ -41,9 +43,14 @@ async function obtenerToken() {
   return u.getIdToken();
 }
 
+// Los puntos se anotan SIEMPRE en el dispositivo (también sin sesión ni internet) y se envían al perfil cuando se puede
+let tEnvio = 0;
 function enviarPuntos(p) {
   try {
-    if (p > 0 && usuario && jugador && jugador.sumarPuntos) Promise.resolve(jugador.sumarPuntos(ID, p)).catch(() => {});
+    if (!(p > 0)) return;
+    encolarPuntos(ID, p);
+    clearTimeout(tEnvio);
+    tEnvio = setTimeout(() => { import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {}); }, 4000);
   } catch (e) {}
 }
 

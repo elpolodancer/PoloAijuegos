@@ -1,5 +1,5 @@
 // Ruta: rompeladrillos/juego-rompeladrillos.js (lógica del juego «rompeladrillos»: mover la paleta, rebotar la pelota y romper ladrillos)
-import { alCambiarSesion, entrar, sumarPuntos } from "../compartido/jugador.js";
+import { encolarPuntos } from "../compartido/cola-puntos.js"; // no usa Firebase: anota puntos aunque no haya internet o sesión
 
 const ID = "rompeladrillos"; // el mismo id de juegos.js (colección de puntos en Firestore)
 
@@ -31,18 +31,26 @@ const PY = H - 36, PH = 10;                    // posición y alto de la paleta
 const BM = 10, BG = 4, BW = (W - 2 * BM - (COLS - 1) * BG) / COLS, BH = 16, BTOP = 70; // medidas de los ladrillos
 let usuario = null, estado = "inicio"; // inicio | servir | jugando | fin
 let ladrillos = [], px = W / 2, bola = { x: 0, y: 0, vx: 0, vy: 0 }, vel = VEL_INICIAL;
-let puntos = 0, vidas = VIDAS, mejor = 0, ultimo = 0, audio = null;
+let puntos = 0, vidas = VIDAS, mejor = 0, ultimo = 0, audio = null, partida = 0; // partida: número de intento (un aviso tardío del perfil no debe pegarse a otra pantalla)
 const teclas = { izq: false, der: false };
 
 try { mejor = parseInt(localStorage.getItem(CLAVE_MEJOR), 10) || 0; } catch (e) {}
 
-alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; });
-btnEntrar.addEventListener("click", () => entrar().catch((e) => { estadoTxt.textContent = e.message; }));
+// La sesión y la nube se cargan aparte: si Firebase no está disponible (sin conexión la primera vez), el juego funciona igual
+let entrarFn = null, nube = null;
+import("../compartido/jugador.js").then((m) => { entrarFn = m.entrar; m.alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; }); }).catch(() => {});
+btnEntrar.addEventListener("click", () => { if (entrarFn) entrarFn().catch((e) => { estadoTxt.textContent = e.message; }); });
 
 // ---------- Sonido ----------
-function tono(f, d = 0.08) {
+function despertarAudio() { // en iPhone/iPad el audio nace «suspendido» hasta un toque: se despierta en el primer toque
   try {
     audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === "suspended") audio.resume();
+  } catch (e) {}
+}
+function tono(f, d = 0.08) {
+  try {
+    despertarAudio();
     const o = audio.createOscillator(), g = audio.createGain();
     o.type = "square";
     o.frequency.value = f;
@@ -67,6 +75,7 @@ function servir() {
   estadoTxt.textContent = "Toca la pantalla (o pulsa espacio) para lanzar la pelota.";
 }
 function empezar() {
+  partida++;
   puntos = 0; vidas = VIDAS; vel = VEL_INICIAL; px = W / 2;
   crearLadrillos();
   jugar.hidden = true;
@@ -93,16 +102,20 @@ async function terminar(gano) {
   if (puntos > mejor) {
     mejor = puntos; txt += " ¡Nuevo récord!";
     try { localStorage.setItem(CLAVE_MEJOR, String(mejor)); } catch (e) {}
+    if (nube) nube.guardado();
   }
   jugar.hidden = false;
   jugar.textContent = "Jugar otra vez";
   estadoTxt.textContent = txt;
   if (gano) { tono(523, 0.12); setTimeout(() => tono(659, 0.12), 120); setTimeout(() => tono(784, 0.2), 240); }
-  // Al perfil va 1 punto por cada PUNTOS_POR_PERFIL; solo si hay sesión
-  const sumar = Math.floor(puntos / PUNTOS_POR_PERFIL);
-  if (!usuario || !sumar) return;
-  try { await sumarPuntos(ID, sumar); estadoTxt.textContent += " +" + sumar + " al perfil ✓"; }
-  catch (e) { estadoTxt.textContent += " No se pudieron guardar (" + e.message + ")"; }
+  // Al perfil va 1 punto por cada PUNTOS_POR_PERFIL; se anotan aunque no haya sesión y se envían al haber internet y sesión
+  const sumar = Math.floor(puntos / PUNTOS_POR_PERFIL), mia = partida;
+  if (!sumar) return;
+  encolarPuntos(ID, sumar);
+  let pendientes = 1;
+  try { pendientes = await (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
+  if (mia !== partida || estado !== "fin") return;
+  estadoTxt.textContent += pendientes === 0 ? " +" + sumar + " al perfil ✓" : " +" + sumar + " pendientes de enviar al perfil.";
 }
 
 // ---------- Movimiento y choques ----------
@@ -188,6 +201,7 @@ function moverA(ev) {
   px = ((ev.clientX - r.left) / r.width) * W;
 }
 cv.addEventListener("pointerdown", (ev) => {
+  despertarAudio();
   moverA(ev);
   if (estado === "servir") lanzar();
 });
@@ -213,3 +227,12 @@ function ciclo(t) {
 }
 crearLadrillos(); // pantalla inicial con los ladrillos a la vista
 requestAnimationFrame((t) => { ultimo = t; ciclo(t); });
+
+// ---------- Mejor puntaje sincronizado con la cuenta (el mayor de los dos; si falla, el juego sigue igual) ----------
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: CLAVE_MEJOR,
+    fusionar: (a, b) => (a == null && b == null ? null : Math.max(Number(a) || 0, Number(b) || 0)),
+    alCambiar: (v) => { mejor = Math.max(mejor, Number(v) || 0); },
+  });
+}).catch(() => {});

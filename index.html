@@ -116,6 +116,7 @@
     const zona = $("sesion");
     try {
       const { alCambiarSesion, entrar, salir, leerPerfil } = await import("./compartido/jugador.js");
+      import("./compartido/progreso.js").catch(() => {}); // envía los puntos pendientes al entrar o al volver la conexión
       alCambiarSesion(async (u) => {
         zona.innerHTML = "";
         const b = document.createElement("button");

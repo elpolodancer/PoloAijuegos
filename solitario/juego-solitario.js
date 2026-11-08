@@ -1,5 +1,5 @@
 // Ruta: solitario/juego-solitario.js (lógica del juego «solitario»: Klondike clásico)
-import { alCambiarSesion, entrar, sumarPuntos } from "../compartido/jugador.js";
+import { encolarPuntos } from "../compartido/cola-puntos.js"; // no usa Firebase: anota puntos aunque no haya internet o sesión
 import { DIFICULTADES, TOTAL_NIVELES, PLAN, SEMILLAS, nivel } from "./niveles-solitario.js";
 import { animarVictoria } from "./victoria-solitario.js";
 
@@ -37,8 +37,10 @@ let deshechoSeguido = false; // true si ya se deshizo y aún no hay un movimient
 let llenando = false, llenadoId = 0; // «Rellenar todo» en marcha / número de la tanda (si cambia, la tanda se cancela)
 let bloqueaClicHasta = 0;            // tras un arrastre se ignora el «click» que el navegador manda al soltar
 
-alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; });
-btnEntrar.addEventListener("click", () => entrar().catch((e) => { estado.textContent = e.message; }));
+// La sesión y la nube se cargan aparte: si Firebase no está disponible (sin conexión la primera vez), el juego funciona igual
+let entrarFn = null, nube = null;
+import("../compartido/jugador.js").then((m) => { entrarFn = m.entrar; m.alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; }); }).catch(() => {});
+btnEntrar.addEventListener("click", () => { if (entrarFn) entrarFn().catch((e) => { estado.textContent = e.message; }); });
 
 // ---- Progreso de niveles (en este dispositivo) ----
 function leerProgreso() {
@@ -48,6 +50,7 @@ function guardarProgreso(n, pts) {
   const p = leerProgreso();
   p[n] = Math.max(p[n] || 0, pts);
   try { localStorage.setItem(CLAVE_PROGRESO, JSON.stringify(p)); } catch (e) {}
+  guardarCopia(true);
 }
 
 // ---- Récords de tiempo por nivel (en este dispositivo) ----
@@ -61,6 +64,7 @@ function guardarTiempo(n, seg) {
   if (t[n] !== undefined && seg >= t[n]) return false;
   t[n] = seg;
   try { localStorage.setItem(CLAVE_TIEMPOS, JSON.stringify(t)); } catch (e) {}
+  guardarCopia(true);
   return true;
 }
 function pintarRecord() {
@@ -75,9 +79,45 @@ function leerMonedas() {
 }
 function ponerMonedas(n) {
   try { localStorage.setItem(CLAVE_MONEDAS, String(Math.max(0, Math.floor(n)))); } catch (e) {}
+  guardarCopia(true);
   pintarMonedas();
 }
 function pintarMonedas() { $("monedas-barra").textContent = "🪙 " + leerMonedas(); }
+
+// ---- Copia para la nube ----
+// { n: mejor puntaje por nivel, t: mejor tiempo por nivel, g / s: monedas ganadas y gastadas EN TOTAL (monedas = g − s) }.
+// Se une así: puntajes y totales por el mayor, tiempos por el menor. Gastar en un dispositivo no se «devuelve» al sincronizar con otro.
+const CLAVE_NUBE = "solitario-nube";
+function guardarCopia(avisar) {
+  let prev = {};
+  try { prev = JSON.parse(localStorage.getItem(CLAVE_NUBE)) || {}; } catch (e) {}
+  const c = leerMonedas();
+  let g = Math.max(0, Math.floor(Number(prev.g)) || 0), s = Math.max(0, Math.floor(Number(prev.s)) || 0);
+  if (g - s < c) g = c + s; else if (g - s > c) s = g - c; // lo que subió cuenta como ganado y lo que bajó como gastado
+  const copia = JSON.stringify({ n: leerProgreso(), t: leerTiempos(), g, s });
+  try {
+    if (localStorage.getItem(CLAVE_NUBE) === copia) return;
+    localStorage.setItem(CLAVE_NUBE, copia);
+  } catch (e) { return; }
+  if (avisar && nube) nube.guardado();
+}
+function unirSolitario(a, b) {
+  if (!a && !b) return null;
+  a = a || {}; b = b || {};
+  const mayor = (x, y) => { const r = { ...(y || {}) }; for (const k in x || {}) r[k] = Math.max(Number(x[k]) || 0, Number(r[k]) || 0); return r; };
+  const menor = (x, y) => { const r = { ...(y || {}) }; for (const k in x || {}) r[k] = k in r ? Math.min(Number(x[k]), Number(r[k])) : Number(x[k]); return r; };
+  return { n: mayor(a.n, b.n), t: menor(a.t, b.t), g: Math.max(Number(a.g) || 0, Number(b.g) || 0), s: Math.max(Number(a.s) || 0, Number(b.s) || 0) };
+}
+function aplicarNube(v) { // la nube trajo algo nuevo: se copia a las claves de siempre y se repinta
+  if (!v) return;
+  try {
+    if (v.n) localStorage.setItem(CLAVE_PROGRESO, JSON.stringify(v.n));
+    if (v.t) localStorage.setItem(CLAVE_TIEMPOS, JSON.stringify(v.t));
+    if ("g" in v) localStorage.setItem(CLAVE_MONEDAS, String(Math.max(0, (Number(v.g) || 0) - (Number(v.s) || 0))));
+  } catch (e) {}
+  pintarMonedas(); pintarRecord();
+  if (!$("vista-niveles").hidden) pintarNiveles();
+}
 
 // ---- Vistas ----
 const VISTAS = ["menu", "dificultad", "niveles", "juego"];
@@ -188,9 +228,11 @@ async function nueva(opc) {
 }
 async function guardar() {
   guardado = true;
-  if (!usuario || !(puntos > 0)) return;
-  try { await sumarPuntos(ID, puntos); estado.textContent += " Guardados ✓"; }
-  catch (e) { estado.textContent += " No se pudieron guardar (" + e.message + ")"; }
+  if (!(puntos > 0)) return;
+  encolarPuntos(ID, puntos); // se anota siempre; se envía al haber internet y sesión
+  let pendientes = 1;
+  try { pendientes = await (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
+  estado.textContent += pendientes === 0 ? " Guardados ✓" : " Se enviarán a tu perfil cuando haya internet y sesión.";
 }
 function pintarTiempo() {
   if (terminado) return;
@@ -556,6 +598,10 @@ function dibujar() {
 
 pintarMonedas();
 mostrar("menu");
+if (Object.keys(leerProgreso()).length || Object.keys(leerTiempos()).length || leerMonedas() > 0) guardarCopia(false); // primera vez: crea la copia solo si ya había algo
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, { clave: CLAVE_NUBE, fusionar: unirSolitario, alCambiar: aplicarNube });
+}).catch(() => {});
 
 // El mensaje de abajo reaparece con cada texto nuevo y se desvanece solo (ver #estado.flota en la página)
 new MutationObserver(() => { estado.classList.remove("flota"); void estado.offsetWidth; estado.classList.add("flota"); })

@@ -1,10 +1,10 @@
 // Ruta: pradera/juego-pradera.js
 import { NIVEL_1 } from "./niveles-pradera.js";
 import { T, ALTO, nuevoJuego, paso } from "./logica-pradera.js";
+import { encolarPuntos } from "../compartido/cola-puntos.js"; // no usa Firebase: anota puntos aunque no haya internet o sesión
 
-// Los puntos del perfil se cargan aparte: si no hay conexión o falla Firebase, el juego igual funciona
-let sumarPuntos = null;
-import("../compartido/jugador.js").then((m) => { sumarPuntos = m.sumarPuntos; }).catch(() => {});
+// La nube (récord y envío de puntos) se carga aparte: si no hay conexión o falla Firebase, el juego igual funciona
+let nube = null;
 
 // ===== AJUSTES =====
 const ID = "pradera";
@@ -121,9 +121,12 @@ function empezar() {
 $("pBoton").addEventListener("click", empezar);
 
 function enviarPuntos() {
-  if (e.puntos > record) { record = e.puntos; localStorage.setItem(ID + ":record", record); }
+  if (e.puntos > record) { record = e.puntos; localStorage.setItem(ID + ":record", record); if (nube) nube.guardado(); }
   const pts = Math.floor(e.puntos / PUNTOS_POR_PERFIL);
-  if (pts > 0 && sumarPuntos) { try { Promise.resolve(sumarPuntos(ID, pts)).catch(() => {}); } catch (er) {} }
+  if (pts > 0) { // se anota siempre; se envía al haber internet y sesión
+    encolarPuntos(ID, pts);
+    import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {});
+  }
 }
 
 function terminarIntento() {
@@ -350,3 +353,12 @@ function bucle(t) {
 ajustar();
 panel("🦊 Pradera", "Llega al mástil del final del nivel.\nAplasta bichos saltando sobre ellos, junta monedas y busca la fruta roja para crecer.\n\nTeclado: flechas o A/D para moverte, Espacio o ↑ para saltar, Shift para correr.", "Jugar");
 requestAnimationFrame(bucle);
+
+// ---------- Récord sincronizado con la cuenta (el mayor de los dos; si falla, el juego sigue igual) ----------
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: ID + ":record",
+    fusionar: (a, b) => (a == null && b == null ? null : Math.max(Number(a) || 0, Number(b) || 0)),
+    alCambiar: (v) => { record = Math.max(record, Number(v) || 0); },
+  });
+}).catch(() => {});

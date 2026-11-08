@@ -10,6 +10,12 @@ const COLS = 11;            // ancho del mapa en cuadros
 const SALTO_T = 0.1;        // segundos que dura un salto
 const LW = COLS * T + 6 * T; // largo del carril antes de que los vehículos den la vuelta
 
+import { encolarPuntos } from "../compartido/cola-puntos.js";
+
+const ID = "rana";                 // id de puntos del juego
+const CLAVE = "rana-nivel";        // localStorage: nivel más alto desbloqueado (un número)
+let nube = null;                   // se llena cuando carga compartido/progreso.js (el juego nunca depende de Firebase)
+
 const $ = (id) => document.getElementById(id);
 const cv = $("c"), ctx = cv.getContext("2d");
 let W = 0, H = 0, dpr = 1, esc = 1;
@@ -69,7 +75,7 @@ const rana = { x: 0, fila: 0, cara: 0, salto: null };
 let cola = null, th = tema(1);
 const cam = { y: 0 };
 
-try { progreso = Math.max(1, Math.min(NIVELES, parseInt(localStorage.getItem("rana-nivel")) || 1)); } catch (e) {}
+try { progreso = Math.max(1, Math.min(NIVELES, parseInt(localStorage.getItem(CLAVE)) || 1)); } catch (e) {}
 inicio = progreso;
 
 function cargar(n) {
@@ -165,18 +171,24 @@ async function completar() {
   estado = "ganado";
   const puntos = 100 + vidas * 50 + Math.floor(tiempo) * 3;
   const ultimo = nivelActual >= NIVELES;
-  if (!ultimo && nivelActual + 1 > progreso) { progreso = nivelActual + 1; try { localStorage.setItem("rana-nivel", String(progreso)); } catch (e) {} }
+  if (!ultimo && nivelActual + 1 > progreso) {
+    progreso = nivelActual + 1;
+    try { localStorage.setItem(CLAVE, String(progreso)); } catch (e) {}
+    if (nube) nube.guardado(); // avisa a la nube (sube a los 3 s si hay sesión e internet)
+  }
   inicio = ultimo ? 1 : nivelActual + 1;
   $("fin").querySelector("h2").textContent = ultimo ? "🏆 ¡Completaste los 50 niveles!" : "¡Nivel " + nivelActual + " completo!";
   $("texto").textContent = "Vidas que te sobraron: " + vidas + " · Tiempo: " + Math.floor(tiempo) + " s · Puntos: " + puntos;
   $("jugar").textContent = ultimo ? "Jugar otra vez" : "Siguiente nivel";
   armarNiveles(); $("msg").textContent = "";
   $("fin").hidden = false; $("hud").hidden = true;
+  // Los puntos se anotan SIEMPRE en el dispositivo y se envían cuando haya internet y sesión
+  encolarPuntos(ID, puntos);
+  $("msg").textContent = "Puntos anotados: se enviarán a tu perfil cuando haya internet y sesión.";
   try {
-    const { sumarPuntos } = await import("../compartido/jugador.js");
-    const ok = await sumarPuntos("rana", puntos);
-    $("msg").textContent = ok ? "Puntos guardados en tu perfil." : "Entra con Google en el portal para guardar tus puntos.";
-  } catch (e) { $("msg").textContent = "No se pudieron guardar los puntos (sin conexión)."; }
+    const pendientes = await (await import("../compartido/progreso.js")).vaciarPuntos();
+    if (pendientes === 0) $("msg").textContent = "Puntos guardados en tu perfil.";
+  } catch (e) {}
 }
 
 function sinVidas() {
@@ -203,6 +215,21 @@ function armarNiveles() {
 armarNiveles();
 $("jugar").addEventListener("click", empezar);
 cargar(inicio);
+
+// ----- Nube: el nivel desbloqueado se une con el de la cuenta (gana el mayor) -----
+const nivelOk = (v) => Math.max(1, Math.min(NIVELES, Math.floor(Number(v)) || 1));
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: CLAVE,
+    fusionar: (local, remoto) => (local == null && remoto == null ? null : Math.max(nivelOk(local), nivelOk(remoto))),
+    alCambiar: (v) => {
+      const antes = progreso;
+      progreso = Math.max(progreso, nivelOk(v));
+      if (estado === "menu" && inicio === antes) inicio = progreso; // en el menú inicial, ofrece el nivel más alto
+      armarNiveles();
+    },
+  });
+}).catch(() => {});
 
 // ----- Dibujo -----
 function elipse(x, y, rx, ry) { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, 7); ctx.fill(); }

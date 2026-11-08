@@ -1,6 +1,7 @@
 // Ruta: pequenos-puzles/juego-pequenos-puzles.js
 import { NIVELES, TOTAL_NIVELES } from "./niveles-pequenos-puzles.js";
 import { celdas } from "./logica-pequenos-puzles.js";
+import { encolarPuntos } from "../compartido/cola-puntos.js";
 
 // ---- Ajustes ----
 const ID = "puzles";             // mismo id que en juegos.js
@@ -20,8 +21,22 @@ function leerProgreso() {
   try { const p = JSON.parse(localStorage.getItem(CLAVE)); if (p && Array.isArray(p.hechos)) return p; } catch (e) {}
   return { hechos: [], mejores: {} };
 }
-function guardarProgreso() { try { localStorage.setItem(CLAVE, JSON.stringify(progreso)); } catch (e) {} }
+let nube = null;   // se llena cuando carga compartido/progreso.js (el juego nunca depende de Firebase)
+function guardarProgreso() { try { localStorage.setItem(CLAVE, JSON.stringify(progreso)); } catch (e) {} if (nube) nube.guardado(); }
 let progreso = leerProgreso();
+
+// Une dos progresos {hechos:[niveles], mejores:{nivel: segundos}}: niveles pasados en cualquiera de los dos y el menor tiempo de cada nivel
+function unirPuzles(a, b) {
+  const ok = (x) => x && Array.isArray(x.hechos);
+  if (!ok(a) && !ok(b)) return null;
+  const hechos = new Set(), mejores = {};
+  for (const x of [a, b]) {
+    if (!ok(x)) continue;
+    x.hechos.forEach((n) => { if (Number.isInteger(n) && n >= 1 && n <= TOTAL_NIVELES) hechos.add(n); });
+    for (const k in x.mejores || {}) { const t = Number(x.mejores[k]); if (t >= 0 && isFinite(t) && (mejores[k] == null || t < mejores[k])) mejores[k] = t; }
+  }
+  return { hechos: [...hechos].sort((p, q) => p - q), mejores };
+}
 
 // ---- Elementos ----
 const $ = (id) => document.getElementById(id);
@@ -250,8 +265,9 @@ function ganar() {
   let texto = "Tiempo: " + seg.toFixed(1) + " s";
   if (primera) {
     texto += " · +" + PUNTOS_NIVEL + " puntos";
-    // Se carga aparte: si Firebase no está disponible (sin conexión la primera vez) el juego igual funciona
-    import("../compartido/jugador.js").then((m) => m.sumarPuntos(ID, Math.floor(PUNTOS_NIVEL / PUNTOS_POR_PERFIL))).catch(() => {});
+    // Se anotan en el dispositivo y se envían al perfil cuando haya internet y sesión
+    encolarPuntos(ID, Math.floor(PUNTOS_NIVEL / PUNTOS_POR_PERFIL));
+    import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {});
   }
   const botones = [["Repetir", () => jugar(numero)]];
   if (NIVELES[numero]) botones.unshift(["Siguiente nivel", () => jugar(numero + 1)]);
@@ -269,3 +285,12 @@ $("b-menu").addEventListener("click", abrirMenu);
 window.addEventListener("resize", () => { if (nivel && !juego.hidden) { disponer(); dibujar(); } });
 
 abrirMenu();
+
+// ---- Nube: niveles pasados y mejores tiempos se unen con los de la cuenta ----
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: CLAVE,
+    fusionar: unirPuzles,
+    alCambiar: (v) => { progreso = v; if (!menu.hidden) abrirMenu(); },   // si estás jugando un nivel, el menú se actualiza al volver a él
+  });
+}).catch(() => {});
