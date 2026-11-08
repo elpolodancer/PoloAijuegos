@@ -20,21 +20,19 @@
 
     /* ----- Marcadores (monedas, vida, oleada): 3 botones cuadrados 3D, iguales a los del dock -----
        Celular: en fila arriba a la izquierda. PC / pantalla ancha: en columna pegados al borde izquierdo del mapa (--mw = ancho del marco) */
-    #stats { display: flex; gap: 8px; }
-    .b3d.stat { --t: 44px; width: auto; min-width: var(--t); padding: 0 4px; flex-direction: column; gap: 2px; font-weight: 800; cursor: default; pointer-events: none; }
-    .b3d.stat .b-ico { font-size: 17px; line-height: 1; }
-    .b3d.stat b { position: relative; font-size: 13px; line-height: 1; font-variant-numeric: tabular-nums; }
+    #stats { display: flex; align-items: center; gap: 8px; }
+    /* --base / --ico / --num = tamaño de los botones de vida y oleada; el del dinero (.dinero) es 25 % más grande en todo */
+    .b3d.stat { --base: 40px; --ico: 15px; --num: 12px; --k: 1; --t: calc(var(--base) * var(--k)); width: auto; min-width: var(--t); padding: 0 4px; flex-direction: column; gap: 2px; font-weight: 800; cursor: default; pointer-events: none; }
+    .b3d.stat.dinero { --k: 1.25; }
+    .b3d.stat .b-ico { font-size: calc(var(--ico) * var(--k)); line-height: 1; }
+    .b3d.stat b { position: relative; font-size: calc(var(--num) * var(--k)); line-height: 1; font-variant-numeric: tabular-nums; }
     @media (min-aspect-ratio: 4/3) {
       body { --mw: min(100vw, calc((100dvh - var(--res-arriba) - var(--res-abajo)) * var(--asp, 0.6667))); }
-      #stats { position: fixed; top: calc(var(--res-arriba) + 6px); right: calc(50vw + var(--mw) / 2 + 12px); flex-direction: column; gap: 8px; }
-      .b3d.stat { --t: 66px; }
-      .b3d.stat .b-ico { font-size: 25px; }
-      .b3d.stat b { font-size: 16px; }
+      #stats { position: fixed; top: calc(var(--res-arriba) + 6px); right: calc(50vw + var(--mw) / 2 + 12px); flex-direction: column; align-items: flex-end; gap: 8px; }
+      .b3d.stat { --base: 66px; --ico: 25px; --num: 16px; }
     }
     @media (min-aspect-ratio: 4/3) and (max-height: 520px) {
-      .b3d.stat { --t: 46px; }
-      .b3d.stat .b-ico { font-size: 18px; }
-      .b3d.stat b { font-size: 13px; }
+      .b3d.stat { --base: 46px; --ico: 18px; --num: 13px; }
     }
 
     /* ----- Textos flotantes ----- */
@@ -162,10 +160,10 @@
   <div class="hud hud-izq">
     <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
     <button class="b3d chico b-azul" id="btnAtras" type="button" aria-label="Volver a los mapas" title="Volver a los mapas"><span class="b-ico">◀</span></button>
-    <div id="stats" role="group" aria-label="Monedas, vida y oleada">
-      <div class="b3d stat b-oro" title="Monedas"><span class="b-ico">💰</span><b id="oro">0</b></div>
+    <div id="stats" role="group" aria-label="Dinero, vida y oleada">
+      <div class="b3d stat dinero b-oro" title="Dinero"><span class="b-ico">💵</span><b id="oro">0</b></div>
       <div class="b3d stat b-rojo" title="Vida del castillo"><span class="b-ico">❤️</span><b id="vida">0</b></div>
-      <div class="b3d stat b-azul" title="Oleada"><span class="b-ico">🌊</span><b id="oleada">1</b></div>
+      <div class="b3d stat b-azul" title="Oleada"><span class="b-ico">👹</span><b id="oleada">1</b></div>
     </div>
     <span class="chip" id="record"></span>
     <div id="mapaNombre"></div>
