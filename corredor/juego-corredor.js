@@ -1,5 +1,5 @@
 // Ruta: corredor/juego-corredor.js (lógica del juego «corredor»: correr por las vías esquivando trenes y barreras, estilo Subway Surfers)
-import { alCambiarSesion, entrar, sumarPuntos } from "../compartido/jugador.js";
+import { encolarPuntos } from "../compartido/cola-puntos.js";
 
 const ID = "corredor"; // el mismo id de juegos.js (colección de puntos en Firestore)
 const $ = (id) => document.getElementById(id);
@@ -20,8 +20,11 @@ const EDIFICIOS = [{ f: "#3a3358", s: "#2d2748", t: "#4a4270" }, { f: "#2f3d5e",
 let usuario = null, p, obs, mon, dist, v, proxZ, proxIman, camX, tiempo, nMonedas, tropiezo, inmune, iman, temblor;
 let vivo = false, ultimo = 0;
 
-alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; });
-btnEntrar.addEventListener("click", () => entrar().catch((e) => { estado.textContent = e.message; }));
+// El botón «Entrar con Google» solo aparece si Firebase pudo cargar (sin internet la primera vez, el juego igual abre)
+import("../compartido/jugador.js").then((m) => {
+  m.alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; });
+  btnEntrar.addEventListener("click", () => m.entrar().catch((e) => { estado.textContent = e.message; }));
+}).catch(() => {});
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const metros = () => Math.floor(dist / METRO);
@@ -288,9 +291,11 @@ async function fin() {
   jugar.textContent = "Jugar otra vez";
   const n = puntos();
   estado.textContent = "¡Te atraparon! Corriste " + metros() + " m y juntaste " + nMonedas + " monedas: " + n + " puntos.";
-  if (!usuario || !n) return;
-  try { await sumarPuntos(ID, n); estado.textContent += " Guardados ✓"; }
-  catch (e) { estado.textContent += " No se pudieron guardar (" + e.message + ")"; }
+  if (!n) return;
+  encolarPuntos(ID, n); // se anotan en el dispositivo y se envían al perfil cuando haya internet y sesión
+  let pendientes = 1;
+  try { pendientes = await (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
+  estado.textContent += pendientes === 0 ? " Guardados ✓" : " Puntos anotados: se enviarán a tu perfil cuando tengas internet y hayas entrado con Google.";
 }
 
 // Teclado: flechas o WASD. En el celular (o con el mouse): desliza el dedo en la dirección que quieras

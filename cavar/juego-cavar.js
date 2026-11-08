@@ -41,8 +41,9 @@ const jug = { x: INICIO_X, y: FILA_SUELO, mov: null, cara: 1, cavando: null };
 const cam = { x: 0, y: 0 };
 let parts = [], flot = [];
 let pausa = false, sucio = false, tv = 0, tickSonido = 0, ultimoAviso = 0;
-let sumar = null;
-import("../compartido/jugador.js").then((m) => { sumar = m.sumarPuntos; }).catch(() => {});
+// Los puntos se anotan al instante en el dispositivo (cola) y se envían cuando haya internet y sesión.
+import { encolarPuntos } from "../compartido/cola-puntos.js";
+let nube = null; // sincronización de la partida con la cuenta de Google (se conecta al final del archivo)
 
 function nuevaPartida() {
   est = estadoNuevo();
@@ -72,23 +73,20 @@ function cargar() {
 function guardar() {
   if (!sucio) return;
   try {
-    localStorage.setItem(CLAVE, JSON.stringify({ v: 1, est, jx: jug.x, jy: jug.y, mapa: mapaAB64(mundo) }));
+    localStorage.setItem(CLAVE, JSON.stringify({ v: 1, t: Date.now(), est, jx: jug.x, jy: jug.y, mapa: mapaAB64(mundo) })); // «t»: gana la partida más reciente al sincronizar
     sucio = false;
+    if (nube) nube.guardado();
   } catch (e) {}
 }
 
 // Puntos al perfil: 1 por cada DOLARES_POR_PUNTO dólares vendidos, en lotes
 function enviar(forzar) {
-  if (!sumar) return;
-  let n = Math.floor(est.ptsPend);
+  const n = Math.floor(est.ptsPend);
   if (n < 1 || (!forzar && n < PUNTOS_LOTE)) return;
   est.ptsPend -= n;
   sucio = true;
-  while (n > 0) {
-    const c = Math.min(n, 1000);
-    n -= c;
-    try { const r = sumar(ID, c); if (r && r.catch) r.catch(() => {}); } catch (e) {}
-  }
+  encolarPuntos(ID, n); // la cola los divide en envíos de máximo 1000
+  import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {});
 }
 
 // ----- Sonido (WebAudio, sin archivos) -----
@@ -644,3 +642,20 @@ requestAnimationFrame(bucle);
 function salida() { guardar(); enviar(true); guardar(); }
 addEventListener("pagehide", salida);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") { limpiarEntrada(); salida(); } });
+
+// ----- Partida en la cuenta de Google: se queda la más reciente (la de este dispositivo o la de la nube) -----
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: CLAVE,
+    fusionar: m.unirRecientes,
+    alCambiar: () => { // la nube traía una partida más reciente (otro dispositivo): se carga en lugar de la actual
+      if (!cargar()) return;
+      jug.mov = null; jug.cavando = null; parts = []; flot = [];
+      iluminar(mundo, jug.x, jug.y, radioLuz(est));
+      sucio = false;
+      moverCamara(true); hud();
+      if (!$("panel").hidden) pintarPanel();
+      aviso("Partida actualizada desde tu cuenta");
+    },
+  });
+}).catch(() => {});

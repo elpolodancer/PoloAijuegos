@@ -17,8 +17,8 @@ cv.width = W * dpr; cv.height = H * dpr;
 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
 // Puntos con sesión de Google (si no hay sesión o conexión, el juego funciona igual)
-let sumarPuntos = null;
-import("../compartido/jugador.js").then((m) => (sumarPuntos = m.sumarPuntos)).catch(() => {});
+// Los puntos se anotan al instante en el dispositivo (cola) y se envían cuando haya internet y sesión.
+import { encolarPuntos } from "../compartido/cola-puntos.js";
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const expo = (v) => Math.round(Math.log2(v));
@@ -37,7 +37,8 @@ function fmt(v) {
 let cols, sel, estado, puntos, maxBloque, pend, flyers, aviso, chispas;
 let record = { bloque: 2, puntos: 0 };
 try { record = Object.assign(record, JSON.parse(localStorage.getItem(CLAVE) || "{}")); } catch (e) {}
-const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(record)); } catch (e) {} };
+let nube = null; // sincronización del récord con la cuenta de Google (se conecta más abajo)
+const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(record)); } catch (e) {} if (nube) nube.guardado(); };
 
 const PESO_TOTAL = VALORES.reduce((s, v) => s + v[1], 0);
 function valorAzar() {
@@ -138,10 +139,11 @@ function confirmar() {
 }
 
 function enviarPuntos() {
-  if (!sumarPuntos || pend <= 0) return;
-  const n = Math.min(pend, 1000);
-  pend -= n;
-  sumarPuntos(ID_JUEGO, n).catch(() => {});
+  if (pend <= 0) return;
+  const n = pend;
+  pend = 0;
+  encolarPuntos(ID_JUEGO, n); // la cola los divide en envíos de máximo 1000
+  import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {});
 }
 document.addEventListener("visibilitychange", () => { if (document.hidden) enviarPuntos(); });
 addEventListener("pagehide", enviarPuntos);
@@ -308,6 +310,15 @@ cv.addEventListener("pointercancel", () => { sel = []; });
 
 $("mezclar").addEventListener("click", () => { if (estado === "listo") { sel = []; mezclar(true); } });
 $("reiniciar").addEventListener("click", () => { enviarPuntos(); nuevaPartida(); });
+
+// ----- Récord en la cuenta (se queda el mayor de cada marca) -----
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID_JUEGO, {
+    clave: CLAVE,
+    fusionar: m.unirMaximos,
+    alCambiar: (v) => { Object.assign(record, v); hud(); },
+  });
+}).catch(() => {});
 
 // ----- Bucle -----
 nuevaPartida();

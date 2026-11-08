@@ -2,6 +2,8 @@
 // El clásico 2048: desliza para juntar números iguales. Tablero de 4×4 (también 5×5 y 6×6), deshacer,
 // mejor puntaje por tamaño y la partida se guarda sola en el navegador.
 // Ajustes rápidos aquí arriba:
+import { encolarPuntos } from "../compartido/cola-puntos.js";
+
 const TAMANOS = [4, 5, 6];
 const META = 2048;            // al crear este número aparece el aviso de victoria (puedes seguir jugando)
 const PROB_4 = 0.1;           // probabilidad de que salga un 4 en vez de un 2
@@ -15,7 +17,19 @@ const tablero = $("tablero");
 
 let N = 4, celda = 80, hueco = 10;
 let fichas = [], puntos = 0, mejor = 0, historial = [];
-let ganoMostrado = false, terminado = false, enviados = 0, idFicha = 0, partidaId = 0, enviando = false;
+let ganoMostrado = false, terminado = false, enviados = 0, idFicha = 0;
+
+// Mejores puntajes por tamaño en una sola clave { "4": n, "5": n, "6": n } para sincronizarlos con la cuenta de Google.
+// (Antes eran claves sueltas «2048-mejor-N»: se pasan solas a la nueva.)
+const CLAVE_MEJORES = "2048-mejores";
+let mejores = {}, nube = null;
+try { mejores = JSON.parse(localStorage.getItem(CLAVE_MEJORES)) || {}; } catch (e) { mejores = {}; }
+for (const n of TAMANOS) { try { const v = parseInt(localStorage.getItem("2048-mejor-" + n)) || 0; if (v > (mejores[n] || 0)) mejores[n] = v; } catch (e) {} }
+function guardarMejores() {
+  try { localStorage.setItem(CLAVE_MEJORES, JSON.stringify(mejores)); } catch (e) {}
+  if (nube) nube.guardado();
+}
+guardarMejores();
 
 try { const t = parseInt(localStorage.getItem("2048-tam")); if (TAMANOS.includes(t)) N = t; } catch (e) {}
 
@@ -161,7 +175,7 @@ function revisar() {
 
 // ----- Marcador, guardado y deshacer -----
 function marcador() {
-  if (puntos > mejor) { mejor = puntos; try { localStorage.setItem("2048-mejor-" + N, String(mejor)); } catch (e) {} }
+  if (puntos > mejor) { mejor = puntos; mejores[N] = mejor; guardarMejores(); }
   $("pts").textContent = puntos; $("mejor").textContent = mejor;
   $("deshacer").disabled = historial.length === 0;
 }
@@ -181,17 +195,17 @@ function deshacer() {
 }
 
 // ----- Puntos al perfil (solo suben, nunca se repiten al deshacer) -----
+// Se anotan al instante en el dispositivo (cola) y se envían al perfil cuando haya internet y sesión.
 async function enviar() {
   const falta = Math.floor(puntos / PUNTOS_POR_PERFIL) - enviados;
-  if (falta <= 0 || enviando) return;
-  enviando = true;
-  const id = partidaId; // si mientras tanto empiezas otra partida, no se mezcla el conteo
-  try {
-    const { sumarPuntos } = await import("../compartido/jugador.js");
-    if (await sumarPuntos(ID_JUEGO, falta)) { if (id === partidaId) { enviados += falta; guardar(); $("msg").textContent = "Puntos guardados en tu perfil."; } }
-    else $("msg").textContent = "Entra con Google en el portal para guardar tus puntos.";
-  } catch (e) { $("msg").textContent = "No se pudieron guardar los puntos (sin conexión)."; }
-  enviando = false;
+  if (falta <= 0) return;
+  enviados += falta; guardar();
+  encolarPuntos(ID_JUEGO, falta);
+  let pendientes = 1;
+  try { pendientes = await (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
+  $("msg").textContent = pendientes === 0
+    ? "Puntos guardados en tu perfil."
+    : "Puntos guardados en este dispositivo; se enviarán a tu perfil cuando tengas internet y hayas entrado con Google.";
 }
 
 // ----- Ventana de avisos -----
@@ -210,7 +224,6 @@ function cerrarVelo() { $("velo").hidden = true; }
 // ----- Partidas -----
 function nueva() {
   enviar();
-  partidaId++;
   cerrarVelo(); limpiar();
   puntos = 0; historial = []; ganoMostrado = false; terminado = false; enviados = 0;
   nuevaFicha(); nuevaFicha();
@@ -223,9 +236,8 @@ function cambiarTamano(n) {
   marcarTamanos(); cargarTamano();
 }
 function cargarTamano() {
-  partidaId++;
   cerrarVelo(); construirTablero();
-  try { mejor = parseInt(localStorage.getItem("2048-mejor-" + N)) || 0; } catch (e) { mejor = 0; }
+  mejor = mejores[N] || 0;
   let s = null;
   try { s = JSON.parse(localStorage.getItem("2048-partida-" + N)); } catch (e) {}
   if (s && Array.isArray(s.f) && s.f.length && s.f.every((o) => o.r < N && o.c < N)) {
@@ -267,3 +279,12 @@ document.addEventListener("visibilitychange", () => { if (document.hidden) envia
 
 marcarTamanos();
 cargarTamano();
+
+// Sincroniza los mejores puntajes con la cuenta (se queda el mayor de cada tamaño). La partida en curso queda en este dispositivo.
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID_JUEGO, {
+    clave: CLAVE_MEJORES,
+    fusionar: m.unirMaximos,
+    alCambiar: (v) => { mejores = v || {}; mejor = Math.max(mejor, mejores[N] || 0); $("mejor").textContent = mejor; },
+  });
+}).catch(() => {});

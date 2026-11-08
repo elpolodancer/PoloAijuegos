@@ -64,16 +64,15 @@ const ESPECIALES = {
 };
 
 // ---------- Perfil (puntos totales del portal) ----------
-// Se carga aparte para que el juego funcione aunque falle Firebase.
-// Si tu sumarPuntos recibe otros argumentos, ajústalo SOLO aquí (copia la llamada de gominolas/juego.js).
-let sumarPuntos = null;
-import("../compartido/jugador.js").then((m) => { sumarPuntos = m.sumarPuntos; }).catch(() => {});
+// Los puntos se anotan al instante en el dispositivo (cola) y se envían cuando haya internet y sesión.
+import { encolarPuntos } from "../compartido/cola-puntos.js";
 let enviadosPerfil = 0;
 function enviarPerfil() {
   const debe = Math.floor(puntos / PUNTOS_POR_PERFIL) - enviadosPerfil;
-  if (!sumarPuntos || debe <= 0) return;
+  if (debe <= 0) return;
   enviadosPerfil += debe;
-  try { Promise.resolve(sumarPuntos(ID, debe)).catch(() => {}); } catch (e) {}
+  encolarPuntos(ID, debe);
+  import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {});
 }
 
 // ---------- Sonidos (se generan con WebAudio, no hay archivos) ----------
@@ -163,6 +162,15 @@ let caen = [], chispas = [], deslizar = 0, aviso = 0, avisoTexto = "", tic = 0;
 
 try { record = Number(localStorage.getItem("burbujas_record")) || 0; } catch (e) { record = 0; }
 elRecord.textContent = record;
+// El récord se sincroniza con la cuenta de Google (se queda el mayor entre este dispositivo y la nube)
+let nube = null;
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: "burbujas_record",
+    fusionar: (a, b) => (a == null && b == null ? null : Math.max(Number(a) || 0, Number(b) || 0)),
+    alCambiar: (v) => { record = Number(v) || 0; elRecord.textContent = record; },
+  });
+}).catch(() => {});
 
 // ---------- Rejilla hexagonal ----------
 const px = (r, c) => R + c * 2 * R + (((r + par) & 1) ? R : 0);
@@ -438,6 +446,7 @@ function actualizarMarcador() {
   if (puntos > record) {
     record = puntos; elRecord.textContent = record;
     try { localStorage.setItem("burbujas_record", String(record)); } catch (e) {}
+    if (nube) nube.guardado();
   }
 }
 

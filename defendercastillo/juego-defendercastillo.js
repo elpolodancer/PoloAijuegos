@@ -38,11 +38,10 @@ const $ = (id) => document.getElementById(id);
 const leer = (k, def) => { try { const v = localStorage.getItem(k); return v == null ? def : JSON.parse(v); } catch (e) { return def; } };
 const guardar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 
-// ----- Sesión y puntos (si Firebase no carga, el juego sigue sin puntos) -----
-let jugador = null, usuario = null;
-import("../compartido/jugador.js")
-  .then((m) => { jugador = m; m.alCambiarSesion((u) => (usuario = u)); })
-  .catch(() => {});
+// ----- Puntos y progreso en la cuenta -----
+// Los puntos se anotan al instante en el dispositivo (cola) y se envían cuando haya internet y sesión.
+import { encolarPuntos } from "../compartido/cola-puntos.js";
+let nube = null; // sincronización del progreso con la cuenta de Google (se conecta al final del archivo)
 
 // ----- Pantalla -----
 const cv = $("lienzo"), ctx = cv.getContext("2d");
@@ -390,6 +389,7 @@ async function terminar(ganado) {
   const r = progreso[p.nivel.id] || { estrellas: 0, record: 0 };
   progreso[p.nivel.id] = { estrellas: Math.max(r.estrellas, est), record: Math.max(r.record, pts) };
   guardar(CLAVE_PROGRESO, progreso);
+  if (nube) nube.guardado();
   $("record").textContent = "Récord: " + progreso[p.nivel.id].record + " " + "⭐".repeat(progreso[p.nivel.id].estrellas);
   $("finTitulo").textContent = ganado ? "¡Castillo defendido! 🏰" : "El castillo cayó 💥";
   $("estrellas").textContent = ganado ? "⭐".repeat(est) + "☆".repeat(3 - est) : "";
@@ -405,12 +405,11 @@ async function terminar(ganado) {
   }
   $("finTexto").textContent = txt;
   $("fin").hidden = false;
-  if (jugador && usuario && ganados > 0) {
-    try {
-      if (await jugador.sumarPuntos(ID, ganados)) $("finTexto").textContent = txt + " · +" + ganados + " al perfil";
-    } catch (e) {}
-  } else if (jugador && !usuario && ganados > 0) {
-    $("finTexto").textContent = txt + " · Entra con Google en el portal para guardar tus puntos";
+  if (ganados > 0) {
+    encolarPuntos(ID, ganados); // se anotan en el dispositivo y se envían al perfil cuando haya internet y sesión
+    let pendientes = 1;
+    try { pendientes = await (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
+    $("finTexto").textContent = txt + (pendientes === 0 ? " · +" + ganados + " al perfil" : " · +" + ganados + " puntos: se enviarán a tu perfil cuando tengas internet y hayas entrado con Google");
   }
 }
 
@@ -683,3 +682,20 @@ function bucle(ts) {
 }
 abrirMenu();
 requestAnimationFrame(bucle);
+
+// ----- Progreso (estrellas y récord por nivel) en la cuenta: de cada nivel se queda lo mejor -----
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: CLAVE_PROGRESO,
+    fusionar: (a, b) => {
+      if (!a && !b) return null;
+      const r = {};
+      for (const fuente of [b, a]) for (const k in fuente || {}) {
+        const x = fuente[k] || {}, y = r[k] || { estrellas: 0, record: 0 };
+        r[k] = { estrellas: Math.max(x.estrellas || 0, y.estrellas || 0), record: Math.max(x.record || 0, y.record || 0) };
+      }
+      return r;
+    },
+    alCambiar: (v) => { progreso = v || {}; if (!$("menu").hidden) abrirMenu(); }, // desbloquea los niveles que ya pasaste en otro dispositivo
+  });
+}).catch(() => {});

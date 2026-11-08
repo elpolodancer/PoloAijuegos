@@ -3,6 +3,7 @@
 import { crear, verter, puedeVerter, resuelto, racha } from "./logica-botellascolores.js";
 import { NIVELES, PALETA, MUNDOS, NIVELES_POR_MUNDO } from "./niveles-botellascolores.js";
 import { montarMapa, ETAPAS } from "./mapa.js";
+import { encolarPuntos } from "../compartido/cola-puntos.js";
 
 // ----- Ajustes -----
 const ID = "botellas-colores";
@@ -16,7 +17,8 @@ let nivel = 0, cap = 3, est = [], hist = [], sel = -1, acabo = false;
 
 try { localStorage.removeItem("botellas_progreso"); } catch (e) {} // borra el progreso de la versión anterior
 const leer = () => { try { hechos = JSON.parse(localStorage.getItem(CLAVE)) || []; } catch (e) { hechos = []; } };
-const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(hechos)); } catch (e) {} };
+let nube = null; // sincronización con la cuenta (se conecta al final; sin internet simplemente no se conecta)
+const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(hechos)); } catch (e) {} if (nube) nube.guardado(); };
 
 // ----- Etapas (cada 100 niveles = un estado de México, ver ETAPAS en mapa.js; también cambia el fondo) -----
 const mundoDe = (i) => Math.min(Math.floor(i / NIVELES_POR_MUNDO), MUNDOS.length - 1);
@@ -149,10 +151,8 @@ async function ganar() {
   $("siguiente").textContent = ultimo ? "Ver niveles" : cierraEtapa ? "Siguiente estado ▶" : "Siguiente nivel ▶";
   $("final").hidden = false;
   if (primera) {
-    try {
-      const { sumarPuntos } = await import("../compartido/jugador.js");
-      await sumarPuntos(ID, PUNTOS_NIVEL); // solo guarda si hay sesión iniciada
-    } catch (e) {}
+    encolarPuntos(ID, PUNTOS_NIVEL); // se anotan en el dispositivo y se envían al perfil cuando haya internet y sesión
+    try { (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
   }
 }
 
@@ -165,3 +165,12 @@ $("siguiente").addEventListener("click", () => (nivel < NIVELES.length - 1 ? jug
 
 leer();
 menu();
+
+// Sincroniza los niveles pasados con la cuenta de Google (une lo local con lo de la nube: un nivel pasado en cualquier lado cuenta)
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: CLAVE,
+    fusionar: m.unirHechos,
+    alCambiar: (v) => { hechos = v || []; if (!$("menu").hidden) menu(); },
+  });
+}).catch(() => {});

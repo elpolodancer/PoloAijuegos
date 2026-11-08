@@ -1,5 +1,5 @@
 // Ruta: buscaminas/juego-buscaminas.js
-import { sumarPuntos } from "../compartido/jugador.js";
+import { encolarPuntos } from "../compartido/cola-puntos.js";
 
 // ===== AJUSTES =====
 const ID = "buscaminas";
@@ -17,7 +17,7 @@ const $ = (id) => document.getElementById(id);
 const tab = $("tablero"), msg = $("msg");
 let nivel = localStorage.getItem(ID + ":nivel") || "facil";
 if (!NIVELES[nivel]) nivel = "facil";
-let N, celdas, botones, estado, abiertas, banderas, t0, reloj, modoBandera = false;
+let N, celdas, botones, estado, abiertas, banderas, t0, reloj, modoBandera = false, nube = null;
 
 function mejores() { try { return JSON.parse(localStorage.getItem(ID + ":mejores")) || {}; } catch (e) { return {}; } }
 
@@ -177,9 +177,10 @@ async function revisarVictoria() {
   $("cara").textContent = "😎";
   const m = mejores();
   let rec = "";
-  if (!m[nivel] || seg < m[nivel]) { m[nivel] = seg; rec = " ¡Nuevo récord!"; localStorage.setItem(ID + ":mejores", JSON.stringify(m)); }
+  if (!m[nivel] || seg < m[nivel]) { m[nivel] = seg; rec = " ¡Nuevo récord!"; localStorage.setItem(ID + ":mejores", JSON.stringify(m)); if (nube) nube.guardado(); }
   msg.innerHTML = `¡Ganaste en <b>${seg} s</b>! +${N.puntos} pts.${rec}`;
-  try { await sumarPuntos(ID, N.puntos); } catch (e) {}
+  encolarPuntos(ID, N.puntos); // se anotan en el dispositivo y se envían al perfil cuando haya internet y sesión
+  import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {});
 }
 
 // ===== Entrada: toque = abrir, pulsación larga o clic derecho = bandera =====
@@ -223,3 +224,20 @@ $("modo").addEventListener("click", () => {
 
 botonesNivel();
 nueva();
+
+// Sincroniza los mejores tiempos con la cuenta de Google (por nivel se queda el MENOR tiempo)
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: ID + ":mejores",
+    fusionar: (a, b) => {
+      if (!a && !b) return null;
+      const r = { ...(b || {}) };
+      for (const k in a || {}) {
+        const x = Number(a[k]), y = Number(r[k]);
+        r[k] = x > 0 && y > 0 ? Math.min(x, y) : x > 0 ? x : y;
+      }
+      return r;
+    },
+    alCambiar: () => { if (estado === "listo") nueva(); }, // repinta el mensaje del mejor tiempo si aún no empezaste
+  });
+}).catch(() => {});

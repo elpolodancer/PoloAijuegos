@@ -24,7 +24,7 @@ export async function entrar() {
 }
 export const salir = () => (auth ? signOut(auth) : Promise.resolve());
 
-// Máximo de puntos por envío. Debe coincidir con MAX_ENVIO (el 1000) de firestore.rules
+// Máximo de puntos por envío. Debe coincidir con el 1000 de firestore-unificado.rules (puntajeOk)
 const MAX_PUNTOS_POR_ENVIO = 1000;
 
 // Suma puntos al perfil (total de todos los juegos) y guarda tu mejor marca de ese juego

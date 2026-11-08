@@ -1,7 +1,7 @@
 // Ruta: ajedrez/juego-ajedrez.js
 import { INICIO, desdeFEN, legales, hacer, deshacer, enJaque, estadoPartida, clave } from "./logica-ajedrez.js";
 import { mejorJugada } from "./ia-ajedrez.js";
-import { sumarPuntos } from "../compartido/jugador.js";
+import { encolarPuntos } from "../compartido/cola-puntos.js";
 
 // ===== AJUSTES =====
 const ID = "ajedrez";
@@ -29,7 +29,7 @@ const $ = (id) => document.getElementById(id);
 const tab = $("tablero");
 let nivel = Math.min(5, Math.max(1, +localStorage.getItem(ID + ":nivel") || 1));
 let jugador = localStorage.getItem(ID + ":color") === "-1" ? -1 : 1;
-let est, pila, claves, legs, sel, ult, fin, msgFin, pensando, partida = 0;
+let est, pila, claves, legs, sel, ult, fin, msgFin, pensando, partida = 0, nube = null;
 
 const ganados = () => { try { return JSON.parse(localStorage.getItem(ID + ":ganados")) || {}; } catch (e) { return {}; } };
 
@@ -168,9 +168,11 @@ async function premio() {
   if (g[nivel]) { msgFin += " (ya habías vencido este nivel)"; return; }
   g[nivel] = true;
   localStorage.setItem(ID + ":ganados", JSON.stringify(g));
+  if (nube) nube.guardado();
   msgFin += " +" + n.puntos + " pts";
   botonesNivel();
-  try { await sumarPuntos(ID, n.puntos); } catch (e) {}
+  encolarPuntos(ID, n.puntos); // se anotan en el dispositivo y se envían al perfil cuando haya internet y sesión
+  try { (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
 }
 
 function tocarCasilla(sq) {
@@ -217,3 +219,12 @@ $("bBlancas").addEventListener("click", () => { if (jugador !== 1) cambiar(() =>
 $("bNegras").addEventListener("click", () => { if (jugador !== -1) cambiar(() => { jugador = -1; localStorage.setItem(ID + ":color", "-1"); }); });
 
 nueva();
+
+// Sincroniza los niveles vencidos (⭐) con la cuenta de Google: un nivel vencido en cualquier lado cuenta.
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: ID + ":ganados",
+    fusionar: (a, b) => (!a && !b ? null : { ...(b || {}), ...(a || {}) }),
+    alCambiar: () => botonesNivel(),
+  });
+}).catch(() => {});

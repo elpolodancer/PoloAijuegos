@@ -31,8 +31,8 @@ const NOMBRES = [
 
 // ---------- Perfil (puntos totales del portal) ----------
 // Se carga aparte para que el juego funcione aunque falle Firebase.
-let sumarPuntos = null;
-import("../compartido/jugador.js").then((m) => { sumarPuntos = m.sumarPuntos; }).catch(() => {});
+// Los puntos se anotan en el dispositivo (cola) y se envían cuando haya internet y sesión.
+import { encolarPuntos } from "../compartido/cola-puntos.js";
 let enviadosPerfil = 0;
 
 // ---------- Elementos ----------
@@ -52,6 +52,15 @@ let record = 0;
 try { record = Number(localStorage.getItem("agario_record")) || 0; } catch (e) {}
 const pintarRecord = () => { $("record").textContent = "Récord: " + Math.round(record); };
 pintarRecord();
+// El récord se sincroniza con la cuenta de Google (se queda el mayor entre este dispositivo y la nube)
+let nube = null;
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: "agario_record",
+    fusionar: (a, b) => (a == null && b == null ? null : Math.max(Number(a) || 0, Number(b) || 0)),
+    alCambiar: (v) => { record = Number(v) || 0; pintarRecord(); },
+  });
+}).catch(() => {});
 try { $("nombre").value = localStorage.getItem("agario_nombre") || ""; } catch (e) {}
 
 // ---------- Estado ----------
@@ -265,9 +274,10 @@ function iniciar() {
 
 function enviarPerfil() {
   const debe = Math.max(0, Math.floor(maxMasa / PUNTOS_POR_MASA) - 1) - enviadosPerfil;
-  if (!sumarPuntos || debe <= 0) return 0;
+  if (debe <= 0) return 0;
   enviadosPerfil += debe;
-  try { Promise.resolve(sumarPuntos(ID, debe)).catch(() => {}); } catch (e) {}
+  encolarPuntos(ID, debe); // se guarda al instante en el dispositivo (también al cerrar la página)
+  import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {});
   return debe;
 }
 
@@ -278,7 +288,7 @@ function morir() {
   enviarPerfil();
   const seg = Math.round(t - t0);
   $("finTexto").textContent = "Masa máxima: " + Math.round(maxMasa) + " · Tiempo: " + Math.floor(seg / 60) + ":" + String(seg % 60).padStart(2, "0") +
-    " · Bots comidos: " + comidos + (pts ? " · +" + pts + " puntos para tu perfil (si entraste con Google en el portal)" : "") +
+    " · Bots comidos: " + comidos + (pts ? " · +" + pts + " puntos para tu perfil (se envían cuando haya internet y hayas entrado con Google)" : "") +
     (maxMasa >= record && maxMasa > MASA_INICIAL ? ". ¡Nuevo récord!" : ".");
   $("fin").classList.add("activo");
 }
@@ -366,7 +376,7 @@ function actualizar(dt) {
   if (estado === "jugando") {
     const total = jugCeldas.reduce((s, c) => s + c.m, 0);
     if (total > maxMasa) maxMasa = total;
-    if (maxMasa > record) { record = maxMasa; try { localStorage.setItem("agario_record", String(Math.round(record))); } catch (e) {} pintarRecord(); }
+    if (maxMasa > record) { record = maxMasa; try { localStorage.setItem("agario_record", String(Math.round(record))); } catch (e) {} pintarRecord(); if (nube) nube.guardado(); }
     if (!jugCeldas.length) morir();
     else $("masa").textContent = "Masa: " + Math.round(total) + (rango ? " · Puesto " + rango : "");
   }
