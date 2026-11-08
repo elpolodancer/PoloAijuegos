@@ -13,8 +13,9 @@
     .b3d:disabled { filter: grayscale(.85) brightness(.7); }
     .b-info:empty { display: none; }
 
-    /* ----- Marco del juego (360×540 = 2:3). Celular horizontal / PC: ocupa toda la altura ----- */
-    .inmersivo .marco { aspect-ratio: 2 / 3; height: auto; width: min(100vw, calc((100vh - var(--res-arriba) - var(--res-abajo)) * 2 / 3)); width: min(100vw, calc((100dvh - var(--res-arriba) - var(--res-abajo)) * 2 / 3)); }
+    /* ----- Marco del juego: toma la proporción del mapa (--asp = columnas / filas, la pone juego-defendercastillo.js; 2:3 si aún no hay mapa).
+       Los mapas van de 12×18 a 30×30. Celular horizontal / PC: ocupa toda la altura ----- */
+    .inmersivo .marco { aspect-ratio: var(--asp, 0.6667); height: auto; width: min(100vw, calc((100vh - var(--res-arriba) - var(--res-abajo)) * var(--asp, 0.6667))); width: min(100vw, calc((100dvh - var(--res-arriba) - var(--res-abajo)) * var(--asp, 0.6667))); }
     .inmersivo .lienzo { background: #2f5d34; }
 
     /* ----- Textos flotantes ----- */

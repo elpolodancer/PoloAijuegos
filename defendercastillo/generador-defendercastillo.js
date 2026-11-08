@@ -69,9 +69,12 @@ function doble(rng) {
 }
 
 // ---------- Oleadas ----------
-export function oleadasDe(n, calib, rng) {
-  const nW = 30 + Math.floor((n - 1) / 12);
-  const unl = Object.keys(DESBLOQUEO_ENEMIGOS).filter((t) => !JEFES.includes(t) && DESBLOQUEO_ENEMIGOS[t] <= n);
+// «opc» (opcional) es para los mapas fijos de «Desbloqueados» (constructor-mapas-defendercastillo.mjs); sin él todo sale igual que antes (Michoacán):
+//   opc.nW = número de oleadas · opc.enemigos = tipos que pueden salir (sin jefes) · opc.miniJefe = trollJefe al final de cada 10 oleadas (desde la 20)
+//   opc.jefe = [tipo, cantidad] que cierra la última oleada (o null) · aquí «n» es la dificultad equivalente (1 a 10 en los 10 primeros mapas)
+export function oleadasDe(n, calib, rng, opc) {
+  const nW = opc && opc.nW ? opc.nW : 30 + Math.floor((n - 1) / 12);
+  const unl = opc && opc.enemigos ? opc.enemigos.slice() : Object.keys(DESBLOQUEO_ENEMIGOS).filter((t) => !JEFES.includes(t) && DESBLOQUEO_ENEMIGOS[t] <= n);
   const clase = (t) => (ENEMIGOS[t].vida >= 800 ? 2 : ENEMIGOS[t].vida >= 200 ? 1 : 0); // 0 ligero, 1 medio, 2 pesado
   const masFuerte = unl.slice().sort((a, b) => ENEMIGOS[b].vida - ENEMIGOS[a].vida)[0];
   // «costo» de un enemigo al repartir la vida de la oleada: los voladores y los muy rápidos pesan más que su vida (son más difíciles de parar)
@@ -85,7 +88,7 @@ export function oleadasDe(n, calib, rng) {
     const m = (1 + 0.075 * (1 + n * 0.03) * w) * Math.pow(calib, w / (nW - 1)); // vida de los enemigos
     const B = (480 + 2 * n) * (1 + 0.14 * (1 + n * 0.01) * w) * Math.min(1, 0.5 + (0.5 * w) / 5); // vida total de la oleada (a vida ×1); las 5 primeras son más suaves
     const pool = unl.filter((t) => clase(t) === 0 || (clase(t) === 1 && w >= 3) || (clase(t) === 2 && w >= 12));
-    const peso = (t) => 1 + (n - DESBLOQUEO_ENEMIGOS[t] < 12 ? 3 : 0);
+    const peso = (t) => (opc ? 1 + ((opc.nuevos || []).includes(t) ? 3 : 0) : 1 + (n - DESBLOQUEO_ENEMIGOS[t] < 12 ? 3 : 0));
     const elegir = (excl) => {
       const l = (pool.length ? pool : unl).filter((t) => !excl.includes(t));
       const tot = l.reduce((s, t) => s + peso(t), 0);
@@ -109,8 +112,11 @@ export function oleadasDe(n, calib, rng) {
       grupos.push([masFuerte, Math.max(1, Math.round((B * 0.35) / v)), redondea(Math.min(2.6, 0.3 + v / 300)), redondea(ini * 0.5)]);
       jefe = true;
     } else if (elite) for (const g of grupos) g[1] = Math.round(g[1] * 1.3); // al inicio solo hay enemigos ligeros: la oleada trae un enjambre más grande
-    if (n >= 20 && w >= 19 && w % 10 === 9 && w !== nW - 1) { grupos.push(["trollJefe", 1, 1, redondea(ini + 2)]); jefe = true; }
-    if (w === nW - 1 && n % 10 === 0) { // jefe final: cada 10 niveles
+    if ((opc ? opc.miniJefe : n >= 20) && w >= 19 && w % 10 === 9 && w !== nW - 1) { grupos.push(["trollJefe", 1, 1, redondea(ini + 2)]); jefe = true; }
+    if (opc && opc.jefe && w === nW - 1) { // mapas fijos: jefe final elegido a mano
+      grupos.push([opc.jefe[0], opc.jefe[1], 6, redondea(ini + 2)]);
+      jefe = true;
+    } else if (!opc && w === nW - 1 && n % 10 === 0) { // jefe final: cada 10 niveles
       const dragon = n >= 75 && (n / 10) % 2 === 1;
       grupos.push(dragon ? ["dragon", 1 + Math.floor((n - 70) / 20), 6, redondea(ini + 2)] : ["trollJefe", 1 + Math.floor(n / 40), 6, redondea(ini + 2)]);
       jefe = true;

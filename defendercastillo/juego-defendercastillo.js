@@ -1,11 +1,11 @@
 // Ruta: defendercastillo/juego-defendercastillo.js
-// «Defensa del castillo»: pantalla, controles y sonido. Las reglas viven en logica-defendercastillo.js y los mapas en niveles-defendercastillo.js.
+// «Defensa del castillo»: pantalla, controles y sonido. Las reglas viven en logica-defendercastillo.js y los mapas en mapas-desbloqueados-defendercastillo.js (generado) y generador-defendercastillo.js.
 // Cómo se juega: elige un mapa; elige una torre abajo y toca un lugar libre del pasto para construirla; toca una torre para
 // mejorarla o venderla; 🪓 Quitar sirve para talar árboles/rocas (cuesta monedas) o vender torres con un toque; ☄️ lanza un
 // meteoro (se recarga solo). Los enemigos caminan por el camino café; si llegan al castillo le quitan vida.
-// El menú tiene dos pestañas: «Desbloqueados» (mapas fijos para repetir; hoy los 10 de antes, y la meta es llegar a unos 200; por dentro siguen llamándose «clasico») y los 10 niveles de Michoacán (generados por generador-defendercastillo.js;
+// El menú tiene dos pestañas: «Desbloqueados» (mapas fijos de 12×18 a 30×30 para repetir; hoy 10 y la meta es llegar a unos 200; cada uno se abre al pasar un nivel de Michoacán, campo «req»; por dentro siguen llamándose «clasico») y los 10 niveles de Michoacán (generados por generador-defendercastillo.js;
 // se desbloquean de uno en uno y cada nivel nuevo puede traer torres y enemigos nuevos).
-import { NIVELES } from "./niveles-defendercastillo.js";
+import { MAPAS_DESBLOQUEADOS as MAPAS } from "./mapas-desbloqueados-defendercastillo.js";
 import { generarNivel, NIVELES_MICHOACAN, DESBLOQUEO_TORRES } from "./generador-defendercastillo.js";
 import {
   CELDA, ANCHO, ALTO, TORRES, TORRES_CLASICAS, ENEMIGOS, METEORO, REEMBOLSO,
@@ -54,10 +54,11 @@ fondo.height = ALTO * DPR;
 
 // ----- Estado -----
 let actual = { t: "clasico", i: 0 }, p = null;
-const nivelDe = (t, i) => (t === "mich" ? generarNivel(i + 1) : NIVELES[i]);
-const totalDe = (t) => (t === "mich" ? NIVELES_MICHOACAN : NIVELES.length);
-const idDe = (t, i) => (t === "mich" ? "M" + (i + 1) : NIVELES[i].id);
-const abierto = (t, i) => t !== "mich" || TODOS || i === 0 || !!progreso[idDe(t, i - 1)];
+const nivelDe = (t, i) => (t === "mich" ? generarNivel(i + 1) : MAPAS[i]);
+const totalDe = (t) => (t === "mich" ? NIVELES_MICHOACAN : MAPAS.length);
+const idDe = (t, i) => (t === "mich" ? "M" + (i + 1) : MAPAS[i].id);
+// Michoacán: se abre el siguiente al pasar uno. Desbloqueados: cada mapa se abre al pasar el nivel «req» de Michoacán.
+const abierto = (t, i) => TODOS || (t === "mich" ? i === 0 || !!progreso[idDe(t, i - 1)] : !!progreso["M" + MAPAS[i].req]);
 let tipoSel = null, torreSel = null, modoMeteoro = false, modoQuitar = false;
 let pausa = false, vel = 1, acum = 0, ultimo = 0, anim = 0;
 let finalizado = false, fantasma = null, flash = 0, menuAbierto = true;
@@ -124,7 +125,7 @@ function textoNuevos(n) {
   if (!n.nuevas) return "";
   const a = [];
   for (const t of n.nuevas.torres) a.push("Torre: " + TORRES[t].icono + " " + TORRES[t].nombre);
-  for (const e of n.nuevas.enemigos) a.push("Enemigo: " + ENEMIGOS[e].icono + " " + ENEMIGOS[e].nombre + " (" + HABILIDAD[e] + ")");
+  for (const e of n.nuevas.enemigos) a.push("Enemigo: " + ENEMIGOS[e].icono + " " + ENEMIGOS[e].nombre + (HABILIDAD[e] ? " (" + HABILIDAD[e] + ")" : ""));
   return a.length ? "🆕 " + a.join(" · ") : "";
 }
 
@@ -137,13 +138,17 @@ function abrirMenu() {
   $("pestMich").classList.toggle("on", pestana === "mich");
   lista.className = pestana === "mich" ? "mich" : "";
   if (pestana === "clasico") {
-    info.textContent = "🔓 Mapas fijos para jugar cuantas veces quieras. Por ahora hay " + NIVELES.length + ", de más fácil a más difícil.";
-    NIVELES.forEach((n, i) => {
-      const r = progreso[n.id];
+    const abiertos = MAPAS.filter((_, i) => abierto("clasico", i)).length;
+    info.textContent = "🔓 Mapas fijos de 12×18 a 30×30 para jugar cuantas veces quieras: " + abiertos + " de " + MAPAS.length + " abiertos. Cada uno se abre al pasar un nivel de Michoacán.";
+    MAPAS.forEach((n, i) => {
+      const r = progreso[n.id], bloq = !abierto("clasico", i);
       const b = document.createElement("button");
-      b.className = "b3d txt mapa " + (COLOR_DIF[n.dificultad] || "b-gris");
-      const t = document.createElement("b"); t.textContent = n.id + " · " + n.nombre;
-      const d = document.createElement("small"); d.textContent = (n.dificultad || "") + (r ? " · " + "⭐".repeat(r.estrellas) + " " + r.record : " · sin jugar");
+      b.type = "button";
+      b.className = "b3d txt mapa " + (bloq ? "b-gris" : COLOR_DIF[n.dificultad] || "b-gris");
+      b.disabled = bloq;
+      const t = document.createElement("b"); t.textContent = (bloq ? "🔒 " : "") + n.id + " · " + n.nombre;
+      const d = document.createElement("small");
+      d.textContent = bloq ? "Pasa el nivel " + n.req + " de Michoacán" : n.dificultad + " · " + n.cols + "×" + n.filas + (r ? " · " + "⭐".repeat(r.estrellas) + " " + r.record : " · sin jugar");
       b.append(t, d);
       b.addEventListener("click", () => empezarNivel("clasico", i));
       lista.appendChild(b);
@@ -181,6 +186,7 @@ function cerrarMenu() { $("menu").hidden = true; menuAbierto = false; }
 function ajustarLienzo() {
   cv.width = fondo.width = p.ancho * DPR;
   cv.height = fondo.height = p.alto * DPR;
+  document.querySelector(".marco").style.setProperty("--asp", String(p.cols / p.filas)); // el marco toma la proporción del mapa (12×18, 20×20, 30×30…)
 }
 
 function armarFondo() {
@@ -197,7 +203,7 @@ function armarFondo() {
   trazar(); g.strokeStyle = "#c9a66b"; g.lineWidth = CELDA * 0.86; g.stroke();
   trazar(); g.strokeStyle = "rgba(255,255,255,.07)"; g.lineWidth = 3; g.setLineDash([8, 12]); g.stroke(); g.setLineDash([]);
   // línea por donde vuelan murciélagos y dragones (directo de la entrada al castillo): solo en los niveles de Michoacán donde ya salen
-  if (n.n >= 5) {
+  if (n.vuelan !== undefined ? n.vuelan : n.n >= 5) { // los mapas fijos dicen si traen voladores; Michoacán, desde el nivel 5
     const ck = n.castillo;
     g.save(); g.setLineDash([3, 9]); g.strokeStyle = "rgba(200,230,255,.28)"; g.lineWidth = 2;
     for (const cam of caminos) { g.beginPath(); g.moveTo(cam[0][0] * CELDA, cam[0][1] * CELDA); g.lineTo(cam[cam.length - 1][0] * CELDA, cam[cam.length - 1][1] * CELDA); g.stroke(); }
@@ -401,7 +407,7 @@ async function terminar(ganado) {
   let txt = (ganado ? "Oleadas superadas: " + p.oleada + "/" + p.nivel.oleadas.length : "Llegaste a la oleada " + (p.oleada + 1) + " de " + p.nivel.oleadas.length) +
     " · Monstruos derrotados: " + p.matados + " · Puntos: " + pts;
   $("finTexto").textContent = txt;
-  $("finSiguiente").hidden = !(ganado && actual.i + 1 < totalDe(actual.t));
+  $("finSiguiente").hidden = !(ganado && actual.i + 1 < totalDe(actual.t) && abierto(actual.t, actual.i + 1));
   $("finSiguiente").textContent = actual.t === "mich" ? "Siguiente nivel ▶" : "Siguiente mapa ▶";
   if (ganado && actual.t === "mich" && actual.i + 1 < NIVELES_MICHOACAN) { // avisa de lo nuevo que trae el próximo nivel
     const nu = textoNuevos(generarNivel(actual.i + 2));
@@ -680,9 +686,9 @@ function bucle(ts) {
 // Arranca con el último mapa jugado y muestra el menú de mapas
 {
   const u = leer(CLAVE_ULTIMO, 0);
-  const t = u && u.t === "mich" ? "mich" : "clasico", i = typeof u === "number" ? u : u && u.i ? u.i : 0;
+  const t = u && u.t === "clasico" ? "clasico" : "mich", i = u && u.i ? u.i : 0; // el formato viejo (número = mapa clásico de antes) arranca en Michoacán 1
   empezarNivel(t, Math.min(totalDe(t) - 1, Math.max(0, +i || 0)));
-  if (t === "mich" && !abierto("mich", actual.i)) empezarNivel("mich", 0);
+  if (!abierto(actual.t, actual.i)) empezarNivel("mich", 0);
 }
 abrirMenu();
 requestAnimationFrame(bucle);
