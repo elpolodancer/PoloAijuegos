@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- Ruta: flappybird/index-flappybird.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Aleteo</title>
+  <meta name="theme-color" content="#7fd3f0" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    html.inmersivo { --fondo-juego: #7fd3f0; }
+  </style>
+</head>
+<body class="inmersivo">
+  <div class="escena">
+    <div class="marco">
+      <canvas id="lienzo" class="lienzo" width="640" height="480" aria-label="Aleteo: toca para aletear"></canvas>
+    </div>
+  </div>
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../index.html" aria-label="Volver al portal"><span class="b-ico">←</span></a>
+    <span class="chip" id="chRecord"></span>
+  </div>
+  <script type="module" src="juego-flappybird.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
