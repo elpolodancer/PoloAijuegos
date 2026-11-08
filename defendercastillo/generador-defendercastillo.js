@@ -1,5 +1,5 @@
 // Ruta: defendercastillo/generador-defendercastillo.js
-// Genera los niveles de Michoacán (por ahora solo 10; el generador sabe hacer 100, basta subir NIVELES_MICHOACAN y calibrar) (mapa de 12 × 18, obstáculos y oleadas) a partir de una semilla: el nivel N siempre sale igual,
+// Genera los niveles de Michoacán (por ahora solo 2; el generador sabe hacer 100, basta subir NIVELES_MICHOACAN y calibrar) (mapa de 12 × 18, obstáculos y oleadas) a partir de una semilla: el nivel N siempre sale igual,
 // en el juego y en las herramientas de Node. No guarda los niveles: guarda solo la «vida calibrada» de cada uno (calibracion-defendercastillo.js),
 // un número que ajusta la vida de los enemigos para que un bot que juega bien gane con ~45 % de vida del castillo.
 // Qué cambia a lo largo de los niveles (todo sale de n):
@@ -11,8 +11,11 @@ import { ENEMIGOS, nuevaPartida } from "./logica-defendercastillo.js";
 import { CALIB } from "./calibracion-defendercastillo.js";
 
 export const OLEADAS = 12; // oleadas de cada mapa (Michoacán y Desbloqueados); antes eran 30. La dificultad se reparte en estas 12 (ver «k» en oleadasDe)
-export const NIVELES_MICHOACAN = 10; // por ahora solo 10 (antes 100). Para ampliar: subir esta cifra y correr «node bot-defendercastillo.mjs calibrar»
+export const NIVELES_MICHOACAN = 2; // por ahora solo 2 (antes 10, y antes 100). Para ampliar: subir esta cifra y correr «node bot-defendercastillo.mjs calibrar» (el generador ya sabe hacer 100)
 export const COLS_M = 12, FILAS_M = 18;
+// Margen para jugadores humanos: el bot gana con la vida de enemigos más alta posible (la dificultad tiene un «precipicio»: con 8 % más de vida el bot ya pierde).
+// Las calibraciones se multiplican por esto al guardarse, para que una persona (que juega peor que el bot y ya no tiene meteoro gratis) tenga holgura.
+export const MARGEN_HUMANO = 0.9;
 
 // Nivel a partir del cual aparece cada torre (la Defensa de Michoacán empieza solo con arqueros)
 export const DESBLOQUEO_TORRES = { arquero: 1, canon: 3, mago: 6, mina: 9, hielo: 13, cuartel: 18, ballesta: 24, veneno: 30, rayos: 38, mortero: 46 };

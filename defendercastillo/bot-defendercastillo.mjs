@@ -4,18 +4,20 @@
 //   node bot-defendercastillo.mjs calibrar [desde] [hasta]   busca la «vida calibrada» de cada nivel y la guarda en calibracion-defendercastillo.js
 //   node bot-defendercastillo.mjs validar [desde] [hasta]    revisa los niveles: mapa válido, árboles de 20 monedas, el bot bueno gana y el bot de solo arqueros no
 // «Bot bueno»: elige la torre y el lugar con más valor por moneda según lo que trae la próxima oleada (voladores, blindados, grupos grandes…),
-// mejora, tala árboles si el lugar vale la pena, construye minas al inicio y lanza el meteoro sobre grupos.
+// mejora, tala árboles si el lugar vale la pena y construye minas al inicio. NO usa el meteoro (ahora es un boost de pago del jugador:
+// la calibración no cuenta con él, así que los niveles se ganan sin comprarlo).
 // «Bot de arqueros»: solo arqueros y sus mejoras (para comprobar que ninguna torre sola resuelve el nivel).
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { CELDA, TORRES, ENEMIGOS, nuevaPartida, celdaLibre, datosTorre, colocar, mejorar, talar, iniciarOleada, meteoro, paso, costeTalar } from "./logica-defendercastillo.js";
-import { generarNivel, NIVELES_MICHOACAN } from "./generador-defendercastillo.js";
+import { CELDA, TORRES, ENEMIGOS, nuevaPartida, celdaLibre, datosTorre, colocar, mejorar, talar, iniciarOleada, paso, costeTalar } from "./logica-defendercastillo.js";
+import { generarNivel, NIVELES_MICHOACAN, MARGEN_HUMANO } from "./generador-defendercastillo.js";
 import { CALIB } from "./calibracion-defendercastillo.js";
 
 const PASO = 1 / 60;
 const TOPE_BASE = 26;  // torres (sin contar minas) que construye el bot; sube 1 cada 12 niveles
-// Vida del castillo con la que el bot bueno debe ganar. Con solo 10 niveles: el 1 es muy fácil (~95 %, un humano hábil gana sin apuros)
-// y la dificultad sube poco a poco hasta ~75 % en el 9; el nivel 10 (jefe) es algo más duro (~67 %)
-const objetivo = (n) => 0.95 - (0.23 * (n - 1)) / 9 - (n % 10 === 0 ? 0.05 : 0);
+// Vida del castillo con la que el bot bueno debe ganar SIN usar el meteoro (ahora es un boost de pago; antes se recargaba solo y el bot lo usaba).
+// El nivel 1 es muy fácil (~98 %) y la dificultad sube poco a poco hasta ~76 % en el 10; el nivel 10 (jefe) es algo más duro.
+// (Versión anterior, con meteoro gratis: 0.95 − 0.23·(n−1)/9: este objetivo es 3 puntos más fácil.)
+export const objetivo = (n) => 0.98 - (0.22 * (n - 1)) / 9 - (n % 10 === 0 ? 0.05 : 0);
 const ARCHIVO = "./calibracion-defendercastillo.js";
 
 // ---------- Cobertura: cuántos puntos del camino alcanza una torre puesta en cada celda ----------
@@ -142,16 +144,6 @@ function gastar(p, cob, modo) {
     mejor();
   }
 }
-function usarMeteoro(p) {
-  if (p.meteoroEspera > 0 || !p.enemigos.length) return;
-  let mej = null, mn = 0;
-  for (const e of p.enemigos) {
-    let n = 0;
-    for (const o of p.enemigos) if (Math.hypot(o.x - e.x, o.y - e.y) <= 1.5 * CELDA) n += 1 + (ENEMIGOS[o.tipo].vida >= 800 ? 3 : 0);
-    if (n > mn) { mn = n; mej = e; }
-  }
-  if (mej && mn >= 6) meteoro(p, mej.x, mej.y);
-}
 
 export function jugarBot(nivel, modo = "bueno") {
   const p = nuevaPartida(nivel), cob = crearCobertura(p);
@@ -165,7 +157,7 @@ export function jugarBot(nivel, modo = "bueno") {
     }
     paso(p, PASO); pasos++;
     p.ev.length = 0;
-    if (pasos % 60 === 0 && p.estado === "oleada") { gastar(p, cob, modo); if (modo !== "arqueros") usarMeteoro(p); }
+    if (pasos % 60 === 0 && p.estado === "oleada") gastar(p, cob, modo);
   }
   const nW = nivel.oleadas.length, ganado = p.estado === "ganado";
   return { ganado, vida: Math.ceil(p.vida), vidaFrac: p.vida / nivel.vidaCastillo, oleada: p.oleada, nW, tal4, torres: p.torres.length, talados: p.talados, seg: Math.round(pasos / 60),
@@ -188,7 +180,7 @@ function calibrarNivel(n) {
     if (r.ganado && r.vidaFrac >= T - 0.1 && r.vidaFrac <= T + 0.12) { mejor = c; break; }
     c *= r.score > T ? 1.05 : 0.93;
   }
-  return Math.round(mejor * 1000) / 1000;
+  return Math.round(mejor * MARGEN_HUMANO * 1000) / 1000; // el bot ganaría con «mejor»; se baja un poco para que un humano tenga holgura
 }
 function guardarCalib(arr) {
   const filas = [];

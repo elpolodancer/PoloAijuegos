@@ -10,7 +10,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { TORRES, ENEMIGOS, nuevaPartida } from "./logica-defendercastillo.js";
-import { oleadasDe } from "./generador-defendercastillo.js";
+import { oleadasDe, MARGEN_HUMANO } from "./generador-defendercastillo.js";
 import { jugarBot } from "./bot-defendercastillo.mjs";
 
 const ARCHIVO = new URL("./mapas-desbloqueados-defendercastillo.js", import.meta.url);
@@ -122,7 +122,10 @@ const E = [
   ["goblin", "lobo", "orco", "murcielago", "esqueleto", "arana", "slime", "caballero", "brujo", "fantasma", "jinete", "golem", "ogro"], // 9
   ["goblin", "lobo", "orco", "murcielago", "esqueleto", "arana", "slime", "caballero", "brujo", "fantasma", "jinete", "golem", "ogro"], // 10
 ];
-export const DISENOS = [
+// De momento solo se publican (y se calibran) los primeros MAPAS_ACTIVOS; los demás diseños quedan guardados aquí para cuando se necesiten.
+// Para volver a tener más mapas: sube este número y corre «node constructor-mapas-defendercastillo.mjs calibrar».
+export const MAPAS_ACTIVOS = 2;
+export const DISENOS_TODOS = [
   { nombre: "Valle tranquilo", trazado: () => serpH(12, 18), nW: 12 },
   { nombre: "Camino del río", trazado: () => transponer(serpH(20, 14)), nW: 12 },
   { nombre: "Espiral del dragón", trazado: () => espiral(16, 22), nW: 12 },
@@ -139,6 +142,7 @@ export const DISENOS = [
   enemigos: E[i],
   dificultad: i < 2 ? "Fácil" : i < 5 ? "Media" : i < 8 ? "Difícil" : "Muy difícil",
 }));
+export const DISENOS = DISENOS_TODOS.slice(0, MAPAS_ACTIVOS);
 
 // ---------- Armar un mapa (sin oleadas) ----------
 function armar(d) {
@@ -173,7 +177,7 @@ function armar(d) {
   }
   nivel.obstaculos.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
   nivel.torres = d.torres;
-  const antes = d.n > 1 ? DISENOS[d.n - 2] : { torres: [], enemigos: [] };
+  const antes = d.n > 1 ? DISENOS_TODOS[d.n - 2] : { torres: [], enemigos: [] };
   nivel.nuevas = { torres: d.torres.filter((t) => !antes.torres.includes(t)), enemigos: d.enemigos.filter((t) => !antes.enemigos.includes(t)) };
   nivel.vuelan = d.enemigos.includes("murcielago"); // dibuja la línea punteada por donde vuelan
   return nivel;
@@ -245,8 +249,8 @@ function dibujar(v) {
 function largoRuta(v) { return (v.caminos || [v.camino]).map((cam) => cam.slice(1).reduce((s, p, i) => s + Math.abs(p[0] - cam[i][0]) + Math.abs(p[1] - cam[i][1]), 0)); }
 
 // ---------- Calibración (misma idea que bot-defendercastillo.mjs: el bot bueno gana terminando cerca del objetivo) ----------
-// 95 % de vida en el primer mapa y ~72 % en el 10.º; el último (jefe) un poco más duro
-const objetivo = (n) => 0.95 - (0.23 * (n - 1)) / 9 - (n === 10 ? 0.05 : 0);
+// Igual que en el bot de Michoacán (el bot juega SIN meteoro, que ahora es un boost de pago): 98 % de vida en el primer mapa y ~76 % en el 10.º; el último (jefe) un poco más duro
+const objetivo = (n) => 0.98 - (0.22 * (n - 1)) / 9 - (n === 10 ? 0.05 : 0);
 function calibrarMapa(d) {
   const T = objetivo(d.n), juego = (c) => jugarBot(conOleadas(d, c));
   let lo = Math.log(0.05), hi = Math.log(12);
@@ -258,7 +262,7 @@ function calibrarMapa(d) {
     if (r.ganado && r.vidaFrac >= T - 0.1 && r.vidaFrac <= T + 0.12) { mejor = c; break; }
     c *= r.score > T ? 1.05 : 0.93;
   }
-  return redondea(mejor);
+  return redondea(mejor * MARGEN_HUMANO); // el bot ganaría con «mejor»; se baja un poco para que un humano tenga holgura
 }
 
 // ---------- Archivo de mapas ----------

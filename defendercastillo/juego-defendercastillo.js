@@ -1,15 +1,15 @@
 // Ruta: defendercastillo/juego-defendercastillo.js
 // «Defensa del castillo»: pantalla, controles y sonido. Las reglas viven en logica-defendercastillo.js y los mapas en mapas-desbloqueados-defendercastillo.js (generado) y generador-defendercastillo.js.
 // Cómo se juega: elige un mapa; elige una torre abajo y toca un lugar libre del pasto para construirla; toca una torre para
-// mejorarla o venderla; 🪓 Quitar sirve para talar árboles/rocas (cuesta monedas) o vender torres con un toque; ☄️ lanza un
-// meteoro (se recarga solo). Los enemigos caminan por el camino café; si llegan al castillo le quitan vida.
-// El menú tiene dos pestañas: «Desbloqueados» (mapas fijos de 12×18 a 30×30 para repetir; hoy 10 y la meta es llegar a unos 200; cada uno se abre al pasar un nivel de Michoacán, campo «req»; por dentro siguen llamándose «clasico») y los 10 niveles de Michoacán (generados por generador-defendercastillo.js;
+// mejorarla o venderla; 🪓 Quitar sirve para talar árboles/rocas (cuesta monedas) o vender torres con un toque; ☄️ es un boost que se
+// COMPRA con las monedas del mapa (METEORO.precio por cada uno, sin espera): se toca el botón y luego el mapa. Los enemigos caminan por el camino café; si llegan al castillo le quitan vida.
+// El menú tiene dos pestañas: «Desbloqueados» (mapas fijos de 12×18 a 30×30 para repetir; hoy 2 y la meta es llegar a unos 200; cada uno se abre al pasar un nivel de Michoacán, campo «req»; por dentro siguen llamándose «clasico») y los 10 niveles de Michoacán (generados por generador-defendercastillo.js;
 // se desbloquean de uno en uno y cada nivel nuevo puede traer torres y enemigos nuevos).
 import { MAPAS_DESBLOQUEADOS as MAPAS } from "./mapas-desbloqueados-defendercastillo.js";
 import { generarNivel, NIVELES_MICHOACAN, DESBLOQUEO_TORRES, OLEADAS } from "./generador-defendercastillo.js";
 import {
   CELDA, ANCHO, ALTO, TORRES, TORRES_CLASICAS, ENEMIGOS, METEORO, REEMBOLSO,
-  nuevaPartida, celdaLibre, torreEn, obstaculoEn, costeTalar, datosTorre, colocar, mejorar, vender, talar, iniciarOleada, meteoro, paso, estrellas,
+  nuevaPartida, celdaLibre, torreEn, obstaculoEn, costeTalar, datosTorre, colocar, mejorar, vender, talar, iniciarOleada, comprarMeteoro, meteoro, paso, estrellas,
 } from "./logica-defendercastillo.js";
 
 // ----- Ajustes -----
@@ -348,10 +348,13 @@ function volverAMapas() {
 $("btnMapas").addEventListener("click", volverAMapas);
 $("btnAtras").addEventListener("click", volverAMapas);
 $("finMapas").addEventListener("click", abrirMenu);
+// ☄️ Boost de pago: con meteoros comprados solo se apunta; sin ninguno, el toque compra uno (si alcanzan las monedas) y lo deja listo para apuntar
 $("btnMeteoro").addEventListener("click", () => {
-  if (p.meteoroEspera > 0 || p.estado === "ganado" || p.estado === "perdido") return;
-  modoMeteoro = !modoMeteoro; tipoSel = null; torreSel = null; modoQuitar = false;
-  if (modoMeteoro) mensaje("☄️ Toca el mapa donde quieres que caiga", 3000);
+  if (p.estado === "ganado" || p.estado === "perdido") return;
+  if (modoMeteoro) { modoMeteoro = false; return; }              // segundo toque: cancelar (el meteoro queda guardado)
+  if (p.meteoros <= 0 && !comprarMeteoro(p)) { mensaje("Te faltan monedas: el meteoro cuesta " + METEORO.precio + " 💵", 2000); return; }
+  modoMeteoro = true; tipoSel = null; torreSel = null; modoQuitar = false;
+  mensaje("☄️ Toca el mapa donde quieres que caiga", 3000);
 });
 $("btnVel").addEventListener("click", () => { vel = vel >= VEL_MAX ? 1 : vel + 1; $("velNum").textContent = "x" + vel; }); // x1 → x2 → … → x8 → x1
 $("btnPausa").addEventListener("click", () => pausar(!pausa));
@@ -636,11 +639,10 @@ function ui() {
   poner("btnOleadaNum", p.estado === "preparando" ? String(p.oleada + 1) : "");   // número de la próxima oleada
   bo.classList.toggle("activo", !bo.disabled);                                  // late cuando ya puedes empezarla
   const bm = $("btnMeteoro");
-  bm.disabled = p.meteoroEspera > 0;
+  bm.disabled = p.estado === "ganado" || p.estado === "perdido";
   bm.classList.toggle("on", modoMeteoro);
-  const carga = Math.round((1 - p.meteoroEspera / METEORO.espera) * 100);
-  if (memo.carga !== carga) { memo.carga = carga; bm.style.setProperty("--carga", carga + "%"); }
-  poner("btnMeteoroNum", p.meteoroEspera > 0 ? Math.ceil(p.meteoroEspera) + "s" : "");
+  bm.classList.toggle("sin", p.meteoros <= 0 && p.oro < METEORO.precio);   // sin meteoros y sin monedas para comprar uno
+  poner("btnMeteoroNum", p.meteoros > 0 ? "×" + p.meteoros : METEORO.precio + "💵");   // cuántos tienes, o lo que cuesta comprar uno
 
   // panel de la torre elegida
   const panel = $("panel");

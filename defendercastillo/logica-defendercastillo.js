@@ -14,7 +14,7 @@ export const ANCHO = COLS * CELDA;
 export const ALTO = FILAS * CELDA;
 
 export const REEMBOLSO = 0.7;          // al vender una torre se devuelve este % de lo invertido
-export const METEORO = { espera: 40, radio: 1.7, dano: 90 }; // habilidad especial: radio en celdas, espera en segundos
+export const METEORO = { precio: 150, radio: 1.7, dano: 90 }; // boost que se COMPRA con monedas (cada compra = 1 meteoro, sin espera): radio en celdas
 export const VEL_PROYECTIL = 340;      // px por segundo
 
 // Cada torre tiene 3 niveles. dano, alcance (celdas), cadencia (segundos entre disparos),
@@ -213,7 +213,7 @@ export function nuevaPartida(nivel) {
     torres: [],
     enemigos: [],
     proyectiles: [],
-    meteoroEspera: 0,
+    meteoros: 0,          // meteoros comprados que aún no se usan (el bot de calibración nunca los compra)
     puntos: 0,
     matados: 0,
     talados: 0,
@@ -358,9 +358,17 @@ function impacto(p, py) {
   }
 }
 
+// Compra un meteoro con las monedas del mapa (se pueden acumular varios). Devuelve true si se compró.
+export function comprarMeteoro(p) {
+  if (p.estado === "ganado" || p.estado === "perdido" || p.oro < METEORO.precio) return false;
+  p.oro -= METEORO.precio;
+  p.meteoros++;
+  return true;
+}
+// Lanza un meteoro ya comprado en (x, y); gasta uno. Sin meteoros no hace nada.
 export function meteoro(p, x, y) {
-  if (p.meteoroEspera > 0 || p.estado === "ganado" || p.estado === "perdido") return false;
-  p.meteoroEspera = METEORO.espera;
+  if (p.meteoros <= 0 || p.estado === "ganado" || p.estado === "perdido") return false;
+  p.meteoros--;
   impacto(p, { radio: METEORO.radio, dano: METEORO.dano, tx: x, ty: y });
   p.ev.push({ t: "meteoro", x, y });
   return true;
@@ -420,7 +428,6 @@ function cuarteles(p, dt) {
 // Avanza el juego dt segundos (juego-defendercastillo.js lo llama con pasos fijos de 1/60)
 export function paso(p, dt) {
   if (p.estado === "ganado" || p.estado === "perdido") return;
-  if (p.meteoroEspera > 0) p.meteoroEspera = Math.max(0, p.meteoroEspera - dt);
 
   // salen enemigos
   if (p.activa) {
