@@ -18,6 +18,25 @@
     .inmersivo .marco { aspect-ratio: var(--asp, 0.6667); height: auto; width: min(100vw, calc((100vh - var(--res-arriba) - var(--res-abajo)) * var(--asp, 0.6667))); width: min(100vw, calc((100dvh - var(--res-arriba) - var(--res-abajo)) * var(--asp, 0.6667))); }
     .inmersivo .lienzo { background: #2f5d34; }
 
+    /* ----- Marcadores (monedas, vida, oleada): 3 botones cuadrados 3D, iguales a los del dock -----
+       Celular: en fila arriba a la izquierda. PC / pantalla ancha: en columna pegados al borde izquierdo del mapa (--mw = ancho del marco) */
+    #stats { display: flex; gap: 8px; }
+    .b3d.stat { --t: 44px; width: auto; min-width: var(--t); padding: 0 4px; flex-direction: column; gap: 2px; font-weight: 800; cursor: default; pointer-events: none; }
+    .b3d.stat .b-ico { font-size: 17px; line-height: 1; }
+    .b3d.stat b { position: relative; font-size: 13px; line-height: 1; font-variant-numeric: tabular-nums; }
+    @media (min-aspect-ratio: 4/3) {
+      body { --mw: min(100vw, calc((100dvh - var(--res-arriba) - var(--res-abajo)) * var(--asp, 0.6667))); }
+      #stats { position: fixed; top: calc(var(--res-arriba) + 6px); right: calc(50vw + var(--mw) / 2 + 12px); flex-direction: column; gap: 8px; }
+      .b3d.stat { --t: 66px; }
+      .b3d.stat .b-ico { font-size: 25px; }
+      .b3d.stat b { font-size: 16px; }
+    }
+    @media (min-aspect-ratio: 4/3) and (max-height: 520px) {
+      .b3d.stat { --t: 46px; }
+      .b3d.stat .b-ico { font-size: 18px; }
+      .b3d.stat b { font-size: 13px; }
+    }
+
     /* ----- Textos flotantes ----- */
     .hud-izq { flex-wrap: wrap; gap: 4px 8px; max-width: calc(100vw - 80px); }
     #mapaNombre { flex-basis: 100%; font-size: 12px; color: #d8dbe2; text-shadow: 0 1px 2px #000; }
@@ -133,9 +152,11 @@
   <div class="hud hud-izq">
     <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
     <button class="b3d chico b-azul" id="btnAtras" type="button" aria-label="Volver a los mapas" title="Volver a los mapas"><span class="b-ico">◀</span></button>
-    <span class="chip">🪙 <b id="oro">0</b></span>
-    <span class="chip">❤️ <b id="vida">0</b></span>
-    <span class="chip">🌊 <b id="oleada">1</b></span>
+    <div id="stats" role="group" aria-label="Monedas, vida y oleada">
+      <div class="b3d stat b-oro" title="Monedas"><span class="b-ico">💰</span><b id="oro">0</b></div>
+      <div class="b3d stat b-rojo" title="Vida del castillo"><span class="b-ico">❤️</span><b id="vida">0</b></div>
+      <div class="b3d stat b-azul" title="Oleada"><span class="b-ico">🌊</span><b id="oleada">1</b></div>
+    </div>
     <span class="chip" id="record"></span>
     <div id="mapaNombre"></div>
   </div>

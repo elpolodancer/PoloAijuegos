@@ -186,7 +186,7 @@ function cerrarMenu() { $("menu").hidden = true; menuAbierto = false; }
 function ajustarLienzo() {
   cv.width = fondo.width = p.ancho * DPR;
   cv.height = fondo.height = p.alto * DPR;
-  document.querySelector(".marco").style.setProperty("--asp", String(p.cols / p.filas)); // el marco toma la proporción del mapa (12×18, 20×20, 30×30…)
+  document.querySelector(".marco").style.setProperty("--asp", String(p.cols / p.filas)); document.documentElement.style.setProperty("--asp", String(p.cols / p.filas)); // también en la raíz: los marcadores de la izquierda la usan para pegarse al mapa // el marco toma la proporción del mapa (12×18, 20×20, 30×30…)
 }
 
 function armarFondo() {
@@ -243,8 +243,8 @@ cv.addEventListener("pointerdown", (ev) => {
   fantasma = { c: q.c, f: q.f };
   if (modoQuitar) {
     const t = torreEn(p, q.c, q.f), o = obstaculoEn(p, q.c, q.f);
-    if (t) { const gana = vender(p, t); torreSel = null; efectos.push({ k: "texto", x: t.x, y: t.y, t: 0, dur: 0.8, txt: "+" + gana + " 🪙" }); tono("v", 400, 700, 0.12, "triangle", 0.05); }
-    else if (o) { if (!talar(p, q.c, q.f)) mensaje("Te faltan monedas: talar cuesta " + costeTalar(o) + " 🪙", 1800); }
+    if (t) { const gana = vender(p, t); torreSel = null; efectos.push({ k: "texto", x: t.x, y: t.y, t: 0, dur: 0.8, txt: "+" + gana + " 💰" }); tono("v", 400, 700, 0.12, "triangle", 0.05); }
+    else if (o) { if (!talar(p, q.c, q.f)) mensaje("Te faltan monedas: talar cuesta " + costeTalar(o) + " 💰", 1800); }
     return;
   }
   if (modoMeteoro) {
@@ -255,7 +255,7 @@ cv.addEventListener("pointerdown", (ev) => {
   if (t) { torreSel = t; tipoSel = null; return; }
   if (tipoSel) {
     if (!celdaLibre(p, q.c, q.f)) { mensaje("Ahí no se puede construir", 1500); return; }
-    if (!colocar(p, tipoSel, q.c, q.f)) mensaje("Te faltan monedas 🪙", 1500);
+    if (!colocar(p, tipoSel, q.c, q.f)) mensaje("Te faltan monedas 💰", 1500);
     return;
   }
   torreSel = null;
@@ -275,7 +275,7 @@ function armarTienda() { // solo las torres que trae el nivel (los clásicos: la
     b.dataset.tipo = tipo;
     b.setAttribute("aria-label", d.nombre + ", " + d.precio + " monedas");
     const ico = document.createElement("span"); ico.className = "b-ico"; ico.textContent = d.icono;
-    const pr = document.createElement("span"); pr.className = "b-info"; pr.textContent = d.precio + "🪙";
+    const pr = document.createElement("span"); pr.className = "b-info"; pr.textContent = d.precio + "💰";
     b.title = d.nombre + ": " + d.desc;
     b.append(ico, pr);
     b.addEventListener("click", () => { tipoSel = tipoSel === tipo ? null : tipo; torreSel = null; modoMeteoro = false; modoQuitar = false; });
@@ -331,7 +331,7 @@ function eventos() {
       else if (e.tipo === "veneno") tono("ve", 300, 220, 0.1, "triangle", 0.03, 100);
       else tono("m", 600, 1200, 0.12, "sine", 0.04, 80);
     } else if (e.t === "muerte") {
-      efectos.push({ k: "texto", x: e.x, y: e.y, t: 0, dur: 0.8, txt: "+" + e.oro + " 🪙" });
+      efectos.push({ k: "texto", x: e.x, y: e.y, t: 0, dur: 0.8, txt: "+" + e.oro + " 💰" });
       tono("x", 520, 220, 0.1, "triangle", 0.035, 50);
     } else if (e.t === "explosion") {
       efectos.push({ k: "explosion", x: e.x, y: e.y, t: 0, dur: 0.3, r: e.r, hielo: e.hielo });
@@ -360,7 +360,7 @@ function eventos() {
     } else if (e.t === "cuartelListo") {
       efectos.push({ k: "texto", x: e.x, y: e.y, t: 0, dur: 0.8, txt: "🏕️ ✅" });
     } else if (e.t === "talar") {
-      efectos.push({ k: "texto", x: e.x, y: e.y, t: 0, dur: 0.8, txt: "-" + e.coste + " 🪙", rojo: true });
+      efectos.push({ k: "texto", x: e.x, y: e.y, t: 0, dur: 0.8, txt: "-" + e.coste + " 💰", rojo: true });
       efectos.push({ k: "chispa", x: e.x, y: e.y, t: 0, dur: 0.25 });
       tono("t", 220, 90, 0.15, "sawtooth", 0.05);
     } else if (e.t === "meteoro") {
@@ -381,7 +381,7 @@ function eventos() {
       mensaje("🌊 Oleada " + e.n + " de " + p.nivel.oleadas.length + (fuerte ? (e.n === p.nivel.oleadas.length ? " — ¡el jefe! 🧌" : " — ¡oleada fuerte! 💪") : ""), 3000);
       tono("o", 220, 440, 0.4, "sawtooth", 0.05);
     } else if (e.t === "oleadaLista") {
-      mensaje("✅ Oleada superada: +" + e.bono + " 🪙" + (e.minas ? " (+" + e.minas + " de tus minas 💰)" : ""), 3000);
+      mensaje("✅ Oleada superada: +" + e.bono + " 💰" + (e.minas ? " (+" + e.minas + " de tus minas)" : ""), 3000);
       melodia([440, 550]);
     } else if (e.t === "fin") {
       terminar(e.ganado);
@@ -463,7 +463,7 @@ function dibujar() {
     if (modoQuitar) circulo((o.c + 0.5) * CELDA, (o.f + 0.5) * CELDA, 19, "rgba(255,210,80,.18)", "rgba(255,210,80,.7)");
     ctx.font = "26px " + FUENTE;
     ctx.fillText(o.e, (o.c + 0.5) * CELDA, (o.f + 0.5) * CELDA + 2);
-    if (modoQuitar) etiqueta(costeTalar(o) + "🪙", (o.c + 0.5) * CELDA, (o.f + 1) * CELDA - 5, p.oro >= costeTalar(o) ? "#ffe27a" : "#ff8a8a");
+    if (modoQuitar) etiqueta(costeTalar(o) + "💰", (o.c + 0.5) * CELDA, (o.f + 1) * CELDA - 5, p.oro >= costeTalar(o) ? "#ffe27a" : "#ff8a8a");
   }
 
   // torres
@@ -634,17 +634,17 @@ function ui() {
       if (d.congela) chip("❄️ congela", d.congela, sig && sig.congela, " s");
       if (d.veneno) chip("☠️ veneno/s", d.veneno.dps, sig && sig.veneno.dps);
       if (d.cadena) chip("⚡ saltos", d.cadena, sig && sig.cadena);
-      if (d.oroOla) chip("💰 por oleada", d.oroOla, sig && sig.oroOla, " 🪙");
+      if (d.oroOla) chip("💰 por oleada", d.oroOla, sig && sig.oroOla);
       if (d.bloqueo) { chip("🪖 soldados", d.bloqueo, sig && sig.bloqueo); chip("❤️ vida", d.hpSol, sig && sig.hpSol); }
       info.append(cab, chips);
       const fila = document.createElement("div"); fila.className = "fila";
       const bu = document.createElement("button"); bu.className = "b3d txt chico " + (torreSel.nivel ? "b-oro" : "b-azul");
-      bu.textContent = sube ? "⬆️ Mejorar · " + sube + " 🪙" : "Nivel máximo";
+      bu.textContent = sube ? "⬆️ Mejorar · " + sube + " 💰" : "Nivel máximo";
       bu.disabled = !sube || p.oro < sube;
       const t = torreSel;
       bu.addEventListener("click", () => { mejorar(p, t); });
       const bv = document.createElement("button"); bv.className = "b3d txt chico b-gris";
-      bv.textContent = "💰 Vender · +" + Math.floor(t.invertido * REEMBOLSO) + " 🪙";
+      bv.textContent = "🏷️ Vender · +" + Math.floor(t.invertido * REEMBOLSO) + " 💰";
       bv.addEventListener("click", () => { vender(p, t); torreSel = null; });
       fila.append(bu, bv);
       panel.append(info, fila);
