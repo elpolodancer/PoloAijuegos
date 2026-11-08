@@ -41,13 +41,15 @@
     .hud-izq { flex-wrap: wrap; gap: 4px 8px; max-width: calc(100vw - 80px); }
     #mapaNombre { flex-basis: 100%; font-size: 12px; color: #d8dbe2; text-shadow: 0 1px 2px #000; }
     #mapaNombre:empty { display: none; }
-    #estado { position: absolute; left: 6px; right: 6px; top: 6px; z-index: 2; padding: 4px 8px; font-size: 11px; line-height: 1.3; text-align: center; color: #fff;
-      background: rgba(10,10,12,.62); border-radius: 10px; pointer-events: none; }
-    #estado:empty { display: none; }
+    /* Texto de ayuda: FUERA del mapa. Vertical: línea arriba de los botones del dock (su espacio está reservado en --res-abajo, así el mapa no salta).
+       Horizontal / PC: panel a la derecha del mapa (ver más abajo) */
+    #estado { order: -1; align-self: center; width: min(100%, 440px); min-height: 34px; display: flex; align-items: center; justify-content: center; padding: 4px 10px; font-size: 11px; line-height: 1.3; text-align: center; color: #e6e8ec;
+      background: rgba(0,0,0,.35); border-radius: 10px; pointer-events: none; }
+    #estado:empty { visibility: hidden; }
 
     /* ----- Dock inferior (como las cartas de Clash Royale): torres arriba y acciones debajo, todo junto abajo del mapa.
        El marco del juego se recorre hacia arriba para dejarle sitio (--res-arriba / --res-abajo = espacio reservado) ----- */
-    :root { --res-arriba: calc(62px + env(safe-area-inset-top, 0px)); --res-abajo: calc(152px + env(safe-area-inset-bottom, 0px)); }
+    :root { --res-arriba: calc(62px + env(safe-area-inset-top, 0px)); --res-abajo: calc(192px + env(safe-area-inset-bottom, 0px)); }
     .escena { padding: var(--res-arriba) 0 var(--res-abajo); }
     #dock { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; gap: 10px;
       padding: 14px 8px calc(8px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(180deg, #2c2f36, #17181c);
@@ -90,10 +92,19 @@
     #estrellas { font-size: 2rem; letter-spacing: 4px; }
 
     /* Muchas torres (Michoacán llega a 10): botones más chicos, en dos filas, y el dock reserva más alto */
-    body.muchas { --res-abajo: calc(196px + env(safe-area-inset-bottom, 0px)); }
+    body.muchas { --res-abajo: calc(236px + env(safe-area-inset-bottom, 0px)); }
     body.muchas #tienda { flex-wrap: wrap; max-width: 330px; gap: 8px 7px; }
     body.muchas #tienda .b3d { --t: 40px; }
     body.muchas .escena { padding-bottom: var(--res-abajo); }
+
+    /* Horizontal / PC: el texto de ayuda va en un panel a la derecha del mapa (no tapa nada); --mw = ancho del marco */
+    @media (orientation: landscape) {
+      body { --mw: min(100vw, calc((100dvh - var(--res-arriba) - var(--res-abajo)) * var(--asp, 0.6667))); }
+      #estado { position: fixed; order: 0; top: calc(var(--res-arriba) + 54px); left: calc(50vw + var(--mw) / 2 + 12px); width: min(260px, calc(50vw - var(--mw) / 2 - 24px)); min-height: 0; max-height: 50dvh; overflow: hidden;
+        justify-content: flex-start; padding: 8px 10px; font-size: 13px; text-align: left; background: rgba(20,21,24,.85); border: 2px solid #15171a; border-radius: 14px; }
+      #estado:empty { display: none; }
+    }
+    @media (orientation: landscape) and (max-height: 520px) { #estado { font-size: 11px; padding: 6px 8px; } }
 
     /* ----- Horizontal (celular acostado / PC): el dock queda en una sola fila abajo y el mapa ocupa casi toda la altura ----- */
     @media (orientation: landscape) {
@@ -126,7 +137,6 @@
   <div class="escena">
     <div class="marco">
       <canvas id="lienzo" class="lienzo" width="360" height="540"></canvas>
-      <div id="estado"></div>
       <div id="panel" hidden></div>
       <div id="menu">
         <h2>🗺️ Elige un mapa</h2>
@@ -165,6 +175,7 @@
   </div>
   <!-- Dock inferior: torres y acciones -->
   <div id="dock">
+    <div id="estado" role="status" aria-live="polite"></div>
     <div id="tienda" role="group" aria-label="Torres"></div>
     <div id="controles" role="group" aria-label="Acciones">
       <button class="b3d b-verde" id="btnOleada" type="button" aria-label="Empezar oleada" title="Empezar oleada"><span class="b-ico" id="btnOleadaIco">▶</span><span class="b-info" id="btnOleadaNum"></span></button>

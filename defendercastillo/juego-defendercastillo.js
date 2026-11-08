@@ -64,6 +64,11 @@ let pausa = false, vel = 1, acum = 0, ultimo = 0, anim = 0;
 let finalizado = false, fantasma = null, flash = 0, menuAbierto = true;
 let efectos = [];
 let msgTexto = "", msgHasta = 0;
+// En celulares/tabletas la ayuda automática (descripción de la torre, «Prepara tu defensa…») se quita 5 s después de iniciar la primera oleada
+// y no vuelve hasta reiniciar la partida. Los avisos puntuales (monedas, oleada superada…) sí se siguen mostrando.
+const ES_TACTIL = matchMedia("(hover: none) and (pointer: coarse)").matches;
+const AYUDA_MS = 5000;
+let ayudaInicio = 0, ayudaOculta = false;
 let progreso = leer(CLAVE_PROGRESO, {});
 
 // ----- Sonido (WebAudio, sin archivos) -----
@@ -107,6 +112,7 @@ function empezarNivel(t, i) {
   p = nuevaPartida(nivelDe(t, i));
   tipoSel = null; torreSel = null; modoMeteoro = false; modoQuitar = false;
   finalizado = false; efectos = []; flash = 0; acum = 0; pausa = false; vel = 1;
+  ayudaInicio = 0; ayudaOculta = false; // la ayuda vuelve a salir al reiniciar la partida
   $("btnPausa").firstElementChild.textContent = "⏸"; $("velNum").textContent = "x1";
   $("fin").hidden = true;
   cerrarMenu();
@@ -653,12 +659,17 @@ function ui() {
 
   // texto de ayuda
   let texto = msgTexto;
+  if (ES_TACTIL && !ayudaOculta) {
+    if (!ayudaInicio && (p.estado !== "preparando" || p.oleada > 0)) ayudaInicio = performance.now();   // la primera oleada ya empezó
+    if (ayudaInicio && performance.now() - ayudaInicio > AYUDA_MS) ayudaOculta = true;
+  }
   if (performance.now() > msgHasta) {
     texto = p.estado === "preparando" ? "Prepara tu defensa. Viene: " + resumenOleada()
       : p.estado === "oleada" ? "🌊 Oleada en curso…" : "";
     if (modoQuitar) texto = "🪓 Toca un árbol o roca para talarlo (cuesta monedas) o una torre para venderla";
     else if (tipoSel) texto = TORRES[tipoSel].icono + " " + TORRES[tipoSel].nombre + ": " + TORRES[tipoSel].desc + ". Toca un lugar libre del pasto para ponerla";
     else if (p.estado === "preparando" && p.oleada === 0 && !p.torres.length) texto = "Elige una torre abajo y colócala junto al camino café. Viene: " + resumenOleada();
+    if (ayudaOculta) texto = ""; // ya la leyó: no vuelve hasta reiniciar
   }
   poner("estado", texto);
 }
