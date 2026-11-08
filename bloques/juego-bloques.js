@@ -2,53 +2,73 @@
 // Bloques de madera: arrastra cada una de las 3 piezas al tablero de 8×8. Cada fila o columna completa se limpia.
 // Cada ronda trae piezas que SÍ caben, pero con trampas: poner una en otro hueco válido puede dejar sin sitio a las demás.
 // Pierdes cuando ninguna de las piezas que te quedan cabe en el tablero. La lógica y el generador están en logica-bloques.js.
-// Guardado: la partida en curso (bloques_partida_v1) queda solo en el dispositivo; el récord (bloques_record_v1) se sincroniza con la cuenta.
+// Zonas: ♾️ Infinito (3 dificultades: Fácil, Normal, Difícil) y 🗺️ Niveles fijos (meta: limpiar N líneas). Sus reglas están en niveles-bloques.js.
+// Guardado: la partida en curso (bloques_partida_v1) queda solo en el dispositivo; el récord de cada dificultad y las estrellas de los niveles
+// (bloques_record_v1 = { mejor (Normal), facil, dificil, est: [estrellas del nivel 1, 2…] }) se sincronizan con la cuenta.
 import { encolarPuntos } from "../compartido/cola-puntos.js";
-import { N, FORMAS, cabe, hayLugar, colocar, tableroInicial, rellenar, agregarBloqueo, generarRonda } from "./logica-bloques.js";
+import { N, FORMAS, cabe, hayLugar, colocar } from "./logica-bloques.js";
+import { DIFICULTADES, ORDEN_DIF, NIVELES_FIJOS, nivelFijo, estrellasDe, partidaInfinita, partidaNivel, avanzarRonda } from "./niveles-bloques.js";
 
 const ID = "bloques", CLAVE_PARTIDA = "bloques_partida_v1", CLAVE_RECORD = "bloques_record_v1";
 const W = 480, H = 720, CELL = 50, BX = 40, BY = 156;       // lienzo y tablero (8 × 50 = 400 px)
 const SLOT_Y = 572, SLOT_CY = 640, ESC = 0.52, ELEVAR = 95; // bandeja de piezas; la pieza arrastrada se muestra por encima del dedo
-const PUNTOS_POR = 40;                                      // 1 punto de perfil por cada 40 del juego
+const PUNTOS_NIVEL = 5;                                     // puntos de perfil la primera vez que pasas cada nivel fijo (en el infinito, ver «puntosPor» de cada dificultad)
 const cv = document.getElementById("lienzo"), ctx = cv.getContext("2d");
 const $ = (id) => document.getElementById(id);
 
 // ----- Partida y récord -----
-const nuevaPartida = () => { const tab = tableroInicial(); return { tab, pz: generarRonda(tab, 0), pt: 0, ro: 1, env: 0 }; };
+// Une dos récords (el de este dispositivo y el de la nube): gana el mayor de cada marca y la mayor estrella de cada nivel
+const unirRecord = (a, b) => {
+  if (!a && !b) return null;
+  a = a || {}; b = b || {};
+  const r = {};
+  for (const k of ["mejor", "facil", "dificil"]) { const v = Math.max(Number(a[k]) || 0, Number(b[k]) || 0); if (v) r[k] = v; }
+  const n = Math.max(Array.isArray(a.est) ? a.est.length : 0, Array.isArray(b.est) ? b.est.length : 0);
+  if (n) { r.est = []; for (let i = 0; i < n; i++) r.est[i] = Math.max((a.est && a.est[i]) | 0, (b.est && b.est[i]) | 0); }
+  return r;
+};
 function cargarPartida() {
   try {
     const o = JSON.parse(localStorage.getItem(CLAVE_PARTIDA));
     if (o && Array.isArray(o.tab) && (o.tab.length === N || o.tab.length === 2 * N) && o.tab.every((v) => Number.isInteger(v) && v >= 0 && v < 256) &&
         Array.isArray(o.pz) && o.pz.length === 3 && o.pz.every((v) => v === null || !!FORMAS[v])) {
       const tab = o.tab.slice(); while (tab.length < 2 * N) tab.push(0); // partidas guardadas antes de los candados
-      return { tab, pz: o.pz, pt: o.pt | 0, ro: (o.ro | 0) || 1, env: o.env | 0 };
+      const base = { tab, pz: o.pz, pt: o.pt | 0, ro: (o.ro | 0) || 1, env: o.env | 0 };
+      if (o.m === "n") return nivelFijo(o.n | 0) ? { ...base, m: "n", n: o.n | 0, lin: o.lin | 0 } : null;
+      return { ...base, m: "i", d: DIFICULTADES[o.d] ? o.d : "normal" }; // las partidas de antes de las dificultades cuentan como Normal
     }
   } catch (e) {}
   return null;
 }
-function leerRecord() { try { return Number(JSON.parse(localStorage.getItem(CLAVE_RECORD)).mejor) || 0; } catch (e) { return 0; } }
-let S = cargarPartida() || nuevaPartida();
-let record = leerRecord(), nube = null, vaciar = null, fin = false;
+function leerRecord() { try { return unirRecord(JSON.parse(localStorage.getItem(CLAVE_RECORD)), null); } catch (e) { return null; } }
+let S = cargarPartida() || partidaInfinita("normal");
+let REC = leerRecord() || {}, nube = null, vaciar = null, fin = false;
+const estrellasDeNivel = (n) => (REC.est && REC.est[n - 1]) | 0;
+const TODOS = new URLSearchParams(location.search).has("todos"); // ?todos abre todos los niveles para probar
 
 function guardarPartida() { if (!fin) try { localStorage.setItem(CLAVE_PARTIDA, JSON.stringify(S)); } catch (e) {} }
 function guardarRecord() {
-  try { localStorage.setItem(CLAVE_RECORD, JSON.stringify({ mejor: record })); } catch (e) {}
+  REC = unirRecord(REC, null) || {};
+  try { localStorage.setItem(CLAVE_RECORD, JSON.stringify(REC)); } catch (e) {}
   if (nube) nube.guardado();
 }
-// Puntos de perfil: se anotan siempre (aunque no haya sesión) y se envían en cuanto se puede
+// Puntos de perfil de la zona infinita: se anotan siempre (aunque no haya sesión) y se envían en cuanto se puede
 function pagar(minimo = 1) { // minimo: junta puntos para no mandar muchos envíos chicos (al terminar siempre se manda todo)
-  const debe = Math.floor(S.pt / PUNTOS_POR) - S.env;
+  if (S.m !== "i") return;
+  const debe = Math.floor(S.pt / DIFICULTADES[S.d].puntosPor) - S.env;
   if (debe >= minimo) { S.env += debe; encolarPuntos(ID, debe); try { if (vaciar) vaciar(); } catch (e) {} }
 }
 function cierre() { // al terminar, reiniciar o salir: récord y puntos al día
-  if (S.pt > record) { record = S.pt; guardarRecord(); }
+  if (S.m !== "i") return;
+  const k = DIFICULTADES[S.d].clave;
+  if (S.pt > (REC[k] || 0)) { REC[k] = S.pt; guardarRecord(); }
   pagar();
 }
 import("../compartido/progreso.js").then((m) => {
   vaciar = m.vaciarPuntos;
   nube = m.conectar(ID, {
-    clave: CLAVE_RECORD, fusionar: m.unirMaximos,
-    alCambiar: (u) => { record = Math.max(record, Number(u && u.mejor) || 0); },
+    clave: CLAVE_RECORD, fusionar: unirRecord,
+    alCambiar: (u) => { REC = unirRecord(REC, u) || REC; },
   });
 }).catch(() => {});
 
@@ -73,18 +93,8 @@ let arr = null;                 // pieza que se está arrastrando: { i, x, y, id
 let parts = [], textos = [], flashes = [], dlg = false;
 const hayMovimiento = () => S.pz.some((id) => id !== null && hayLugar(S.tab, FORMAS[id]));
 
-function nuevaRonda() {
-  S.ro++;
-  S.tab = rellenar(S.tab);
-  if (S.ro >= 3) { // de vez en cuando aparece un cubo con candado (más seguido conforme avanzas)
-    const veces = (Math.random() < Math.min(0.55, 0.2 + 0.01 * S.ro) ? 1 : 0) + (S.ro >= 15 && Math.random() < 0.25 ? 1 : 0);
-    for (let k = 0; k < veces; k++) {
-      const antes = S.tab, nuevo = agregarBloqueo(antes);
-      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (((nuevo[N + r] >> c) & 1) && !((antes[N + r] >> c) & 1)) textos.push({ x: BX + (c + 0.5) * CELL, y: BY + (r + 0.5) * CELL, t: "🔒", vida: 1.2 });
-      S.tab = nuevo;
-    }
-  }
-  S.pz = generarRonda(S.tab, Math.min(1, (S.ro - 1) / 35)); // la dificultad sube poco a poco (35 rondas hasta el máximo)
+function nuevaRonda() { // las reglas de cada zona están en avanzarRonda (niveles-bloques.js); aquí solo se avisa de los candados nuevos
+  for (const [r, c] of avanzarRonda(S)) textos.push({ x: BX + (c + 0.5) * CELL, y: BY + (r + 0.5) * CELL, t: "🔒", vida: 1.2 });
   pagar(5);
 }
 
@@ -97,6 +107,7 @@ function poner(i, f, r, c) {
   const res = colocar(S.tab, f, r, c);
   const ganados = f.n + (res.lineas ? 10 * res.lineas * res.lineas : 0) + 5 * res.rotos.length;
   S.tab = res.t; S.pz[i] = null; S.pt += ganados;
+  if (S.m === "n") S.lin += res.lineas;
   if (res.lineas) {
     flashes.push({ filas: res.filas, cols: res.cols, vida: 0.4 });
     const cel = (rr, cc, color) => { for (let k = 0; k < 2; k++) { const a = Math.random() * 6.28, v = 50 + Math.random() * 120; parts.push({ x: BX + (cc + 0.5) * CELL, y: BY + (rr + 0.5) * CELL, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, vida: 0.6, c: color }); } };
@@ -107,39 +118,94 @@ function poner(i, f, r, c) {
     if (res.rotos.length) sonido(240, 0.12, "square", 0.06);
   } else sonido(300, 0.08, "square", 0.04);
   textos.push({ x: BX + (c + f.w / 2) * CELL, y: BY + (r + f.h / 2) * CELL, t: "+" + ganados, vida: 0.9 });
+  if (S.m === "n" && S.lin >= nivelFijo(S.n).meta) { ganar(); return; }
   if (S.pz.every((x) => x === null)) nuevaRonda();
   else if (!hayMovimiento()) { terminar(); return; }
   guardarPartida();
 }
 
-// ----- Fin, reinicio y carteles -----
+// ----- Menús, fin y carteles -----
 const boton = (color, attr, txt) => '<button class="b3d txt chico ' + color + '" ' + attr + ">" + txt + "</button>";
 function mostrar(html) { $("velo").innerHTML = '<div class="caja">' + html + "</div>"; $("velo").hidden = false; dlg = true; }
 function ocultar() { $("velo").hidden = true; dlg = false; }
+const hayPartida = () => !fin && (S.pt > 0 || S.ro > 1 || (S.lin | 0) > 0);
+const nombreModo = () => (S.m === "n" ? "Nivel " + S.n : DIFICULTADES[S.d].nombre);
+const estrellasTxt = (e) => "★".repeat(e) + "☆".repeat(3 - e);
+
+function menuPrincipal() {
+  const difs = ORDEN_DIF.map((id) => { const D = DIFICULTADES[id];
+    return '<button class="b3d dif ' + D.color + '" data-dif="' + id + '"><span class="b-ico">' + D.icono + "</span><b>" + D.nombre + "</b><small>👑 " + (REC[D.clave] || 0) + "</small></button>"; }).join("");
+  let hechos = 0; for (let n = 1; n <= NIVELES_FIJOS; n++) if (estrellasDeNivel(n)) hechos++;
+  mostrar("<h2>Polo Blocks</h2>" +
+    (hayPartida() ? '<div class="fila">' + boton("b-verde", "data-cont", "▶ Continuar · " + nombreModo() + " · " + S.pt) + '</div><p class="nota">Si empiezas otra partida, esta se pierde.</p>' : "") +
+    "<p>♾️ Infinito: elige la dificultad</p>" + '<div class="difs">' + difs + "</div>" +
+    '<div class="fila">' + boton("b-azul", "data-lista", "🗺️ Niveles fijos · " + hechos + "/" + NIVELES_FIJOS) + "</div>");
+}
+let pag = 0;
+const POR_PAG = 50; // niveles por página de la lista (con 2000 niveles son 40 páginas)
+function menuNiveles() {
+  const paginas = Math.max(1, Math.ceil(NIVELES_FIJOS / POR_PAG));
+  pag = Math.min(Math.max(0, pag), paginas - 1);
+  let estrellas = 0; for (let n = 1; n <= NIVELES_FIJOS; n++) estrellas += estrellasDeNivel(n);
+  let lista = "";
+  for (let n = pag * POR_PAG + 1; n <= Math.min(NIVELES_FIJOS, (pag + 1) * POR_PAG); n++) {
+    const e = estrellasDeNivel(n);
+    lista += TODOS || n === 1 || estrellasDeNivel(n - 1) > 0
+      ? '<button class="b3d nvl ' + (e ? "b-oro" : "b-azul") + '" data-nivel="' + n + '"><span class="b-ico">' + n + "</span><small>" + (e ? estrellasTxt(e) : "") + "</small></button>"
+      : '<button class="b3d nvl b-gris" disabled><span class="b-ico">🔒</span><small></small></button>';
+  }
+  mostrar("<h2>🗺️ Niveles fijos</h2><p>Limpia las líneas que pide cada nivel. ⭐ " + estrellas + "/" + NIVELES_FIJOS * 3 + "</p>" + '<div class="nivs">' + lista + "</div>" +
+    '<div class="fila">' + (paginas > 1 ? boton("b-gris", 'data-pag="-1"' + (pag ? "" : " disabled"), "◀") + '<span class="pg">' + (pag + 1) + "/" + paginas + "</span>" + boton("b-gris", 'data-pag="1"' + (pag < paginas - 1 ? "" : " disabled"), "▶") : "") +
+    boton("b-gris", "data-menu", "Atrás") + "</div>");
+}
+
 function terminar() {
   fin = true; arr = null;
-  const nuevo = S.pt > record && S.pt > 0;
+  const inf = S.m === "i", k = inf ? DIFICULTADES[S.d].clave : "";
+  const nuevo = inf && S.pt > (REC[k] || 0) && S.pt > 0;
   cierre();
   try { localStorage.removeItem(CLAVE_PARTIDA); } catch (e) {}
   sonido(130, 0.5, "sawtooth", 0.05);
-  mostrar("<h2>Sin espacio</h2><p>Ya no cabe ninguna de tus piezas.</p><div class=\"grande-num\">" + S.pt + "</div><p>" +
-    (nuevo ? "¡Nuevo récord! 👑" : "Récord: " + record) + "</p><div class=\"fila\">" + boton("b-verde", "data-otra", "Jugar de nuevo") + "</div>");
+  mostrar('<h2>Sin espacio</h2><p>Ya no cabe ninguna de tus piezas.</p><div class="grande-num">' + S.pt + "</div><p>" +
+    (inf ? (nuevo ? "¡Nuevo récord! 👑" : "Récord " + DIFICULTADES[S.d].nombre + ": " + (REC[k] || 0)) : "Te faltaron " + (nivelFijo(S.n).meta - S.lin) + " línea(s) para pasar el nivel.") +
+    '</p><div class="fila">' + boton("b-verde", "data-rep", inf ? "Jugar de nuevo" : "Reintentar") + boton("b-gris", "data-menu", "Menú") + "</div>");
 }
-function reiniciar() {
+function ganar() { // meta del nivel fijo cumplida
+  fin = true; arr = null;
+  const L = nivelFijo(S.n), e = estrellasDe(S.n, S.ro), antes = estrellasDeNivel(S.n);
+  if (e > antes) { REC.est = REC.est || []; for (let i = 0; i < S.n; i++) REC.est[i] = REC.est[i] | 0; REC.est[S.n - 1] = e; guardarRecord(); }
+  if (!antes) { encolarPuntos(ID, PUNTOS_NIVEL); try { if (vaciar) vaciar(); } catch (err) {} } // los puntos de perfil solo se dan la primera vez
+  try { localStorage.removeItem(CLAVE_PARTIDA); } catch (err) {}
+  sonido(660, 0.25, "triangle", 0.07); setTimeout(() => sonido(880, 0.3, "triangle", 0.07), 160);
+  mostrar('<h2>¡Nivel superado!</h2><div class="estrellas">' + estrellasTxt(e) + "</div><p>Lo lograste en " + S.ro + " ronda" + (S.ro === 1 ? "" : "s") + " (par: " + L.par + ").</p>" +
+    (!antes ? "<p>+" + PUNTOS_NIVEL + " puntos de perfil 🎉</p>" : "") + (S.n >= NIVELES_FIJOS ? "<p>Por ahora es el último nivel: ¡pronto habrá más!</p>" : "") +
+    '<div class="fila">' + (S.n < NIVELES_FIJOS ? boton("b-verde", "data-sig", "Siguiente ▶") : "") + boton("b-azul", "data-rep", "Repetir") + boton("b-gris", "data-lista", "Niveles") + "</div>");
+}
+function empezar(P) { // empieza una partida nueva (guarda antes el récord y los puntos de la que había)
   cierre();
-  S = nuevaPartida(); fin = false; arr = null; parts = []; textos = []; flashes = [];
+  S = P; fin = false; arr = null; parts = []; textos = []; flashes = [];
   ocultar(); guardarPartida();
 }
+const reiniciar = () => empezar(S.m === "n" ? partidaNivel(S.n) : partidaInfinita(S.d));
 $("velo").addEventListener("click", (e) => {
-  const b = e.target.closest("button"); if (!b) return;
-  if (b.dataset.no !== undefined) ocultar(); else reiniciar();
+  const b = e.target.closest("button"); if (!b || b.disabled) return;
+  const d = b.dataset;
+  if (d.no !== undefined || d.cont !== undefined) ocultar();
+  else if (d.dif) empezar(partidaInfinita(d.dif));
+  else if (d.nivel) empezar(partidaNivel(Number(d.nivel)));
+  else if (d.lista !== undefined) { pag = S.m === "n" ? Math.floor((S.n - 1) / POR_PAG) : 0; menuNiveles(); }
+  else if (d.pag) { pag += Number(d.pag); menuNiveles(); }
+  else if (d.menu !== undefined) menuPrincipal();
+  else if (d.sig !== undefined) empezar(partidaNivel(S.n + 1));
+  else reiniciar(); // data-si (partida nueva) y data-rep (jugar de nuevo / reintentar / repetir)
 });
 $("bNueva").addEventListener("click", () => {
   if (fin || dlg) return;
-  if (S.pt === 0 && S.ro === 1) { reiniciar(); return; }
-  mostrar("<h2>¿Partida nueva?</h2><p>Se pierde la partida actual (los puntos que ya ganaste se conservan).</p><div class=\"fila\">" +
-    boton("b-rojo", "data-si", "Sí, empezar") + boton("b-gris", "data-no", "Seguir jugando") + "</div>");
+  if (!hayPartida()) { reiniciar(); return; }
+  mostrar("<h2>" + (S.m === "n" ? "¿Reiniciar el nivel?" : "¿Partida nueva?") + "</h2><p>" + (S.m === "n" ? "Empiezas el nivel desde cero." : "Se pierde la partida actual (los puntos que ya ganaste se conservan).") +
+    '</p><div class="fila">' + boton("b-rojo", "data-si", "Sí, empezar") + boton("b-gris", "data-no", "Seguir jugando") + "</div>");
 });
+$("bMenu").addEventListener("click", () => { if (dlg) return; cierre(); guardarPartida(); menuPrincipal(); });
 
 // ----- Entrada: arrastrar piezas -----
 const aLienzo = (e) => { const r = cv.getBoundingClientRect(); return { x: ((e.clientX - r.left) * W) / r.width, y: ((e.clientY - r.top) * H) / r.height }; };
@@ -213,12 +279,13 @@ function texto(t, x, y, tam, color) { ctx.font = "800 " + tam + "px system-ui, s
 function dibujar() {
   ctx.drawImage(fondo, 0, 0);
   // marcadores: récord (morado) y puntos
-  const rec = Math.max(record, S.pt);
-  ctx.font = "30px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText("👑", 150, 72);
+  const esN = S.m === "n", rec = esN ? 0 : Math.max(REC[DIFICULTADES[S.d].clave] || 0, S.pt);
+  ctx.font = "30px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText(esN ? "🎯" : "👑", 150, 72);
   const g = ctx.createLinearGradient(0, 78, 0, 134); g.addColorStop(0, "#9a6cf5"); g.addColorStop(1, "#6a3fd0");
   ctx.fillStyle = "#3a2410"; rr(68, 78, 164, 60, 14); ctx.fill(); ctx.fillStyle = g; rr(72, 80, 156, 52, 11); ctx.fill();
   ctx.fillStyle = "#3a2410"; rr(248, 78, 164, 60, 14); ctx.fill(); ctx.fillStyle = "#5a3418"; rr(252, 80, 156, 52, 11); ctx.fill();
-  texto(String(rec), 150, 118, 34, "#ffe27a"); texto(String(S.pt), 330, 118, 34, "#fff4d6");
+  texto(esN ? S.lin + "/" + nivelFijo(S.n).meta : String(rec), 150, 118, 34, "#ffe27a"); texto(String(S.pt), 330, 118, 34, "#fff4d6");
+  texto(nombreModo(), 240, 46, 22, "#fff4d6");
   // tablero
   ctx.fillStyle = "#8a5226"; rr(BX - 14, BY - 14, N * CELL + 28, N * CELL + 28, 16); ctx.fill();
   ctx.fillStyle = "#d39a52"; rr(BX - 11, BY - 11, N * CELL + 22, N * CELL + 22, 14); ctx.fill();
@@ -271,4 +338,5 @@ function bucle(t) {
 // ----- Arranque -----
 if (S.pz.every((x) => x === null)) nuevaRonda();
 if (!hayMovimiento()) terminar(); else guardarPartida();
+menuPrincipal(); // al abrir siempre se ve el menú (con «Continuar» si había una partida a medias)
 requestAnimationFrame(bucle);

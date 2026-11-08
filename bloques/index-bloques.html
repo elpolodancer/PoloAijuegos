@@ -20,7 +20,21 @@
     .caja h2 { margin: 0 0 6px; font-size: 1.4rem; }
     .caja p { margin: 6px 0; font-size: .95rem; line-height: 1.35; }
     .caja .grande-num { margin: 4px 0; font-size: 2.2rem; font-weight: 800; color: #ffd86b; text-shadow: 0 2px 0 rgba(0,0,0,.4); }
-    .caja .fila { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .caja .fila { display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .caja { max-height: 100%; overflow-y: auto; }
+    .caja .nota { margin: 4px 0 0; font-size: .75rem; opacity: .75; }
+    .caja .estrellas { margin: 2px 0; font-size: 2.4rem; letter-spacing: 6px; color: #ffd86b; text-shadow: 0 2px 0 rgba(0,0,0,.4); }
+    .caja .pg { min-width: 44px; font-weight: 800; }
+    /* Menú: 3 dificultades (icono, nombre y récord) y lista de niveles fijos (5 por fila) */
+    .caja .difs { display: flex; justify-content: center; gap: 8px; margin: 6px 0; }
+    .b3d.dif { --t: 78px; width: 92px; flex-direction: column; gap: 2px; margin-bottom: 5px; padding: 4px 0; font-size: 14px; }
+    .b3d.dif .b-ico { font-size: 26px; }
+    .b3d.dif b { position: relative; font-size: 14px; }
+    .b3d.dif small { position: relative; font-size: 11px; font-weight: 700; }
+    .caja .nivs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 8px 0 4px; }
+    .b3d.nvl { --t: 52px; width: 100%; height: 54px; flex-direction: column; gap: 0; margin: 0 0 5px; font-size: 18px; font-weight: 800; }
+    .b3d.nvl .b-ico { font-size: 18px; }
+    .b3d.nvl small { position: relative; font-size: 9px; line-height: 9px; min-height: 9px; letter-spacing: 0; }
 
     /* ----- Pantalla de inicio «Polo Blocks» (se ve 1.5 s al abrir el juego) ----- */
     #portada {
@@ -55,8 +69,7 @@
     #portada .cubo {
       --r: 0deg; --y: 0em;
       display: flex; align-items: center; justify-content: center; width: .64em; height: .64em;
-      font: 900 .42em/1 "Arial Rounded MT Bold", "Baloo 2", "Nunito", "Segoe UI", system-ui, sans-serif;
-      font-size: calc(var(--u) * .42);
+      font: 900 1em/1 "Arial Rounded MT Bold", "Baloo 2", "Nunito", "Segoe UI", system-ui, sans-serif; /* 1em = --u: así el cubo mide .64 del tamaño base */
       color: var(--l); text-shadow: 0 .04em 0 rgba(0, 0, 0, .25);
       background: linear-gradient(180deg, var(--c1), var(--c2));
       border-radius: .17em; box-shadow: 0 .05em 0 var(--c3), 0 .09em .1em rgba(0, 0, 0, .35), inset 0 .035em 0 rgba(255, 255, 255, .45);
@@ -69,6 +82,7 @@
     #portada .cubo:nth-child(4) { --i: 3; --r: 6deg;  --y: -.03em; --c1: #c07cf5; --c2: #8f44d6; --c3: #5c2398; --l: #f8e6ff; }
     #portada .cubo:nth-child(5) { --i: 4; --r: -5deg; --y: .03em;  --c1: #ffa75a; --c2: #ee6f20; --c3: #a8430c; --l: #fff0e0; }
     #portada .cubo:nth-child(6) { --i: 5; --r: 5deg;  --y: -.02em; --c1: #ff7a8b; --c2: #e23a55; --c3: #9a1f33; --l: #ffe6ea; }
+    #portada .cubo i { font-style: normal; font-size: .42em; } /* la letra mide .42 del tamaño base, dentro del cubo */
     @keyframes letrero { from { opacity: 0; transform: scale(.7); } }
     @keyframes cae { from { opacity: 0; transform: translateY(-1em) rotate(0deg) scale(.5); } }
     @media (prefers-reduced-motion: reduce) { #portada .letrero, #portada .cubo { animation: none; } #portada { transition: none; } }
@@ -79,7 +93,7 @@
   <div id="portada" role="img" aria-label="Polo Blocks">
     <div class="letrero"><span class="polo" data-t="POLO"><i>POLO</i></span></div>
     <div class="cubos" aria-hidden="true">
-      <span class="cubo">B</span><span class="cubo">L</span><span class="cubo">O</span><span class="cubo">C</span><span class="cubo">K</span><span class="cubo">S</span>
+      <span class="cubo"><i>B</i></span><span class="cubo"><i>L</i></span><span class="cubo"><i>O</i></span><span class="cubo"><i>C</i></span><span class="cubo"><i>K</i></span><span class="cubo"><i>S</i></span>
     </div>
   </div>
   <script>
@@ -101,6 +115,7 @@
     <a class="b3d chico b-gris" href="../index.html" aria-label="Volver al portal"><span class="b-ico">←</span></a>
   </div>
   <div class="hud hud-der">
+    <button class="b3d chico b-azul" id="bMenu" type="button" aria-label="Menú: dificultades y niveles" title="Menú"><span class="b-ico">🗺️</span></button>
     <button class="b3d chico b-oro" id="bNueva" type="button" aria-label="Empezar una partida nueva" title="Partida nueva"><span class="b-ico">↻</span></button>
   </div>
   <script type="module" src="juego-bloques.js"></script>

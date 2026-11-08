@@ -136,7 +136,7 @@ function elegir(lista, peso, rnd) {
   for (const x of lista) { u -= peso(x); if (u <= 0) return x; }
   return lista[lista.length - 1];
 }
-function construir(t, rnd) {
+function construir(t, rnd, limpia = LIMPIA) {
   let tab = t;
   const ids = [];
   for (let k = 0; k < 3; k++) {
@@ -144,7 +144,7 @@ function construir(t, rnd) {
     const f = elegir(caben, (x) => x.peso, rnd);
     const sitios = [];
     for (let r = 0; r <= N - f.h; r++) for (let c = 0; c <= N - f.w; c++) if (cabe(tab, f, r, c)) sitios.push({ r, c, s: contacto(tab, f, r, c), l: colocar(tab, f, r, c).lineas });
-    const s = elegir(sitios, (x) => Math.pow(x.s + 0.5, 2.2) * (1 + LIMPIA * x.l), rnd);
+    const s = elegir(sitios, (x) => Math.pow(x.s + 0.5, 2.2) * (1 + limpia * x.l), rnd);
     tab = colocar(tab, f, s.r, s.c).t;
     ids.push(f.id);
   }
@@ -152,11 +152,12 @@ function construir(t, rnd) {
   return ids;
 }
 // dif: 0 (fácil: casi cualquier sitio sirve) a 1 (difícil: casi todos los sitios son trampa)
-export function generarRonda(t, dif, rnd = Math.random) {
+// limpia: cuánto prefiere el generador los sitios que completan líneas (más = el tablero respira mejor; las dificultades lo ajustan)
+export function generarRonda(t, dif, rnd = Math.random, limpia = LIMPIA) {
   const objetivo = FACIL + (DIFICIL - FACIL) * Math.min(1, Math.max(0, dif));
   let mejor = null;
   for (let k = 0; k < CANDIDATAS; k++) {
-    const ids = construir(t, rnd);
+    const ids = construir(t, rnd, limpia);
     const a = analizar(t, ids.map((i) => FORMAS[i]));
     const d = Math.abs(a.ratio - objetivo);
     if (!mejor || d < mejor.d) mejor = { ids, d, ratio: a.ratio };
@@ -196,5 +197,8 @@ export function agregarBloqueo(t, rnd = Math.random) {
   return t;
 }
 export const tableroInicial = (rnd = Math.random) => sembrar(tableroVacio(), INICIO + Math.floor(rnd() * 6), rnd);
+// Tablero con un número exacto de cubos (sin candados): lo usan las dificultades y los niveles fijos (niveles-bloques.js)
+export const tableroCon = (cubos, rnd = Math.random) => sembrar(tableroVacio(), cubos, rnd);
 // Si quedan pocos cubos, aparecen más (así siempre hay algo que armar)
-export const rellenar = (t, rnd = Math.random) => (llenas(t) >= MINIMO ? t : sembrar(t, MINIMO + 8 + Math.floor(rnd() * 5), rnd, 0.12));
+// pCandado: probabilidad de que cada pieza sembrada lleve un cubo con candado (los niveles sencillos pasan 0)
+export const rellenar = (t, rnd = Math.random, pCandado = 0.12) => (llenas(t) >= MINIMO ? t : sembrar(t, MINIMO + 8 + Math.floor(rnd() * 5), rnd, pCandado));
