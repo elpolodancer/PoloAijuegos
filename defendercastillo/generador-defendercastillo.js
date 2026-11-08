@@ -4,12 +4,13 @@
 // un número que ajusta la vida de los enemigos para que un bot que juega bien gane con ~45 % de vida del castillo.
 // Qué cambia a lo largo de los niveles (todo sale de n):
 //   · caminos: serpentinas de 4 a 8 carriles, a veces con dos entradas, y espejadas o volteadas (castillo arriba o abajo);
-//   · oleadas: 30 a 38 por nivel (el triple o más que los mapas clásicos), cada una con más monstruos y con más vida;
+//   · oleadas: 12 por nivel (antes 30), cada una con más monstruos y con más vida;
 //   · enemigos y torres: se desbloquean por nivel (ver DESBLOQUEO_*); jefe en el último nivel de cada decena y mini-jefes cada 10 oleadas;
 //   · economía: bono por oleada y oro por enemigo crecen con la vida, y siempre hay árboles de 20 monedas junto a las curvas del camino.
 import { ENEMIGOS, nuevaPartida } from "./logica-defendercastillo.js";
 import { CALIB } from "./calibracion-defendercastillo.js";
 
+export const OLEADAS = 12; // oleadas de cada mapa (Michoacán y Desbloqueados); antes eran 30. La dificultad se reparte en estas 12 (ver «k» en oleadasDe)
 export const NIVELES_MICHOACAN = 10; // por ahora solo 10 (antes 100). Para ampliar: subir esta cifra y correr «node bot-defendercastillo.mjs calibrar»
 export const COLS_M = 12, FILAS_M = 18;
 
@@ -73,7 +74,12 @@ function doble(rng) {
 //   opc.nW = número de oleadas · opc.enemigos = tipos que pueden salir (sin jefes) · opc.miniJefe = trollJefe al final de cada 10 oleadas (desde la 20)
 //   opc.jefe = [tipo, cantidad] que cierra la última oleada (o null) · aquí «n» es la dificultad equivalente (1 a 10 en los 10 primeros mapas)
 export function oleadasDe(n, calib, rng, opc) {
-  const nW = opc && opc.nW ? opc.nW : 30 + Math.floor((n - 1) / 12);
+  const nW = opc && opc.nW ? opc.nW : OLEADAS;
+  // Cada oleada «vale» k oleadas del juego original de 30 (enemigos más fuertes, más oro, tipos pesados). Con nW = 30, k = 1 y todo sale como antes;
+  // con 12 oleadas k = 1.2 (con más, el número de enemigos crece tan rápido que el mapa 8, de dos entradas, no se podía ganar ni con enemigos casi sin vida).
+  const k = Math.min(1.2, 29 / Math.max(1, nW - 1)); // tope 1.2: con 12 oleadas la última equivale a la ~14 del original; la vida calibrada ajusta el final
+  const cadaElite = Math.max(2, Math.round(nW / 3));           // oleada fuerte cada «cadaElite» oleadas (con 12: la 4, la 8 y la 12)
+  const ablanda = Math.max(3, Math.round(nW / 3));             // las primeras oleadas son más suaves (con 12: las 4 primeras)
   const unl = opc && opc.enemigos ? opc.enemigos.slice() : Object.keys(DESBLOQUEO_ENEMIGOS).filter((t) => !JEFES.includes(t) && DESBLOQUEO_ENEMIGOS[t] <= n);
   const clase = (t) => (ENEMIGOS[t].vida >= 800 ? 2 : ENEMIGOS[t].vida >= 200 ? 1 : 0); // 0 ligero, 1 medio, 2 pesado
   const masFuerte = unl.slice().sort((a, b) => ENEMIGOS[b].vida - ENEMIGOS[a].vida)[0];
@@ -81,13 +87,14 @@ export function oleadasDe(n, calib, rng, opc) {
   const costo = (t) => ENEMIGOS[t].vida * (ENEMIGOS[t].vuela ? 2.2 : 1) * (ENEMIGOS[t].vel >= 70 ? 1.4 : 1);
   const oleadas = [];
   for (let w = 0; w < nW; w++) {
-    const elite = w === nW - 1 || w % 10 === 9;
+    const elite = w === nW - 1 || (w + 1) % cadaElite === 0;
+    const s = w * k; // «oleada equivalente» del juego original de 30 (0 a 29)
     // Cada nivel empieza de cero (mismo oro, sin torres): las primeras oleadas se parecen en todos los niveles y lo que crece con n
     // es la rapidez con la que suben los monstruos (g) y su vida (h) durante el nivel. «calib» solo ajusta el final: la oleada 1 va a ×1
     // y la última a ×calib (crece de forma geométrica entre las dos).
-    const m = (1 + 0.075 * (1 + n * 0.03) * w) * Math.pow(calib, w / (nW - 1)); // vida de los enemigos
-    const B = (480 + 2 * n) * (1 + 0.14 * (1 + n * 0.01) * w) * Math.min(1, 0.5 + (0.5 * w) / 5); // vida total de la oleada (a vida ×1); las 5 primeras son más suaves
-    const pool = unl.filter((t) => clase(t) === 0 || (clase(t) === 1 && w >= 3) || (clase(t) === 2 && w >= 12));
+    const m = (1 + 0.075 * (1 + n * 0.03) * s) * Math.pow(calib, w / (nW - 1)); // vida de los enemigos
+    const B = (480 + 2 * n) * (1 + 0.14 * (1 + n * 0.01) * s) * Math.min(1, 0.5 + (0.5 * w) / ablanda); // vida total de la oleada (a vida ×1); las 5 primeras son más suaves
+    const pool = unl.filter((t) => clase(t) === 0 || (clase(t) === 1 && s >= 3) || (clase(t) === 2 && s >= 12));
     const peso = (t) => (opc ? 1 + ((opc.nuevos || []).includes(t) ? 3 : 0) : 1 + (n - DESBLOQUEO_ENEMIGOS[t] < 12 ? 3 : 0));
     const elegir = (excl) => {
       const l = (pool.length ? pool : unl).filter((t) => !excl.includes(t));
@@ -96,7 +103,7 @@ export function oleadasDe(n, calib, rng, opc) {
       for (const t of l) { r -= peso(t); if (r <= 0) return t; }
       return l[l.length - 1] || "goblin";
     };
-    const ng = Math.min(pool.length, 1 + (rng() < 0.55 ? 1 : 0) + (w >= 12 && rng() < 0.4 ? 1 : 0)); // sin repetir tipos en la misma oleada
+    const ng = Math.min(pool.length, 1 + (rng() < 0.55 ? 1 : 0) + (s >= 12 && rng() < 0.4 ? 1 : 0)); // sin repetir tipos en la misma oleada
     const grupos = [], usados = [];
     let ini = 0;
     for (let g = 0; g < ng; g++) {
@@ -112,7 +119,7 @@ export function oleadasDe(n, calib, rng, opc) {
       grupos.push([masFuerte, Math.max(1, Math.round((B * 0.35) / v)), redondea(Math.min(2.6, 0.3 + v / 300)), redondea(ini * 0.5)]);
       jefe = true;
     } else if (elite) for (const g of grupos) g[1] = Math.round(g[1] * 1.3); // al inicio solo hay enemigos ligeros: la oleada trae un enjambre más grande
-    if ((opc ? opc.miniJefe : n >= 20) && w >= 19 && w % 10 === 9 && w !== nW - 1) { grupos.push(["trollJefe", 1, 1, redondea(ini + 2)]); jefe = true; }
+    if ((opc ? opc.miniJefe : n >= 20) && s >= 19 && (w + 1) % cadaElite === 0 && w !== nW - 1) { grupos.push(["trollJefe", 1, 1, redondea(ini + 2)]); jefe = true; }
     if (opc && opc.jefe && w === nW - 1) { // mapas fijos: jefe final elegido a mano
       grupos.push([opc.jefe[0], opc.jefe[1], 6, redondea(ini + 2)]);
       jefe = true;
@@ -121,7 +128,7 @@ export function oleadasDe(n, calib, rng, opc) {
       grupos.push(dragon ? ["dragon", 1 + Math.floor((n - 70) / 20), 6, redondea(ini + 2)] : ["trollJefe", 1 + Math.floor(n / 40), 6, redondea(ini + 2)]);
       jefe = true;
     }
-    oleadas.push({ vida: redondea(m * calib, 3), oro: redondea(1 + 0.06 * w), bono: Math.round(30 + 3 * w + 0.35 * n), jefe, grupos });
+    oleadas.push({ vida: redondea(m * calib, 3), oro: redondea(1 + 0.06 * s), bono: Math.round(30 + 3 * s + 0.35 * n), jefe, grupos });
   }
   return oleadas;
 }

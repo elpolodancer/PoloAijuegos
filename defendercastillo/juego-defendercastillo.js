@@ -6,7 +6,7 @@
 // El menú tiene dos pestañas: «Desbloqueados» (mapas fijos de 12×18 a 30×30 para repetir; hoy 10 y la meta es llegar a unos 200; cada uno se abre al pasar un nivel de Michoacán, campo «req»; por dentro siguen llamándose «clasico») y los 10 niveles de Michoacán (generados por generador-defendercastillo.js;
 // se desbloquean de uno en uno y cada nivel nuevo puede traer torres y enemigos nuevos).
 import { MAPAS_DESBLOQUEADOS as MAPAS } from "./mapas-desbloqueados-defendercastillo.js";
-import { generarNivel, NIVELES_MICHOACAN, DESBLOQUEO_TORRES } from "./generador-defendercastillo.js";
+import { generarNivel, NIVELES_MICHOACAN, DESBLOQUEO_TORRES, OLEADAS } from "./generador-defendercastillo.js";
 import {
   CELDA, ANCHO, ALTO, TORRES, TORRES_CLASICAS, ENEMIGOS, METEORO, REEMBOLSO,
   nuevaPartida, celdaLibre, torreEn, obstaculoEn, costeTalar, datosTorre, colocar, mejorar, vender, talar, iniciarOleada, meteoro, paso, estrellas,
@@ -35,6 +35,43 @@ const HABILIDAD = {
 };
 
 const $ = (id) => document.getElementById(id);
+
+// ----- Billete verde (reemplaza al emoji 💵, que en muchos equipos se ve como dólar gris/verdoso) -----
+// Dibujo propio: billete verde claro, borde verde oscuro, estrella en el centro. En el código las monedas siguen escribiéndose con «💵»:
+// conBillete() (para la página) y textoCanvas() (para el mapa) cambian ese símbolo por el dibujo.
+const ESTRELLA = Array.from({ length: 10 }, (_, i) => { const r = i % 2 ? 3.6 : 8, a = (-90 + 36 * i) * Math.PI / 180; return (32 + r * Math.cos(a)).toFixed(1) + "," + (20 + r * Math.sin(a)).toFixed(1); }).join(" ");
+const BILLETE_URL = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 40"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d9ff8f"/><stop offset="1" stop-color="#63e04a"/></linearGradient></defs>' +
+  '<rect x="2" y="3" width="60" height="34" rx="7" fill="url(#g)" stroke="#1d7d2b" stroke-width="3"/>' +
+  '<rect x="7" y="8" width="50" height="24" rx="4" fill="none" stroke="#f6ffd6" stroke-width="1.6" stroke-dasharray="3 2.4"/>' +
+  '<circle cx="32" cy="20" r="11" fill="#eaffb9" stroke="#2f9e3a" stroke-width="2"/>' +
+  '<polygon points="' + ESTRELLA + '" fill="#2fc247" stroke="#1d7d2b" stroke-width="1" stroke-linejoin="round"/>' +
+  '<circle cx="12.5" cy="20" r="2.4" fill="#2fc247"/><circle cx="51.5" cy="20" r="2.4" fill="#2fc247"/>' +
+  '<ellipse cx="21" cy="10.5" rx="12" ry="2.6" fill="#fff" opacity=".4"/></svg>');
+const imgBillete = new Image(); imgBillete.src = BILLETE_URL;
+// Pone un texto en un elemento de la página cambiando cada «💵» por el billete
+function conBillete(el, txt) {
+  el.textContent = "";
+  String(txt).split("💵").forEach((parte, i) => {
+    if (i) { const im = document.createElement("img"); im.className = "bill"; im.src = BILLETE_URL; im.alt = "monedas"; el.appendChild(im); }
+    if (parte) el.appendChild(document.createTextNode(parte));
+  });
+}
+// Dibuja un texto en el mapa (centrado en x, y) cambiando cada «💵» por el billete; «trazo» = ancho del contorno oscuro (0 = sin contorno)
+function textoCanvas(txt, x, y, tam, color, trazo, colorTrazo) {
+  const partes = String(txt).split("💵");
+  const pon = (t, px) => { if (trazo) { ctx.lineWidth = trazo; ctx.strokeStyle = colorTrazo; ctx.strokeText(t, px, y); } ctx.fillStyle = color; ctx.fillText(t, px, y); };
+  if (partes.length === 1) { pon(txt, x); return; }
+  const h = tam * 1.1, w = h * 1.6, hueco = 2, anchos = partes.map((t) => ctx.measureText(t).width);
+  let cur = x - (anchos.reduce((a, b) => a + b, 0) + (partes.length - 1) * (w + hueco)) / 2;
+  const alinea = ctx.textAlign; ctx.textAlign = "left";
+  partes.forEach((t, i) => {
+    if (t) pon(t, cur);
+    cur += anchos[i];
+    if (i < partes.length - 1) { if (imgBillete.complete && imgBillete.naturalWidth) ctx.drawImage(imgBillete, cur + hueco / 2, y - h / 2, w, h); cur += w + hueco; }
+  });
+  ctx.textAlign = alinea;
+}
 const leer = (k, def) => { try { const v = localStorage.getItem(k); return v == null ? def : JSON.parse(v); } catch (e) { return def; } };
 const guardar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 
@@ -162,7 +199,7 @@ function abrirMenu() {
   } else {
     let hechos = 0, sig = -1;
     for (let i = 0; i < NIVELES_MICHOACAN; i++) { if (progreso["M" + (i + 1)]) hechos++; else if (sig < 0) sig = i; }
-    info.textContent = "Michoacán: " + hechos + " de " + NIVELES_MICHOACAN + " niveles pasados · se desbloquean de uno en uno · 🆕 = torre nueva · cada nivel tiene 30 oleadas (usa ⏩ para acelerar hasta x8).";
+    info.textContent = "Michoacán: " + hechos + " de " + NIVELES_MICHOACAN + " niveles pasados · se desbloquean de uno en uno · 🆕 = torre nueva · cada nivel tiene " + OLEADAS + " oleadas (usa ⏩ para acelerar hasta x8).";
     const dif = (i) => (i < 25 ? "b-verde" : i < 55 ? "b-azul" : i < 85 ? "b-morado" : "b-rojo");
     const torreNueva = Object.keys(DESBLOQUEO_TORRES).reduce((o, t) => { o[DESBLOQUEO_TORRES[t]] = t; return o; }, {});
     for (let i = 0; i < NIVELES_MICHOACAN; i++) {
@@ -281,7 +318,7 @@ function armarTienda() { // solo las torres que trae el nivel (los clásicos: la
     b.dataset.tipo = tipo;
     b.setAttribute("aria-label", d.nombre + ", " + d.precio + " monedas");
     const ico = document.createElement("span"); ico.className = "b-ico"; ico.textContent = d.icono;
-    const pr = document.createElement("span"); pr.className = "b-info"; pr.textContent = d.precio + "💵";
+    const pr = document.createElement("span"); pr.className = "b-info"; conBillete(pr, d.precio + "💵");
     b.title = d.nombre + ": " + d.desc;
     b.append(ico, pr);
     b.addEventListener("click", () => { tipoSel = tipoSel === tipo ? null : tipo; torreSel = null; modoMeteoro = false; modoQuitar = false; });
@@ -438,10 +475,7 @@ function circulo(x, y, r, relleno, borde) {
 }
 function etiqueta(txt, x, y, color) {
   ctx.font = "bold 11px " + FUENTE;
-  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.75)";
-  ctx.strokeText(txt, x, y);
-  ctx.fillStyle = color;
-  ctx.fillText(txt, x, y);
+  textoCanvas(txt, x, y, 11, color, 3, "rgba(0,0,0,.75)");
 }
 function dibujar() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -559,10 +593,7 @@ function dibujar() {
     } else if (e.k === "texto") {
       ctx.globalAlpha = 1 - k * k;
       ctx.font = "bold 13px " + FUENTE;
-      ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.7)";
-      ctx.strokeText(e.txt, e.x, e.y - 16 - 22 * k);
-      ctx.fillStyle = e.rojo ? "#ff7a7a" : "#ffe27a";
-      ctx.fillText(e.txt, e.x, e.y - 16 - 22 * k);
+      textoCanvas(e.txt, e.x, e.y - 16 - 22 * k, 13, e.rojo ? "#ff7a7a" : "#ffe27a", 3, "rgba(0,0,0,.7)");
       ctx.globalAlpha = 1;
     }
   }
@@ -582,7 +613,12 @@ function dibujar() {
 
 // ----- Marcadores y botones (solo se tocan si cambian) -----
 const memo = {};
-function poner(id, valor, prop = "textContent") { if (memo[id + prop] !== valor) { memo[id + prop] = valor; $(id)[prop] = valor; } }
+conBillete(document.querySelector(".stat.dinero .b-ico"), "💵");   // el marcador de dinero usa el billete verde
+function poner(id, valor, prop = "textContent") {
+  if (memo[id + prop] === valor) return;
+  memo[id + prop] = valor;
+  if (prop === "textContent" && typeof valor === "string" && valor.includes("💵")) conBillete($(id), valor); else $(id)[prop] = valor;
+}
 function ui() {
   const total = p.nivel.oleadas.length;
   poner("oro", String(Math.floor(p.oro)));
@@ -618,7 +654,7 @@ function ui() {
       panel.hidden = false;
       panel.classList.toggle("abajo", torreSel.f < p.filas / 2); // si la torre está arriba, el panel va abajo y viceversa
       panel.textContent = "";
-      const el = (tag, cls, txt) => { const x = document.createElement(tag); if (cls) x.className = cls; if (txt !== undefined) x.textContent = txt; return x; };
+      const el = (tag, cls, txt) => { const x = document.createElement(tag); if (cls) x.className = cls; if (txt !== undefined) { if (typeof txt === "string" && txt.includes("💵")) conBillete(x, txt); else x.textContent = txt; } return x; };
       const sig = def.niveles[torreSel.nivel + 1];           // datos del siguiente nivel (si lo hay) para mostrar la mejora
       const info = el("div");
       const cab = el("div", "cab");
@@ -645,12 +681,12 @@ function ui() {
       info.append(cab, chips);
       const fila = document.createElement("div"); fila.className = "fila";
       const bu = document.createElement("button"); bu.className = "b3d txt chico " + (torreSel.nivel ? "b-oro" : "b-azul");
-      bu.textContent = sube ? "⬆️ Mejorar · " + sube + " 💵" : "Nivel máximo";
+      conBillete(bu, sube ? "⬆️ Mejorar · " + sube + " 💵" : "Nivel máximo");
       bu.disabled = !sube || p.oro < sube;
       const t = torreSel;
       bu.addEventListener("click", () => { mejorar(p, t); });
       const bv = document.createElement("button"); bv.className = "b3d txt chico b-gris";
-      bv.textContent = "🏷️ Vender · +" + Math.floor(t.invertido * REEMBOLSO) + " 💵";
+      conBillete(bv, "🏷️ Vender · +" + Math.floor(t.invertido * REEMBOLSO) + " 💵");
       bv.addEventListener("click", () => { vender(p, t); torreSel = null; });
       fila.append(bu, bv);
       panel.append(info, fila);

@@ -220,7 +220,7 @@ function revisarMapa(n) {
   if (arboles < 2 || cerca < 2) errores.push("faltan árboles de 20 junto al camino");
   const libres = p.mapa.bloq.flat().filter((x) => !x).length;
   if (libres < 40) errores.push("pocos lugares para construir: " + libres);
-  if (v.oleadas.length < 30) errores.push("menos de 30 oleadas");
+  if (v.oleadas.length < 12) errores.push("menos de 12 oleadas");
   return { errores, libres, arboles, cerca };
 }
 

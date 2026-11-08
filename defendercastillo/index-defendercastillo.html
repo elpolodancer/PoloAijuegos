@@ -12,6 +12,9 @@
     html.inmersivo { --fondo-juego: #101114; }
     .b3d:disabled { filter: grayscale(.85) brightness(.7); }
     .b-info:empty { display: none; }
+    /* Billete verde (dibujado en juego-defendercastillo.js): se escala con el tamaño del texto donde esté */
+    .bill { display: inline-block; width: 1.6em; height: 1em; vertical-align: -.2em; margin: 0 1px; filter: drop-shadow(0 1px 0 rgba(0,0,0,.45)); pointer-events: none; }
+    .b3d.stat .b-ico .bill { display: block; }
 
     /* ----- Marco del juego: toma la proporción del mapa (--asp = columnas / filas, la pone juego-defendercastillo.js; 2:3 si aún no hay mapa).
        Los mapas van de 12×18 a 30×30. Celular horizontal / PC: ocupa toda la altura ----- */

@@ -1,8 +1,6 @@
 // Ruta: defendercastillo/calibracion-defendercastillo.js
-// Una cifra por nivel de Michoacán (1 a 10): multiplica la vida de los enemigos. Para que los niveles sean cómodos para una persona
-// (y no «al límite» para un bot perfecto), cada cifra se eligió dejando margen: los dos bots (bueno y de solo arqueros) ganan con casi toda
-// la vida, y la dificultad sube poco a poco (el nivel 1 es el más holgado y el 10, el del jefe, el más ajustado).
-// Si algún día se amplían los niveles, «node bot-defendercastillo.mjs calibrar» reescribe este archivo con otro criterio (ver su objetivo).
+// ARCHIVO GENERADO por bot-defendercastillo.mjs (node bot-defendercastillo.mjs calibrar): no se edita a mano.
+// Una cifra por nivel de Michoacán (1 a 10): multiplica la vida de los enemigos para que un bot que juega bien gane con ~ % de vida del castillo.
 export const CALIB = [
-  1.75, 1.8, 1.85, 1.85, 1.5, 0.6, 1.2, 1.4, 1.2, 1.15,
+  2.008, 1.987, 2.03, 2.211, 1.834, 0.667, 1.505, 1.464, 1.504, 1.48,
 ];
