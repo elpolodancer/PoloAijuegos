@@ -13,8 +13,9 @@ import { CALIB } from "./calibracion-defendercastillo.js";
 
 const PASO = 1 / 60;
 const TOPE_BASE = 26;  // torres (sin contar minas) que construye el bot; sube 1 cada 12 niveles
-// Vida del castillo con la que el bot bueno debe ganar: sube la dificultad nivel a nivel (de ~72 % en el nivel 1 a ~35 % en el 100) y los niveles de jefe son algo más duros
-const objetivo = (n) => 0.72 - (0.37 * (n - 1)) / 99 - (n % 10 === 0 ? 0.05 : 0);
+// Vida del castillo con la que el bot bueno debe ganar. Con solo 10 niveles: el 1 es muy fácil (~95 %, un humano hábil gana sin apuros)
+// y la dificultad sube poco a poco hasta ~75 % en el 9; el nivel 10 (jefe) es algo más duro (~67 %)
+const objetivo = (n) => 0.95 - (0.23 * (n - 1)) / 9 - (n % 10 === 0 ? 0.05 : 0);
 const ARCHIVO = "./calibracion-defendercastillo.js";
 
 // ---------- Cobertura: cuántos puntos del camino alcanza una torre puesta en cada celda ----------
@@ -259,7 +260,7 @@ if (cmd === "nivel") {
     const b = jugarBot(generarNivel(n)), q = jugarBot(generarNivel(n), "arqueros");
     const prob = [...m.errores];
     if (!b.ganado) prob.push("el bot bueno pierde (oleada " + b.oleada + "/" + b.nW + ")");
-    else if (b.vidaFrac < 0.2 || b.vidaFrac > 0.8) prob.push("vida final fuera de 20–80 %: " + b.vida);
+    else if (b.vidaFrac < 0.2) prob.push("vida final por debajo de 20 %: " + b.vida);
     const v = generarNivel(n), oro4 = v.oroInicial + v.oleadas.slice(0, 3).reduce((a, o) => a + o.bono, 0);
     if (oro4 < 20 + 4 * TORRES.arquero.precio) sinTala++; // con el oro de las 3 primeras oleadas debe sobrar para talar (20) además de 4 arqueros
     if (q.ganado && n >= 12) arquerosGanan.push(n);

@@ -1,8 +1,8 @@
 // Ruta: defendercastillo/generador-defendercastillo.js
-// Genera los 100 niveles de Michoacán (mapa de 12 × 18, obstáculos y oleadas) a partir de una semilla: el nivel N siempre sale igual,
+// Genera los niveles de Michoacán (por ahora solo 10; el generador sabe hacer 100, basta subir NIVELES_MICHOACAN y calibrar) (mapa de 12 × 18, obstáculos y oleadas) a partir de una semilla: el nivel N siempre sale igual,
 // en el juego y en las herramientas de Node. No guarda los niveles: guarda solo la «vida calibrada» de cada uno (calibracion-defendercastillo.js),
 // un número que ajusta la vida de los enemigos para que un bot que juega bien gane con ~45 % de vida del castillo.
-// Qué cambia a lo largo de los 100 niveles (todo sale de n):
+// Qué cambia a lo largo de los niveles (todo sale de n):
 //   · caminos: serpentinas de 4 a 8 carriles, a veces con dos entradas, y espejadas o volteadas (castillo arriba o abajo);
 //   · oleadas: 30 a 38 por nivel (el triple o más que los mapas clásicos), cada una con más monstruos y con más vida;
 //   · enemigos y torres: se desbloquean por nivel (ver DESBLOQUEO_*); jefe en el último nivel de cada decena y mini-jefes cada 10 oleadas;
@@ -10,7 +10,7 @@
 import { ENEMIGOS, nuevaPartida } from "./logica-defendercastillo.js";
 import { CALIB } from "./calibracion-defendercastillo.js";
 
-export const NIVELES_MICHOACAN = 100;
+export const NIVELES_MICHOACAN = 10; // por ahora solo 10 (antes 100). Para ampliar: subir esta cifra y correr «node bot-defendercastillo.mjs calibrar»
 export const COLS_M = 12, FILAS_M = 18;
 
 // Nivel a partir del cual aparece cada torre (la Defensa de Michoacán empieza solo con arqueros)
@@ -138,7 +138,7 @@ export function generarNivel(n, calib) {
   }
   const nivel = { id: "M" + n, n, region: "Michoacán", nombre: PUEBLOS[(n - 1) % 25] + ROMANOS[Math.floor((n - 1) / 25)], semilla: 910000 + n,
     dificultad: n <= 25 ? "Fácil" : n <= 55 ? "Media" : n <= 85 ? "Difícil" : "Muy difícil",
-    cols: COLS_M, filas: FILAS_M, oroInicial: 220 + Math.min(120, n * 2), vidaCastillo: 100, castillo, obstaculos: [] };
+    cols: COLS_M, filas: FILAS_M, oroInicial: 250 + (n - 1) * 25 /* nivel 1: 250 monedas; +25 por nivel (el 10 empieza con 475) */, vidaCastillo: 100, castillo, obstaculos: [] };
   if (caminos.length === 1) nivel.camino = caminos[0]; else nivel.caminos = caminos;
 
   // obstáculos: 3 a 5 árboles de 20 monedas junto a las curvas del camino (lugares estratégicos) y el resto repartido

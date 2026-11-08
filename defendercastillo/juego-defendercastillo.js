@@ -3,7 +3,7 @@
 // Cómo se juega: elige un mapa; elige una torre abajo y toca un lugar libre del pasto para construirla; toca una torre para
 // mejorarla o venderla; 🪓 Quitar sirve para talar árboles/rocas (cuesta monedas) o vender torres con un toque; ☄️ lanza un
 // meteoro (se recarga solo). Los enemigos caminan por el camino café; si llegan al castillo le quitan vida.
-// El menú tiene dos pestañas: los 10 mapas clásicos y los 100 niveles de Michoacán (generados por generador-defendercastillo.js;
+// El menú tiene dos pestañas: los 10 mapas clásicos y los 10 niveles de Michoacán (generados por generador-defendercastillo.js;
 // se desbloquean de uno en uno y cada nivel nuevo puede traer torres y enemigos nuevos).
 import { NIVELES } from "./niveles-defendercastillo.js";
 import { generarNivel, NIVELES_MICHOACAN, DESBLOQUEO_TORRES } from "./generador-defendercastillo.js";
@@ -16,8 +16,8 @@ import {
 const ID = "defensa";            // nombre del juego en el ranking
 const PUNTOS_POR_PERFIL = 25;    // 1 punto al perfil por cada 25 del juego
 const PASO = 1 / 60;             // paso fijo de la simulación (se ve igual en pantallas de 90/120 Hz)
-const VEL_MAX = 5;               // la velocidad del botón ⏩ va de x1 a x5
-const PASOS_MAX = 30;            // tope de pasos por cuadro (a x5 un cuadro lento necesita hasta 30)
+const VEL_MAX = 8;               // la velocidad del botón ⏩ va de x1 a x8
+const PASOS_MAX = 48;            // tope de pasos por cuadro (a x8 un cuadro lento necesita hasta 48)
 const CLAVE_PROGRESO = "defensa_progreso";
 const CLAVE_SONIDO = "defensa_sonido";
 const CLAVE_ULTIMO = "defensa_ultimo";   // último mapa jugado: { t: "clasico" | "mich", i }
@@ -151,7 +151,7 @@ function abrirMenu() {
   } else {
     let hechos = 0, sig = -1;
     for (let i = 0; i < NIVELES_MICHOACAN; i++) { if (progreso["M" + (i + 1)]) hechos++; else if (sig < 0) sig = i; }
-    info.textContent = "Michoacán: " + hechos + " de " + NIVELES_MICHOACAN + " niveles pasados · se desbloquean de uno en uno · 🆕 = torre nueva · cada nivel tiene 30 a 38 oleadas (usa ⏩ para acelerar).";
+    info.textContent = "Michoacán: " + hechos + " de " + NIVELES_MICHOACAN + " niveles pasados · se desbloquean de uno en uno · 🆕 = torre nueva · cada nivel tiene 30 oleadas (usa ⏩ para acelerar hasta x8).";
     const dif = (i) => (i < 25 ? "b-verde" : i < 55 ? "b-azul" : i < 85 ? "b-morado" : "b-rojo");
     const torreNueva = Object.keys(DESBLOQUEO_TORRES).reduce((o, t) => { o[DESBLOQUEO_TORRES[t]] = t; return o; }, {});
     for (let i = 0; i < NIVELES_MICHOACAN; i++) {
@@ -282,7 +282,9 @@ $("btnQuitar").addEventListener("click", () => {
   if (modoQuitar) mensaje("🪓 Toca un árbol o roca para talarlo (cuesta monedas) o una torre para venderla", 4000);
 });
 let salirListo = false, salirTimer = 0;
-$("btnMapas").addEventListener("click", () => {
+// Volver a la zona anterior (menú de mapas): lo usan el botón ◀ de arriba (junto a 🏠) y el 🗺️ del dock
+function volverAMapas() {
+  if (menuAbierto) return;
   const enCurso = (p.estado === "oleada" || p.torres.length) && p.estado !== "ganado" && p.estado !== "perdido";
   if (enCurso && !salirListo) {
     // Sin confirm(): el cuadro del navegador saca de la pantalla completa. Se pide tocar dos veces.
@@ -293,14 +295,16 @@ $("btnMapas").addEventListener("click", () => {
   salirListo = false; clearTimeout(salirTimer);
   $("fin").hidden = true;
   abrirMenu();
-});
+}
+$("btnMapas").addEventListener("click", volverAMapas);
+$("btnAtras").addEventListener("click", volverAMapas);
 $("finMapas").addEventListener("click", abrirMenu);
 $("btnMeteoro").addEventListener("click", () => {
   if (p.meteoroEspera > 0 || p.estado === "ganado" || p.estado === "perdido") return;
   modoMeteoro = !modoMeteoro; tipoSel = null; torreSel = null; modoQuitar = false;
   if (modoMeteoro) mensaje("☄️ Toca el mapa donde quieres que caiga", 3000);
 });
-$("btnVel").addEventListener("click", () => { vel = vel >= VEL_MAX ? 1 : vel + 1; $("velNum").textContent = "x" + vel; }); // x1 → x2 → x3 → x4 → x5 → x1
+$("btnVel").addEventListener("click", () => { vel = vel >= VEL_MAX ? 1 : vel + 1; $("velNum").textContent = "x" + vel; }); // x1 → x2 → … → x8 → x1
 $("btnPausa").addEventListener("click", () => pausar(!pausa));
 $("btnSonido").addEventListener("click", () => { sonido = !sonido; guardar(CLAVE_SONIDO, sonido); $("btnSonido").firstElementChild.textContent = sonido ? "🔊" : "🔇"; });
 $("btnSonido").firstElementChild.textContent = sonido ? "🔊" : "🔇";
