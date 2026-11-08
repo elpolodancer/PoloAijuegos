@@ -3,7 +3,7 @@
 // Cómo se juega: elige un mapa; elige una torre abajo y toca un lugar libre del pasto para construirla; toca una torre para
 // mejorarla o venderla; 🪓 Quitar sirve para talar árboles/rocas (cuesta monedas) o vender torres con un toque; ☄️ lanza un
 // meteoro (se recarga solo). Los enemigos caminan por el camino café; si llegan al castillo le quitan vida.
-// El menú tiene dos pestañas: los 10 mapas clásicos y los 10 niveles de Michoacán (generados por generador-defendercastillo.js;
+// El menú tiene dos pestañas: «Desbloqueados» (mapas fijos para repetir; hoy los 10 de antes, y la meta es llegar a unos 200; por dentro siguen llamándose «clasico») y los 10 niveles de Michoacán (generados por generador-defendercastillo.js;
 // se desbloquean de uno en uno y cada nivel nuevo puede traer torres y enemigos nuevos).
 import { NIVELES } from "./niveles-defendercastillo.js";
 import { generarNivel, NIVELES_MICHOACAN, DESBLOQUEO_TORRES } from "./generador-defendercastillo.js";
@@ -137,7 +137,7 @@ function abrirMenu() {
   $("pestMich").classList.toggle("on", pestana === "mich");
   lista.className = pestana === "mich" ? "mich" : "";
   if (pestana === "clasico") {
-    info.textContent = "10 mapas con 10 oleadas cada uno, de más fácil a más difícil.";
+    info.textContent = "🔓 Mapas fijos para jugar cuantas veces quieras. Por ahora hay " + NIVELES.length + ", de más fácil a más difícil.";
     NIVELES.forEach((n, i) => {
       const r = progreso[n.id];
       const b = document.createElement("button");
