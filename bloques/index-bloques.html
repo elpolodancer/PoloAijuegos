@@ -1,0 +1,109 @@
+<!doctype html>
+<!-- Ruta: bloques/index-bloques.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Bloques de madera</title>
+  <meta name="theme-color" content="#b0713c" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    html.inmersivo { --fondo-juego: #8a5429; }
+    /* Juego vertical: marco 2:3 (el modo inmersivo trae 4:3 por defecto) */
+    .inmersivo .marco { aspect-ratio: 2 / 3; width: min(100vw, calc(100vh * 2 / 3)); width: min(100vw, calc(100dvh * 2 / 3)); }
+    .inmersivo .lienzo { background: #b9743a; cursor: grab; }
+    /* Cartel de fin de partida / reinicio (dentro del marco) */
+    #velo { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: 14px; background: rgba(40, 22, 10, .72); }
+    #velo[hidden] { display: none; }
+    .caja { width: 100%; max-width: 340px; padding: 18px 16px; text-align: center; color: #fff4d6; background: #5b3a1e; border: 3px solid #2e1b0c; border-radius: 18px; box-shadow: 0 5px 0 #2e1b0c; }
+    .caja h2 { margin: 0 0 6px; font-size: 1.4rem; }
+    .caja p { margin: 6px 0; font-size: .95rem; line-height: 1.35; }
+    .caja .grande-num { margin: 4px 0; font-size: 2.2rem; font-weight: 800; color: #ffd86b; text-shadow: 0 2px 0 rgba(0,0,0,.4); }
+    .caja .fila { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+
+    /* ----- Pantalla de inicio «Polo Blocks» (se ve 1.5 s al abrir el juego) ----- */
+    #portada {
+      --u: min(20vw, 17vh); --u: min(20vw, 17dvh); /* tamaño base: todo el logo se mide en «em» de este valor */
+      position: fixed; inset: 0; z-index: 2147483001; display: flex; flex-direction: column; align-items: center;
+      padding: 16vh 4vw 0; padding-top: 16dvh; background: #b0713c; touch-action: none;
+      transition: opacity .2s ease;
+    }
+    #portada.salir { opacity: 0; pointer-events: none; }
+    #portada .letrero {
+      position: relative; font-size: var(--u); padding: .1em .32em .2em;
+      background: linear-gradient(180deg, #8c4223, #5c2714);
+      border: .05em solid #a8582b; border-radius: .3em / .26em;
+      box-shadow: 0 .06em 0 #6e3216, 0 .12em .16em rgba(0, 0, 0, .35), inset 0 .035em 0 rgba(255, 255, 255, .2);
+      animation: letrero .4s cubic-bezier(.3, 1.4, .5, 1) both;
+    }
+    #portada .polo {
+      position: relative; isolation: isolate; display: block; line-height: 1; letter-spacing: .02em;
+      font: 900 1em/1 "Arial Rounded MT Bold", "Baloo 2", "Nunito", "Segoe UI", system-ui, sans-serif;
+    }
+    /* Contorno y grosor café detrás de las letras amarillas */
+    #portada .polo::before {
+      content: attr(data-t); position: absolute; inset: 0; z-index: -1; color: #9a4f17;
+      -webkit-text-stroke: .17em #9a4f17; transform: translateY(.06em);
+    }
+    #portada .polo i {
+      font-style: normal; position: relative;
+      background: linear-gradient(180deg, #ffe98f 0%, #ffc43f 55%, #f79f1c 100%);
+      -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;
+    }
+    #portada .cubos { display: flex; gap: .07em; margin-top: .3em; font-size: var(--u); }
+    #portada .cubo {
+      --r: 0deg; --y: 0em;
+      display: flex; align-items: center; justify-content: center; width: .64em; height: .64em;
+      font: 900 .42em/1 "Arial Rounded MT Bold", "Baloo 2", "Nunito", "Segoe UI", system-ui, sans-serif;
+      font-size: calc(var(--u) * .42);
+      color: var(--l); text-shadow: 0 .04em 0 rgba(0, 0, 0, .25);
+      background: linear-gradient(180deg, var(--c1), var(--c2));
+      border-radius: .17em; box-shadow: 0 .05em 0 var(--c3), 0 .09em .1em rgba(0, 0, 0, .35), inset 0 .035em 0 rgba(255, 255, 255, .45);
+      transform: translateY(var(--y)) rotate(var(--r));
+      animation: cae .45s cubic-bezier(.3, 1.5, .5, 1) both; animation-delay: calc(.15s + var(--i) * 70ms);
+    }
+    #portada .cubo:nth-child(1) { --i: 0; --r: -7deg; --y: .03em;  --c1: #5fe07a; --c2: #26ad4a; --c3: #15782e; --l: #e8ffe9; }
+    #portada .cubo:nth-child(2) { --i: 1; --r: 4deg;  --y: -.04em; --c1: #4fdbdd; --c2: #17a8b2; --c3: #0b6f79; --l: #e2ffff; }
+    #portada .cubo:nth-child(3) { --i: 2; --r: -3deg; --y: .02em;  --c1: #7d96f5; --c2: #4562dc; --c3: #27399f; --l: #e2e8ff; }
+    #portada .cubo:nth-child(4) { --i: 3; --r: 6deg;  --y: -.03em; --c1: #c07cf5; --c2: #8f44d6; --c3: #5c2398; --l: #f8e6ff; }
+    #portada .cubo:nth-child(5) { --i: 4; --r: -5deg; --y: .03em;  --c1: #ffa75a; --c2: #ee6f20; --c3: #a8430c; --l: #fff0e0; }
+    #portada .cubo:nth-child(6) { --i: 5; --r: 5deg;  --y: -.02em; --c1: #ff7a8b; --c2: #e23a55; --c3: #9a1f33; --l: #ffe6ea; }
+    @keyframes letrero { from { opacity: 0; transform: scale(.7); } }
+    @keyframes cae { from { opacity: 0; transform: translateY(-1em) rotate(0deg) scale(.5); } }
+    @media (prefers-reduced-motion: reduce) { #portada .letrero, #portada .cubo { animation: none; } #portada { transition: none; } }
+  </style>
+</head>
+<body class="inmersivo">
+  <!-- Pantalla de inicio: se quita sola a los 1.5 s (ver el script de abajo) -->
+  <div id="portada" role="img" aria-label="Polo Blocks">
+    <div class="letrero"><span class="polo" data-t="POLO"><i>POLO</i></span></div>
+    <div class="cubos" aria-hidden="true">
+      <span class="cubo">B</span><span class="cubo">L</span><span class="cubo">O</span><span class="cubo">C</span><span class="cubo">K</span><span class="cubo">S</span>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var p = document.getElementById("portada");
+      if (!p) return;
+      setTimeout(function () { p.classList.add("salir"); }, 1300); // empieza a desvanecerse...
+      setTimeout(function () { p.remove(); }, 1500);               // ...y a los 1.5 s ya no está
+    })();
+  </script>
+
+  <div class="escena">
+    <div class="marco">
+      <canvas id="lienzo" class="lienzo" width="480" height="720" aria-label="Bloques de madera: arrastra cada pieza al tablero de 8 por 8"></canvas>
+      <div id="velo" hidden></div>
+    </div>
+  </div>
+  <div class="hud hud-izq">
+    <a class="b3d chico b-gris" href="../index.html" aria-label="Volver al portal"><span class="b-ico">←</span></a>
+  </div>
+  <div class="hud hud-der">
+    <button class="b3d chico b-oro" id="bNueva" type="button" aria-label="Empezar una partida nueva" title="Partida nueva"><span class="b-ico">↻</span></button>
+  </div>
+  <script type="module" src="juego-bloques.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
