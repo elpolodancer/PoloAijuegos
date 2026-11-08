@@ -1,7 +1,11 @@
 // Ruta: jetpack/juego-jetpack.js
 // Estilo Jetpack Joyride: mantén pulsado (dedo, clic o espacio) para subir; suelta para caer.
-// Sesión y puntos: se cargan aparte para que el juego funcione aunque Firebase no esté disponible
-let sumarPuntos = async () => false, entrar = async () => { throw new Error("Sesión no disponible sin conexión"); }, salir = () => {};
+// Puntos: se anotan en una cola local (no usa Firebase) y se envían al perfil cuando hay internet y sesión.
+// Sesión y nube: se cargan aparte para que el juego funcione aunque Firebase no esté disponible.
+import { encolarPuntos } from "../compartido/cola-puntos.js";
+const ID = "jetpack"; // el mismo id de juegos.js
+let entrar = async () => { throw new Error("Sesión no disponible sin conexión"); }, salir = () => {};
+let nube = null;      // se llena al cargar compartido/progreso.js (abajo del todo)
 
 const W = 800, H = 400, TECHO = 30, SUELO = 370, PX = 150, R = 15;
 const cv = document.getElementById("lienzo"), c = cv.getContext("2d");
@@ -9,11 +13,12 @@ cv.width = W; cv.height = H;
 const info = document.getElementById("info");
 const rnd = (a, b) => a + Math.random() * (b - a);
 
-let estado = "inicio", y, vy, obs, mon, dist, vel, sigObs, subir = false, nMon = 0, tFin = 0, msg = "", user = null;
+let estado = "inicio", y, vy, obs, mon, dist, vel, sigObs, subir = false, nMon = 0, tFin = 0, msg = "", partida = 0;
 let mejor = 0;
 try { mejor = Number(localStorage.getItem("jetpack_mejor") || 0); } catch (e) {}
 
 function empezar() {
+  partida++; // número de intento: evita que un aviso tardío del perfil se pegue a otra pantalla
   y = 200; vy = 0; obs = []; mon = []; dist = 0; vel = 300; sigObs = 500; nMon = 0; msg = ""; estado = "juego";
 }
 
@@ -45,17 +50,27 @@ function distSeg(px, py, x1, y1, x2, y2) {
 }
 
 // ---- Fin ----
-async function morir() {
-  if (estado === "fin") return; // dos obstáculos en el mismo cuadro: solo cuenta una vez (si no, se guardarían los puntos dos veces)
+function morir() {
+  if (estado === "fin") return; // dos obstáculos en el mismo cuadro: solo cuenta una vez (si no, se anotarían los puntos dos veces)
   estado = "fin"; tFin = performance.now();
   const m = Math.floor(dist / 50), puntos = Math.min(1000, m + nMon * 5);
-  if (m > mejor) { mejor = m; try { localStorage.setItem("jetpack_mejor", m); } catch (e) {} }
-  msg = "";
-  if (!user) msg = "Entra con Google para guardar tus puntos";
-  else if (puntos > 0) {
-    try { await sumarPuntos("jetpack", puntos); msg = "+" + puntos + " puntos guardados"; }
-    catch (e) { msg = "No se pudieron guardar los puntos"; }
+  if (m > mejor) {
+    mejor = m;
+    try { localStorage.setItem("jetpack_mejor", String(m)); } catch (e) {}
+    if (nube) nube.guardado(); // récord: se sube a la cuenta cuando hay internet y sesión
   }
+  msg = "";
+  if (puntos > 0) anotar(puntos, partida);
+}
+
+// Anota los puntos en el dispositivo (siempre, haya o no sesión) y los envía si se puede
+async function anotar(puntos, mia) {
+  encolarPuntos(ID, puntos);
+  msg = "+" + puntos + " puntos anotados";
+  let faltan = 1;
+  try { faltan = await (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
+  if (mia !== partida || estado !== "fin") return;
+  msg = faltan === 0 ? "+" + puntos + " puntos en tu perfil ✓" : "+" + puntos + " anotados: se envían al entrar con Google y tener internet";
 }
 
 // ---- Actualización ----
@@ -185,13 +200,22 @@ addEventListener("keyup", (e) => { if (e.code === "Space" || e.code === "ArrowUp
 
 // ---- Sesión ----
 const zona = document.getElementById("sesion");
-import("../compartido/jugador.js").then((m) => { sumarPuntos = m.sumarPuntos; entrar = m.entrar; salir = m.salir; m.alCambiarSesion(sesion); })
-  .catch(() => { info.textContent = "Sin sesión: no se guardan puntos"; });
+import("../compartido/jugador.js").then((m) => { entrar = m.entrar; salir = m.salir; m.alCambiarSesion(sesion); })
+  .catch(() => { info.textContent = "Sin conexión: tus puntos se anotan y se envían después"; });
 function sesion(u) {
-  user = u; zona.innerHTML = "";
+  zona.innerHTML = "";
   const b = document.createElement("button"); b.type = "button"; b.className = "b3d chico txt " + (u ? "b-gris" : "b-azul");
-  if (!u) { b.textContent = "👤 Entrar con Google"; b.addEventListener("click", () => entrar().catch((e) => { info.textContent = e.message; })); zona.appendChild(b); info.textContent = "Sin sesión: no se guardan puntos"; return; }
+  if (!u) { b.textContent = "👤 Entrar con Google"; b.addEventListener("click", () => entrar().catch((e) => { info.textContent = e.message; })); zona.appendChild(b); info.textContent = "Sin sesión: tus puntos se anotan y se envían al entrar"; return; }
   b.textContent = "Salir"; b.addEventListener("click", salir);
   const s = document.createElement("span"); s.className = "chip"; s.textContent = u.displayName || "Jugador";
   zona.append(s, b); info.textContent = "Puntos por partida = metros + 5 por moneda (máx. 1000)";
 }
+
+// ---- Récord sincronizado con la cuenta (el mayor de los dos; si falla, el juego sigue igual) ----
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: "jetpack_mejor",
+    fusionar: (a, b) => (a == null && b == null ? null : Math.max(Number(a) || 0, Number(b) || 0)),
+    alCambiar: (v) => { mejor = Math.max(mejor, Number(v) || 0); },
+  });
+}).catch(() => {});

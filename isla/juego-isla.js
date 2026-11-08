@@ -1,6 +1,7 @@
 // Ruta: isla/juego-isla.js
 // «Isla»: supervivencia sencilla en vista isométrica. Tala árboles, mina rocas, fabrica hacha y pico y construye pisos y paredes.
 // El terreno es una imagen suave (no cuadros): se genera una vez con ruido y se proyecta en isométrico; árboles y rocas son sprites dibujados con canvas.
+import { encolarPuntos } from "../compartido/cola-puntos.js"; // sin Firebase: anotar puntos funciona sin internet
 const ID = "isla";
 
 // ----- Ajustes -----
@@ -546,19 +547,33 @@ function pintarMesa() {
 { const b = document.createElement("button"); b.type = "button"; b.className = "b3d it b-oro"; b.innerHTML = "<span>🛠️</span><small>Mesa</small>"; b.onclick = () => { const v = $("mesa").hidden; $("mesa").hidden = !v; $("invp").hidden = true; $("fab").hidden = true; hud(); }; $("barra").appendChild(b); botones.mesa = b; }
 
 // ----- Puntos al perfil (1 por cada 5 recursos, por lotes) -----
-async function enviar(min) {
+// Los puntos se anotan en la cola local y se envían solos cuando hay internet y sesión (compartido/progreso.js)
+function enviar(min) {
   if (pend < min) return;
   const p = Math.floor(pend); if (p < 1) return; pend -= p;
-  try { const { sumarPuntos } = await import("../compartido/jugador.js"); await sumarPuntos(ID, p); } catch (e) { pend += p; }
+  encolarPuntos(ID, p);
+  import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {});
 }
 
 // ----- Guardado (en el navegador) -----
 const aB = (a) => { let s = ""; for (let i = 0; i < a.length; i++) s += String.fromCharCode(a[i]); return btoa(s); };
 const deB = (t, a) => { const s = atob(t); for (let i = 0; i < a.length && i < s.length; i++) a[i] = s.charCodeAt(i); };
-function guardar() { try { localStorage.setItem(GUARDA, JSON.stringify({ semilla, inv: invTotal(), herr, x: pj.x, y: pj.y, obj: aB(obj), piso: aB(piso), pared: aB(pared), suelto: aB(suelto) })); } catch (e) {} }
+// «t» (Date.now()) solo sube cuando cambia algo que importa (recursos, herramientas, árboles, rocas, pisos, paredes):
+// así, abrir la isla en otro dispositivo sin jugar no pisa el avance de la nube (gana la partida más reciente, unirRecientes).
+let nube = null, tGuardado = 0, firma = "";
+const firmaActual = () => JSON.stringify([invTotal(), herr]) + aB(obj) + aB(piso) + aB(pared);
+function guardar(forzar) {
+  try {
+    const f = firmaActual(), cambio = forzar === true || f !== firma;
+    if (cambio) { tGuardado = Date.now(); firma = f; }
+    localStorage.setItem(GUARDA, JSON.stringify({ t: tGuardado, semilla, inv: invTotal(), herr, x: pj.x, y: pj.y, obj: aB(obj), piso: aB(piso), pared: aB(pared), suelto: aB(suelto) }));
+    if (cambio && nube) nube.guardado();
+  } catch (e) {}
+}
 function iniciar(nueva) {
   let g = null; try { g = !nueva && JSON.parse(localStorage.getItem(GUARDA)); } catch (e) {}
   semilla = g ? g.semilla : 1 + Math.floor(Math.random() * 100000);
+  tGuardado = g ? Number(g.t) || 0 : 0;
   inv = { madera: 0, piedra: 0, cuerda: 0 }; herr = { hacha: false, pico: false, lanza: 0 }; rej = [null, null, null, null]; rej3 = Array(9).fill(null); selInv = null; fx.length = 0; rebrote.clear(); pj.ruta = []; pj.obj = -1;
   generar(); crearTextura();
   if (g) {
@@ -573,6 +588,7 @@ function iniciar(nueva) {
     } catch (e) {}
   }
   camx = iso(pj.x, pj.y)[0]; camy = iso(pj.x, pj.y)[1];
+  firma = firmaActual();   // lo recién cargado no cuenta como cambio (no sube «t»)
   hud();
 }
 function confirmar(texto, alAceptar) {   // confirm() saca al navegador de la pantalla completa: se usa un aviso dentro de la página
@@ -580,8 +596,8 @@ function confirmar(texto, alAceptar) {   // confirm() saca al navegador de la pa
   $("confSi").onclick = () => { $("confirmar").hidden = true; alAceptar(); };
   $("confNo").onclick = () => { $("confirmar").hidden = true; };
 }
-$("nueva").onclick = () => confirmar("¿Crear una isla nueva? Se perderá la actual.", () => { try { localStorage.removeItem(GUARDA); } catch (e) {} iniciar(true); });
-setInterval(guardar, 10000);
+$("nueva").onclick = () => confirmar("¿Crear una isla nueva? Se perderá la actual.", () => { try { localStorage.removeItem(GUARDA); } catch (e) {} iniciar(true); guardar(true); /* la isla nueva es la más reciente: reemplaza a la de la nube */ });
+setInterval(() => guardar(), 10000);
 addEventListener("pagehide", () => { guardar(); enviar(1); });
 document.addEventListener("visibilitychange", () => { if (document.hidden) { guardar(); enviar(1); } });
 
@@ -624,3 +640,12 @@ function bucle(tm) {
 ajustar(); iniciar(false);
 if (innerWidth < 600) zoom = 0.85;
 requestAnimationFrame(bucle);
+
+// ----- Nube: la isla se sincroniza con la cuenta de Google (local primero; el juego nunca depende de Firebase) -----
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: GUARDA,
+    fusionar: m.unirRecientes,                      // gana la isla más reciente (campo «t»)
+    alCambiar: () => { iniciar(false); aviso("Isla actualizada desde tu cuenta"); },   // la nube trajo una isla más nueva: ya está en local
+  });
+}).catch(() => {});

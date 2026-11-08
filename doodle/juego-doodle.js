@@ -1,5 +1,5 @@
 // Ruta: doodle/juego-doodle.js (lógica del juego «doodle»: saltar de plataforma en plataforma, estilo Doodle Jump)
-import { alCambiarSesion, entrar, sumarPuntos } from "../compartido/jugador.js";
+import { encolarPuntos } from "../compartido/cola-puntos.js";
 
 const ID = "doodle"; // el mismo id de juegos.js (colección de puntos en Firestore)
 const $ = (id) => document.getElementById(id);
@@ -18,8 +18,11 @@ const COLOR = { normal: "#3cb043", movil: "#2e86de", rompible: "#a8743f", unica:
 let usuario = null, p, plats, enemigos, monedas, caidos, cam, y0, maxAlt, techo, proxGorro, gorro, t, nMonedas, nEnemigos;
 let dir = 0, vivo = false, ultimo = 0;
 
-alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; });
-btnEntrar.addEventListener("click", () => entrar().catch((e) => { estado.textContent = e.message; }));
+// El botón «Entrar con Google» solo aparece si Firebase pudo cargar (sin internet la primera vez, el juego igual abre)
+import("../compartido/jugador.js").then((m) => {
+  m.alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; });
+  btnEntrar.addEventListener("click", () => m.entrar().catch((e) => { estado.textContent = e.message; }));
+}).catch(() => {});
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const metros = () => Math.floor(maxAlt / METRO);
@@ -277,9 +280,11 @@ async function fin() {
   jugar.textContent = "Jugar otra vez";
   const n = puntos();
   estado.textContent = "¡Caíste! Subiste " + metros() + " m, juntaste " + nMonedas + " monedas y derrotaste " + nEnemigos + " enemigos: " + n + " puntos.";
-  if (!usuario || !n) return;
-  try { await sumarPuntos(ID, n); estado.textContent += " Guardados ✓"; }
-  catch (e) { estado.textContent += " No se pudieron guardar (" + e.message + ")"; }
+  if (!n) return;
+  encolarPuntos(ID, n); // se anotan en el dispositivo y se envían al perfil cuando haya internet y sesión
+  let pendientes = 1;
+  try { pendientes = await (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
+  estado.textContent += pendientes === 0 ? " Guardados ✓" : " Puntos anotados: se enviarán a tu perfil cuando tengas internet y hayas entrado con Google.";
 }
 
 // Controles: teclado, o tocar la mitad izquierda / derecha del juego

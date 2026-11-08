@@ -3,6 +3,8 @@
 // pegados (abajo, a los lados o arriba) se fusionan y suman sus valores, y la fusión puede encadenarse.
 // El juego termina cuando las 5 columnas están llenas y el bloque actual no encaja con ninguna.
 
+import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
+
 const COLS = 5, FILAS = 8, CELDA = 64, BX = 20, BY = 128, W = 360, H = 650;   // BY - 88 = y donde nace el bloque que cae (y donde se ve antes de soltarlo)
 const ID_JUEGO = "fusionanumeros";
 const CLAVE = "fusionanumeros-record";
@@ -17,9 +19,8 @@ const dpr = Math.min(2, window.devicePixelRatio || 1);
 cv.width = W * dpr; cv.height = H * dpr;
 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-// Puntos con sesión de Google (si no hay sesión o conexión, el juego funciona igual)
-let sumarPuntos = null;
-import("../compartido/jugador.js").then((m) => (sumarPuntos = m.sumarPuntos)).catch(() => {});
+// Progreso: se guarda SIEMPRE en el dispositivo y se sincroniza con la cuenta cuando hay internet y sesión
+let nube = null; // se llena al cargar compartido/progreso.js (abajo del todo)
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const expo = (v) => Math.round(Math.log2(v));
@@ -37,7 +38,7 @@ function fmt(v) {
 let cols, actual, siguiente, hover = 2, activo, estado, puntos, maxBloque, pend, espera, flyers, aviso;
 let record = { bloque: 2, puntos: 0 };
 try { record = Object.assign(record, JSON.parse(localStorage.getItem(CLAVE) || "{}")); } catch (e) {}
-const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(record)); } catch (e) {} };
+const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(record)); } catch (e) {} if (nube) nube.guardado(); };
 
 const nuevoBloque = (v, y) => ({ v, y, vy: 0, pulse: 0 });
 
@@ -147,13 +148,13 @@ function terminar() {
 }
 
 function enviarPuntos() {
-  if (!sumarPuntos || pend <= 0) return;
-  const n = Math.min(pend, 1000);
-  pend -= n;
-  sumarPuntos(ID_JUEGO, n).catch(() => {});
+  if (pend > 0) { encolarPuntos(ID_JUEGO, pend); pend = 0; }   // se anotan en el dispositivo (envíos de máx. 1000)
+  import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {}); // y se envían si hay sesión e internet
 }
-document.addEventListener("visibilitychange", () => { if (document.hidden) { enviarPuntos(); guardar(); } });
-addEventListener("pagehide", () => { enviarPuntos(); guardar(); });
+// Al salir a medias también se guarda el mejor puntaje de la partida en curso (antes solo se guardaba al terminar)
+function alSalir() { if (puntos > record.puntos) record.puntos = puntos; enviarPuntos(); guardar(); }
+document.addEventListener("visibilitychange", () => { if (document.hidden) alSalir(); });
+addEventListener("pagehide", alSalir);
 
 function hud() {
   $("puntos").textContent = fmt(puntos);
@@ -313,3 +314,16 @@ function bucle(ahora) {
   requestAnimationFrame(bucle);
 }
 requestAnimationFrame(bucle);
+
+// Sincronizar con la cuenta: del bloque más alto y de los puntos récord se queda el mayor
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID_JUEGO, {
+    clave: CLAVE,
+    fusionar: m.unirMaximos,
+    alCambiar: (v) => {
+      record.bloque = Math.max(record.bloque, Number(v.bloque) || 2);
+      record.puntos = Math.max(record.puntos, Number(v.puntos) || 0);
+      hud();
+    },
+  });
+}).catch(() => {});

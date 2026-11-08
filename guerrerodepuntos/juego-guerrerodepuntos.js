@@ -2,6 +2,7 @@
 // Devorador: saltas de zona en zona; vences enemigos de nivel menor al tuyo y te quedas con su nivel.
 // El mapa es grande: la cámara te sigue, puedes arrastrar para mirar y hay niebla (solo ves las zonas junto a las que has estado).
 import { NIVELES, NIVEL_INICIAL } from "./niveles-guerrerodepuntos.js";
+import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
 
 // Qué pasa si saltas a un enemigo igual o más fuerte que tú:
 //  "inicio"    → te vence y regresas a la zona inicial (conservas tu nivel y el enemigo sigue ahí)
@@ -17,7 +18,7 @@ const EMOJI = "'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-seri
 const BICHOS = ["🐛", "🐁", "🦇", "🐺", "👹", "🐗", "🦂", "🐉", "💀", "👾"]; // más fuerte = más grande y más feroz
 
 let idx = 0, zonas, ady, enlaces, salida, vis, mundo, jug, estado, anim, flotantes, aviso, avisoHasta;
-let pendiente, cam, modoMapa, siguiendo, arrastre, destello, sumar = null;
+let pendiente, cam, modoMapa, siguiendo, arrastre, destello;
 
 function cargar(i) {
   idx = i;
@@ -189,12 +190,20 @@ function llegar(i) {
   if (i === salida) {
     estado = "ganado";
     const hay = idx + 1 < NIVELES.length;
-    decir(hay ? "¡Nivel superado con nivel " + fmt(jug.nivel) + "!" : "¡Llegaste a la salida con nivel " + jug.nivel.toLocaleString("es-MX") + "!", 99999);
+    const msg = hay ? "¡Nivel superado con nivel " + fmt(jug.nivel) + "!" : "¡Llegaste a la salida con nivel " + jug.nivel.toLocaleString("es-MX") + "!";
+    decir(msg, 99999);
     $("accion").textContent = hay ? "Siguiente nivel" : "Jugar de nuevo";
     $("accion").hidden = false;
     // 1 punto por cada 1000 de nivel (el tope por envío es 1000, así que un millón = 1000 puntos)
     const puntos = Math.min(1000, Math.floor(jug.nivel / 1000));
-    if (sumar && puntos > 0) sumar("guerrerodepuntos", puntos).catch(() => {});
+    if (puntos > 0) {
+      // se anotan en el dispositivo (nunca se pierden) y se envían al perfil si hay internet y sesión; el ✓ solo sale si ya se enviaron
+      const mio = idx;
+      encolarPuntos("guerrerodepuntos", puntos);
+      import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).then((faltan) => {
+        if (estado === "ganado" && idx === mio) decir(msg + " +" + puntos + (faltan === 0 ? " puntos ✓" : " puntos anotados: se enviarán cuando tengas internet y hayas entrado con Google."), 99999);
+      }).catch(() => {});
+    }
   }
 }
 
@@ -348,7 +357,6 @@ function cuadro(ahora) {
 (async () => {
   try {
     const m = await import("../compartido/jugador.js");
-    sumar = m.sumarPuntos;
     const zona = $("sesion");
     m.alCambiarSesion((u) => {
       zona.innerHTML = "";

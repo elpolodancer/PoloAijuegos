@@ -1,6 +1,8 @@
 // Ruta: deslizante/juego-deslizante.js
 // Puzle deslizante (estilo «15 puzzle»): ordena las fichas numeradas de 1 en adelante, con el hueco al final.
 // Cada tamaño es una dificultad. La mezcla siempre tiene solución.
+import { encolarPuntos } from "../compartido/cola-puntos.js";
+
 const ID = "deslizante";
 
 // ----- Ajustes -----
@@ -94,8 +96,20 @@ function mover(dx, dy) {                            // flechas: mueve la ficha q
 const fmt = (s) => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 const seg = () => Math.floor((Date.now() - inicio) / 1000);
 function mostrarTiempo() { $("tiempo").textContent = fmt(seg()); }
-const claveMejor = () => ID + "_mejor_" + n;
-function leerMejor() { try { return JSON.parse(localStorage.getItem(claveMejor())); } catch (e) { return null; } }
+// Mejores marcas por tamaño en una sola clave { "3": {mov, seg}, "4": … } para sincronizarlas con la cuenta de Google.
+// (Antes eran claves sueltas «deslizante_mejor_N»: se pasan solas a la nueva.)
+const CLAVE_MEJORES = ID + "_mejores";
+let mejores = {}, nube = null;
+try { mejores = JSON.parse(localStorage.getItem(CLAVE_MEJORES)) || {}; } catch (e) { mejores = {}; }
+for (const l of NIVELES) {
+  try { const m = JSON.parse(localStorage.getItem(ID + "_mejor_" + l.n)); if (m && m.mov && (!mejores[l.n] || m.mov < mejores[l.n].mov)) mejores[l.n] = m; } catch (e) {}
+}
+function guardarMejores() {
+  try { localStorage.setItem(CLAVE_MEJORES, JSON.stringify(mejores)); } catch (e) {}
+  if (nube) nube.guardado();
+}
+guardarMejores();
+const leerMejor = () => mejores[n] || null;
 function pintarMejor() { const m = leerMejor(); $("mejor").textContent = m ? m.mov + " mov." : "–"; }
 
 // ----- Victoria -----
@@ -106,7 +120,7 @@ async function ganar() {
   mostrarTiempo();
   const m = leerMejor();
   const record = !m || movs < m.mov;
-  if (record) { try { localStorage.setItem(claveMejor(), JSON.stringify({ mov: movs, seg: s })); } catch (e) {} pintarMejor(); }
+  if (record) { mejores[n] = { mov: movs, seg: s }; guardarMejores(); pintarMejor(); }
   const v = document.createElement("div");
   v.id = "victoria";
   v.innerHTML = "<h2>🎉 ¡Resuelto!</h2><div>" + movs + " movimientos · " + fmt(s) + (record ? "<br>⭐ ¡Nuevo récord!" : "") + "</div>";
@@ -115,11 +129,12 @@ async function ganar() {
   b.addEventListener("click", empezar);
   v.appendChild(b);
   $("tablero").appendChild(v);
-  try {
-    const { sumarPuntos } = await import("../compartido/jugador.js");
-    if (await sumarPuntos(ID, nivel.puntos)) $("msg").textContent = "+" + nivel.puntos + " puntos a tu perfil";
-    else $("msg").textContent = "Entra con Google en el portal para guardar tus puntos.";
-  } catch (e) { $("msg").textContent = "No se pudieron guardar los puntos (sin conexión)."; }
+  encolarPuntos(ID, nivel.puntos); // se anotan en el dispositivo y se envían al perfil cuando haya internet y sesión
+  let pendientes = 1;
+  try { pendientes = await (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
+  $("msg").textContent = pendientes === 0
+    ? "+" + nivel.puntos + " puntos a tu perfil"
+    : "+" + nivel.puntos + " puntos anotados: se enviarán a tu perfil cuando tengas internet y hayas entrado con Google.";
 }
 
 // ----- Partida -----
@@ -159,3 +174,20 @@ elegir(NIVELES[guardado] ? guardado : 0);
 import("../compartido/jugador.js").then(({ alCambiarSesion }) =>
   alCambiarSesion((u) => ($("sesion").textContent = u ? (u.displayName || "Jugador") : "Sin sesión"))
 ).catch(() => {});
+
+// Mejores marcas en la cuenta: por tamaño se queda la de menos movimientos (y, si empatan, la de menos tiempo)
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: CLAVE_MEJORES,
+    fusionar: (a, b) => {
+      if (!a && !b) return null;
+      const r = { ...(b || {}) };
+      for (const k in a || {}) {
+        const x = a[k], y = r[k];
+        r[k] = !y || (x && (x.mov < y.mov || (x.mov === y.mov && x.seg < y.seg))) ? x : y;
+      }
+      return r;
+    },
+    alCambiar: (v) => { mejores = v || {}; pintarMejor(); },
+  });
+}).catch(() => {});

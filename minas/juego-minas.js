@@ -3,9 +3,10 @@
 // Las reglas están en logica-minas.js y los números enormes en grande.js.
 import * as L from "./logica-minas.js";
 import * as B from "./grande.js";
-const ID = "minas", GUARDA = "minas_partida3";  // clave nueva: el formato cambió (números enormes y varias minas); la partida vieja ya no sirve
+import { encolarPuntos } from "../compartido/cola-puntos.js";
+const ID = "minas", GUARDA = "minas_partida3", NUBE = "minas_nube";  // clave nueva: el formato cambió (números enormes y varias minas); la partida vieja ya no sirve
 const H = 112;                                 // alto de cada fila en px (igual que .fila en index.html)
-const PUNTOS_LOTE = 10;                        // al perfil: pozo nuevo +10, gerente +5, prestigio +50, mina nueva +100, por lotes
+// Al perfil: pozo nuevo +10, asesor +5, prestigio +50, mina nueva +100 (se anotan en el dispositivo y se envían con internet y sesión)
 const MINERAL = ["⚫", "🪙", "💎", "🟣", "🔶", "💠"];
 const $ = (id) => document.getElementById(id);
 const escena = $("escena"), filasEl = $("filas");
@@ -15,7 +16,9 @@ const est = (a) => { const x = typeof a === "number" ? a : B.aNum(a); return x >
 function aviso(t) { const a = $("aviso"); a.textContent = t; a.style.opacity = 1; clearTimeout(aviso.t); aviso.t = setTimeout(() => (a.style.opacity = 0), 3500); }
 
 // ----- Partida -----
-let E = L.nuevoEstado(), sel = 0, pend = 0, modo = 1;   // sel: mina que se ve; modo: 1, 10, 100 o 0 (máximo)
+let E = L.nuevoEstado(), sel = 0, modo = 1;   // sel: mina que se ve; modo: 1, 10, 100 o 0 (máximo)
+// Nube: copia compacta (minas_nube) que sincroniza compartido/progreso.js. tNube solo cambia cuando cambia lo comprado (no el dinero)
+let nube = null, tNube = 0, lastHuella = "", sucioNube = false, ultSubida = 0, tEnv = 0;
 const mina = () => E.minas[sel];
 const esB = (o) => o && Number.isFinite(o.m) && Number.isFinite(o.e) && o.m >= 0;
 const okT = (o) => o && Number.isFinite(o.n) && Number.isFinite(o.f) && Number.isFinite(o.t) && o.ger >= 0 && o.ger <= 3;
@@ -26,17 +29,24 @@ function cargar() {
     const g = JSON.parse(localStorage.getItem(GUARDA)), S = g && g.E;
     if (!S || !esB(S.din) || !Array.isArray(S.minas) || !S.minas.length || !S.minas.every((M, j) => minaOk(M) && M.j === j)) return;
     S.minas.forEach((M) => { M.sucio = true; M.U = B.CERO; });
-    E = S; pend = g.pend || 0; sel = Math.min(Math.max(0, g.sel | 0), E.minas.length - 1);
+    E = S; if (g.pend >= 1) encolarPuntos(ID, Math.floor(g.pend)); sel = Math.min(Math.max(0, g.sel | 0), E.minas.length - 1);
     const seg = (Date.now() - g.t) / 1000;
     if (seg > 30) { const x = L.fuera(E, seg); if (x.m > 0) aviso("Mientras no estabas ganaste $" + fmt(x)); }
   } catch (e) {}
 }
-function guardar() { try { localStorage.setItem(GUARDA, JSON.stringify({ E, sel, pend, t: Date.now() })); } catch (e) {} }
-async function enviar(min) {
-  if (pend < min) return;
-  const p = Math.floor(pend); if (p < 1) return; pend -= p;
-  try { const { sumarPuntos } = await import("../compartido/jugador.js"); await sumarPuntos(ID, p); } catch (e) { pend += p; }
+function guardar() {
+  try { localStorage.setItem(GUARDA, JSON.stringify({ E, sel, t: Date.now() })); } catch (e) {}
+  const h = L.huella(E);
+  if (h !== lastHuella) { lastHuella = h; tNube = Date.now(); sucioNube = true; }
+  if (L.hayAvance(E)) {
+    if (!tNube) tNube = Date.now();
+    try { localStorage.setItem(NUBE, JSON.stringify(L.aInstantanea(E, tNube))); } catch (e) {}
+    if (sucioNube && nube && Date.now() - ultSubida > 20000) { ultSubida = Date.now(); sucioNube = false; nube.guardado(); }   // como mucho una subida cada 20 s (los ejecutivos suben niveles solos)
+  }
 }
+// Puntos: a la cola local; se envían juntos unos segundos después (y al salir)
+function puntos(p) { encolarPuntos(ID, p); clearTimeout(tEnv); tEnv = setTimeout(vaciar, 4000); }
+function vaciar() { import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {}); }
 
 // ----- Filas (solo existen en el DOM las que se ven: con 1000 pozos serían demasiadas) -----
 // Fila 0 = almacén, fila 1 = ascensor, fila q ≥ 2 = pozo q − 1. Cada fila mide H px y empieza en q × H dentro de #filas.
@@ -80,7 +90,7 @@ function armar() {                                // reconstruye todo (al cambia
 const nuevo = document.createElement("button"); nuevo.id = "nuevo"; nuevo.className = "b3d txt b-oro"; escena.appendChild(nuevo);
 nuevo.onclick = () => {
   const M = mina();
-  if (L.comprarPozo(E, M)) { pend += 10; enviar(PUNTOS_LOTE); sincronizar(); pintar(); guardar(); } else aviso("Te falta dinero");
+  if (L.comprarPozo(E, M)) { puntos(10); sincronizar(); pintar(); guardar(); } else aviso("Te falta dinero");
 };
 
 const cantidad = (M, r, w) => (modo ? Math.max(1, Math.min(modo, L.nivMax(r.tipo) - w.n)) : Math.max(1, L.maxNiv(M, r.tipo, r.i, w.n, E.din)));
@@ -88,15 +98,15 @@ function comprarNiv(r) {
   const M = mina(), w = L.trab(M, r.tipo, r.i), h = L.hitos(w.n);
   if (!L.subir(E, M, r.tipo, r.i, cantidad(M, r, w))) { aviso("Te falta dinero"); return; }
   if (L.hitos(w.n) > h) aviso("¡Hito! Nivel " + w.n + ": ×2 de producción");
-  pintar();
+  pintar(); guardar();
 }
 function comprarGer(r) {
   const M = mina(), w = L.trab(M, r.tipo, r.i);
   if (w.ger >= 3) return;
   if (w.ger === 0 && !L.asesoresActivos(M)) { aviso("Los asesores se desbloquean cuando el pozo 1 llega al nivel " + L.AJ.NIV_ASESOR); return; }
   if (!L.comprarGer(E, M, r.tipo, r.i)) { aviso("Te falta dinero"); return; }
-  if (w.ger === 1) { pend += 5; enviar(PUNTOS_LOTE); aviso("Asesor contratado: ahora trabaja solo"); } else if (w.ger === 3) aviso("¡Ejecutivo! Además sube solo el nivel de este trabajador (si cuesta menos del 10 % de tu dinero)"); else aviso("Gerente " + L.RANGOS[w.ger] + ": ×" + L.vel(w));
-  pintar();
+  if (w.ger === 1) { puntos(5); aviso("Asesor contratado: ahora trabaja solo"); } else if (w.ger === 3) aviso("¡Ejecutivo! Además sube solo el nivel de este trabajador (si cuesta menos del 10 % de tu dinero)"); else aviso("Gerente " + L.RANGOS[w.ger] + ": ×" + L.vel(w));
+  pintar(); guardar();
 }
 
 // ----- Minas (selector) -----
@@ -109,7 +119,7 @@ function armarMinas() {
     const b = document.createElement("button"); b.className = "b3d chico txt b-azul mp";
     b.onclick = () => {
       if (j < E.minas.length) { if (sel === j) return; sel = j; armar(); armarMinas(); pintar(); guardar(); escena.scrollTo(0, 0); return; }
-      if (L.comprarMina(E)) { sel = j; pend += 100; enviar(PUNTOS_LOTE); aviso("¡Mina " + (j + 1) + " desbloqueada! El dinero es compartido"); armar(); armarMinas(); pintar(); guardar(); escena.scrollTo(0, 0); }
+      if (L.comprarMina(E)) { sel = j; puntos(100); aviso("¡Mina " + (j + 1) + " desbloqueada! El dinero es compartido"); armar(); armarMinas(); pintar(); guardar(); escena.scrollTo(0, 0); }
       else aviso("Te falta dinero para la mina " + (j + 1));
     };
     cont.appendChild(b); pills.push(b);
@@ -143,7 +153,7 @@ bPres.onclick = () => {
   const M = mina(), g = L.estrellasGanables(M);
   if (g < 1) { aviso("Necesitas ganar $" + fmt(L.AJ.PRESTIGIO) + " en esta mina para tu primera ⭐"); return; }
   confirmar("¿Hacer prestigio en la mina " + (sel + 1) + "? Ganas " + g + " ⭐ (+" + Math.round(g * L.AJ.BONO_ESTRELLA * 100) + " % de ganancias en esta mina para siempre), pero esta mina se reinicia" + (L.AJ.REINICIA_DIN ? " y el dinero vuelve a $" + L.AJ.DIN0 : "") + " (conservas tus estrellas y las demás minas).", () => {
-    L.prestigio(E, M); pend += 50; enviar(1); armar(); pintar(); guardar();
+    L.prestigio(E, M); puntos(50); armar(); pintar(); guardar();
   });
 };
 const bFin = document.createElement("button"); bFin.className = "b3d chico b-gris"; bFin.textContent = "⏬"; bFin.title = "Ir al final (nuevo pozo)"; barra.appendChild(bFin);
@@ -225,7 +235,27 @@ function bucle(ahora) {
 escena.addEventListener("scroll", () => { sincronizar(); pintar(); }, { passive: true });
 addEventListener("resize", () => { sincronizar(); pintar(); });
 cargar(); armarMinas(); armar();
+
+// ----- Nube: la partida completa se une con la de la cuenta (gana la copia cuyo progreso cambió más tarde) -----
+try { const c = JSON.parse(localStorage.getItem(NUBE)); tNube = (c && Number(c.t)) || 0; } catch (e) {}
+lastHuella = L.huella(E);
+guardar();   // crea la copia la primera vez (solo si ya hay algo comprado) y guarda los puntos pendientes de la versión anterior
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: NUBE,
+    fusionar: L.unirMinas,
+    alCambiar: (v) => {
+      const S = L.deInstantanea(v);
+      if (!S) return;
+      E = S; tNube = Number(v.t) || 0; lastHuella = L.huella(E); sucioNube = false;
+      const seg = (Date.now() - (Number(v.g) || Date.now())) / 1000;
+      if (seg > 30) { const x = L.fuera(E, seg); if (x.m > 0) aviso("Mientras no estabas ganaste $" + fmt(x)); }
+      sel = Math.min(sel, E.minas.length - 1);
+      armar(); armarMinas(); pintar(); guardar();
+    },
+  });
+}).catch(() => {});
 setInterval(guardar, 5000);
-addEventListener("pagehide", () => { guardar(); enviar(1); });
-document.addEventListener("visibilitychange", () => { if (document.hidden) { guardar(); enviar(1); } });
+addEventListener("pagehide", () => { guardar(); vaciar(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden) { guardar(); vaciar(); } });   // progreso.js también sincroniza la copia al ocultarse la página
 requestAnimationFrame(bucle);

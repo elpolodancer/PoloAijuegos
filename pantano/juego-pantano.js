@@ -1,6 +1,9 @@
 // Ruta: pantano/juego-pantano.js (lógica del juego «pantano»: defiende la cabaña disparando a los bichos del pantano)
 // Proyecto: Juegos (portal). PAQUETES 1 a 5: disparo, enemigos (de tierra y voladores), jefes cada 5 oleadas, monedas, tienda, 4 armas, gráficos/animaciones y campaña de 5 niveles con fondos y misiones.
 // La sesión y los puntos se cargan aparte (más abajo): si Firebase no está disponible (sin conexión la primera vez) el juego igual funciona.
+// Local primero, nube después: los puntos van a la cola local (encolarPuntos) y se envían cuando hay sesión e internet; monedas, mejoras, armas, niveles y récord
+// se guardan en el dispositivo (claves de siempre) y se copian en «pantano_nube» para sincronizarlos con la cuenta (compartido/progreso.js).
+import { encolarPuntos } from "../compartido/cola-puntos.js";
 
 const ID = "pantano"; // el mismo id de juegos.js (colección de puntos en Firestore)
 
@@ -97,9 +100,18 @@ try { mejor = parseInt(localStorage.getItem(CLAVE_MEJOR), 10) || 0; } catch (e) 
 try { monedas = parseInt(localStorage.getItem(CLAVE_MONEDAS), 10) || 0; } catch (e) {}
 try { Object.assign(mej, JSON.parse(localStorage.getItem(CLAVE_MEJORAS)) || {}); } catch (e) {}
 for (const k in mej) mej[k] = Math.max(0, Math.min(MAXNIV, Math.floor(Number(mej[k])) || 0));
+// Copia para la nube: «t» solo sube cuando cambia algo de verdad (así un dispositivo viejo, abierto sin jugar, no pisa lo de la cuenta)
+const CLAVE_NUBE = "pantano_nube";
+let nube = null, tNube = 0, firmaNube = "";
+const firmaDatos = () => JSON.stringify([monedas, mej, armasMias, armaId, progreso.desbloqueado, progreso.estrellas, mejor]);
 const guardar = () => {
   try { localStorage.setItem(CLAVE_MONEDAS, String(monedas)); localStorage.setItem(CLAVE_MEJORAS, JSON.stringify(mej)); localStorage.setItem(CLAVE_ARMAS, JSON.stringify({ mias: armasMias, puesta: armaId }));
-    localStorage.setItem(CLAVE_PROGRESO, JSON.stringify({ desbloqueado: progreso.desbloqueado, estrellas: progreso.estrellas, sel: nivelSel })); } catch (e) {}
+    localStorage.setItem(CLAVE_PROGRESO, JSON.stringify({ desbloqueado: progreso.desbloqueado, estrellas: progreso.estrellas, sel: nivelSel }));
+    const f = firmaDatos(), cambio = f !== firmaNube;
+    if (cambio) { tNube = Date.now(); firmaNube = f; }
+    localStorage.setItem(CLAVE_NUBE, JSON.stringify({ t: tNube, monedas, mej, armas: { mias: armasMias, puesta: armaId }, prog: { desbloqueado: progreso.desbloqueado, estrellas: progreso.estrellas }, mejor }));
+    if (cambio && nube) nube.guardado();
+  } catch (e) {}
 };
 try {
   const g = JSON.parse(localStorage.getItem(CLAVE_ARMAS)) || {};
@@ -113,6 +125,13 @@ try {
   progreso.estrellas = g.estrellas && typeof g.estrellas === "object" ? g.estrellas : {};
   nivelSel = Math.max(1, Math.min(progreso.desbloqueado, Math.floor(Number(g.sel)) || 1));
 } catch (e) {}
+// Primera vez con la copia para la nube: quien ya traía avance gana sobre una cuenta vacía; quien llega sin nada deja que mande la cuenta (t = 0)
+try {
+  const n = JSON.parse(localStorage.getItem(CLAVE_NUBE));
+  const hay = monedas > 0 || mejor > 0 || armasMias.length > 1 || progreso.desbloqueado > 1 || Object.values(mej).some(Boolean);
+  tNube = n ? Number(n.t) || 0 : hay ? Date.now() : 0;
+} catch (e) {}
+firmaNube = firmaDatos(); guardar();
 // Valores finales según el arma puesta y las mejoras compradas
 const arma = () => ARMAS[armaId];
 const danoBala = () => arma().dano * (1 + 0.5 * mej.dano);
@@ -126,10 +145,47 @@ const misionCumplida = () => {
   return M.tipo === "vida" ? minVida >= M.meta : M.tipo === "puntos" ? puntos >= M.meta : misionProg >= M.meta;
 };
 
-let sumarPuntos = null, entrarGoogle = null;
+let entrarGoogle = null;
 import("../compartido/jugador.js").then((m) => {
-  sumarPuntos = m.sumarPuntos; entrarGoogle = m.entrar;
+  entrarGoogle = m.entrar;
   m.alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; });
+}).catch(() => {});
+// Une dos copias: la más reciente manda en monedas y selección; lo que no se pierde nunca (niveles, estrellas, récord, mejoras y armas compradas) se junta de las dos
+function unirPantano(a, b) {
+  if (!a) return b || null;
+  if (!b) return a;
+  const nuevoB = (Number(b.t) || 0) > (Number(a.t) || 0), r = nuevoB ? b : a, o = nuevoB ? a : b;
+  const u = { ...r };
+  u.mej = { ...(r.mej || {}) };
+  for (const k in o.mej || {}) u.mej[k] = Math.max(Number(u.mej[k]) || 0, Number(o.mej[k]) || 0);
+  const mias = [...((r.armas && r.armas.mias) || [])];
+  for (const id of (o.armas && o.armas.mias) || []) if (!mias.includes(id)) mias.push(id);
+  u.armas = { mias, puesta: (r.armas && r.armas.puesta) || "pistola" };
+  u.prog = { desbloqueado: Math.max(Number(r.prog && r.prog.desbloqueado) || 1, Number(o.prog && o.prog.desbloqueado) || 1), estrellas: { ...((o.prog && o.prog.estrellas) || {}), ...((r.prog && r.prog.estrellas) || {}) } };
+  u.mejor = Math.max(Number(r.mejor) || 0, Number(o.mejor) || 0);
+  return u;
+}
+// La nube trajo algo más nuevo: se pone en la partida (aunque sea en plena oleada, solo cambia la billetera y la tienda)
+function aplicarNube(v) {
+  try {
+    monedas = Math.max(0, Math.floor(Number(v.monedas)) || 0);
+    for (const k in mej) mej[k] = Math.max(0, Math.min(MAXNIV, Math.floor(Number(v.mej && v.mej[k])) || 0));
+    armasMias = [...new Set(["pistola", ...((v.armas && v.armas.mias) || []).filter((id) => ARMAS[id])])];
+    const p = v.armas && v.armas.puesta;
+    if (ARMAS[p] && armasMias.includes(p) && p !== armaId) { armaId = p; recargando = 0; balasCargador = cargadorMax(); }
+    progreso.desbloqueado = Math.max(1, Math.min(NIVELES.length, Math.floor(Number(v.prog && v.prog.desbloqueado)) || 1));
+    const est = v.prog && v.prog.estrellas;
+    progreso.estrellas = est && typeof est === "object" ? est : {};
+    mejor = Math.max(0, Math.floor(Number(v.mejor)) || 0);
+    nivelSel = Math.min(nivelSel, progreso.desbloqueado);
+    vida = Math.min(vida, vidaMax()); balasCargador = Math.min(balasCargador, cargadorMax());
+    tNube = Number(v.t) || tNube; firmaNube = firmaDatos();
+    try { localStorage.setItem(CLAVE_MEJOR, String(mejor)); } catch (e) {}
+    guardar(); ui();
+  } catch (e) {}
+}
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, { clave: CLAVE_NUBE, fusionar: unirPantano, alCambiar: aplicarNube });
 }).catch(() => {});
 btnEntrar.addEventListener("click", () => { if (entrarGoogle) entrarGoogle().catch((e) => { estadoTxt.textContent = e.message; }); });
 
@@ -205,14 +261,19 @@ async function terminar(gano) {
   if (puntos > mejor) {
     mejor = puntos; txt += " ¡Nuevo récord!";
     try { localStorage.setItem(CLAVE_MEJOR, String(mejor)); } catch (e) {}
+    guardar(); // sube el récord a la cuenta
   }
   jugar.hidden = false; jugar.textContent = "Jugar otra vez";
   estadoTxt.textContent = txt;
   ui();
   const sumar = Math.floor(puntos / PUNTOS_POR_PERFIL);
-  if (!usuario || !sumar || !sumarPuntos) return;
-  try { await sumarPuntos(ID, sumar); estadoTxt.textContent += " +" + sumar + " al perfil ✓"; }
-  catch (e) { estadoTxt.textContent += " No se pudieron guardar (" + e.message + ")"; }
+  if (!sumar) return;
+  encolarPuntos(ID, sumar); // primero a la cola del dispositivo: no se pierden aunque no haya sesión ni internet
+  if (!usuario) { estadoTxt.textContent += " +" + sumar + " pendientes: se enviarán al entrar con Google."; return; }
+  try {
+    const pend = await (await import("../compartido/progreso.js")).vaciarPuntos();
+    estadoTxt.textContent += pend ? " +" + sumar + " anotados: se enviarán al perfil en cuanto haya conexión." : " +" + sumar + " al perfil ✓";
+  } catch (e) { estadoTxt.textContent += " +" + sumar + " anotados: se enviarán al perfil en cuanto haya conexión."; }
 }
 
 // ---------- Actualizar ----------

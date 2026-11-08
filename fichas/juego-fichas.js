@@ -3,6 +3,7 @@
 // Los ajustes están justo debajo. Reglas y niveles: logica-fichas.js. Dibujos y fondos: piezas-fichas.js.
 import { COLS, FILAS, RANURAS, NIVELES, generarNivel, libre, repartirTipos, mezclar } from "./logica-fichas.js";
 import { ICONOS, crearSprites, cargarImagenesPropias, dibujarFondo, cargarFondosPropios } from "./piezas-fichas.js";
+import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
 
 const ID = "fichas";
 
@@ -23,14 +24,12 @@ const dpr = Math.min(window.devicePixelRatio || 1, 2);
 lienzo.width = W * dpr;
 lienzo.height = H * dpr;
 
-// ----- Puntos (se carga aparte: sin conexión el juego sigue funcionando) -----
-let jugador = null;
-import("../compartido/jugador.js").then((m) => { jugador = m; }).catch(() => {});
-
-// ----- Progreso -----
+// ----- Progreso: se guarda SIEMPRE en el dispositivo y se sincroniza con la cuenta cuando hay internet y sesión -----
+const CLAVE = "fichas_progreso";
+let nube = null; // se llena al cargar compartido/progreso.js (si no carga, el juego sigue igual)
 let progreso = 1; // nivel más alto desbloqueado (NIVELES + 1 = todos pasados)
-try { progreso = Math.max(1, Math.min(NIVELES + 1, parseInt(localStorage.getItem("fichas_progreso"), 10) || 1)); } catch (e) {}
-const guardarProgreso = () => { try { localStorage.setItem("fichas_progreso", String(progreso)); } catch (e) {} };
+try { progreso = Math.max(1, Math.min(NIVELES + 1, parseInt(localStorage.getItem(CLAVE), 10) || 1)); } catch (e) {}
+const guardarProgreso = () => { try { localStorage.setItem(CLAVE, String(progreso)); } catch (e) {} if (nube) nube.guardado(); };
 
 // ----- Dibujos -----
 const sprites = crearSprites(128);
@@ -310,9 +309,11 @@ function ganar() {
     const mio = nivel, pts = Math.min(1000, PUNTOS_BASE + PUNTOS_POR_NIVEL * mio);
     progreso = Math.min(progreso + 1, NIVELES + 1);
     guardarProgreso();
-    // El aviso de puntos solo sale si de verdad se guardaron (hace falta tener sesión)
-    if (jugador) jugador.sumarPuntos(ID, pts).then((ok) => {
-      if (ok && estado === "fin" && nivel === mio && !$("modal").hidden) $("mTxt").textContent = "+" + pts + " puntos ✓";
+    // Los puntos se anotan en la cola local (nunca se pierden) y se envían al haber sesión y conexión.
+    // El aviso solo sale cuando de verdad ya se enviaron.
+    encolarPuntos(ID, pts);
+    import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).then((faltan) => {
+      if (faltan === 0 && estado === "fin" && nivel === mio && !$("modal").hidden) $("mTxt").textContent = "+" + pts + " puntos ✓";
     }).catch(() => {});
   }
   const botones = [];
@@ -490,3 +491,16 @@ fondoIdx = 0;
 armarFondo();
 requestAnimationFrame(bucle);
 abrirMenu();
+
+// ----- Sincronizar con la cuenta (al final, tras cargar el progreso local) -----
+// El progreso es un solo número (nivel más alto desbloqueado): se queda con el mayor.
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: CLAVE,
+    fusionar: (a, b) => (a == null && b == null ? null : Math.max(1, Math.min(NIVELES + 1, Math.max(Number(a) || 1, Number(b) || 1)))),
+    alCambiar: (v) => {
+      progreso = Math.max(1, Math.min(NIVELES + 1, Number(v) || 1));
+      if (!$("menu").hidden) abrirMenu(); // si el menú está abierto, repinta los niveles pasados
+    },
+  });
+}).catch(() => {});

@@ -4,7 +4,8 @@
 // Una negra se elimina cuando se rompe una gominola pegada a ella (también en diagonal).
 // Si un movimiento no elimina ninguna negra, aparece una nueva abajo.
 // Perfil y sesión: se cargan aparte para que el juego funcione aunque Firebase no esté disponible
-let sumarPuntos = async () => false;
+import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
+let nube = null; // se llena al cargar compartido/progreso.js (abajo del todo)
 let entrar = async () => { throw new Error("Sesión no disponible sin conexión"); };
 
 const ID = "gominolas"; // el mismo id de juegos.js (colección de puntos en Firestore)
@@ -19,6 +20,7 @@ const GRAVEDAD = 70;        // filas/s² con que caen
 const PUNTOS_POR_PERFIL = 25; // al perfil se envía 1 punto por cada 25 del juego (así pesa parecido a los demás juegos)
 const CLAVE_MEJOR = "gominolas_mejor";
 const CLAVE_NIVEL = "gominolas_nivel";
+const CLAVE_PROG = "gominolas_progreso"; // { mejor, nivel } juntos, para sincronizarlos con la cuenta (antes: las dos claves de arriba)
 
 // Gominolas negras
 const NEGRAS_MIN = 10;      // negras por nivel: entre NEGRAS_MIN y NEGRAS_MAX
@@ -105,6 +107,12 @@ let usuario = null;     // sesión de Google (null si no ha entrado)
 
 try { mejor = parseInt(localStorage.getItem(CLAVE_MEJOR), 10) || 0; } catch (e) {}
 try { nivel = parseInt(localStorage.getItem(CLAVE_NIVEL), 10) || 1; } catch (e) {}
+try { const p = JSON.parse(localStorage.getItem(CLAVE_PROG)); if (p) { mejor = Math.max(mejor, Number(p.mejor) || 0); nivel = Math.max(nivel, Number(p.nivel) || 1); } } catch (e) {}
+function guardarProg() {
+  try { localStorage.setItem(CLAVE_PROG, JSON.stringify({ mejor, nivel })); } catch (e) {}
+  if (nube) nube.guardado();
+}
+if (mejor || nivel > 1) guardarProg(); // pasa lo de las claves de antes a la nueva
 
 // ---------- Sonido ----------
 let ac = null;
@@ -458,7 +466,6 @@ function ganar() {
   if (puntos > mejor) {
     mejor = puntos;
     nuevoRecord = true;
-    try { localStorage.setItem(CLAVE_MEJOR, String(mejor)); } catch (e) {}
   }
   actualizarHud();
   ovlTitulo.textContent = "¡Nivel " + nivel + " superado!";
@@ -466,7 +473,7 @@ function ganar() {
   ovlBtn.textContent = "Siguiente nivel";
   puntosInicioNivel = puntos;
   nivel++;
-  try { localStorage.setItem(CLAVE_NIVEL, String(nivel)); } catch (e) {}
+  guardarProg(); // récord y nivel, en el dispositivo y (con internet y sesión) en la cuenta
   setTimeout(() => ovl.classList.remove("oculto"), 700);
   enviarPuntos(ganados);
 }
@@ -482,18 +489,19 @@ function perder() {
 
 // ---------- Sesión y perfil ----------
 import("../compartido/jugador.js").then((m) => {
-  sumarPuntos = m.sumarPuntos;
   entrar = m.entrar;
   m.alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; });
 }).catch(() => {});
 btnEntrar.addEventListener("click", () => entrar().catch((e) => { ovlTexto.textContent = e.message; }));
 
-// Guarda en el perfil los puntos del nivel ganado (convertidos con PUNTOS_POR_PERFIL); solo si hay sesión
+// Anota los puntos del nivel ganado (convertidos con PUNTOS_POR_PERFIL) en la cola local y los envía si hay sesión e internet
 async function enviarPuntos(pts) {
   const sumar = Math.floor(pts / PUNTOS_POR_PERFIL), mia = partida;
-  if (!usuario || !sumar) return;
-  try { await sumarPuntos(ID, sumar); if (mia === partida) ovlTexto.textContent += " · +" + sumar + " al perfil ✓"; }
-  catch (e) { if (mia === partida) ovlTexto.textContent += " · no se pudieron guardar (" + e.message + ")"; }
+  if (!sumar) return;
+  encolarPuntos(ID, sumar);
+  let faltan = 1;
+  try { faltan = await (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
+  if (mia === partida) ovlTexto.textContent += faltan === 0 ? " · +" + sumar + " al perfil ✓" : " · +" + sumar + " anotados: se enviarán a tu perfil cuando tengas internet y hayas entrado con Google";
 }
 
 ovlBtn.addEventListener("click", empezar);
@@ -667,3 +675,17 @@ colocarNegras(NEGRAS_MIN);
 mostrarInicio();
 actualizarHud();
 requestAnimationFrame((t) => { ultimo = t; bucle(t); });
+
+// Sincronizar con la cuenta: del récord y del nivel se queda el mayor
+import("../compartido/progreso.js").then((p) => {
+  nube = p.conectar(ID, {
+    clave: CLAVE_PROG,
+    fusionar: p.unirMaximos,
+    alCambiar: (v) => {
+      mejor = Math.max(mejor, Number(v.mejor) || 0);
+      // el nivel solo se cambia en la pantalla de inicio, para no alterar un nivel en juego ni el texto del botón de «Reintentar»
+      if (estado === "inicio") { nivel = Math.max(nivel, Number(v.nivel) || 1); mostrarInicio(); }
+      actualizarHud();
+    },
+  });
+}).catch(() => {});

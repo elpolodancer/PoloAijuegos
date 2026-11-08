@@ -305,3 +305,42 @@ export function ejecutivos(E) {
   }
   return n;
 }
+
+// ----- Copia compacta para la nube (compartido/progreso.js) -----
+// La partida completa pesa demasiado (cada pozo guarda su depósito y su fase). A la nube solo va lo que se compró:
+// dinero, estrellas, ganado y [nivel, rango de gerente] de cada pozo, el ascensor y el almacén (~8 caracteres por pozo).
+// Lo que se pierde al restaurar (viajes en curso, carga de los depósitos) es de unos segundos de producción.
+const esB = (o) => !!o && Number.isFinite(o.m) && Number.isFinite(o.e) && o.m >= 0;
+const nivOk = (w, tipo) => Array.isArray(w) && Number.isInteger(w[0]) && w[0] >= 1 && w[0] <= nivMax(tipo) && Number.isInteger(w[1]) && w[1] >= 0 && w[1] <= 3;
+// Huella de lo comprado (sin el dinero, que cambia solo): si cambia, hay progreso nuevo
+export const huella = (E) => E.minas.map((M) => M.estrellas + ":" + M.pozos.length + ":" + M.asc.n + "." + M.asc.ger + ":" + M.alm.n + "." + M.alm.ger + ":" + M.pozos.map((p) => p.n + "." + p.ger).join(",")).join("|");
+// ¿Hay algo que valga la pena guardar en la nube? (un estado recién empezado no debe pisar la partida de la cuenta)
+export const hayAvance = (E) => E.minas.length > 1 || E.minas.some((M) => M.estrellas > 0 || M.pozos.length > 0);
+export const aInstantanea = (E, t) => ({
+  v: 1, t, g: Date.now(), din: E.din,
+  minas: E.minas.map((M) => ({ e: M.estrellas, r: M.run, p: M.pozos.map((p) => [p.n, p.ger]), a: [M.asc.n, M.asc.ger], w: [M.alm.n, M.alm.ger] })),
+});
+// Reconstruye el estado desde una copia de la nube; devuelve null si algo no cuadra
+export function deInstantanea(S) {
+  try {
+    if (!S || !esB(S.din) || !Array.isArray(S.minas) || !S.minas.length || S.minas.length > AJ.MAX_MINAS) return null;
+    const minas = S.minas.map((x, j) => {
+      if (!Number.isFinite(x.e) || x.e < 0 || !esB(x.r) || !Array.isArray(x.p) || x.p.length > AJ.MAX_POZOS || !nivOk(x.a, "a") || !nivOk(x.w, "w") || !x.p.every((q) => nivOk(q, "m"))) throw new Error("copia inválida");
+      const M = nuevaMina(j, x.e);
+      M.run = { m: x.r.m, e: x.r.e };
+      M.pozos = x.p.map(([n, ger]) => ({ n, ger, f: 0, t: 0, dep: CERO }));
+      M.asc = { ...M.asc, n: x.a[0], ger: x.a[1] };
+      M.alm = { ...M.alm, n: x.w[0], ger: x.w[1] };
+      return M;
+    });
+    return { din: { m: S.din.m, e: S.din.e }, minas };
+  } catch (e) { return null; }
+}
+// Une dos copias: gana la de «t» más reciente (la última vez que cambió lo comprado); con el mismo «t», la que se guardó después (g)
+export function unirMinas(a, b) {
+  if (!a) return b || null;
+  if (!b) return a;
+  const ta = Number(a.t) || 0, tb = Number(b.t) || 0;
+  if (ta !== tb) return tb > ta ? b : a;
+  return (Number(b.g) || 0) > (Number(a.g) || 0) ? b : a;
+}

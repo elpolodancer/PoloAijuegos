@@ -1,6 +1,7 @@
 // Ruta: imperio/juego-imperio.js
 // Imperio: estrategia isométrica. Recolectores juntan y venden recursos, constructores levantan y reparan,
 // guerreros exploran y atacan; el personaje principal pica, fabrica tablones y construye cajones.
+import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
 const VEL = .23; // casillas por segundo por cada punto de velocidad (humano = 10 → 2.3 casillas/s)
 const N = 44, TW = 32, TH = 16, $ = (id) => document.getElementById(id);
 const RES = {
@@ -269,7 +270,13 @@ function iaEnemigo(e, dt) {
   if (d > 1.1) mover(e, t.w ? t.x + t.w / 2 : t.x, t.w ? t.y + t.w / 2 : t.y, dt);
   else if (!e.cd) { golpe(e, t, 8); e.cd = 1; }
 }
-function puntos(n) { pend += n; if (pend >= 10 || (fin && pend > 0)) { const p = pend; pend = 0; import("../compartido/jugador.js").then((m) => m.sumarPuntos("imperio", p)).catch(() => {}); } }
+// Puntos al perfil: se juntan en «pend» y se anotan en la cola local (compartido/cola-puntos.js); progreso.js los envía si hay sesión e internet
+function enviarPuntos() {
+  const p = Math.floor(pend) || 0; pend = (pend || 0) - p; // «pend» aún no existe si todavía no se empezó ninguna partida
+  if (p > 0) encolarPuntos("imperio", p);
+  import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {});
+}
+function puntos(n) { pend += n; if (pend >= 10 || (fin && pend > 0)) enviarPuntos(); }
 // ----- Zona del imperio (postes), grupos de tropas y tareas -----
 const MAX_GRUPO = 10, RADIO_ZONA = 6; // tropas por grupo; radio (en casillas) que marca cada poste de imperio
 const CAT = { madera: ["arbol"], mineral: ["roca", "carbon", "cobre", "hierro", "oro", "diamante"] };
@@ -642,8 +649,15 @@ let ult = performance.now(), th = 0, ta = 0;
 // ----- Partidas guardadas (varias, en este dispositivo) y menú -----
 const CLAVE = "imperio:partidas";
 let slot = null, jugando = false;
-const leer = () => { try { return JSON.parse(localStorage.getItem(CLAVE)) || []; } catch (e) { return []; } };
+// La lista guardada incluye las partidas borradas como «lápidas» { id, borrada: true, fecha }: así, al sincronizar con la cuenta,
+// una partida borrada en un dispositivo no «revive» desde otro. leer() devuelve solo las partidas vivas.
+let nube = null; // se llena al cargar compartido/progreso.js (abajo del todo)
+const leerTodo = () => { try { const l = JSON.parse(localStorage.getItem(CLAVE)); return Array.isArray(l) ? l : []; } catch (e) { return []; } };
+const leer = () => leerTodo().filter((p) => !p.borrada);
 const escribir = (l) => { try { localStorage.setItem(CLAVE, JSON.stringify(l)); return true; } catch (e) { aviso("No se pudo guardar la partida"); return false; } };
+// Sube a la cuenta (a los 3 s). Se llama al crear, borrar y salir al menú; el autoguardado cada 5 s solo guarda en el dispositivo,
+// y progreso.js también sincroniza solo al ocultar la página, al volver la conexión y al iniciar sesión.
+const subir = () => { if (nube) nube.guardado(); };
 function estado() {
   return { dinero, oleada, tReloj, tOleada, muertes, cam, expl: Array.from(expl).join(""), bio: Array.from(bio).join(""),
     res: res.map((r, i) => r && [i, r.t, r.n, r.g || 0]).filter(Boolean),
@@ -664,7 +678,7 @@ function cargar(s) {
   if (!us.some((u) => u.k == "h")) crearUnidad("h"); sel = heroe(); fx = []; colocar = null; fin = false; pend = 0; // partidas viejas: se agrega el personaje
 }
 function guardar() {
-  if (!slot) return; const l = leer(), i = l.findIndex((p) => p.id == slot.id), p = { id: slot.id, nombre: slot.nombre, fecha: Date.now(), estado: estado() };
+  if (!slot) return; const l = leerTodo(), i = l.findIndex((p) => p.id == slot.id), p = { id: slot.id, nombre: slot.nombre, fecha: Date.now(), estado: estado() };
   if (i < 0) l.push(p); else l[i] = p; escribir(l);
 }
 function pantalla(id) { $("menu").hidden = !id; ["mPrincipal", "mPers", "mNiv"].forEach((m) => ($(m).hidden = m != id)); $("datos").hidden = !!id; $("bMenu").hidden = !!id; $("bReino").hidden = !!id; $("bCrea").hidden = !!id; $("bTropas").hidden = !!id; teclas.clear(); if (id) { $("reino").hidden = true; $("crea").hidden = true; $("tropas").hidden = true; } if (id == "mPers") listar(); }
@@ -685,7 +699,7 @@ function listar() {
     f.className = "fila"; t.innerHTML = "<b></b><small></small>"; t.firstChild.textContent = p.nombre;
     t.lastChild.textContent = "$" + Math.floor(p.estado.dinero) + " · " + new Date(p.fecha).toLocaleDateString();
     j.className = "btn"; j.textContent = "Jugar"; j.addEventListener("click", () => { slot = { id: p.id, nombre: p.nombre }; cargar(p.estado); entrar(); });
-    d.className = "btn sec"; d.textContent = "Borrar"; d.addEventListener("click", async () => { if (await preguntar("¿Borrar «" + p.nombre + "»?")) { escribir(leer().filter((x) => x.id != p.id)); listar(); } });
+    d.className = "btn sec"; d.textContent = "Borrar"; d.addEventListener("click", async () => { if (await preguntar("¿Borrar «" + p.nombre + "»?")) { escribir(leerTodo().map((x) => (x.id == p.id ? { id: x.id, borrada: true, fecha: Date.now() } : x))); subir(); listar(); } });
     f.append(t, j, d); z.appendChild(f);
   });
 }
@@ -693,11 +707,11 @@ $("bPers").addEventListener("click", () => pantalla("mPers")); $("bNiv").addEven
 $("vPers").addEventListener("click", () => pantalla("mPrincipal")); $("vNiv").addEventListener("click", () => pantalla("mPrincipal"));
 $("crear").addEventListener("click", () => {
   const nombre = $("nombre").value.trim() || "Partida " + (leer().length + 1); $("nombre").value = "";
-  slot = { id: Date.now().toString(36), nombre }; nuevo(); guardar(); entrar();
+  slot = { id: Date.now().toString(36), nombre }; nuevo(); guardar(); subir(); entrar();
 });
-$("bMenu").addEventListener("click", () => { guardar(); jugando = false; pantalla("mPrincipal"); });
-addEventListener("pagehide", () => jugando && !fin && guardar());
-document.addEventListener("visibilitychange", () => document.hidden && jugando && !fin && guardar());
+$("bMenu").addEventListener("click", () => { guardar(); enviarPuntos(); subir(); jugando = false; pantalla("mPrincipal"); });
+addEventListener("pagehide", () => { if (jugando && !fin) guardar(); enviarPuntos(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden) { if (jugando && !fin) guardar(); enviarPuntos(); } });
 ajustar(); pantalla("mPrincipal");
 (function bucle(n) {
   const dt = Math.min(.05, (n - ult) / 1000); ult = n;
@@ -708,3 +722,22 @@ ajustar(); pantalla("mPrincipal");
   }
   requestAnimationFrame(bucle);
 })(ult);
+
+// Sincronizar las partidas con la cuenta (al final, tras cargar lo local).
+// Se unen por «id»: de cada partida gana la más reciente (campo «fecha»); las borradas quedan como lápidas.
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar("imperio", {
+    clave: CLAVE,
+    fusionar: (a, b) => {
+      if (!Array.isArray(a) && !Array.isArray(b)) return null;
+      const r = new Map();
+      for (const p of [...(Array.isArray(b) ? b : []), ...(Array.isArray(a) ? a : [])]) {
+        if (!p || !p.id) continue;
+        const x = r.get(p.id);
+        if (!x || (Number(p.fecha) || 0) > (Number(x.fecha) || 0)) r.set(p.id, p);
+      }
+      return [...r.values()].sort((x, y) => (x.id < y.id ? -1 : 1)); // orden fijo: así no se reescribe sin necesidad
+    },
+    alCambiar: () => { if (!$("mPers").hidden) listar(); }, // si la lista de partidas está abierta, se repinta
+  });
+}).catch(() => {});

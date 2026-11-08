@@ -1,5 +1,5 @@
 // Ruta: dulces/juego-dulces.js (pantalla del juego «dulces», estilo Candy Crush). Las reglas están en logica-dulces.js y los niveles en niveles-dulces.js
-import { alCambiarSesion, entrar, sumarPuntos } from "../compartido/jugador.js";
+import { encolarPuntos } from "../compartido/cola-puntos.js";
 import { crearEstado, jugada, todasJugadas, instantanea, estrellas } from "./logica-dulces.js";
 import { nivel, TOTAL } from "./niveles-dulces.js";
 
@@ -57,23 +57,31 @@ function tono(freq, dur = 0.12, tipo = "sine", vol = 0.12, retraso = 0) {
 $("sonido").addEventListener("click", () => { mudo = !mudo; $("sonido").firstElementChild.textContent = mudo ? "🔇" : "🔊"; });
 
 // ---- Sesión ----
-alCambiarSesion((u) => {
-  usuario = u;
-  $("entrar").hidden = !!u;
-  $("entrarMapa").hidden = !!u;
-  if (!E) estado.textContent = u ? "" : "Sin sesión: tus puntos no se guardan.";
-});
-for (const id of ["entrar", "entrarMapa"]) $(id).addEventListener("click", () => entrar().catch((e) => { estado.textContent = e.message; }));
+// Los botones «Entrar con Google» solo aparecen si Firebase pudo cargar (sin internet la primera vez, el juego igual abre)
+import("../compartido/jugador.js").then((m) => {
+  m.alCambiarSesion((u) => {
+    usuario = u;
+    $("entrar").hidden = !!u;
+    $("entrarMapa").hidden = !!u;
+    if (!E) estado.textContent = u ? "" : "Sin sesión: tus puntos se guardarán en tu perfil cuando entres.";
+  });
+  for (const id of ["entrar", "entrarMapa"]) $(id).addEventListener("click", () => m.entrar().catch((e) => { estado.textContent = e.message; }));
+}).catch(() => {});
 async function guardarPuntos() {
   if (guardado || !E) return;
   guardado = true;
   const n = Math.round(E.puntos / PUNTOS_POR_PERFIL);
-  if (!usuario || !(n > 0)) return;
-  try { await sumarPuntos(ID, n); estado.textContent = "Se guardaron " + n + " puntos en tu perfil ✓"; }
-  catch (e) { estado.textContent = "No se pudieron guardar los puntos (" + e.message + ")"; }
+  if (!(n > 0)) return;
+  encolarPuntos(ID, n); // se anotan en el dispositivo y se envían al perfil cuando haya internet y sesión
+  let pendientes = 1;
+  try { pendientes = await (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
+  estado.textContent = pendientes === 0
+    ? "Se guardaron " + n + " puntos en tu perfil ✓"
+    : n + " puntos anotados: se enviarán a tu perfil cuando tengas internet y hayas entrado con Google.";
 }
 
 // ---- Progreso (estrellas por nivel, en este navegador) ----
+let nube = null; // sincronización de las estrellas con la cuenta de Google (se conecta al final del archivo)
 function leerProgreso() {
   try { return JSON.parse(localStorage.getItem(CLAVE_PROGRESO)) || {}; } catch (e) { return {}; }
 }
@@ -82,6 +90,7 @@ function guardarProgreso(n, e) {
     const p = leerProgreso();
     if ((p[n] || 0) < e) p[n] = e;
     localStorage.setItem(CLAVE_PROGRESO, JSON.stringify(p));
+    if (nube) nube.guardado();
   } catch (err) { /* sin almacenamiento: el juego sigue, solo no recuerda las estrellas */ }
 }
 
@@ -262,7 +271,7 @@ async function iniciarNivel(n) {
   E = crearEstado(def);
   guardado = false; sel = null; arrastre = null;
   mapa.hidden = true; juego.hidden = false;
-  estado.textContent = usuario ? "" : "Sin sesión: tus puntos no se guardan.";
+  estado.textContent = usuario ? "" : "Sin sesión: tus puntos se guardarán en tu perfil cuando entres.";
   construirHUD();
   dibujarTodo();
   actualizarHUD(instantanea(E));
@@ -528,3 +537,12 @@ async function terminar(fin) {
 }
 
 mostrarMapa();
+
+// Estrellas por nivel en la cuenta: de cada nivel se queda la mayor cantidad
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: CLAVE_PROGRESO,
+    fusionar: m.unirMaximos,
+    alCambiar: () => { if (!mapa.hidden) mostrarMapa(); }, // repinta el mapa con las estrellas que ya tenías en otro dispositivo
+  });
+}).catch(() => {});

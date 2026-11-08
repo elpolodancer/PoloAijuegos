@@ -4,6 +4,8 @@
 // Trofeos: n globos reventados = n × (n + 30). Niveles por trofeos. Artefactos: 6 = bomba, 7+ = eliminador de color, 10+ = elimina todo.
 // Globos con número: bajan 1 en cada jugada que no los revienta; si uno llega a 0, pierdes.
 
+import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
+
 const ID = "globos";
 
 // ---------- AJUSTES ----------
@@ -52,29 +54,16 @@ const COLORES = [                  // globos [luz, base, sombra]
   ["#ffc79a", "#ff8a2b", "#b8500a"],
 ];
 
-// ---------- Perfil (puntos totales del portal) ----------
-// Se carga aparte para que el juego funcione aunque falle Firebase.
-// Si tu sumarPuntos recibe otros argumentos, ajústalo SOLO aquí (copia la llamada de gominolas/juego-gominolas.js).
-let sumarPuntos = null;
-import("../compartido/jugador.js").then((m) => { sumarPuntos = m.sumarPuntos; }).catch(() => {});
-// Cada partida lleva su propia cuenta de lo ya enviado. «final» guarda los puntos de la partida cuando empieza otra,
-// para que termine de enviar lo que le quedó pendiente.
-let cuenta = { enviados: 0, enviando: false, final: null };
-async function enviarPerfil() {
-  const c = cuenta;
-  if (!sumarPuntos || c.enviando) return;   // si ya hay un envío en marcha, él mismo revisa el total al terminar cada tanda
-  c.enviando = true;
-  try {
-    for (;;) {
-      const total = Math.floor((c === cuenta ? puntos : c.final) / PUNTOS_POR_PERFIL);
-      const debe = total - c.enviados;
-      if (debe <= 0) break;
-      const n = Math.min(debe, 1000);       // jugador.js y las reglas de Firestore aceptan como máximo 1000 por envío
-      if (!(await sumarPuntos(ID, n))) break;   // sin sesión: se intenta otra vez en el siguiente envío
-      c.enviados += n;
-    }
-  } catch (e) { /* sin conexión: queda pendiente para el siguiente envío */ }
-  c.enviando = false;
+// ---------- Perfil y progreso (se sincronizan con la cuenta si hay internet y sesión; si no, el juego igual funciona) ----------
+// Los puntos al perfil se anotan en la cola local (compartido/cola-puntos.js) y compartido/progreso.js los envía al haber sesión y conexión.
+let nube = null;                 // se llena al cargar compartido/progreso.js (abajo del todo)
+const CLAVE_PROG = "globos_progreso";   // { record, monedas } juntos, para sincronizarlos con la cuenta (antes: globos_record y globos_monedas)
+// «cuenta.enviados» = puntos de perfil ya anotados en esta partida; así cada envío solo anota lo nuevo
+let cuenta = { enviados: 0 };
+function enviarPerfil() {
+  const debe = Math.floor(puntos / PUNTOS_POR_PERFIL) - cuenta.enviados;
+  if (debe > 0) { cuenta.enviados += debe; encolarPuntos(ID, debe); }   // se parte solo en envíos de máx. 1000
+  import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {});
 }
 
 // ---------- Sonidos (WebAudio, sin archivos) ----------
@@ -195,7 +184,13 @@ let cadena = [], punteroId = null, ultimoP = null;
 let puntos = 0, record = 0, reventados = 0, mejorCadena = 0;
 let nivel = 1, monedas = 0, numerosActivos = false;   // numerosActivos: los globos con número empiezan a caer tras la primera jugada
 let t = 0, tic = 0, pendientes = 0, destello = 0, aviso = 0, avisoTexto = "", llenado = 0, peligro = 0;
-try { record = Number(localStorage.getItem("globos_record")) || 0; monedas = Number(localStorage.getItem("globos_monedas")) || 0; } catch (e) {}
+try { record = Number(localStorage.getItem("globos_record")) || 0; monedas = Number(localStorage.getItem("globos_monedas")) || 0; } catch (e) {}   // claves de antes
+try { const p = JSON.parse(localStorage.getItem(CLAVE_PROG)); if (p) { record = Math.max(record, Number(p.record) || 0); monedas = Math.max(monedas, Number(p.monedas) || 0); } } catch (e) {}
+function guardarProg() {
+  try { localStorage.setItem(CLAVE_PROG, JSON.stringify({ record, monedas })); } catch (e) {}
+  if (nube) nube.guardado();
+}
+if (record || monedas) guardarProg();   // pasa lo de las claves de antes a la nueva
 elRecord.textContent = record;
 
 const umbral = (n) => (n < 1 ? 0 : n === 1 ? NIVEL1_TROFEOS : Math.round(NIVEL1_TROFEOS * Math.pow(n, POTENCIA_NIVEL) / 100) * 100);   // trofeos acumulados para terminar el nivel n
@@ -219,7 +214,7 @@ function pintarNivel() {
   $("nivelRelleno").style.width = Math.round(k * 100) + "%";
   $("monedas").textContent = "🪙 " + monedas;
 }
-function guardarMonedas() { try { localStorage.setItem("globos_monedas", String(monedas)); } catch (e) {} }
+function guardarMonedas() { guardarProg(); }
 function subirNivel() {
   let subio = false;
   while (puntos >= umbral(nivel)) { nivel++; subio = true; }
@@ -229,8 +224,8 @@ function subirNivel() {
 function iniciar() {
   ac();
   globos = []; chispas = []; anillos = []; textos = []; cadena = []; punteroId = null;
-  cuenta.final = puntos; enviarPerfil();   // termina de enviar lo que quedó pendiente de la partida anterior
-  cuenta = { enviados: 0, enviando: false, final: null };
+  enviarPerfil();   // anota lo que quedó pendiente de la partida anterior
+  cuenta = { enviados: 0 };
   puntos = 0; reventados = 0; mejorCadena = 0;
   nivel = 1; numerosActivos = false;
   t = 0; pendientes = INICIAL; destello = 0; aviso = 0; llenado = 0; peligro = 0;
@@ -453,7 +448,7 @@ function actualizarMarcador() {
   elPuntos.textContent = puntos;
   if (puntos > record) {
     record = puntos; elRecord.textContent = record;
-    try { localStorage.setItem("globos_record", String(record)); } catch (e) {}
+    guardarProg();
   }
 }
 
@@ -671,3 +666,17 @@ function cuadro(ahora) {
   dibujar();
 }
 requestAnimationFrame(cuadro);
+
+// Sincronizar con la cuenta (al final, tras cargar lo local): del récord y de las monedas se queda el mayor
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: CLAVE_PROG,
+    fusionar: m.unirMaximos,
+    alCambiar: (v) => {
+      record = Math.max(record, Number(v.record) || 0);
+      monedas = Math.max(monedas, Number(v.monedas) || 0);
+      elRecord.textContent = record;
+      pintarNivel(); // actualiza las monedas en pantalla
+    },
+  });
+}).catch(() => {});

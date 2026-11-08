@@ -1,6 +1,8 @@
 // Ruta: pelota/juego-pelota.js
 // Una pelota que rueda, brinca, empuja cajas y aplasta monstruos. 5 niveles.
 // Ajustes de física arriba. Los niveles están al final de este bloque (NIVELES).
+import { encolarPuntos } from "../compartido/cola-puntos.js";
+
 const T = 40;          // tamaño de cada cuadro
 const FILAS = 10;      // alto de todos los niveles (en cuadros)
 const GRAV = 1900;
@@ -192,8 +194,16 @@ function paso(dt) {
   if (ov(b, meta)) completar();
 }
 
+// ----- Progreso (niveles pasados): se guarda en el dispositivo y se sincroniza con la cuenta de Google -----
+const CLAVE = "pelota_progreso_v1";
+let hechos = [];
+try { hechos = JSON.parse(localStorage.getItem(CLAVE)) || []; } catch (e) { hechos = []; }
+let nube = null;
+const guardarProgreso = () => { try { localStorage.setItem(CLAVE, JSON.stringify(hechos)); } catch (e) {} if (nube) nube.guardado(); };
+
 async function completar() {
   estado = "ganado";
+  hechos[nivel] = true; guardarProgreso();
   const puntos = 100 + nMonedas * 10 + nMuertos * 50;
   const ultimo = nivel === NIVELES.length - 1;
   $("fin").querySelector("h2").textContent = ultimo ? "🏆 ¡Ganaste el juego!" : "¡Nivel " + (nivel + 1) + " completo!";
@@ -203,13 +213,12 @@ async function completar() {
   $("jugar").textContent = ultimo ? "Jugar otra vez" : "Siguiente nivel";
   $("msg").textContent = "";
   $("fin").hidden = false; $("hud").hidden = true;
-  try {
-    const { sumarPuntos } = await import("../compartido/jugador.js");
-    const ok = await sumarPuntos("pelota", puntos);
-    $("msg").textContent = ok ? "Puntos guardados en tu perfil." : "Entra con Google en el portal para guardar tus puntos.";
-  } catch (e) {
-    $("msg").textContent = "No se pudieron guardar los puntos (sin conexión).";
-  }
+  encolarPuntos("pelota", puntos); // se anotan en el dispositivo y se envían al perfil cuando haya internet y sesión
+  let pendientes = 1;
+  try { pendientes = await (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
+  $("msg").textContent = pendientes === 0
+    ? "Puntos guardados en tu perfil."
+    : "Puntos guardados en este dispositivo; se enviarán a tu perfil cuando tengas internet y hayas entrado con Google.";
 }
 
 function empezar() {
@@ -222,6 +231,7 @@ function empezar() {
 // ----- Menú de niveles -----
 // Color = dificultad: verde → azul → morado → dorado → rojo
 const COLOR_NIVEL = ["b-verde", "b-azul", "b-morado", "b-oro", "b-rojo"];
+function marcarHechos() { document.querySelectorAll("#niveles .b3d").forEach((b, i) => { b.textContent = (i + 1) + (hechos[i] ? " ✓" : ""); }); }
 function marcarNivel() { document.querySelectorAll("#niveles .b3d").forEach((b, i) => b.classList.toggle("on", i === inicio)); }
 NIVELES.forEach((n, i) => {
   const b = document.createElement("button");
@@ -230,8 +240,12 @@ NIVELES.forEach((n, i) => {
   $("niveles").appendChild(b);
 });
 marcarNivel();
+marcarHechos();
 $("jugar").addEventListener("click", empezar);
 cargar(0);
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar("pelota", { clave: CLAVE, fusionar: m.unirHechos, alCambiar: (v) => { hechos = v || []; marcarHechos(); } });
+}).catch(() => {});
 
 // ----- Dibujo -----
 function dibujarFondo() {

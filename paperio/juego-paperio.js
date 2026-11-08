@@ -8,6 +8,7 @@
 //   así los bordes se ven redondeados y no «cuadrados».
 import { NIVELES, crearForma } from "./niveles-paperio.js";
 import { montarMapa } from "./mapa.js";
+import { encolarPuntos } from "../compartido/cola-puntos.js";
 const ID = "paperio";
 
 // ----- Ajustes -----
@@ -110,14 +111,49 @@ try {
   nVeloz = Math.max(0, Math.floor(Number(localStorage.getItem("paperio_boost_veloz")) || 0));
 } catch (e) {}
 
-// ----- Monedas y tienda (las monedas y el boost comprado se guardan en este navegador) -----
-function guardarMonedas() {
+// ----- Monedas y tienda (las monedas y el boost comprado se guardan en este navegador y en la cuenta) -----
+function escribirClaves() {
   try {
     localStorage.setItem("paperio_monedas", String(monedas));
     localStorage.setItem("paperio_boost_inicio", boostInicio ? "1" : "0");
     localStorage.setItem("paperio_boost_invenc", String(nInvenc));
     localStorage.setItem("paperio_boost_veloz", String(nVeloz));
   } catch (e) {}
+}
+function guardarMonedas() { escribirClaves(); guardarNube(true); }
+
+// ----- Nube: copia única «paperio_nube» que sincroniza compartido/progreso.js -----
+// Nivel desbloqueado y mejor % → el mayor de los dos sitios. Monedas y boosts (se gastan) → los de la copia que cambió más tarde (t).
+const CLAVE_NUBE = "paperio_nube";
+let nube = null, tNube = 0;
+function guardarNube(cambioTienda) {
+  // Un dispositivo sin nada guardado no crea copia: así no pisa la de la cuenta
+  if (!(desbloqueado > 0 || mejorPct > 0 || monedas > 0 || boostInicio || nInvenc > 0 || nVeloz > 0)) return;
+  if (cambioTienda || !tNube) tNube = Date.now();
+  try { localStorage.setItem(CLAVE_NUBE, JSON.stringify({ nivel: desbloqueado, mejor: mejorPct, monedas, boostInicio: !!boostInicio, nInvenc, nVeloz, t: tNube })); } catch (e) {}
+  if (nube) nube.guardado();
+}
+function unirPaperio(a, b) {
+  const ok = (x) => x && typeof x === "object";
+  if (!ok(a) && !ok(b)) return null;
+  if (!ok(a)) return b;
+  if (!ok(b)) return a;
+  const ta = Number(a.t) || 0, tb = Number(b.t) || 0, n = tb > ta ? b : a;
+  return { nivel: Math.max(Number(a.nivel) || 0, Number(b.nivel) || 0), mejor: Math.max(Number(a.mejor) || 0, Number(b.mejor) || 0),
+    monedas: n.monedas, boostInicio: !!n.boostInicio, nInvenc: n.nInvenc, nVeloz: n.nVeloz, t: Math.max(ta, tb) };
+}
+function aplicarNube(v) {
+  if (!v || typeof v !== "object") return;
+  desbloqueado = Math.min(NIVELES.length - 1, Math.max(0, Math.floor(Number(v.nivel)) || 0));
+  mejorPct = Math.max(0, Number(v.mejor) || 0);
+  monedas = Math.max(0, Math.floor(Number(v.monedas)) || 0);
+  boostInicio = !!v.boostInicio;
+  nInvenc = Math.max(0, Math.floor(Number(v.nInvenc)) || 0);
+  nVeloz = Math.max(0, Math.floor(Number(v.nVeloz)) || 0);
+  tNube = Number(v.t) || 0;
+  escribirClaves();
+  try { localStorage.setItem("paperio_nivel", String(desbloqueado)); localStorage.setItem("paperio_mejor", String(mejorPct)); } catch (e) {}
+  try { refrescarTienda(); refrescarBoosts(); } catch (e) {}
 }
 function ganarMonedas(n) {
   if (!(n > 0)) return;
@@ -191,6 +227,13 @@ addEventListener("keydown", (ev) => {
 let J = null, usuario = null;
 import("../compartido/jugador.js")
   .then((m) => { J = m; m.alCambiarSesion((u) => { usuario = u; marcarEntrar(); }); })
+  .catch(() => {});
+
+// Nube: se crea la copia (la primera vez, con lo que ya había en este dispositivo) y se conecta con la cuenta
+try { const c = JSON.parse(localStorage.getItem(CLAVE_NUBE)); tNube = (c && Number(c.t)) || 0; } catch (e) {}
+guardarNube(false);
+import("../compartido/progreso.js")
+  .then((m) => { nube = m.conectar(ID, { clave: CLAVE_NUBE, fusionar: unirPaperio, alCambiar: aplicarNube }); })
   .catch(() => {});
 
 // ----- Capas de territorio, estelas y suelo -----
@@ -920,6 +963,7 @@ async function terminar(gano) {
     if (nivelActual + 1 < NIVELES.length && nivelActual + 1 > desbloqueado) {
       desbloqueado = nivelActual + 1;
       try { localStorage.setItem("paperio_nivel", String(desbloqueado)); } catch (e) {}
+      guardarNube(false);
     }
   }
   if (gano) ganarMonedas(MONEDAS_POR_NIVEL);
@@ -928,11 +972,15 @@ async function terminar(gano) {
   if (pct > mejorPct) {
     mejorPct = pct;
     try { localStorage.setItem("paperio_mejor", String(pct)); } catch (e) {}
+    guardarNube(false);
   }
   let guardado = "";
-  if (puntos > 0 && J && usuario) {
-    try { guardado = (await J.sumarPuntos(ID, puntos)) ? "guardados en tu perfil" : ""; } catch (e) { guardado = "no se pudieron guardar"; }
-  } else if (puntos > 0 && !usuario) guardado = "entra con Google para guardarlos";
+  if (puntos > 0) {
+    // Los puntos se anotan SIEMPRE en el dispositivo y se envían al perfil cuando haya internet y sesión
+    encolarPuntos(ID, puntos);
+    guardado = "se enviarán a tu perfil cuando haya internet y sesión";
+    try { if ((await (await import("../compartido/progreso.js")).vaciarPuntos()) === 0) guardado = "guardados en tu perfil"; } catch (e) {}
+  }
   setTimeout(() => {
     if (estado !== "fin") return;
     mostrarVelo(gano ? "¡Nivel superado!" : "Te eliminaron", "", [

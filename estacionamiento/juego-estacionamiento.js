@@ -5,6 +5,8 @@
 // - Los niveles se generan con una semilla fija y siempre tienen solución:
 //   cada auto se coloca con su camino libre respecto a los ya colocados, y se resuelve en orden inverso.
 
+import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
+
 const N = 25;                       // casillas por lado
 const TW = 16, TH = 8;              // medio ancho / medio alto de una casilla (isométrico)
 const VEL = 16;                     // casillas por segundo al salir
@@ -26,14 +28,11 @@ const $ = (id) => document.getElementById(id);
 const COLOR_NIVEL = ["b-verde", "b-azul", "b-morado", "b-oro", "b-rojo"];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-// Puntos con sesión de Google (si no hay sesión o conexión, el juego funciona igual)
-let sumarPuntos = null;
-import("../compartido/jugador.js").then((m) => (sumarPuntos = m.sumarPuntos)).catch(() => {});
-
-// ----- Progreso guardado (solo en este dispositivo) -----
+// ----- Progreso: se guarda SIEMPRE en el dispositivo y se sincroniza con la cuenta cuando hay internet y sesión -----
+let nube = null; // se llena al cargar compartido/progreso.js (si no carga, el juego sigue igual)
 let prog = { max: 1, hecho: 0 };
 try { prog = Object.assign(prog, JSON.parse(localStorage.getItem(CLAVE) || "{}")); } catch (e) {}
-const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(prog)); } catch (e) {} };
+const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(prog)); } catch (e) {} if (nube) nube.guardado(); };
 
 // ----- Generador de niveles -----
 function mulberry32(a) {
@@ -402,14 +401,16 @@ function actualizar(dt) {
 function victoria() {
   ganado = true;
   const txt = "Lo lograste en " + movs + " movimientos.";
-  if (nivel > prog.hecho && sumarPuntos) {
-    // Los puntos del nivel se dan una sola vez, y solo se anotan como cobrados si de verdad se guardaron (con sesión y conexión)
-    const mio = nivel, pts = 100 * mio;
-    sumarPuntos(ID_JUEGO, pts).then((ok) => {
-      if (!ok) return;
-      prog.hecho = Math.max(prog.hecho, mio);
-      guardar();
-      if (ganado && nivel === mio && !$("victoria").hidden) $("vtexto").textContent = txt + " +" + pts + " puntos ✓";
+  const mio = nivel;
+  let pts = 0;
+  if (nivel > prog.hecho) {
+    // Los puntos del nivel se dan una sola vez: se anotan en la cola local (nunca se pierden) y se envían al haber sesión y conexión
+    pts = 100 * mio;
+    prog.hecho = mio;
+    encolarPuntos(ID_JUEGO, pts);
+    import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).then((faltan) => {
+      // el ✓ solo sale si de verdad ya se enviaron
+      if (faltan === 0 && ganado && nivel === mio && !$("victoria").hidden) $("vtexto").textContent = txt + " +" + pts + " puntos ✓";
     }).catch(() => {});
   }
   prog.max = Math.max(prog.max, Math.min(NIVELES.length, nivel + 1));
@@ -417,7 +418,7 @@ function victoria() {
   hudNiveles();
   const ultimo = nivel >= NIVELES.length;
   $("vtitulo").textContent = ultimo ? "¡Terminaste los 5 niveles! 🎉" : "¡Nivel " + nivel + " completado!";
-  $("vtexto").textContent = txt;
+  $("vtexto").textContent = txt + (pts ? " +" + pts + " puntos" : "");
   $("siguiente").hidden = ultimo;
   $("victoria").hidden = false;
 }
@@ -527,3 +528,17 @@ function bucle(ahora) {
   requestAnimationFrame(bucle);
 }
 requestAnimationFrame(bucle);
+
+// ----- Sincronizar con la cuenta (al final, tras cargar el progreso local) -----
+// prog = { max, hecho }: se queda con el mayor de cada uno (unirMaximos)
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID_JUEGO, {
+    clave: CLAVE,
+    fusionar: m.unirMaximos,
+    alCambiar: (v) => {
+      prog.max = clamp(Number(v.max) || 1, 1, NIVELES.length);
+      prog.hecho = Math.max(0, Number(v.hecho) || 0);
+      hudNiveles(); // repinta los botones de nivel con lo que trajo la nube
+    },
+  });
+}).catch(() => {});

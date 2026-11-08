@@ -2,6 +2,8 @@
 // Estilo Hole.io en vista isométrica, con 3 mapas: «ciudad», «playa» (islas) y «campo».
 // El hoyo tiene 15 niveles de tamaño; los objetos también (solo traga los de su nivel o menores). Ver «Niveles de tamaño» abajo.
 // Ajustes rápidos aquí arriba:
+import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
+
 const DURACION = 120;      // segundos por partida
 let MUNDO = 3000;          // tamaño del mapa (px); cada mapa puede traer el suyo con «mundo»
 const NUM_BOTS = 7;         // bots por defecto (cada mapa puede traer los suyos con «bots»)
@@ -775,13 +777,15 @@ async function terminar() {
   $("msg").textContent = "";
   const pp = Math.floor(yo.puntos / 1000); // 1 punto de perfil por cada 1000 del juego (1 000 000 = tope de 1000)
   if (pp < 1) { $("msg").textContent = "Junta 1000 puntos en una partida para sumar 1 al perfil."; return; }
-  try {
-    const { sumarPuntos } = await import("../compartido/jugador.js");
-    const ok = await sumarPuntos("hoyo", pp);
-    $("msg").textContent = ok ? "Puntos guardados en tu perfil (+" + Math.min(pp, 1000) + ")." : "Entra con Google en el portal para guardar tus puntos.";
-  } catch (e) {
-    $("msg").textContent = "No se pudieron guardar los puntos (sin conexión).";
-  }
+  // Los puntos se anotan en el dispositivo (nunca se pierden) y se envían al perfil si hay internet y sesión
+  const n = Math.min(pp, 1000);
+  encolarPuntos("hoyo", n);
+  $("msg").textContent = "+" + n + " puntos anotados.";
+  let faltan = 1;
+  try { faltan = await (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
+  $("msg").textContent = faltan === 0
+    ? "Puntos guardados en tu perfil (+" + n + ")."
+    : "+" + n + " puntos anotados: se enviarán a tu perfil cuando tengas internet y hayas entrado con Google.";
 }
 
 // ----- Menú: elegir mapa y jugar -----
