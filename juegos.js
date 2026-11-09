@@ -21,7 +21,7 @@
 // «Juegos en desarrollo» del portal; los demás salen en la zona «Juegos». Al terminar un juego, quita su id de esa lista.
 // «ejemplo» (Reflejos) no está en esta lista: se abre con el botón «Juego de prueba» de index.html.
 export const JUEGOS = [
-  { id: "deslizante", nombre: "Puzle deslizante", icono: "🔢", descripcion: "Desliza las fichas numeradas hasta ponerlas en orden: 280 niveles fijos de 3×3 a 30×30 que se desbloquean en orden, y un modo libre con tableros al azar sin fin en los tamaños que ya abriste.", carpeta: "deslizante" },
+  { id: "deslizante", nombre: "Puzle deslizante", icono: "🔢", descripcion: "Desliza las fichas numeradas hasta ponerlas en orden: 280 niveles fijos de 3×3 a 30×30 que se desbloquean en orden, y un modo libre con tableros al azar sin fin en los tamaños que ya abriste.", carpeta: "deslizante", imagen: "imagenes/deslizante.webp" },
   { id: "piano", nombre: "Piano", icono: "🎹", descripcion: "Toca las teclas negras para tocar canciones clásicas y populares: elige una o juega en modo aleatorio.", carpeta: "piano", imagen: "imagenes/piano.webp" },
   { id: "doodle", nombre: "Saltarín", icono: "🦘", descripcion: "Sube lo más alto que puedas: plataformas trampa, enemigos, monedas y un gorro que te lanza 100 m (estilo Doodle Jump).", carpeta: "doodle", imagen: "imagenes/saltarin.webp" },
   { id: "corredor", nombre: "Corredor", icono: "🏃", descripcion: "Corre por las vías esquivando trenes y barreras y junta monedas (estilo Subway Surfers).", carpeta: "corredor", imagen: "imagenes/corredor.webp" },
