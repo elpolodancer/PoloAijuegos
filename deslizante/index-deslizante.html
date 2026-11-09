@@ -5,19 +5,21 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Puzle deslizante</title>
-  <meta name="theme-color" content="#15161a" />
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script> <!-- evita el parpadeo de la madera clara en modo oscuro -->
   <link rel="stylesheet" href="../compartido/estilos.css" />
   <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 30%, #23252b, #131417 70%); }
+    /* El fondo (madera clara u oscura) lo pone compartido/inmersivo.css; los textos sueltos usan --txt-fondo, --txt-fondo-suave y --sombra-txt */
+    main { color: var(--txt-fondo); }
 
     /* Pantallas (inicio, niveles y juego): solo una visible a la vez */
     .pantalla { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
       padding: calc(104px + env(safe-area-inset-top, 0px)) 12px calc(56px + env(safe-area-inset-bottom, 0px)); } /* 104px arriba: botones de navegación; 56px abajo: el ⛶ */
 
     /* Inicio */
-    #inicio h1 { margin: 0; font-size: clamp(1.8rem, 7vw, 2.6rem); text-align: center; text-shadow: 0 3px 0 rgba(0,0,0,.5); }
-    #inicio p { margin: 0 0 8px; color: var(--suave); text-align: center; }
+    #inicio h1 { margin: 0; font-size: clamp(1.8rem, 7vw, 2.6rem); text-align: center; text-shadow: var(--sombra-txt); }
+    #inicio p { margin: 0 0 8px; color: var(--txt-fondo-suave); text-align: center; }
     #inicio .b3d { --t: 56px; min-width: 220px; font-size: 18px; }
 
     /* Niveles */
@@ -25,17 +27,17 @@
     #pantalla-niveles, #pantalla-libre { justify-content: flex-start; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
     #pantalla-niveles h2, #pantalla-libre h2 { margin: 0; font-size: 1.4rem; }
     /* Modo libre: tamaños disponibles */
-    .nota-libre { flex: none; width: min(100%, 520px); margin: 0; text-align: center; color: var(--suave); font-size: .85rem; }
+    .nota-libre { flex: none; width: min(100%, 520px); margin: 0; text-align: center; color: var(--txt-fondo-suave); font-size: .85rem; }
     .rejilla-libre { flex: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 8px; width: min(100%, 520px); }
     .rejilla-libre .b3d { width: 100%; --t: 46px; font-size: 15px; font-weight: 800; }
     .grupo { flex: none; width: min(100%, 520px); }
-    .grupo h3 { margin: 8px 0 8px; font-size: 1rem; color: var(--suave); }
+    .grupo h3 { margin: 8px 0 8px; font-size: 1rem; color: var(--txt-fondo-suave); }
     .rejilla-niveles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px 8px; }
     /* Cuadrados (el doble de alto que antes): número del nivel arriba y mejor tiempo abajo */
     .rejilla-niveles .b3d { width: 100%; height: auto; aspect-ratio: 1 / 1; min-width: 0; padding: 0 2px; flex-direction: column; gap: 3px; border-radius: 16px; font-size: 16px; font-weight: 800; }
     .nivel-num { position: relative; font-size: 24px; line-height: 1; }
     .nivel-t { position: relative; font-size: 11px; font-weight: 700; line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; opacity: .95; }
-    .proximamente { flex: none; width: min(100%, 520px); margin: 6px 0 0; text-align: center; color: var(--suave); font-size: .85rem; }
+    .proximamente { flex: none; width: min(100%, 520px); margin: 6px 0 0; text-align: center; color: var(--txt-fondo-suave); font-size: .85rem; }
 
     /* Juego */
     /* Anterior / siguiente: arriba a la derecha, justo debajo de la sesión (cabe en los 104px de margen superior de la pantalla) */
@@ -43,7 +45,7 @@
     .nav-nivel[hidden] { display: none; }
     .lado { display: flex; flex-direction: column; align-items: center; gap: 8px; width: min(100%, 520px); }
     .titulo-nivel { font-weight: 800; font-size: 1rem; text-align: center; }
-    .titulo-nivel small { display: block; color: var(--suave); font-weight: 600; font-size: .75rem; }
+    .titulo-nivel small { display: block; color: var(--txt-fondo-suave); font-weight: 600; font-size: .75rem; }
     .datos { display: flex; justify-content: center; gap: 8px; width: 100%; }
     .datos div { flex: 1; max-width: 130px; padding: 4px 8px; text-align: center; color: var(--suave); font-size: .7rem; background: linear-gradient(180deg, #3a3d45, #262830); border: 2px solid #121316; border-radius: 12px; box-shadow: 0 3px 0 #121316, inset 0 2px 0 rgba(255,255,255,.15); }
     .datos b { display: block; color: var(--texto); font-size: 1.1rem; font-variant-numeric: tabular-nums; }
@@ -60,7 +62,7 @@
       box-shadow: inset 0 -4px 0 rgba(0,0,0,.25), 0 2px 4px rgba(0,0,0,.3); }
     .ficha.bien > span { outline: 3px solid rgba(255,255,255,.55); outline-offset: -3px; }
     #victoria { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-      background: rgba(10,10,12,.88); border-radius: 14px; text-align: center; padding: 12px; }
+      background: rgba(10,10,12,.88); border-radius: 14px; text-align: center; padding: 12px; color: var(--texto); } /* panel oscuro: texto claro en cualquier fondo */
     #victoria h2 { margin: 0; font-size: 1.6rem; }
     #victoria .botones { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
     #victoria { overflow-y: auto; justify-content: safe center; gap: 6px; }
@@ -102,7 +104,8 @@
     .chispa { position: absolute; width: var(--tam, 3px); height: var(--tam, 3px); border-radius: 50%; pointer-events: none; box-shadow: 0 0 6px 1px rgba(255,255,255,.9); animation: estela .9s ease-out forwards; }
     @keyframes estela { from { opacity: 1; transform: translate(0,0) scale(1); } to { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(.2); } }
 
-    .meta-estrellas { display: flex; align-items: center; justify-content: center; gap: 8px; --e: 16px; color: var(--suave); font-size: .75rem; }
+    .meta-estrellas { display: flex; align-items: center; justify-content: center; gap: 8px; --e: 16px; color: var(--txt-fondo-suave); font-size: .75rem; }
+    html:not(.oscura) .meta-estrellas .est.vacia::before { background: rgba(90,50,20,.22); } /* estrella vacía visible sobre madera clara */
     .rejilla-niveles .fila-est { --e: 12px; gap: 2px; }
     .estrellas-vic { --e: 40px; }
     .estrellas-vic .fila-est { gap: 8px; }
@@ -171,5 +174,6 @@
   </main>
   <script type="module" src="juego-deslizante.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
 </body>
 </html>

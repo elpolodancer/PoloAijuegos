@@ -26,7 +26,9 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
 .hud-abajo{ bottom: max(14px, env(safe-area-inset-bottom)); left: max(10px, env(safe-area-inset-left)); }
 
 /* ESTÁNDAR de navegación de todos los juegos: arriba a la izquierda, «🎮 Juegos» (vuelve al portal) y, solo fuera del menú
-   principal del juego, «☰ Menú principal» justo debajo. Los dos del mismo ancho. */
+   principal del juego, «☰» justo debajo. Los dos del mismo ancho. En las pantallas sin partida el ☰ dice «Menú principal» y vuelve
+   al menú del juego; dentro de una partida dice «Pausa» y abre el MENÚ DE PAUSA (Continuar / opciones del juego / Salir):
+   ver compartido/menu-pausa.js y los estilos .pausa-* al final de este archivo. */
 .nav-juego { position: fixed; z-index: 6; top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); display: flex; flex-direction: column; align-items: stretch; }
 .nav-juego .b3d { --t: 40px; border-radius: 12px; font-size: 14px; }
 
@@ -84,3 +86,19 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
 .b-gris   { --c1: #d5d9e0; --c2: #8b93a0; --c3: #4f5662; }
 
 @media (max-height: 420px) { .b3d { --t: 44px; } .b3d.chico { --t: 36px; } }
+
+/* ----- Menú de pausa estándar (lo crea compartido/menu-pausa.js): ventana con «Continuar», opciones del juego y «Salir» ----- */
+.pausa-fondo { position: fixed; inset: 0; z-index: 100; display: flex; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgba(8,9,11,.72); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+.pausa-fondo[hidden] { display: none; }
+.pausa-panel { width: min(100%, 360px); margin: auto; padding: 18px 16px 12px; text-align: center; color: #f1f2f4;
+  background: linear-gradient(180deg, #3a3d45, #22242a); border: 2px solid #121316; border-radius: 20px;
+  box-shadow: 0 6px 0 #0c0d0f, 0 14px 28px rgba(0,0,0,.55), inset 0 2px 0 rgba(255,255,255,.15); }
+.pausa-panel h2 { margin: 0 0 14px; font-size: 1.4rem; text-shadow: 0 2px 0 rgba(0,0,0,.5); }
+.pausa-opciones { display: flex; flex-direction: column; gap: 10px; }
+/* Los textos largos se parten en varias líneas en lugar de salirse de la ventana */
+.pausa-opciones .b3d.txt { --t: 50px; width: 100%; height: auto; min-height: var(--t); padding: 8px 16px; white-space: normal; text-align: center; line-height: 1.15; font-size: 16px; border-radius: 15px; }
+.pausa-opciones .b3d > span { position: relative; }
+.pausa-opciones .b3d > .b-ico { margin-right: 8px; }
+.pausa-ayuda { display: block; margin: -4px 0 2px; color: #b0b4bd; font-size: .75rem; line-height: 1.25; }

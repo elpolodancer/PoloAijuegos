@@ -23,6 +23,11 @@ Ruta: `deslizante/README-deslizante.md` · Aquí se anotan las especificaciones 
 - Arriba a la izquierda, **🎮 Juegos** (vuelve al portal), siempre visible.
 - Justo debajo, el botón **☰**, visible en todas las pantallas menos en el propio menú de inicio. En «Niveles» y «Modo libre» dice **☰ Menú principal** y vuelve al menú de inicio; **dentro de una partida dice ☰ Pausa y abre el menú de pausa** (ver abajo).
 
+## Fondo de madera
+- Todas las pantallas (inicio, niveles, modo libre y partida) van sobre el fondo estándar de madera de `compartido/inmersivo.css`: **madera clara** por defecto y **madera oscura con luna** con el botón **🌙/☀️** de abajo a la izquierda (`compartido/fondo-madera.js`; la elección se guarda en el dispositivo y vale para todos los juegos).
+- Los textos sueltos sobre la madera (título, notas, encabezados de tamaño, título del nivel) usan `--txt-fondo`, `--txt-fondo-suave` y `--sombra-txt`; los paneles oscuros (datos, victoria, tablero) conservan sus colores.
+- La página trae un `<script>` pequeño en el `<head>` que pone la clase `oscura` antes de pintar, para que no parpadee la madera clara.
+
 ## Pausa y guardar progreso del nivel
 - Dentro de una partida, **☰ Pausa** (o la tecla **Esc**) abre el menú de pausa estándar de `compartido/menu-pausa.js`. Mientras está abierto el **cronómetro se detiene** y el tablero no responde. Opciones, en este orden:
   1. **▶ Continuar**: cierra el menú y el tiempo sigue donde iba (también con Esc o tocando fuera de la ventana).
