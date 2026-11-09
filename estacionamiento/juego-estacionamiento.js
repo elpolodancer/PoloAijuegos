@@ -1,31 +1,21 @@
 // Ruta: estacionamiento/juego-estacionamiento.js
-// Saca todos los autos de un estacionamiento de 25×25 casillas (vista isométrica).
+// Saca todos los autos de un estacionamiento cuadrado (vista isométrica). El tamaño cambia con cada nivel (de 10×10 a 50×50).
 // - Cada auto avanza solo hacia donde apunta su flecha; si algo le estorba, no se mueve.
 // - Alrededor del estacionamiento hay una vía de un solo sentido (horario) con la salida en las 4 esquinas.
-// - Los niveles se generan con una semilla fija y siempre tienen solución:
-//   cada auto se coloca con su camino libre respecto a los ya colocados, y se resuelve en orden inverso.
+// - Hay 22 600 niveles (3200 de México y 100 por cada país). Todos salen de niveles-estacionamiento.js: tamaño, autos y premio dependen solo del número
+//   de nivel, y siempre tienen solución (cada auto se coloca con su camino libre respecto a los ya colocados).
 
 import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
+import { TOTAL_NIVELES, configNivel, generarNivel } from "./niveles-estacionamiento.js";
 
-const N = 25;                       // casillas por lado
+let N = 25;                         // casillas por lado (cambia con cada nivel)
 const TW = 16, TH = 8;              // medio ancho / medio alto de una casilla (isométrico)
 const VEL = 16;                     // casillas por segundo al salir
 const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0]; // 0 arriba, 1 derecha, 2 abajo, 3 izquierda
 const ID_JUEGO = "estacionamiento";
 const CLAVE = "estacionamiento-progreso";
 
-// 5 niveles: semilla fija, autos objetivo, proporción de autos largos (1×3) y esfuerzo de "desorden"
-const NIVELES = [
-  { seed: 101, obj: 40, p3: 0.3, K: 6 },
-  { seed: 202, obj: 75, p3: 0.4, K: 10 },
-  { seed: 303, obj: 105, p3: 0.45, K: 16 },
-  { seed: 404, obj: 130, p3: 0.5, K: 24 },
-  { seed: 505, obj: 150, p3: 0.6, K: 30 },
-];
-const TONOS = [0, 22, 48, 120, 165, 198, 225, 265, 300, 335];
-
 const $ = (id) => document.getElementById(id);
-const COLOR_NIVEL = ["b-verde", "b-azul", "b-morado", "b-oro", "b-rojo"];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ----- Progreso: se guarda SIEMPRE en el dispositivo y se sincroniza con la cuenta cuando hay internet y sesión -----
@@ -34,77 +24,91 @@ let prog = { max: 1, hecho: 0 };
 try { prog = Object.assign(prog, JSON.parse(localStorage.getItem(CLAVE) || "{}")); } catch (e) {}
 const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(prog)); } catch (e) {} if (nube) nube.guardado(); };
 
-// ----- Generador de niveles -----
-function mulberry32(a) {
-  return function () {
-    a |= 0; a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+// ----- Monedas (cartera): por ahora solo en el dispositivo. Las monedas se gastan, así que NO van en «prog» (unirMaximos las inflaría);
+//       cuando se haga la sincronización (paso 3) necesitarán su propia regla de fusión. -----
+const CLAVE_MONEDAS = "estacionamiento-monedas";
+let cartera = { monedas: 0 };
+try { cartera = Object.assign(cartera, JSON.parse(localStorage.getItem(CLAVE_MONEDAS) || "{}")); } catch (e) {}
+cartera.monedas = Math.max(0, Math.floor(Number(cartera.monedas)) || 0);
+const guardarCartera = () => { try { localStorage.setItem(CLAVE_MONEDAS, JSON.stringify(cartera)); } catch (e) {} };
+const chipMonedas = document.createElement("span");
+chipMonedas.className = "chip";
+chipMonedas.title = "Monedas";
+const pintarMonedas = () => { chipMonedas.textContent = "🪙 " + cartera.monedas.toLocaleString("es-MX"); };
+pintarMonedas();
+document.querySelector(".hud-centro").appendChild(chipMonedas);
+
+// ----- Boosts (paso 2a): «Quitar un auto» (30 🪙, o gratis si ya tienes usos) y «Paquete ×3» (50 🪙 = 3 usos). La bomba va aparte (2b). -----
+// «Quitar un auto» se paga AL USARLO: tocas el botón, tocas el auto y entonces se gasta un uso (o 30 monedas). Si te arrepientes, tocas el botón otra vez.
+const PRECIO_QUITAR = 30, PRECIO_PAQUETE = 50, USOS_PAQUETE = 3;
+cartera.quitar = Math.max(0, Math.floor(Number(cartera.quitar)) || 0); // usos de «quitar un auto» que tienes
+let modoQuitar = false;
+
+function botonBoost(clase, icono, titulo) {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "b3d " + clase; b.title = titulo; b.setAttribute("aria-label", titulo);
+  const i = document.createElement("span"); i.className = "b-ico"; i.textContent = icono;
+  const info = document.createElement("span"); info.className = "b-info";
+  b.append(i, info);
+  return { b, info };
 }
+const bQuitar = botonBoost("b-azul", "🚗", "Quitar un auto");
+const bPaquete = botonBoost("b-oro sin", "📦", "Paquete ×3: tres usos de «Quitar un auto»");
+bPaquete.info.textContent = PRECIO_PAQUETE + "🪙";
+const zBoosts = document.createElement("div");
+zBoosts.style.cssText = "display:flex;gap:10px";
+zBoosts.setAttribute("role", "group"); zBoosts.setAttribute("aria-label", "Boosts");
+zBoosts.append(bQuitar.b, bPaquete.b);
+{ // los boosts van arriba del selector de nivel, abajo al centro
+  const zN = $("niveles"), padre = zN.parentElement;
+  padre.style.flexDirection = "column";
+  padre.insertBefore(zBoosts, zN);
+}
+
+function pintarBoosts() {
+  const tiene = cartera.quitar > 0;
+  bQuitar.info.textContent = tiene ? "×" + cartera.quitar : PRECIO_QUITAR + "🪙";
+  bQuitar.b.classList.toggle("sin", !tiene);
+  bQuitar.b.classList.toggle("on", modoQuitar);
+  bQuitar.b.setAttribute("aria-pressed", String(modoQuitar));
+}
+function salirModoQuitar() {
+  modoQuitar = false;
+  $("lienzo").style.cursor = "";
+  pintarBoosts();
+}
+bQuitar.b.addEventListener("click", () => {
+  if (modoQuitar) { salirModoQuitar(); return; }
+  if (ganado) return;
+  if (cartera.quitar <= 0 && cartera.monedas < PRECIO_QUITAR) { aviso("Necesitas " + PRECIO_QUITAR + " monedas"); return; }
+  modoQuitar = true;
+  $("lienzo").style.cursor = "crosshair";
+  pintarBoosts();
+  aviso("Toca el auto que quieres quitar");
+});
+bPaquete.b.addEventListener("click", () => {
+  if (cartera.monedas < PRECIO_PAQUETE) { aviso("Necesitas " + PRECIO_PAQUETE + " monedas"); return; }
+  cartera.monedas -= PRECIO_PAQUETE; cartera.quitar += USOS_PAQUETE;
+  guardarCartera(); pintarMonedas(); pintarBoosts();
+  aviso("Paquete comprado: +" + USOS_PAQUETE + " usos de quitar un auto");
+});
+pintarBoosts();
+
+// ----- Niveles: el generador vive en niveles-estacionamiento.js -----
 const cabeza = (c) => [c.dir === 1 ? c.x + c.len - 1 : c.x, c.dir === 2 ? c.y + c.len - 1 : c.y];
 
-function generar(cfg) {
-  const rnd = mulberry32(cfg.seed);
-  const occ = new Array(N * N).fill(-1);
-  const autos = [];
-  const candidato = () => {
-    const dir = (rnd() * 4) | 0, len = rnd() < cfg.p3 ? 3 : 2, h = dir % 2 === 1;
-    const x = (rnd() * (N - (h ? len : 1) + 1)) | 0, y = (rnd() * (N - (h ? 1 : len) + 1)) | 0;
-    const c = { x, y, len, dir, h };
-    const celdas = [];
-    for (let i = 0; i < len; i++) {
-      const cx = h ? x + i : x, cy = h ? y : y + i;
-      if (occ[cy * N + cx] !== -1) return null;
-      celdas.push(cy * N + cx);
-    }
-    // su camino hacia afuera debe estar libre respecto a los autos ya colocados
-    const [hx, hy] = cabeza(c);
-    let rx = hx + DX[dir], ry = hy + DY[dir];
-    while (rx >= 0 && ry >= 0 && rx < N && ry < N) {
-      if (occ[ry * N + rx] !== -1) return null;
-      rx += DX[dir]; ry += DY[dir];
-    }
-    // más puntos mientras más autos ya colocados le estorben a este (más enredo)
-    const set = new Set(celdas);
-    let score = 0;
-    for (const o of autos) {
-      const [ox, oy] = cabeza(o);
-      let ax = ox + DX[o.dir], ay = oy + DY[o.dir];
-      while (ax >= 0 && ay >= 0 && ax < N && ay < N) {
-        if (set.has(ay * N + ax)) { score++; break; }
-        ax += DX[o.dir]; ay += DY[o.dir];
-      }
-    }
-    return { c, celdas, score };
-  };
-  for (let intento = 0; autos.length < cfg.obj && intento < 4000; intento++) {
-    let mejor = null;
-    for (let k = 0; k < cfg.K; k++) {
-      const r = candidato();
-      if (r && (!mejor || r.score > mejor.score)) mejor = r;
-    }
-    if (!mejor) continue;
-    const id = autos.length;
-    mejor.celdas.forEach((i) => (occ[i] = id));
-    mejor.c.id = id;
-    mejor.c.tono = TONOS[(rnd() * TONOS.length) | 0];
-    mejor.c.luz = 46 + ((rnd() * 12) | 0);
-    autos.push(mejor.c);
-  }
-  return autos;
-}
-
 // ----- Estado -----
-let nivel = 1, autos = [], occ = [], restantes = 0, movs = 0, T = 0, ganado = false;
+let nivel = 1, cfg = null, autos = [], occ = [], restantes = 0, movs = 0, T = 0, ganado = false;
 let cam = { s: 1, ox: 0, oy: 0 }, camMin = 0.3, camMax = 6;
 let camTocada = false; // true cuando el jugador movió o acercó la vista (así un cambio de tamaño de ventana no se la deshace)
 let ultAutos = "", ultMovs = -1; // últimos textos puestos en pantalla (para no reescribirlos 60 veces por segundo)
 
 function cargarNivel(n) {
+  n = clamp(Math.floor(Number(n)) || 1, 1, TOTAL_NIVELES);
   nivel = n;
-  autos = generar(NIVELES[n - 1]);
+  cfg = configNivel(n);
+  N = cfg.tam;
+  autos = generarNivel(cfg);
   occ = new Array(N * N).fill(-1);
   for (const c of autos) {
     c.estado = 0; c.bump = 0; c.flash = 0;
@@ -112,6 +116,7 @@ function cargarNivel(n) {
   }
   restantes = autos.length;
   movs = 0; ganado = false;
+  salirModoQuitar();
   $("victoria").hidden = true;
   hudNiveles();
   ajustarCamara();
@@ -140,10 +145,11 @@ function planear(c) {
   const n = d === 0 ? hy + 1 : d === 1 ? N - hx : d === 2 ? N - hy : hx + 1; // casillas hasta la vía
   const entrada = [hx + DX[d] * n, hy + DY[d] * n];
   let s0, esquinaS, sd, esquina;
-  if (d === 0) { s0 = hx + 1; esquinaS = 26; sd = [1, 0]; esquina = [25.5, -0.5]; }
-  else if (d === 1) { s0 = 26 + (hy + 1); esquinaS = 52; sd = [0, 1]; esquina = [25.5, 25.5]; }
-  else if (d === 2) { s0 = 52 + (N - hx); esquinaS = 78; sd = [-1, 0]; esquina = [-0.5, 25.5]; }
-  else { s0 = 78 + (N - hy); esquinaS = 104; sd = [0, -1]; esquina = [-0.5, -0.5]; }
+  const V = N + 1; // largo de cada lado de la vía
+  if (d === 0) { s0 = hx + 1; esquinaS = V; sd = [1, 0]; esquina = [N + 0.5, -0.5]; }
+  else if (d === 1) { s0 = V + (hy + 1); esquinaS = 2 * V; sd = [0, 1]; esquina = [N + 0.5, N + 0.5]; }
+  else if (d === 2) { s0 = 2 * V + (N - hx); esquinaS = 3 * V; sd = [-1, 0]; esquina = [-0.5, N + 0.5]; }
+  else { s0 = 3 * V + (N - hy); esquinaS = 4 * V; sd = [0, -1]; esquina = [-0.5, -0.5]; }
   const P0 = [hx + 0.5, hy + 0.5];
   const P1 = [entrada[0] + 0.5, entrada[1] + 0.5];
   const ext = c.len + 6;
@@ -180,8 +186,21 @@ function viaOcupada(nuevo) {
   return false;
 }
 
+// Boost «Quitar un auto»: gasta un uso (o 30 monedas) y el auto desaparece; sus casillas quedan libres
+function quitarAuto(c) {
+  if (cartera.quitar > 0) cartera.quitar--;
+  else if (cartera.monedas >= PRECIO_QUITAR) cartera.monedas -= PRECIO_QUITAR;
+  else { aviso("Necesitas " + PRECIO_QUITAR + " monedas"); salirModoQuitar(); return; }
+  celdasDe(c).forEach(([x, y]) => { if (occ[y * N + x] === c.id) occ[y * N + x] = -1; });
+  c.estado = 2;
+  restantes--;
+  guardarCartera(); pintarMonedas();
+  salirModoQuitar();
+}
+
 function tocarAuto(c) {
   if (c.estado !== 0 || ganado) return;
+  if (modoQuitar) { quitarAuto(c); return; }
   if (!caminoLibre(c)) {
     c.bump = 0.35; c.flash = 0.4;
     aviso("Algo le estorba");
@@ -245,11 +264,11 @@ function redim() {
   cw = r.width; ch = r.height;
   cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
 }
-const escalaAjustada = () => Math.min(cw / (54 * TW + 30), ch / (54 * TH + 70));
+const escalaAjustada = () => Math.min(cw / ((2 * N + 4) * TW + 30), ch / ((2 * N + 4) * TH + 70));
 function ajustarCamara() {
   const s = escalaAjustada();
   camMin = s * 0.8; camMax = s * 7;
-  cam.s = s; cam.ox = cw / 2; cam.oy = ch / 2 - 25 * TH * s + 10;
+  cam.s = s; cam.ox = cw / 2; cam.oy = ch / 2 - N * TH * s + 10;
   camTocada = false;
 }
 function zoom(f, mx, my) {
@@ -276,8 +295,8 @@ function poli(pts, fill, stroke) {
 const rect = (x0, y0, x1, y1, z) => [P(x0, y0, z), P(x1, y0, z), P(x1, y1, z), P(x0, y1, z)];
 
 function dibujarSuelo() {
-  poli(rect(-1, -1, 26, 26), "#2a2e39");
-  poli(rect(0, 0, 25, 25), "#3c4254");
+  poli(rect(-1, -1, N + 1, N + 1), "#2a2e39");
+  poli(rect(0, 0, N, N), "#3c4254");
   ctx.lineWidth = 1;
   ctx.strokeStyle = "rgba(255,255,255,.07)";
   ctx.beginPath();
@@ -287,7 +306,7 @@ function dibujarSuelo() {
   }
   ctx.stroke();
   ctx.lineWidth = Math.max(1, 2 * cam.s);
-  poli(rect(0, 0, 25, 25), null, "#9aa3b8");
+  poli(rect(0, 0, N, N), null, "#9aa3b8");
 
   // flechas de la vía (sentido horario)
   ctx.fillStyle = "rgba(240,215,80,.55)";
@@ -295,17 +314,17 @@ function dibujarSuelo() {
     const px = -dy, py = dx;
     poli([P(cx + dx * 0.3, cy + dy * 0.3), P(cx - dx * 0.2 + px * 0.25, cy - dy * 0.2 + py * 0.25), P(cx - dx * 0.2 - px * 0.25, cy - dy * 0.2 - py * 0.25)], "rgba(240,215,80,.55)");
   };
-  for (let i = 2; i < 25; i += 3) {
+  for (let i = 2; i < N; i += 3) {
     flecha(i + 0.5, -0.5, 1, 0);
-    flecha(25.5, i + 0.5, 0, 1);
-    flecha(i + 0.5, 25.5, -1, 0);
+    flecha(N + 0.5, i + 0.5, 0, 1);
+    flecha(i + 0.5, N + 0.5, -1, 0);
     flecha(-0.5, i + 0.5, 0, -1);
   }
   // salidas en las esquinas
   const fs = Math.max(8, Math.round(9 * cam.s * 2));
   ctx.font = "bold " + fs + "px system-ui,sans-serif";
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  for (const [x, y] of [[-1, -1], [25, -1], [25, 25], [-1, 25]]) {
+  for (const [x, y] of [[-1, -1], [N, -1], [N, N], [-1, N]]) {
     poli(rect(x, y, x + 1, y + 1), "rgba(46,204,113,.9)", "#1e8449");
     const p = P(x + 0.5, y + 0.5, 1);
     ctx.fillStyle = "#fff";
@@ -399,12 +418,17 @@ function actualizar(dt) {
 
 function victoria() {
   ganado = true;
-  const txt = "Lo lograste en " + movs + " movimientos.";
+  let txt = "Lo lograste en " + movs + " movimientos.";
   const mio = nivel;
   let pts = 0;
   if (nivel > prog.hecho) {
+    // Monedas: igual que los puntos, solo la primera vez que se pasa el nivel (repetirlo no da monedas)
+    cartera.monedas += cfg.premio;
+    guardarCartera();
+    pintarMonedas();
+    txt += " +" + cfg.premio + " 🪙";
     // Los puntos del nivel se dan una sola vez: se anotan en la cola local (nunca se pierden) y se envían al haber sesión y conexión
-    pts = 100 * mio;
+    pts = 10 * cfg.premio; // 150 a 600 puntos según el tamaño del nivel (antes 100 × nivel, que en el nivel 22 600 sería enorme)
     prog.hecho = mio;
     encolarPuntos(ID_JUEGO, pts);
     import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).then((faltan) => {
@@ -412,11 +436,11 @@ function victoria() {
       if (faltan === 0 && ganado && nivel === mio && !$("victoria").hidden) $("vtexto").textContent = txt + " +" + pts + " puntos ✓";
     }).catch(() => {});
   }
-  prog.max = Math.max(prog.max, Math.min(NIVELES.length, nivel + 1));
+  prog.max = Math.max(prog.max, Math.min(TOTAL_NIVELES, nivel + 1));
   guardar();
   hudNiveles();
-  const ultimo = nivel >= NIVELES.length;
-  $("vtitulo").textContent = ultimo ? "¡Terminaste los 5 niveles! 🎉" : "¡Nivel " + nivel + " completado!";
+  const ultimo = nivel >= TOTAL_NIVELES;
+  $("vtitulo").textContent = ultimo ? "¡Terminaste los " + TOTAL_NIVELES.toLocaleString("es-MX") + " niveles! 🎉" : "¡Nivel " + nivel + " completado!";
   $("vtexto").textContent = txt + (pts ? " +" + pts + " puntos" : "");
   $("siguiente").hidden = ultimo;
   $("victoria").hidden = false;
@@ -431,18 +455,28 @@ function aviso(t) {
   tMsg = setTimeout(() => m.classList.remove("ver"), 1600);
 }
 
+// Selector provisional (◀ nivel ▶) hasta que exista el mapa. Solo se puede avanzar hasta el nivel desbloqueado.
 function hudNiveles() {
   const z = $("niveles");
   z.innerHTML = "";
-  for (let i = 1; i <= NIVELES.length; i++) {
+  const flecha = (txt, etiqueta, ok, destino) => {
     const b = document.createElement("button");
-    b.className = "b3d chico txt " + COLOR_NIVEL[i - 1] + (i === nivel ? " on" : ""); // un color por nivel (más difícil = más oscuro/intenso)
-    b.setAttribute("aria-label", "Nivel " + i + (i > prog.max ? " (bloqueado)" : ""));
-    b.textContent = i;
-    b.disabled = i > prog.max;
-    b.addEventListener("click", () => cargarNivel(i));
-    z.appendChild(b);
-  }
+    b.type = "button";
+    b.className = "b3d chico b-gris";
+    b.textContent = txt;
+    b.setAttribute("aria-label", etiqueta);
+    b.disabled = !ok;
+    b.addEventListener("click", () => cargarNivel(destino));
+    return b;
+  };
+  const info = document.createElement("span");
+  info.className = "chip";
+  const pe = document.createElement("small"); pe.textContent = "Nivel";
+  const num = document.createElement("b"); num.textContent = nivel;
+  const det = document.createElement("small"); det.style.cssText = "margin:0 0 0 8px";
+  det.textContent = cfg.tam + "×" + cfg.tam + " · 🪙" + cfg.premio;
+  info.append(pe, num, det);
+  z.append(flecha("◀", "Nivel anterior", nivel > 1, nivel - 1), info, flecha("▶", "Nivel siguiente", nivel < prog.max && nivel < TOTAL_NIVELES, nivel + 1));
 }
 
 // ----- Controles: tocar, arrastrar, pellizcar, rueda -----
@@ -502,7 +536,7 @@ $("menos").addEventListener("click", () => zoom(1 / 1.3, cw / 2, ch / 2));
 $("centrar").addEventListener("click", ajustarCamara);
 $("reiniciar").addEventListener("click", () => cargarNivel(nivel));
 $("repetir").addEventListener("click", () => cargarNivel(nivel));
-$("siguiente").addEventListener("click", () => cargarNivel(Math.min(NIVELES.length, nivel + 1)));
+$("siguiente").addEventListener("click", () => cargarNivel(Math.min(TOTAL_NIVELES, nivel + 1)));
 addEventListener("resize", () => {
   const w0 = cw, h0 = ch;
   redim();
@@ -517,7 +551,7 @@ addEventListener("resize", () => {
 
 // ----- Inicio -----
 redim();
-cargarNivel(clamp(prog.max, 1, NIVELES.length));
+cargarNivel(clamp(prog.max, 1, TOTAL_NIVELES));
 let ultimo = performance.now();
 function bucle(ahora) {
   const dt = Math.min(0.05, (ahora - ultimo) / 1000);
@@ -535,7 +569,7 @@ import("../compartido/progreso.js").then((m) => {
     clave: CLAVE,
     fusionar: m.unirMaximos,
     alCambiar: (v) => {
-      prog.max = clamp(Number(v.max) || 1, 1, NIVELES.length);
+      prog.max = clamp(Number(v.max) || 1, 1, TOTAL_NIVELES);
       prog.hecho = Math.max(0, Number(v.hecho) || 0);
       hudNiveles(); // repinta los botones de nivel con lo que trajo la nube
     },

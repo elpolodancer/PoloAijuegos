@@ -1,9 +1,10 @@
 // Ruta: botellascolores/juego-botellascolores.js
 // Botellas de colores: vierte los colores de una botella a otra hasta que cada botella tenga un solo color.
 import { crear, verter, puedeVerter, resuelto, racha } from "./logica-botellascolores.js";
-import { NIVELES, PALETA, MUNDOS, NIVELES_POR_MUNDO } from "./niveles-botellascolores.js";
+import { NIVELES, PALETA, NIVELES_POR_MUNDO } from "./niveles-botellascolores.js";
 import { montarMapa, ETAPAS } from "./mapa.js";
 import { encolarPuntos } from "../compartido/cola-puntos.js";
+import { crearMenuPausa } from "../compartido/menu-pausa.js";
 
 // ----- Ajustes -----
 const ID = "botellas-colores";
@@ -20,19 +21,9 @@ const leer = () => { try { hechos = JSON.parse(localStorage.getItem(CLAVE)) || [
 let nube = null; // sincronización con la cuenta (se conecta al final; sin internet simplemente no se conecta)
 const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(hechos)); } catch (e) {} if (nube) nube.guardado(); };
 
-// ----- Etapas (cada 100 niveles = un estado de México, ver ETAPAS en mapa.js; también cambia el fondo) -----
-const mundoDe = (i) => Math.min(Math.floor(i / NIVELES_POR_MUNDO), MUNDOS.length - 1);
+// ----- Etapas (cada 100 niveles = un estado de México, ver ETAPAS en mapa.js) -----
 const etapaDe = (i) => ETAPAS[Math.min(Math.floor(i / NIVELES_POR_MUNDO), ETAPAS.length - 1)];
 const numEnEtapa = (i) => (i % NIVELES_POR_MUNDO) + 1;
-function aplicarMundo(i) {
-  const m = MUNDOS[mundoDe(i)];
-  const s = document.documentElement.style;
-  s.setProperty("--f1", m.fondo[0]);
-  s.setProperty("--f2", m.fondo[1]);
-  s.setProperty("--f3", m.fondo[2]);
-  s.setProperty("--vidrio", m.vidrio);
-  s.setProperty("--luna", m.luna);
-}
 
 // ----- Inicio y mapa -----
 const primeroSinPasar = () => { let s = 0; while (s < NIVELES.length && hechos[s]) s++; return Math.min(s, NIVELES.length - 1); };
@@ -40,9 +31,10 @@ const primeroSinPasar = () => { let s = 0; while (s < NIVELES.length && hechos[s
 function menu() {
   $("juego").hidden = true;
   $("menu").hidden = false;
+  $("btn-menu").hidden = true;  // en el menú principal no se muestra el ☰
+  $("hudJuego").hidden = true;
   mapa.cerrar();
   const s = primeroSinPasar();
-  aplicarMundo(s);
   const pasados = hechos.filter(Boolean).length;
   $("menuInfo").textContent = "Niveles pasados: " + pasados + " de " + NIVELES.length;
   $("continuar").textContent = "▶ " + (pasados ? "Continuar" : "Empezar") + " · " + etapaDe(s).nombre + " · Nivel " + numEnEtapa(s);
@@ -65,9 +57,10 @@ function jugar(i) {
   hist = [];
   sel = -1;
   acabo = false;
-  aplicarMundo(i);
   $("menu").hidden = true;
   $("juego").hidden = false;
+  $("btn-menu").hidden = false; // dentro de la partida el ☰ dice «Pausa»
+  $("hudJuego").hidden = false;
   $("final").hidden = true;
   pintar();
   encajar();
@@ -156,7 +149,14 @@ async function ganar() {
   }
 }
 
-$("volver").addEventListener("click", () => mapa.abrir());
+// Menú de pausa estándar (☰): Continuar / Niveles / Salir. No hay reloj que congelar.
+crearMenuPausa({
+  boton: $("btn-menu"),
+  puedeAbrir: () => !$("juego").hidden && $("mapa").hidden,
+  extras: () => [{ icono: "🗺️", texto: "Niveles", clase: "b-azul", alElegir: () => mapa.abrir() }],
+  ayudaSalir: () => (hist.length && !acabo ? "Se pierde lo que llevas de este nivel" : ""),
+  alSalir: () => menu(),
+});
 $("verMapa").addEventListener("click", () => mapa.abrir());
 $("continuar").addEventListener("click", () => jugar(primeroSinPasar()));
 $("deshacer").addEventListener("click", deshacer);
