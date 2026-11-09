@@ -471,13 +471,51 @@ function dibA(a) {
   cx.font = 17 * z + "px system-ui"; cx.textAlign = "center"; cx.fillStyle = "#fff"; cx.fillText(ANI[a.k].ico, c[0], c[1] - 2 * z);
   if (a.hp < a.mh) barra(c[0], c[1] - 22 * z, a.hp / a.mh, "#ff9f43");
 }
+// Aldeano estilo Age of Empires: piernas que caminan, túnica del color de su oficio, brazos, cabeza y herramienta propia.
+// paso (-1..1) = vaivén al caminar. Los pies quedan en (x, y).
+function hombre(x, y, z, k, col, paso, bob) {
+  const R = (a, b, w, h, c) => { cx.fillStyle = c; cx.fillRect(x + a * z, y + (b - bob) * z, w * z, h * z); };
+  const piel = "#f0c08a", pant = "#6b4f33", cuero = "#3e2a17";
+  const l1 = 8 - Math.max(0, paso) * 2.5, l2 = 8 - Math.max(0, -paso) * 2.5;
+  R(-3.6, -l1 + bob, 3.2, l1, pant); R(.4, -l2 + bob, 3.2, l2, pant);          // piernas
+  R(-3.6, -1.5 + bob, 3.2, 1.5, cuero); R(.4, -1.5 + bob, 3.2, 1.5, cuero);    // botas
+  R(-6.6, -16 + paso * 1.5, 2.4, 7, piel); R(4.2, -16 - paso * 1.5, 2.4, 7, piel); // brazos
+  R(-4.6, -17.5, 9.2, 9.5, col); R(-4.6, -11.5, 9.2, 1.6, cuero);               // túnica y cinturón
+  cx.fillStyle = piel; cx.beginPath(); cx.arc(x, y + (-21.5 - bob) * z, 4.2 * z, 0, 7); cx.fill(); // cabeza
+  const hy = y + (-21.5 - bob) * z;
+  if (k == "g") { // casco con cresta y escudo
+    cx.fillStyle = "#aab0bb"; cx.beginPath(); cx.arc(x, hy - .3 * z, 4.6 * z, Math.PI, 0); cx.fill(); R(-.9, -29, 1.8, 3.5, col);
+    cx.fillStyle = "#c9ccd3"; cx.strokeStyle = "#4f5662"; cx.lineWidth = Math.max(1, z); cx.beginPath(); cx.arc(x - 6.5 * z, y + (-13 - bob) * z, 4.4 * z, 0, 7); cx.fill(); cx.stroke();
+    cx.fillStyle = col; cx.beginPath(); cx.arc(x - 6.5 * z, y + (-13 - bob) * z, 1.8 * z, 0, 7); cx.fill();
+  } else if (k == "e") { // bandido: pañuelo rojo
+    cx.fillStyle = "#7f0000"; cx.beginPath(); cx.arc(x, hy - .3 * z, 4.5 * z, Math.PI, 0); cx.fill(); R(-4.5, -22.5, 9, 1.4, "#b71c1c");
+  } else { // pelo castaño; el personaje lleva además una diadema dorada
+    cx.fillStyle = "#4e342e"; cx.beginPath(); cx.arc(x, hy - .4 * z, 4.5 * z, Math.PI, 0); cx.fill();
+    if (k == "h") R(-4.4, -24.6, 8.8, 1.3, "#ffd23f");
+  }
+  cx.fillStyle = "#222"; cx.fillRect(x - 2 * z, hy, 1.1 * z, 1.1 * z); cx.fillRect(x + .9 * z, hy, 1.1 * z, 1.1 * z); // ojos
+  const hx = x + 5.4 * z, hyM = y + (-10 - bob) * z; // mano derecha: herramienta
+  cx.lineCap = "round";
+  if (k == "g" || k == "e") { // espada
+    cx.strokeStyle = k == "e" ? "#9e9e9e" : "#e6e9ef"; cx.lineWidth = 2 * z; cx.beginPath(); cx.moveTo(hx, hyM); cx.lineTo(hx + 1.5 * z, hyM - 14 * z); cx.stroke();
+    cx.strokeStyle = "#ffd23f"; cx.lineWidth = 1.6 * z; cx.beginPath(); cx.moveTo(hx - 2 * z, hyM - 2 * z); cx.lineTo(hx + 3 * z, hyM - 2 * z); cx.stroke();
+  } else if (k == "c") { // martillo
+    cx.strokeStyle = "#6d4c2f"; cx.lineWidth = 1.8 * z; cx.beginPath(); cx.moveTo(hx, hyM); cx.lineTo(hx + 2 * z, hyM - 12 * z); cx.stroke();
+    cx.fillStyle = "#8b93a0"; cx.fillRect(hx - 1.5 * z, hyM - 15 * z, 7 * z, 4 * z);
+  } else { // pico (recolector y personaje)
+    cx.strokeStyle = "#6d4c2f"; cx.lineWidth = 1.8 * z; cx.beginPath(); cx.moveTo(hx, hyM); cx.lineTo(hx + 2 * z, hyM - 13 * z); cx.stroke();
+    cx.strokeStyle = "#aab0bb"; cx.lineWidth = 2 * z; cx.beginPath(); cx.moveTo(hx - 3 * z, hyM - 11 * z); cx.quadraticCurveTo(hx + 2 * z, hyM - 16 * z, hx + 7 * z, hyM - 11 * z); cx.stroke();
+  }
+  cx.lineCap = "butt";
+}
 function dibU(u) {
   const z = cam.z, c = P(u.x, u.y), d = UN[u.k];
   cx.fillStyle = "#0005"; cx.beginPath(); cx.ellipse(c[0], c[1], 8 * z, 4 * z, 0, 0, 7); cx.fill();
-  cx.fillStyle = d.c; cx.beginPath(); cx.arc(c[0], c[1] - 9 * z, 7 * z, 0, 7); cx.fill(); cx.strokeStyle = "#fff"; cx.lineWidth = sel === u ? 3 : 1; cx.stroke();
-  cx.fillStyle = "#fff"; cx.font = (u.k == "e" ? "bold " : "") + 9 * z + "px system-ui"; cx.textAlign = "center"; cx.fillText(u.k == "e" ? "!" : d.ico, c[0], c[1] - 6 * z);
-  if (u.carry && u.carry.n) { cx.fillStyle = RES[u.carry.t].c; cx.fillRect(c[0] + 5 * z, c[1] - 20 * z, 6 * z, 6 * z); }
-  if (u.hp < u.mh) barra(c[0], c[1] - 24 * z, u.hp / u.mh, u.k == "e" ? "#ff6b6b" : "#59d96b");
+  if (sel === u) { cx.strokeStyle = "#fff"; cx.lineWidth = 2; cx.beginPath(); cx.ellipse(c[0], c[1], 11 * z, 5.5 * z, 0, 0, 7); cx.stroke(); }
+  const mov = !!(u.p && u.p.length), t = performance.now() / 1000;
+  hombre(c[0], c[1], z, u.k, d.c, mov ? Math.sin(t * 10) : 0, mov ? Math.abs(Math.sin(t * 10)) * 1.2 : 0);
+  if (u.carry && u.carry.n) { cx.fillStyle = RES[u.carry.t].c; cx.fillRect(c[0] + 7 * z, c[1] - 29 * z, 6 * z, 6 * z); }
+  if (u.hp < u.mh) barra(c[0], c[1] - 34 * z, u.hp / u.mh, u.k == "e" ? "#ff6b6b" : "#59d96b");
 }
 // ----- Entrada -----
 let tileMouse = null, arrastre = null;
@@ -544,15 +582,36 @@ function toque(w, raton) {
 // ----- Interfaz -----
 let tAviso = 0;
 function aviso(t) { $("aviso").textContent = t; $("aviso").hidden = false; clearTimeout(tAviso); tAviso = setTimeout(() => ($("aviso").hidden = true), 2500); }
+// Figura de hombre (SVG) para los botones de comprar unidades: misma idea que hombre() del lienzo
+function figuraSVG(k) {
+  const col = UN[k].c, piel = "#f0c08a";
+  const herr = {
+    r: '<path d="M20.5 22 L23.5 8" stroke="#6d4c2f" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 9 Q23.5 4 27.5 9" fill="none" stroke="#aab0bb" stroke-width="2" stroke-linecap="round"/>',
+    c: '<path d="M20.5 22 L23.5 10" stroke="#6d4c2f" stroke-width="1.8" stroke-linecap="round"/><rect x="20" y="5.5" width="7" height="4.5" rx="1" fill="#8b93a0"/>',
+    g: '<path d="M22 21 L22.8 4" stroke="#e6e9ef" stroke-width="2.2" stroke-linecap="round"/><path d="M19.5 18.5 L24.5 18.5" stroke="#ffd23f" stroke-width="1.8" stroke-linecap="round"/><circle cx="5.5" cy="18" r="4.6" fill="#c9ccd3" stroke="#4f5662" stroke-width="1.2"/><circle cx="5.5" cy="18" r="1.9" fill="' + col + '"/>',
+  }[k] || "";
+  const pelo = k == "g" ? '<path d="M9.4 7 A4.6 4.6 0 0 1 18.6 7 Z" fill="#aab0bb"/><rect x="13.1" y="0.5" width="1.8" height="3.6" fill="' + col + '"/>' : '<path d="M9.5 7 A4.5 4.5 0 0 1 18.5 7 Z" fill="#4e342e"/>';
+  return '<rect x="10" y="22" width="3.2" height="8" fill="#6b4f33"/><rect x="14.8" y="22" width="3.2" height="8" fill="#6b4f33"/>' +
+    '<rect x="10" y="28.5" width="3.2" height="1.5" fill="#3e2a17"/><rect x="14.8" y="28.5" width="3.2" height="1.5" fill="#3e2a17"/>' +
+    '<rect x="6.8" y="13" width="2.4" height="7" rx="1.2" fill="' + piel + '"/><rect x="18.8" y="13" width="2.4" height="7" rx="1.2" fill="' + piel + '"/>' +
+    '<rect x="9.4" y="11.5" width="9.2" height="9.5" rx="2" fill="' + col + '"/><rect x="9.4" y="17.5" width="9.2" height="1.6" fill="#3e2a17"/>' +
+    '<circle cx="14" cy="7.5" r="4.2" fill="' + piel + '"/>' + pelo + '<rect x="12" y="7.5" width="1.1" height="1.1" fill="#222"/><rect x="15" y="7.5" width="1.1" height="1.1" fill="#222"/>' + herr;
+}
 function panel(soloTexto) {
   const z = $("acciones"); if (!soloTexto) z.innerHTML = "";
   const boton = (t, f, off) => { const b = document.createElement("button"); b.className = "btn"; b.textContent = t; b.disabled = !!off; b.addEventListener("click", f); z.appendChild(b); };
-  if (!soloTexto) ["r", "c", "g"].forEach((k) => boton((nPostes ? "+ " : "🔒 ") + UN[k].nom + " $" + UN[k].costo, () => {
-    if (!nPostes) return aviso("Necesitas un poste de imperio (fabrícalo en 🛠️ Creaciones)");
-    if (dinero < UN[k].costo) return aviso("No alcanza el dinero");
-    const nu = crearUnidad(k); if (!nu) return aviso("No hay espacio libre para crearla");
-    dinero -= UN[k].costo; sel = nu; colocar = null; panel();
-  }));
+  if (!soloTexto) ["r", "c", "g"].forEach((k) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "b3d fig " + ({ r: "b-azul", c: "b-oro", g: "b-morado" })[k] + (nPostes ? "" : " sin");
+    b.title = b.ariaLabel = UN[k].nom + " $" + UN[k].costo;
+    b.innerHTML = '<svg viewBox="0 0 28 32" aria-hidden="true">' + figuraSVG(k) + '</svg><span class="b-nom">' + UN[k].nom + '</span><span class="b-info">' + (nPostes ? "" : "🔒 ") + "$" + UN[k].costo + "</span>";
+    b.addEventListener("click", () => {
+      if (!nPostes) return aviso("Necesitas un poste de imperio (fabrícalo en 🛠️ Creaciones)");
+      if (dinero < UN[k].costo) return aviso("No alcanza el dinero");
+      const nu = crearUnidad(k); if (!nu) return aviso("No hay espacio libre para crearla");
+      dinero -= UN[k].costo; sel = nu; colocar = null; panel();
+    });
+    z.appendChild(b);
+  });
   if (!soloTexto) boton("Siguiente libre", () => { const l = us.filter((u) => !u.o); if (!l.length) return aviso("Todos están ocupados"); const j = l.indexOf(sel); sel = l[(j + 1) % l.length]; const c = P(sel.x, sel.y); cam.x += W / 2 - c[0]; cam.y += H / 2 - c[1]; panel(); });
   if (!soloTexto && sel && sel.k == "c") ["almacen", "torre"].forEach((k) => boton((colocar == k ? "Toca el mapa: " : "") + ED[k].nom + " $" + ED[k].costo, () => { colocar = colocar == k ? null : k; panel(); }));
   if (!soloTexto && sel && sel.inv && sel.w) {
@@ -681,7 +740,7 @@ function guardar() {
   if (!slot) return; const l = leerTodo(), i = l.findIndex((p) => p.id == slot.id), p = { id: slot.id, nombre: slot.nombre, fecha: Date.now(), estado: estado() };
   if (i < 0) l.push(p); else l[i] = p; escribir(l);
 }
-function pantalla(id) { $("menu").hidden = !id; ["mPrincipal", "mPers", "mNiv"].forEach((m) => ($(m).hidden = m != id)); $("datos").hidden = !!id; $("bMenu").hidden = !!id; $("bReino").hidden = !!id; $("bCrea").hidden = !!id; $("bTropas").hidden = !!id; teclas.clear(); if (id) { $("reino").hidden = true; $("crea").hidden = true; $("tropas").hidden = true; } if (id == "mPers") listar(); }
+function pantalla(id) { $("menu").hidden = !id; ["mPrincipal", "mPers", "mNiv"].forEach((m) => ($(m).hidden = m != id)); $("datos").hidden = !!id; $("bMenu").hidden = id == "mPrincipal"; $("bReino").hidden = !!id; $("bCrea").hidden = !!id; $("bTropas").hidden = !!id; teclas.clear(); if (id) { $("reino").hidden = true; $("crea").hidden = true; $("tropas").hidden = true; } if (id == "mPers") listar(); }
 function entrar() { $("fin").hidden = true; jugando = true; pantalla(null); ult = performance.now(); panel(); }
 // Sustituye a confirm(): un aviso dentro de la página (confirm() saca al navegador de la pantalla completa)
 function preguntar(texto) {
@@ -709,7 +768,7 @@ $("crear").addEventListener("click", () => {
   const nombre = $("nombre").value.trim() || "Partida " + (leer().length + 1); $("nombre").value = "";
   slot = { id: Date.now().toString(36), nombre }; nuevo(); guardar(); subir(); entrar();
 });
-$("bMenu").addEventListener("click", () => { guardar(); enviarPuntos(); subir(); jugando = false; pantalla("mPrincipal"); });
+$("bMenu").addEventListener("click", () => { if (jugando) { guardar(); enviarPuntos(); subir(); jugando = false; } $("fin").hidden = true; pantalla("mPrincipal"); }); // en una partida guarda y sale; en las pantallas del menú solo regresa
 addEventListener("pagehide", () => { if (jugando && !fin) guardar(); enviarPuntos(); });
 document.addEventListener("visibilitychange", () => { if (document.hidden) { if (jugando && !fin) guardar(); enviarPuntos(); } });
 ajustar(); pantalla("mPrincipal");

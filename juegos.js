@@ -17,6 +17,8 @@
 //   3. Anota su carpeta en «JUEGOS» de sw.js y sube VERSION (así funciona sin internet).
 //   4. Si tiene imagen, agrégala también a «ARCHIVOS» de sw.js.
 //   5. Agrega su fila en el mapa de archivos del README y una nota en «Estado».
+// Juegos en desarrollo: al final de este archivo está la lista «EN_DESARROLLO». Los juegos cuyo id esté ahí salen en la zona
+// «Juegos en desarrollo» del portal; los demás salen en la zona «Juegos». Al terminar un juego, quita su id de esa lista.
 // «ejemplo» (Reflejos) no está en esta lista: se abre con el botón «Juego de prueba» de index.html.
 export const JUEGOS = [
   { id: "piano", nombre: "Piano", icono: "🎹", descripcion: "Toca las teclas negras para tocar canciones clásicas y populares: elige una o juega en modo aleatorio.", carpeta: "piano", imagen: "imagenes/piano.webp" },
@@ -64,3 +66,7 @@ export const JUEGOS = [
   { id: "fate", nombre: "Aldea y Mazmorra", icono: "⚔️", descripcion: "RPG de acción: habla con los aldeanos, acepta las misiones de Marta y baja a la mazmorra a rescatar, buscar objetos y cazar monstruos. Usa bola de fuego y pociones, sube de nivel y tu partida se guarda sola.", carpeta: "fate" },
   { id: "bloques", nombre: "Bloques de madera", icono: "🟫", descripcion: "Arrastra 3 piezas a un tablero de 8×8 y limpia filas y columnas completas. Cada ronda trae piezas que sí caben, pero con trampas: si las pones en otro hueco, a otra pieza ya no le queda sitio. A veces aparecen bloques con candado que piden completar su línea dos veces. Pierdes cuando ninguna pieza cabe.", carpeta: "bloques" },
 ];
+
+// ids (campo «id» de arriba) de los juegos que todavía se están programando. Se ven en la zona «Juegos en desarrollo».
+// Cuando uno esté terminado, quita su id de aquí y pasará solo a la zona «Juegos».
+export const EN_DESARROLLO = ["bloques", "fate", "pasteles", "flappybird"];
