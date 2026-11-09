@@ -42,14 +42,26 @@
     #aviso { position: fixed; z-index: 6; top: calc(var(--safe-t) + 46px); left: 50%; transform: translateX(-50%); max-width: min(90vw, 460px); padding: 6px 14px; font-size: 13px; text-align: center; color: #fff; background: #101114e6; border: 2px solid #3b3e46; border-radius: 999px; pointer-events: none; }
 
     /* Paneles de Reino / Creaciones / Tropas: junto a la columna de botones, con scroll interno */
-    #reino, #crea, #tropas { position: fixed; z-index: 5; top: calc(var(--safe-t) + 98px); left: calc(var(--safe-l) + 52px); width: min(330px, calc(100vw - var(--safe-l) - 64px));
+    #reino, #crea, #edif, #tropas { position: fixed; z-index: 5; top: calc(var(--safe-t) + 98px); left: calc(var(--safe-l) + 52px); width: min(330px, calc(100vw - var(--safe-l) - 64px));
       max-height: calc(100dvh - var(--safe-t) - 98px - 190px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; display: flex; flex-direction: column; gap: 6px; padding: 10px;
       color: var(--texto); background: #15171af2; border: 2px solid #3b3e46; border-radius: 14px; font-size: .85rem; }
-    #reino .resumen, #crea .resumen, #tropas .resumen { font-weight: 700; }
-    #reino p, #crea p, #tropas p { margin: 0; color: var(--suave); }
+    #reino .resumen, #crea .resumen, #edif .resumen, #tropas .resumen { font-weight: 700; }
+    #reino p, #crea p, #edif p, #tropas p { margin: 0; color: var(--suave); }
     .soldado { padding: 8px 10px; font: inherit; font-size: .82rem; text-align: left; color: var(--texto); background: #1e2025; border: 2px solid #3b3e46; border-radius: 10px; cursor: pointer; }
     .soldado:disabled { opacity: .5; cursor: default; }
     .soldado.activo { border-color: #fff; background: #2b2f35; }
+
+    /* Panel Creaciones: cuadrícula de 4 columnas de botones cuadrados */
+    .cuadricula { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 6px; padding-top: 6px; }
+    .b3d.cuad { --t: auto; width: 100%; height: auto; aspect-ratio: 1; margin: 0 0 5px; padding: 2px; flex-direction: column; gap: 2px; border-radius: 13px; font-size: 26px; }
+    .b3d.cuad .b-ico { display: flex; font-size: 26px; line-height: 1; }
+    .b3d.cuad .b-nom { position: relative; font-size: 9px; font-weight: 800; line-height: 1.05; text-align: center; }
+    .b3d .b-info svg { width: 13px; height: 13px; vertical-align: -2px; margin-left: 1px; }
+    /* Edificios: sin recursos se ven más apagados y con candado en la esquina inferior derecha */
+    .b3d.cerrado { filter: saturate(.55) brightness(.78); }
+    .b3d .b-lock { position: absolute; right: 3px; bottom: 2px; font-size: 14px; line-height: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,.7)); }
+    .chip .ri { display: inline-flex; margin-right: 4px; font-size: 14px; line-height: 1; }
+    .chip .rn { min-width: 1ch; }
 
     /* Barra inferior flotante: inventario, texto de la selección y acciones (con scroll horizontal) */
     #inferior { position: fixed; z-index: 5; left: var(--safe-l); right: var(--safe-l); bottom: max(8px, env(safe-area-inset-bottom)); padding: 8px 58px 3px 10px; background: #101114e6; border: 2px solid #3b3e46; border-radius: 16px; min-width: 0; }
@@ -79,8 +91,11 @@
     .fila span { flex: 1; min-width: 0; display: flex; flex-direction: column; } .fila small { color: var(--suave); }
     .fila .btn { margin-bottom: 5px; }
     .fila .btn.sec { --c1: #ffb3a8; --c2: #f0483a; --c3: #8f1c12; }
-    #fin, #confirmar { position: fixed; inset: 0; z-index: 7; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; text-align: center; background: #000c; }
+    #fin, #confirmar, #revivir { position: fixed; inset: 0; z-index: 7; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; text-align: center; background: #000c; }
     #confirmar { z-index: 9; }
+    #revivir h2 { margin: 0; } #revTxt { max-width: 34ch; margin: 0; } #revOpc { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+    #reino .sub-titulo { margin-top: 4px; font-weight: 800; color: #fff4c2; }
+    .soldado.grupo { font-weight: 800; background: #2b2f35; } .soldado.sub { margin-left: 14px; }
     #pausa { position: fixed; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 20px; background: #000b; }
     #pausa h2 { margin: 0 0 6px; font-size: 2rem; }
     #pausa .grande { width: min(300px, 80vw); }
@@ -104,6 +119,7 @@
   <div class="hud hud-col izq">
     <button class="b3d chico b-oro" id="bReino" type="button" hidden aria-label="Reino" title="Reino: tus soldados"><span class="b-ico">👑</span></button>
     <button class="b3d chico b-azul" id="bCrea" type="button" hidden aria-label="Creaciones" title="Creaciones: fabricar y construir"><span class="b-ico">🛠️</span></button>
+    <button class="b3d chico b-verde" id="bEdif" type="button" hidden aria-label="Edificios" title="Edificios: construir"><span class="b-ico">🏗️</span></button>
     <button class="b3d chico b-rojo" id="bTropas" type="button" hidden aria-label="Seleccionar tropas" title="Seleccionar tropas"><span class="b-ico">🎯</span></button>
   </div>
   <!-- Columna derecha: guardar y salir, zoom -->
@@ -117,6 +133,7 @@
     <div id="aviso" hidden></div>
     <div id="reino" hidden></div>
     <div id="crea" hidden></div>
+    <div id="edif" hidden></div>
     <div id="tropas" hidden></div>
 
     <div id="menu">
@@ -139,6 +156,13 @@
   </div>
 
   <!-- Sustituye a confirm(): no saca al navegador de la pantalla completa -->
+  <div id="revivir" hidden>
+    <h2>Tu personaje cayó</h2>
+    <p id="revTxt">Puedes seguir jugando en uno de tus soldados: podrá atacar y juntar recursos. Elige en cuál revivir.</p>
+    <div id="revOpc"></div>
+    <button class="btn sec" id="revFin" type="button">Terminar partida</button>
+  </div>
+
   <div id="confirmar" hidden>
     <p id="confTxt"></p>
     <div class="fila"><button class="btn" id="confSi" type="button">Borrar</button><button class="btn sec" id="confNo" type="button">Cancelar</button></div>

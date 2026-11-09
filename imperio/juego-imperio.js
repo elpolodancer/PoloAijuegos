@@ -65,9 +65,21 @@ const cuenta = (inv, t) => inv.filter((s) => s.t == t).reduce((a, s) => a + s.n,
 function anadir(inv, t, n) { for (const s of inv) if (s.t == t && n > 0) { const k = Math.min(n, STACK - s.n); s.n += k; n -= k; } while (n > 0) { const k = Math.min(n, STACK); inv.push({ t, n: k }); n -= k; } }
 function quitar(inv, t, n) { for (let i = inv.length - 1; i >= 0 && n > 0; i--) { const s = inv[i]; if (s.t != t) continue; const k = Math.min(n, s.n); s.n -= k; n -= k; if (!s.n) inv.splice(i, 1); } }
 function pasar(de, a, ok, r = RANURAS) { de.slice().forEach((s) => { if (!ok(s.t)) return; const k = Math.min(cuenta(de, s.t), espacio(a, s.t, r)); if (k > 0) { quitar(de, s.t, k); anadir(a, s.t, k); } }); }
-const heroe = () => us.find((u) => u.k == "h");
+const esHeroe = (u) => u.k == "h" || !!u.jug; // el personaje original o el soldado en el que reviviste
+const heroe = () => us.find((u) => u.k == "h") || us.find((u) => u.jug);
+const nivelArma = () => eds.reduce((m, b) => (b.k == "herrero" && b.prog >= 1 ? Math.max(m, b.nv || 0) : m), 0);
+const dmgDe = (u) => UN[u.k].dmg * (u.k == "e" ? 1 : 1 + BONO_ARMA * nivelArma()); // golpe de una unidad con la mejora del herrero
 const ED = {
-  poste: { nom: "Poste de imperio", w: 1, hp: 120, c: "#c0392b" }, baul: { nom: "Baúl", w: 1, hp: 80, c: "#8b5a2b", ran: 20 }, cajonM: { nom: "Cajón de madera", w: 1, hp: 60, c: "#a1763f" }, cajonN: { nom: "Cajón de minerales", w: 1, hp: 60, c: "#6b7280" }, centro: { nom: "Castillo destruido", w: 2, hp: 400, c: "#9e9588" }, refugio: { nom: "Refugio", w: 2, hp: 200, c: "#8d6e63" }, almacen: { nom: "Almacén", costo: 60, w: 1, hp: 150, c: "#a47148" }, torre: { nom: "Torre", costo: 120, w: 1, hp: 200, c: "#8a8fa3" } };
+  poste: { nom: "Poste de imperio", w: 1, hp: 120, c: "#c0392b" }, baul: { nom: "Baúl", w: 1, hp: 80, c: "#8b5a2b", ran: 20 }, cajonM: { nom: "Cajón de madera", w: 1, hp: 60, c: "#a1763f" }, cajonN: { nom: "Cajón de minerales", w: 1, hp: 60, c: "#6b7280" }, centro: { nom: "Castillo destruido", w: 2, hp: 400, c: "#9e9588" }, refugio: { nom: "Refugio", w: 2, hp: 200, c: "#8d6e63" }, almacen: { nom: "Almacén", costo: 60, w: 1, hp: 150, c: "#a47148" }, torre: { nom: "Torre", costo: 120, w: 1, hp: 200, c: "#8a8fa3" },
+  arqueros: { nom: "Torre de arqueros", ico: "🏹", costo: 150, w: 1, hp: 220, c: "#8d8a84" }, canon: { nom: "Cañón con ruedas", ico: "💣", costo: 250, w: 1, hp: 250, c: "#3c4048" }, hospital: { nom: "Hospital", ico: "🏥", costo: 200, w: 2, hp: 300, c: "#f1efe9" },
+  muroM: { nom: "Muro de madera", costo: 15, w: 1, hp: 150, c: "#a1763f" }, muroP: { nom: "Muro de piedra", costo: 30, w: 1, hp: 400, c: "#8d8a84" }, herrero: { nom: "Herrero", ico: "⚒️", costo: 220, w: 2, hp: 300, c: "#4a4f57" } };
+// Herrero: cada arma que forja (en orden) sube el golpe de todas tus tropas y del personaje un 25 % sobre el base
+const ARMAS = [["Espada de madera", 80], ["Espada de cobre", 160], ["Espada de plata", 300], ["Espada de oro", 500], ["Espada de diamante", 800]], BONO_ARMA = .25;
+const esMuro = (k) => k == "muroM" || k == "muroP";
+// Defensas que disparan (r = alcance en casillas, dmg = daño, cd = segundos entre disparos, area = radio del estallido) y rango de curación del hospital
+const DEF = { torre: { r: 6, dmg: 12, cd: 1 }, arqueros: { r: 9, dmg: 10, cd: .7 }, canon: { r: 8, dmg: 45, cd: 2.5, area: 1.6 } };
+const CURA = { r: 5, hps: 4 }; // el hospital cura 4 de vida por segundo a tus tropas a 5 casillas o menos
+const RANGO = { torre: DEF.torre.r, arqueros: DEF.arqueros.r, canon: DEF.canon.r, hospital: CURA.r }; // aro que se ve al elegir el edificio
 const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const capac = (b) => ED[b.k].ran || RANURAS; // ranuras de un contenedor
 const cv = $("lienzo"), cx = cv.getContext("2d");
@@ -239,12 +251,12 @@ function actualizar(u, dt) {
   u.cd = Math.max(0, u.cd - dt);
   if (u.k == "e") return iaEnemigo(u, dt);
   const o = u.o; if (o) { if (u.pr && u.pr.length) u.pr = []; if (o.t != "tar") u.reu = false; } // una orden manual deja a la unidad «suelta» (ya no vuelve sola al grupo)
-  if (!o) { if (u.k != "h" && u.reu) inactivo(u, dt); return; } // sin órdenes se queda quieta (las del grupo se juntan en su punto de reunión)
+  if (!o) { if (!esHeroe(u) && u.reu) inactivo(u, dt); return; } // sin órdenes se queda quieta (las del grupo se juntan en su punto de reunión)
   if (o.t == "mov") { if (!paso(u, dt)) u.o = null; return; }
   if (o.t == "atk") {
     if (o.e.hp <= 0) { u.o = null; return; }
     if (Math.hypot(o.e.x - u.x, o.e.y - u.y) > 1.2) mover(u, o.e.x, o.e.y, dt);
-    else if (!u.cd) { golpe(u, o.e, UN[u.k].dmg); u.cd = .8; }
+    else if (!u.cd) { golpe(u, o.e, dmgDe(u)); u.cd = .8; }
     return;
   }
   if (o.t == "pic") { // el personaje pica árboles, rocas y minerales: 1 golpe por segundo, 10 golpes
@@ -256,10 +268,10 @@ function actualizar(u, dt) {
     return;
   }
   if (o.t == "con") {
-    const b = o.b; if (b.hp <= 0) { u.o = null; return; }
+    const b = o.b; if (b.hp <= 0) { sigObra(u); return; }
     if (distRect(u, b.x, b.y, b.w) < 1.6) {
       if (b.prog < 1) { b.prog = Math.min(1, b.prog + dt / 8); b.hp = Math.min(b.mh, b.hp + b.mh * dt / 8.8); }
-      else if (b.hp < b.mh) b.hp = Math.min(b.mh, b.hp + 25 * dt); else u.o = null;
+      else if (b.hp < b.mh) b.hp = Math.min(b.mh, b.hp + 25 * dt); else sigObra(u);
     } else if (!paso(u, dt)) { u.p = ruta(u, b.x, b.y, b.w); if (!u.p.length) u.o = null; }
     return;
   }
@@ -461,7 +473,7 @@ function atacar(h, w) {
   }
   if (!mejor) return;
   h.cd = .6;
-  if (mejor.e) golpe(h, mejor.e, UN.h.dmg);
+  if (mejor.e) golpe(h, mejor.e, dmgDe(h));
   else { fx.push({ x1: h.x, y1: h.y, x2: mejor.k % N + .5, y2: ((mejor.k / N) | 0) + .5, t: .15 }); golpeRes(h, mejor.k); }
 }
 function controlHeroe(dt) {
@@ -478,13 +490,43 @@ function controlHeroe(dt) {
   }
   if (teclas.has("Space")) atacar(h, null);
 }
+// Un constructor con varias obras pendientes (por ejemplo, un muro de varias casillas) pasa a la siguiente al terminar
+// Si cae el personaje y te quedan soldados, puedes seguir en uno de ellos (ataca y junta recursos); si no, termina la partida
+function morirHeroe() {
+  fin = true;
+  const tipos = ["g", "r", "c"].filter((k) => us.some((u) => u.k == k));
+  if (!tipos.length) { $("finTxt").textContent = "Tu personaje fue derrotado."; $("fin").hidden = false; return; }
+  const z = $("revOpc"); z.innerHTML = "";
+  tipos.forEach((k) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "b3d fig " + ({ r: "b-azul", c: "b-oro", g: "b-morado" })[k]; b.title = b.ariaLabel = "Revivir en un " + UN[k].nom;
+    b.innerHTML = '<svg viewBox="0 0 28 32" aria-hidden="true">' + figuraSVG(k) + '</svg><span class="b-nom">' + UN[k].nom + '</span><span class="b-info">×' + us.filter((u) => u.k == k).length + '</span>';
+    b.addEventListener("click", () => revivirEn(k)); z.appendChild(b);
+  });
+  $("revivir").hidden = false;
+}
+function revivirEn(k) {
+  const u = us.filter((x) => x.k == k && !x.jug).sort((a, b) => b.hp - a.hp)[0]; if (!u) return;
+  u.jug = true; u.gr = null; u.reu = false; u.o = null; u.p = []; u.cola = null; u.hp = u.mh; u.inv = u.inv || [];
+  sel = u; fin = false; $("revivir").hidden = true; const c = P(u.x, u.y); cam.x += W / 2 - c[0]; cam.y += H / 2 - c[1];
+  invHud(); panel(); aviso("Ahora juegas con tu " + UN[k].nom + ": ataca y junta recursos"); guardar();
+}
+function sigObra(u) {
+  u.o = null; u.p = [];
+  while (u.cola && u.cola.length) { const b = u.cola.shift(); if (b.hp > 0 && (b.prog < 1 || b.hp < b.mh)) { u.o = { t: "con", b }; return; } }
+}
 function tick(dt) {
   if (fin) return;
   tReloj += dt; controlHeroe(dt);
   us.forEach((u) => actualizar(u, dt)); enem.forEach((e) => actualizar(e, dt)); anim.forEach((a) => iaAnimal(a, dt));
-  eds.forEach((b) => { // las torres disparan
-    if (b.k != "torre" || b.prog < 1) return; b.cd = Math.max(0, b.cd - dt);
-    const e = cercano(enem, { x: b.x + .5, y: b.y + .5 }, 6); if (e && !b.cd) { golpe({ x: b.x + .5, y: b.y + .5 }, e, 12); b.cd = 1; }
+  const blancos = enem.concat(anim.filter((a) => ANI[a.k].dmg > 0)); // enemigos y animales que atacan
+  eds.forEach((b) => { // torres, torres de arqueros y cañones disparan; el hospital cura
+    if (b.prog < 1) return; b.cd = Math.max(0, b.cd - dt);
+    const cen = { x: b.x + b.w / 2, y: b.y + b.w / 2 };
+    if (b.k == "hospital") { us.forEach((u) => { if (u.hp < u.mh && Math.hypot(u.x - cen.x, u.y - cen.y) <= CURA.r) u.hp = Math.min(u.mh, u.hp + CURA.hps * dt); }); return; }
+    const d = DEF[b.k]; if (!d || b.cd) return;
+    const e = cercano(b.k == "torre" ? enem : blancos, cen, d.r); if (!e) return;
+    golpe(cen, e, d.dmg); b.cd = d.cd;
+    if (d.area) { blancos.forEach((o) => { if (o !== e && Math.hypot(o.x - e.x, o.y - e.y) < d.area) o.hp -= d.dmg * .6; }); fx.push({ x1: e.x, y1: e.y, x2: e.x, y2: e.y, t: .3, boom: d.area }); }
   });
   for (let i = enem.length - 1; i >= 0; i--) if (enem[i].hp <= 0) { enem.splice(i, 1); dinero += 15; muertes++; puntos(1); }
   for (let i = anim.length - 1; i >= 0; i--) if (anim[i].hp <= 0) { // al morir entrega carne, piel o cuero
@@ -495,10 +537,10 @@ function tick(dt) {
   if (sel && sel.hp <= 0) sel = null;
   const np = eds.filter((b) => b.k == "poste").length; if (np != nPostes) { nPostes = np; recalcZona(); }
   fx.forEach((f) => (f.t -= dt)); fx = fx.filter((f) => f.t > 0);
-  if (!us.some((u) => u.k == "h")) { fin = true; $("fin").hidden = false; $("finTxt").textContent = "Tu personaje fue derrotado."; }
+  if (!heroe()) morirHeroe();
   vis.fill(0);
   const ver = (x, y, r) => { for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) { const a = (x | 0) + i, b = (y | 0) + j; if (a >= 0 && b >= 0 && a < N && b < N && i * i + j * j <= r * r) vis[b * N + a] = expl[b * N + a] = 1; } };
-  us.forEach((u) => ver(u.x, u.y, u.k == "g" ? 7 : 5)); eds.forEach((b) => ver(b.x, b.y, b.k == "torre" ? 8 : 6));
+  us.forEach((u) => ver(u.x, u.y, u.k == "g" ? 7 : 5)); eds.forEach((b) => ver(b.x, b.y, b.k == "arqueros" ? 11 : b.k == "torre" ? 8 : 6));
 }
 // ----- Dibujo -----
 const P = (x, y) => [(x - y) * TW * cam.z + cam.x, (x + y) * TH * cam.z + cam.y];
@@ -510,6 +552,7 @@ function caja(x, y, w, h, col) {
 function shade(c, f) { const n = parseInt(c.slice(1), 16); return "rgb(" + [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => (v * f) | 0).join(",") + ")"; }
 function barra(x, y, f, col) { const z = cam.z; cx.fillStyle = "#000a"; cx.fillRect(x - 12 * z, y, 24 * z, 4 * z); cx.fillStyle = col; cx.fillRect(x - 12 * z, y, 24 * z * Math.max(0, f), 4 * z); }
 function dibujar() {
+  _muros = null;
   cx.fillStyle = "#05070d"; cx.fillRect(0, 0, W, H); const z = cam.z;
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     const i = y * N + x; if (!expl[i]) continue;
@@ -519,15 +562,21 @@ function dibujar() {
     if (zona[i]) poly([a, P(x + 1, y), P(x + 1, y + 1), P(x, y + 1)], "rgba(255,215,90,.16)"); // zona del imperio
     if (!vis[i]) poly([a, P(x + 1, y), P(x + 1, y + 1), P(x, y + 1)], "rgba(5,7,13,.55)");
   }
-  if (colocar) { const t = tileMouse; if (t) { const ok = libre(t.x, t.y) && zonaOk(t.y * N + t.x, colocar); poly([P(t.x, t.y), P(t.x + 1, t.y), P(t.x + 1, t.y + 1), P(t.x, t.y + 1)], ok ? "rgba(80,255,120,.5)" : "rgba(255,70,70,.5)"); } }
+  if (colocar) { const t = tileMouse; if (t) { const w = (ED[colocar] && ED[colocar].w) || 1, ok = cabe(t.x, t.y, w) && zonaOk(t.y * N + t.x, colocar); poly([P(t.x, t.y), P(t.x + w, t.y), P(t.x + w, t.y + w), P(t.x, t.y + w)], ok ? "rgba(80,255,120,.5)" : "rgba(255,70,70,.5)"); } }
   const L = [];
   res.forEach((r, i) => { if (r && expl[i]) L.push({ d: i % N + ((i / N) | 0) + 1, f: () => dibRes(i % N, (i / N) | 0, r) }); });
   eds.forEach((b) => L.push({ d: b.x + b.y + b.w, f: () => dibEd(b) }));
+  if (colocar && tileMouse && ED[colocar] && tileMouse.x >= 0 && tileMouse.y >= 0 && tileMouse.x < N && tileMouse.y < N) { // vista previa: el edificio semitransparente (más tenue si no cabe)
+    const t = tileMouse, d = ED[colocar], ok = cabe(t.x, t.y, d.w) && zonaOk(t.y * N + t.x, colocar), g = { k: colocar, x: t.x, y: t.y, w: d.w, mh: d.hp, hp: d.hp, prog: 1, cd: 0, fantasma: ok ? .6 : .3 };
+    L.push({ d: t.x + t.y + d.w + .01, f: () => { cx.globalAlpha = g.fantasma; dibEd(g); cx.globalAlpha = 1; } });
+  }
   us.forEach((u) => L.push({ d: u.x + u.y, f: () => dibU(u) }));
   enem.forEach((e) => { if (vis[(e.y | 0) * N + (e.x | 0)]) L.push({ d: e.x + e.y, f: () => dibU(e) }); });
   anim.forEach((a) => { if (vis[(a.y | 0) * N + (a.x | 0)]) L.push({ d: a.x + a.y, f: () => dibA(a) }); });
   L.sort((a, b) => a.d - b.d).forEach((l) => l.f());
-  fx.forEach((f) => { const a = P(f.x1, f.y1), b = P(f.x2, f.y2); cx.strokeStyle = "#ffe08a"; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(a[0], a[1] - 8 * z); cx.lineTo(b[0], b[1] - 8 * z); cx.stroke(); });
+  fx.forEach((f) => { const a = P(f.x1, f.y1), b = P(f.x2, f.y2);
+    if (f.boom) { cx.fillStyle = "rgba(255,150,40," + Math.min(.7, f.t * 2.5) + ")"; cx.beginPath(); cx.ellipse(a[0], a[1], f.boom * 45 * z * (1.3 - f.t), f.boom * 22 * z * (1.3 - f.t), 0, 0, 7); cx.fill(); return; }
+    cx.strokeStyle = "#ffe08a"; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(a[0], a[1] - 8 * z); cx.lineTo(b[0], b[1] - 8 * z); cx.stroke(); });
 }
 function dibRes(x, y, r) {
   const z = cam.z, c = P(x + .5, y + .5), d = RES[r.t]; if (r.g) barra(c[0], c[1] - 34 * z, 1 - r.g / 10, "#ffb13b");
@@ -542,6 +591,133 @@ function dibRes(x, y, r) {
   cx.fillStyle = r.t == "roca" ? d.c : "#7b8294"; cx.beginPath(); cx.ellipse(c[0], c[1] - 5 * z, 12 * z, 8 * z, 0, 0, 7); cx.fill();
   if (r.t != "roca") { cx.fillStyle = d.c; [[-5, -7], [3, -9], [5, -4], [-2, -3]].forEach(([a, b]) => { cx.beginPath(); cx.arc(c[0] + a * z, c[1] + b * z, 2.6 * z, 0, 7); cx.fill(); }); }
 }
+// ----- Castillo en ruinas y refugio (cabaña): dibujados con prismas isométricos, sin imágenes -----
+const Q = (x, y, a) => { const p = P(x, y); return [p[0], p[1] - a * cam.z]; }; // punto del mundo (x, y) a la altura «a» (en px)
+// Prisma: base (x, y)–(x+w, y+d) a la altura z0, alto h. Dibuja las dos caras visibles y la tapa; «juntas» = cada cuántos px una línea (piedras o troncos)
+function prisma(x, y, w, d, h, col, z0 = 0, juntas = 0) {
+  const a0 = z0, a1 = z0 + h;
+  poly([Q(x, y + d, a0), Q(x + w, y + d, a0), Q(x + w, y + d, a1), Q(x, y + d, a1)], shade(col, .78)); // cara +y
+  poly([Q(x + w, y + d, a0), Q(x + w, y, a0), Q(x + w, y, a1), Q(x + w, y + d, a1)], shade(col, .55));   // cara +x
+  poly([Q(x, y, a1), Q(x + w, y, a1), Q(x + w, y + d, a1), Q(x, y + d, a1)], col);                         // tapa
+  if (juntas) {
+    cx.strokeStyle = "rgba(0,0,0,.3)"; cx.lineWidth = Math.max(1, cam.z); cx.beginPath();
+    for (let k = juntas; k < h; k += juntas) { let q = Q(x, y + d, a0 + k); cx.moveTo(q[0], q[1]); q = Q(x + w, y + d, a0 + k); cx.lineTo(q[0], q[1]); q = Q(x + w, y, a0 + k); cx.lineTo(q[0], q[1]); }
+    cx.stroke();
+  }
+}
+const parte = (k, ...a) => ({ k: k + a[0] + a[1] + (a[2] + a[3]) / 2 + (a[6] || 0) / 10, f: () => prisma(...a) }); // k = orden de dibujo (de atrás hacia delante)
+function dibCastillo(b) { // montón de piedras y maderas en ruinas
+  const X = b.x, Y = b.y, z = cam.z, pie = "#9a9288", pie2 = "#857d72", pie3 = "#aaa296", mad = "#8b5a2b", mad2 = "#6d4524";
+  poly([Q(X - .1, Y - .1, 0), Q(X + 2.1, Y - .1, 0), Q(X + 2.1, Y + 2.1, 0), Q(X - .1, Y + 2.1, 0)], "#6f685c"); // suelo de escombros
+  poly([Q(X + .2, Y + .2, 0), Q(X + 1.9, Y + .2, 0), Q(X + 1.9, Y + 1.9, 0), Q(X + .2, Y + 1.9, 0)], "#7c7468");
+  const P_ = [ // [x, y, ancho, fondo, alto, color, z0, juntas]
+    [X + .05, Y + .05, .55, .55, 36, pie, 0, 5],            // torre rota (la más alta)
+    [X + .05, Y + .05, .22, .22, 9, pie2, 36, 4], [X + .38, Y + .32, .22, .22, 5, pie3, 36, 0], // dientes de la almena
+    [X + .6, Y + .05, .75, .3, 21, pie2, 0, 5], [X + 1.35, Y + .05, .4, .3, 12, pie, 0, 4], [X + 1.75, Y + .05, .2, .3, 6, pie3, 0, 0], // muro de atrás, cada vez más caído
+    [X + .05, Y + .6, .3, .7, 17, pie2, 0, 5], [X + .05, Y + 1.3, .3, .35, 8, pie, 0, 4],      // muro de la izquierda
+    [X + 1.45, Y + 1.4, .5, .5, 16, pie, 0, 5], [X + 1.45, Y + 1.4, .2, .2, 5, pie3, 16, 0],    // torreón bajo
+    [X + .95, Y + .75, .09, .09, 24, mad, 0, 0], [X + .95, Y + 1.35, .09, .09, 17, mad2, 0, 0], [X + .95, Y + .75, .09, .69, 6, mad, 17, 0], // andamio roto
+    [X + .5, Y + 1.7, .9, .1, 4, mad, 0, 0], [X + 1.78, Y + .55, .1, .8, 5, mad2, 0, 0],       // vigas caídas
+    [X + 1.2, Y + 1.05, .4, .25, 3, mad2, 0, 0], [X + 1.22, Y + 1.07, .35, .2, 3, mad, 3, 0],  // tablones apilados
+    [X + 1.05, Y + 1.5, .2, .2, 6, pie, 0, 0], [X + .65, Y + 1.15, .17, .17, 4, pie2, 0, 0], [X + 1.55, Y + .7, .2, .2, 7, pie3, 0, 0], [X + 1.2, Y + .5, .14, .14, 4, pie, 0, 0], [X + .45, Y + 1.5, .15, .15, 3, pie3, 0, 0], [X + 1.7, Y + 1.15, .15, .15, 4, pie2, 0, 0], // piedras sueltas
+  ].map((a) => parte(0, ...a));
+  P_.push({ k: X + Y + .8 + 4.5, f: () => { // mástil roto con un trapo rojo sobre la torre
+    prisma(X + .3, Y + .1, .05, .05, 20, mad2, 36, 0);
+    const a = Q(X + .33, Y + .12, 54), c = Q(X + .33, Y + .12, 46);
+    cx.fillStyle = "#b3302a"; cx.beginPath(); cx.moveTo(a[0], a[1]); cx.lineTo(a[0] + 15 * z, a[1] + 4 * z); cx.lineTo(a[0] + 9 * z, a[1] + 7 * z); cx.lineTo(a[0] + 14 * z, a[1] + 11 * z); cx.lineTo(c[0], c[1]); cx.closePath(); cx.fill();
+  } });
+  P_.sort((p, q) => p.k - q.k).forEach((p) => p.f());
+}
+function dibCabana(b) { // cabaña de troncos con techo a dos aguas
+  const X = b.x, Y = b.y, z = cam.z, x0 = X + .05, x1 = X + 1.95, y0 = Y + .1, y1 = Y + 1.8, ym = (y0 + y1) / 2, h0 = 20, r = 14;
+  poly([Q(X - .05, Y - .05, 0), Q(X + 2.05, Y - .05, 0), Q(X + 2.05, Y + 2.05, 0), Q(X - .05, Y + 2.05, 0)], "#6a5a3e"); // suelo pisado
+  prisma(X + .15, Y + .2, 1.7, 1.5, h0, "#a0703c", 0, 4); // paredes de troncos
+  const cara = (xa, xb, y, a0, a1, col) => poly([Q(xa, y, a0), Q(xb, y, a0), Q(xb, y, a1), Q(xa, y, a1), ], col);
+  const px = X + 1.85; // puerta en la cara +x
+  poly([Q(px, Y + .55, 0), Q(px, Y + 1.05, 0), Q(px, Y + 1.05, 14), Q(px, Y + .55, 14)], "#3b2412");
+  poly([Q(px, Y + .6, 0), Q(px, Y + 1.0, 0), Q(px, Y + 1.0, 12), Q(px, Y + .6, 12)], "#5a3a1c");
+  cx.fillStyle = "#ffd23f"; const kn = Q(px, Y + .93, 6); cx.fillRect(kn[0] - z, kn[1] - z, 2 * z, 2 * z);
+  cara(X + .5, X + .9, Y + 1.7, 9, 17, "#ffe9a8"); // ventana en la cara +y, con marco en cruz
+  cx.strokeStyle = "#4a2d12"; cx.lineWidth = Math.max(1, 1.5 * z); cx.beginPath();
+  let q = Q(X + .5, Y + 1.7, 13); cx.moveTo(q[0], q[1]); q = Q(X + .9, Y + 1.7, 13); cx.lineTo(q[0], q[1]);
+  q = Q(X + .7, Y + 1.7, 9); cx.moveTo(q[0], q[1]); q = Q(X + .7, Y + 1.7, 17); cx.lineTo(q[0], q[1]); cx.stroke();
+  // techo: plano de atrás, chimenea, plano del frente, ala triangular del lado +x y cumbrera
+  poly([Q(x0, y0, h0), Q(x1, y0, h0), Q(x1, ym, h0 + r), Q(x0, ym, h0 + r)], "#6b3f1d");
+  prisma(X + .35, Y + .3, .24, .24, 16, "#8f887c", 22, 4);
+  poly([Q(x0, ym, h0 + r), Q(x1, ym, h0 + r), Q(x1, y1, h0), Q(x0, y1, h0)], "#8a5427");
+  cx.strokeStyle = "rgba(0,0,0,.28)"; cx.lineWidth = Math.max(1, z); cx.beginPath();
+  for (const t of [.25, .5, .75]) { let a = Q(x0, ym + (y1 - ym) * t, h0 + r * (1 - t)), c = Q(x1, ym + (y1 - ym) * t, h0 + r * (1 - t)); cx.moveTo(a[0], a[1]); cx.lineTo(c[0], c[1]); }
+  cx.stroke();
+  poly([Q(x1, y0, h0), Q(x1, y1, h0), Q(x1, ym, h0 + r)], "#a8743f");
+  cx.strokeStyle = "#c58a4d"; cx.lineWidth = Math.max(1.5, 2 * z); cx.beginPath(); q = Q(x0, ym, h0 + r); cx.moveTo(q[0], q[1]); q = Q(x1, ym, h0 + r); cx.lineTo(q[0], q[1]); cx.stroke();
+  // barril y caja junto a la entrada
+  const t = P(X + .3, Y + 1.88);
+  cx.fillStyle = "#7a4a22"; cx.fillRect(t[0] - 5 * z, t[1] - 10 * z, 10 * z, 10 * z);
+  cx.fillStyle = "#3b2412"; cx.fillRect(t[0] - 5 * z, t[1] - 7 * z, 10 * z, 1.5 * z); cx.fillRect(t[0] - 5 * z, t[1] - 3 * z, 10 * z, 1.5 * z);
+  cx.fillStyle = "#a9773f"; cx.beginPath(); cx.ellipse(t[0], t[1] - 10 * z, 5 * z, 2.4 * z, 0, 0, 7); cx.fill();
+  prisma(X + 1.55, Y + 1.78, .22, .22, 8, "#b58650", 0, 0);
+}
+// ----- Torre de arqueros, cañón y hospital: dibujados con prismas isométricos -----
+function dibArqueros(b) {
+  const X = b.x, Y = b.y;
+  prisma(X + .2, Y + .2, .6, .6, 34, "#8d8a84", 0, 5);                 // torre de piedra
+  prisma(X + .06, Y + .06, .88, .88, 5, "#8a5a2b", 34, 0);             // plataforma de madera
+  prisma(X + .08, Y + .08, .1, .1, 11, "#6d4c2f", 39, 0);              // postes (los de atrás)
+  prisma(X + .82, Y + .08, .1, .1, 11, "#6d4c2f", 39, 0); prisma(X + .08, Y + .82, .1, .1, 11, "#6d4c2f", 39, 0);
+  prisma(X + .43, Y + .43, .16, .16, 9, "#3ea6ff", 39, 0);             // arquero
+  prisma(X + .45, Y + .45, .12, .12, 4, "#f0c8a0", 48, 0);
+  prisma(X + .82, Y + .82, .1, .1, 11, "#6d4c2f", 39, 0);              // poste de delante
+  prisma(X + .02, Y + .02, .96, .96, 4, "#b04a2f", 50, 0);             // techo
+  const q = Q(X + .5, Y + .98, 20), z = cam.z; cx.fillStyle = "#2b2d33"; cx.fillRect(q[0] - 2 * z, q[1] - 6 * z, 4 * z, 9 * z); // aspillera
+}
+function dibCanon(b) {
+  const X = b.x, Y = b.y, z = cam.z;
+  prisma(X + .22, Y + .3, .5, .4, 5, "#7a4a22", 6, 0);                  // cureña
+  prisma(X + .2, Y + .38, .72, .24, 9, "#3c4048", 11, 0);               // cañón apuntando a +x
+  prisma(X + .78, Y + .35, .16, .3, 11, "#22252b", 10, 0);              // boca
+  for (const px of [.32, .68]) {                                         // ruedas en el costado visible
+    const c = Q(X + px, Y + .76, 7); cx.save(); cx.translate(c[0], c[1]); cx.transform(1, .5, 0, 1, 0, 0);
+    cx.fillStyle = "#4a2c0f"; cx.beginPath(); cx.arc(0, 0, 8 * z, 0, 7); cx.fill();
+    cx.fillStyle = "#a1763f"; cx.beginPath(); cx.arc(0, 0, 6 * z, 0, 7); cx.fill();
+    cx.strokeStyle = "#4a2c0f"; cx.lineWidth = Math.max(1, 1.2 * z); cx.beginPath();
+    for (let a = 0; a < 4; a++) { cx.moveTo(0, 0); cx.lineTo(6 * z * Math.cos(a * Math.PI / 4), 6 * z * Math.sin(a * Math.PI / 4)); cx.lineTo(-6 * z * Math.cos(a * Math.PI / 4), -6 * z * Math.sin(a * Math.PI / 4)); }
+    cx.stroke(); cx.fillStyle = "#222"; cx.beginPath(); cx.arc(0, 0, 1.8 * z, 0, 7); cx.fill(); cx.restore();
+  }
+  for (const [px, py] of [[.12, .85], [.2, .92]]) { const c = Q(X + px, Y + py, 3); cx.fillStyle = "#1b1d22"; cx.beginPath(); cx.arc(c[0], c[1], 3 * z, 0, 7); cx.fill(); } // balas
+}
+function dibHospital(b) {
+  const X = b.x, Y = b.y;
+  prisma(X + .1, Y + .1, 1.8, 1.8, 22, "#f1efe9", 0, 0);               // paredes blancas
+  poly([Q(X + .75, Y + 1.9, 0), Q(X + 1.25, Y + 1.9, 0), Q(X + 1.25, Y + 1.9, 13), Q(X + .75, Y + 1.9, 13)], "#6b4a2b"); // puerta
+  for (const x of [.25, 1.5]) poly([Q(X + x, Y + 1.9, 9), Q(X + x + .25, Y + 1.9, 9), Q(X + x + .25, Y + 1.9, 17), Q(X + x, Y + 1.9, 17)], "#9fd8ff"); // ventanas
+  for (const y of [.35, 1.35]) poly([Q(X + 1.9, Y + y, 9), Q(X + 1.9, Y + y + .25, 9), Q(X + 1.9, Y + y + .25, 17), Q(X + 1.9, Y + y, 17)], "#7fb8e0");
+  prisma(X, Y, 2, 2, 5, "#c0392b", 22, 0);                              // techo rojo
+  poly([Q(X + .85, Y + .45, 27.2), Q(X + 1.15, Y + .45, 27.2), Q(X + 1.15, Y + 1.55, 27.2), Q(X + .85, Y + 1.55, 27.2)], "#fff"); // cruz blanca
+  poly([Q(X + .45, Y + .85, 27.2), Q(X + 1.55, Y + .85, 27.2), Q(X + 1.55, Y + 1.15, 27.2), Q(X + .45, Y + 1.15, 27.2)], "#fff");
+}
+let _muros = null; // casillas con muro (se arma una vez por cuadro) para unir los muros vecinos
+function dibMuro(b) {
+  if (!_muros) { _muros = new Set(); eds.forEach((e) => esMuro(e.k) && _muros.add(e.y * N + e.x)); }
+  const X = b.x, Y = b.y, ya = (dx, dy) => _muros.has((Y + dy) * N + X + dx), piedra = b.k == "muroP", col = piedra ? "#8d8a84" : "#a1763f", h = piedra ? 22 : 17, j = piedra ? 5 : 4;
+  if (ya(-1, 0)) prisma(X, Y + .32, .5, .36, h - 3, col, 0, j);
+  if (ya(0, -1)) prisma(X + .32, Y, .36, .5, h - 3, col, 0, j);
+  prisma(X + .24, Y + .24, .52, .52, h, col, 0, j);
+  if (!piedra) prisma(X + .24, Y + .24, .52, .52, 3, "#6d4c2f", h, 0); else prisma(X + .2, Y + .2, .6, .6, 3, "#a7a49d", h, 0);
+  if (ya(1, 0)) prisma(X + .5, Y + .32, .5, .36, h - 3, col, 0, j);
+  if (ya(0, 1)) prisma(X + .32, Y + .5, .36, .5, h - 3, col, 0, j);
+}
+function dibHerrero(b) {
+  const X = b.x, Y = b.y, z = cam.z;
+  prisma(X + .1, Y + .1, 1.5, 1.5, 18, "#7a6a5a", 0, 4);                // paredes de piedra
+  poly([Q(X + .4, Y + 1.6, 0), Q(X + 1.0, Y + 1.6, 0), Q(X + 1.0, Y + 1.6, 12), Q(X + .4, Y + 1.6, 12)], "#2b1a10"); // boca de la fragua
+  poly([Q(X + .5, Y + 1.6, 0), Q(X + .9, Y + 1.6, 0), Q(X + .9, Y + 1.6, 7), Q(X + .5, Y + 1.6, 7)], "#ff8a1f");
+  poly([Q(X + .58, Y + 1.6, 0), Q(X + .82, Y + 1.6, 0), Q(X + .82, Y + 1.6, 4), Q(X + .58, Y + 1.6, 4)], "#ffd23f");
+  prisma(X, Y, 1.7, 1.7, 4, "#3b3f47", 18, 0);                          // techo de pizarra
+  prisma(X + 1.1, Y + .15, .3, .3, 26, "#6e6e6e", 18, 4);               // chimenea
+  const t = performance.now() / 700;                                    // humo
+  for (let i = 0; i < 3; i++) { const f = (t + i / 3) % 1, c = Q(X + 1.25, Y + .3, 46 + f * 22); cx.fillStyle = "rgba(190,190,195," + (.55 * (1 - f)) + ")"; cx.beginPath(); cx.arc(c[0] + f * 5 * z, c[1], (3 + f * 4) * z, 0, 7); cx.fill(); }
+  prisma(X + 1.55, Y + 1.5, .38, .28, 5, "#2b2d33", 0, 0); prisma(X + 1.6, Y + 1.53, .28, .2, 4, "#454952", 5, 0); // yunque
+}
 function dibEd(b) {
   if (b.k == "poste") { // poste con bandera
     const z = cam.z, c = P(b.x + .5, b.y + .5);
@@ -551,11 +727,14 @@ function dibEd(b) {
     if (sel === b) { cx.strokeStyle = "#fff"; cx.lineWidth = 2; cx.strokeRect(c[0] - 12 * z, c[1] - 38 * z, 24 * z, 42 * z); }
     return;
   }
-  const z = cam.z, d = ED[b.k], h = b.k == "torre" ? 40 : b.k == "centro" ? 26 : 14;
-  cx.globalAlpha = b.prog < 1 ? .6 : 1; caja(b.x + .1, b.y + .1, b.w - .2, h * (b.prog < 1 ? .4 + b.prog * .6 : 1), d.c); cx.globalAlpha = 1;
-  const c = P(b.x + b.w / 2, b.y + b.w / 2); if (b.hp < b.mh) barra(c[0], c[1] - (h + 14) * z, b.hp / b.mh, "#59d96b");
-  if (b.k == "centro" || b.k == "refugio") { cx.font = 24 * z + "px system-ui"; cx.textAlign = "center"; cx.fillStyle = "#fff"; cx.fillText(b.k == "centro" ? "🏚️" : "⛺", c[0], c[1] - (h + 2) * z); }
-  if (sel === b) { cx.strokeStyle = "#fff"; cx.lineWidth = 2; cx.strokeRect(c[0] - 20 * z, c[1] - (h + 4) * z, 40 * z, h * z + 10 * z); }
+  const z = cam.z, d = ED[b.k], h = ({ torre: 40, centro: 54, refugio: 36, arqueros: 56, canon: 22, hospital: 34, muroM: 17, muroP: 22, herrero: 30 })[b.k] || 14;
+  cx.globalAlpha = b.fantasma || (b.prog < 1 ? .6 : 1);
+  if (b.k == "centro") dibCastillo(b); else if (b.k == "refugio") dibCabana(b); else if (b.k == "arqueros") dibArqueros(b); else if (b.k == "canon") dibCanon(b); else if (b.k == "hospital") dibHospital(b); else if (b.k == "herrero") dibHerrero(b); else if (esMuro(b.k)) dibMuro(b); else caja(b.x + .1, b.y + .1, b.w - .2, h * (b.prog < 1 ? .4 + b.prog * .6 : 1), d.c);
+  cx.globalAlpha = 1;
+  const c = P(b.x + b.w / 2, b.y + b.w / 2);
+  if (sel === b && RANGO[b.k] && b.prog >= 1) { cx.strokeStyle = b.k == "hospital" ? "rgba(90,255,140,.8)" : "rgba(255,255,255,.65)"; cx.setLineDash([6, 5]); cx.lineWidth = 2; cx.beginPath(); cx.ellipse(c[0], c[1], RANGO[b.k] * 45.25 * z, RANGO[b.k] * 22.6 * z, 0, 0, 7); cx.stroke(); cx.setLineDash([]); }
+  if (b.hp < b.mh) barra(c[0], c[1] - (h + 14) * z, b.hp / b.mh, "#59d96b");
+  if (sel === b) { cx.strokeStyle = "#fff"; cx.lineWidth = 2; const aw = b.w > 1 ? b.w * TW * .95 : 20; cx.strokeRect(c[0] - aw * z, c[1] - (h + 4) * z, 2 * aw * z, h * z + 10 * z + (b.w > 1 ? 16 * z : 0)); }
 }
 function dibA(a) {
   const z = cam.z, c = P(a.x, a.y);
@@ -603,6 +782,7 @@ function hombre(x, y, z, k, col, paso, bob) {
 function dibU(u) {
   const z = cam.z, c = P(u.x, u.y), d = UN[u.k];
   cx.fillStyle = "#0005"; cx.beginPath(); cx.ellipse(c[0], c[1], 8 * z, 4 * z, 0, 0, 7); cx.fill();
+  if (u.jug) { cx.strokeStyle = "#ffd23f"; cx.lineWidth = 2.5 * z; cx.beginPath(); cx.ellipse(c[0], c[1], 13 * z, 6.5 * z, 0, 0, 7); cx.stroke(); } // tú
   if (sel === u) { cx.strokeStyle = "#fff"; cx.lineWidth = 2; cx.beginPath(); cx.ellipse(c[0], c[1], 11 * z, 5.5 * z, 0, 0, 7); cx.stroke(); }
   const mov = !!(u.p && u.p.length), t = performance.now() / 1000;
   hombre(c[0], c[1], z, u.k, d.c, mov ? Math.sin(t * 10) : 0, mov ? Math.abs(Math.sin(t * 10)) * 1.2 : 0);
@@ -612,6 +792,7 @@ function dibU(u) {
 // ----- Entrada -----
 let tileMouse = null, arrastre = null;
 const aMundo = (px, py) => { const a = (px - cam.x) / cam.z / TW, b = (py - cam.y) / cam.z / TH; return { x: (a + b) / 2, y: (b - a) / 2 }; };
+function cabe(x, y, w) { for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) if (!libre(x + i, y + j)) return false; return true; } // edificios de w×w casillas
 function libre(x, y) { const i = y * N + x; return x >= 0 && y >= 0 && x < N && y < N && !bloq[i] && expl[i] && !us.some((u) => (u.x | 0) == x && (u.y | 0) == y); }
 cv.addEventListener("pointerdown", (e) => { cv.setPointerCapture(e.pointerId); arrastre = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y, mov: false }; });
 cv.addEventListener("pointermove", (e) => {
@@ -640,6 +821,7 @@ function toque(w, raton) {
     if (tx < 0 || ty < 0 || tx >= N || ty >= N || !expl[i] || bloq[i]) return aviso("Ahí no pueden ir: elige una casilla libre y explorada");
     const id = moverGrupo, g = grupos[id]; moverGrupo = null; g.x = tx + .5; g.y = ty + .5; return asignarTarea(id, null);
   }
+  if (colocar && colocar in COSTO_FAB && heroe() && heroe().k != "h") { colocar = null; panel(); return aviso("Solo tu personaje original fabrica y coloca postes y cofres"); }
   if (colocar && colocar in COSTO_FAB && heroe()) { // poste, baúl o cajón: lo coloca el personaje
     const h = heroe(), costo = COSTO_FAB[colocar], poste = colocar == "poste";
     if (!libre(tx, ty) || Math.hypot(tx + .5 - h.x, ty + .5 - h.y) > 6) return aviso("Ahí no se puede: elige una casilla libre y cerca");
@@ -650,9 +832,14 @@ function toque(w, raton) {
     colocar = null; invHud(); return panel();
   }
   if (colocar && sel && sel.k == "c") {
-    if (!libre(tx, ty)) return aviso("Ahí no se puede construir");
-    if (dinero < ED[colocar].costo) return aviso("No alcanza el dinero");
-    dinero -= ED[colocar].costo; const b = ponerEdificio(colocar, tx, ty, false); sel.o = { t: "con", b }; sel.p = []; colocar = null; return panel();
+    const d = ED[colocar];
+    if (!cabe(tx, ty, d.w)) return aviso("Ahí no se puede construir" + (d.w > 1 ? " (necesita " + d.w + "×" + d.w + " casillas libres)" : ""));
+    if (dinero < d.costo) return aviso("No alcanza el dinero");
+    dinero -= d.costo; const b = ponerEdificio(colocar, tx, ty, false);
+    if (sel.o && sel.o.t == "con" && sel.o.b.hp > 0 && sel.o.b.prog < 1) (sel.cola = sel.cola || []).push(b); // ya está construyendo: la anota para después
+    else { sel.o = { t: "con", b }; sel.p = []; }
+    if (esMuro(colocar)) { if (dinero < d.costo) colocar = null; } else colocar = null; // los muros se pueden poner uno tras otro
+    edif(true); return panel();
   }
   const u = us.filter((u) => Math.hypot(u.x - w.x, u.y - w.y - .3) < .8)[0];
   if (u) { sel = u; return panel(); }
@@ -667,7 +854,7 @@ function toque(w, raton) {
   if (en) { sel.o = { t: "atk", e: en }; }
   else if (b && (b.prog < 1 || b.hp < b.mh)) { if (sel.k == "c") { sel.o = { t: "con", b }; sel.p = []; } else aviso("Solo los constructores construyen y reparan"); }
   else if (b) { sel = b; }
-  else if (res[i] && expl[i]) { if (sel.k == "r") sel.o = { t: "rec", i, tipo: res[i].t, f: "ir" }; else if (sel.k == "h") sel.o = { t: "pic", i }; else aviso("Solo los recolectores juntan recursos"); sel.p = []; }
+  else if (res[i] && expl[i]) { if (esHeroe(sel)) sel.o = { t: "pic", i }; else if (sel.k == "r") sel.o = { t: "rec", i, tipo: res[i].t, f: "ir" }; else aviso("Solo los recolectores juntan recursos"); sel.p = []; }
   else if (tx >= 0 && ty >= 0 && tx < N && ty < N && expl[i] && !bloq[i]) { sel.p = ruta(sel, tx, ty, 0); sel.o = { t: "mov" }; }
   panel();
 }
@@ -704,7 +891,15 @@ function panel(soloTexto) {
     z.appendChild(b);
   });
   if (!soloTexto) boton("Siguiente libre", () => { const l = us.filter((u) => !u.o); if (!l.length) return aviso("Todos están ocupados"); const j = l.indexOf(sel); sel = l[(j + 1) % l.length]; const c = P(sel.x, sel.y); cam.x += W / 2 - c[0]; cam.y += H / 2 - c[1]; panel(); });
-  if (!soloTexto && sel && sel.k == "c") ["almacen", "torre"].forEach((k) => boton((colocar == k ? "Toca el mapa: " : "") + ED[k].nom + " $" + ED[k].costo, () => { colocar = colocar == k ? null : k; panel(); }));
+  if (!soloTexto && sel && sel.k == "c") boton("🏗️ Edificios", () => { alternar("edif"); edif(true); });
+  if (!soloTexto && sel && sel.k == "herrero" && sel.prog >= 1) {
+    const n = sel.nv || 0;
+    if (n >= ARMAS.length) boton("⚒️ Armas al máximo", () => {}, true);
+    else boton("⚒️ Forjar " + ARMAS[n][0] + " $" + ARMAS[n][1], () => {
+      if (dinero < ARMAS[n][1]) return aviso("No alcanza el dinero");
+      dinero -= ARMAS[n][1]; sel.nv = n + 1; aviso(ARMAS[n][0] + ": tus tropas golpean +" + Math.round(BONO_ARMA * 100) + " % más"); panel();
+    });
+  }
   if (!soloTexto && sel && sel.inv && sel.w) {
     const acepta = (t) => sel.k == "baul" || (sel.k == "cajonM") == MADERA.includes(t), cerca = () => { const h = heroe(); return h && Math.hypot(h.x - sel.x - .5, h.y - sel.y - .5) < 2.5; };
     boton("Guardar", () => { if (!cerca()) return aviso("Acércate (a menos de 2 casillas)"); pasar(heroe().inv, sel.inv, acepta, capac(sel)); invHud(); panel(); });
@@ -714,8 +909,12 @@ function panel(soloTexto) {
   if (!sel) s.textContent = us.length ? "Toca una unidad para elegirla y luego toca el mapa para darle una orden." : "Toca el refugio para crear tropas ($10 cada una).";
   else if (sel.w && sel.inv) s.textContent = ED[sel.k].nom + " · " + (sel.inv.length ? sel.inv.map((x) => ITEM[x.t] + " ×" + x.n).join(", ") : "vacío") + " · " + sel.inv.length + "/" + capac(sel) + " ranuras (hasta " + STACK + " por ranura)";
   else if (sel.k == "refugio") s.textContent = "Refugio · aquí se crean tus tropas: $" + UN.r.costo + " cada una · vida " + Math.ceil(sel.hp) + "/" + sel.mh;
+  else if (sel.w && DEF[sel.k] && sel.k != "torre") s.textContent = ED[sel.k].nom + " · dispara a enemigos y animales hostiles a " + DEF[sel.k].r + " casillas" + (DEF[sel.k].area ? " (daño en área)" : "") + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
+  else if (sel.k == "herrero") s.textContent = "Herrero · " + ((sel.nv || 0) ? ARMAS[sel.nv - 1][0] : "sin armas todavía") + " (" + (sel.nv || 0) + "/" + ARMAS.length + ") · tus tropas golpean +" + Math.round(BONO_ARMA * 100 * (sel.nv || 0)) + " % · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
+  else if (sel.k == "hospital") s.textContent = "Hospital · cura " + CURA.hps + " de vida por segundo a tus tropas a " + CURA.r + " casillas · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
   else if (sel.w) s.textContent = ED[sel.k].nom + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
-  else s.textContent = UN[sel.k].nom + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + " · golpe " + UN[sel.k].dmg + " · " + ({ r: "toca un recurso para juntarlo", c: "toca una obra o edificio dañado; o elige qué construir", g: "toca el mapa para explorar o un animal para atacar", h: "flechas o WASD para moverte · barra espaciadora o clic para atacar y picar (10 golpes por árbol o roca) · en pantalla táctil, toca el mapa" })[sel.k];
+  else s.textContent = UN[sel.k].nom + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + " · golpe " + Math.round(dmgDe(sel)) + " · " + ({ r: "toca un recurso para juntarlo", c: "toca una obra o edificio dañado; o elige qué construir", g: "toca el mapa para explorar o un animal para atacar", h: "flechas o WASD para moverte · barra espaciadora o clic para atacar y picar (10 golpes por árbol o roca) · en pantalla táctil, toca el mapa" })[sel.k];
+  if (colocar && ED[colocar] && !(colocar in COSTO_FAB)) s.textContent = "Toca una casilla libre para construir: " + ED[colocar].nom + " $" + ED[colocar].costo + (esMuro(colocar) ? " (puedes poner varios seguidos; Esc para terminar)" : " (Esc para cancelar)");
   if (colocar && colocar in COSTO_FAB) s.textContent = "Toca una casilla libre y cercana (dentro de la zona del imperio, salvo el primer poste) para colocar: " + ED[colocar].nom + " (Esc para cancelar)";
   if (moverGrupo != null) s.textContent = "Toca el mapa para mandar al grupo " + (moverGrupo + 1) + " (Esc para cancelar)";
 }
@@ -728,58 +927,130 @@ function invHud() {
 // (plata y fibra todavía no se pueden conseguir en el juego: se quedan en 0.)
 const totalDe = (...items) => { let n = 0; const h = heroe(); if (h) items.forEach((t) => (n += cuenta(h.inv, t))); eds.forEach((b) => { if (b.inv && b.prog >= 1) items.forEach((t) => (n += cuenta(b.inv, t))); }); return n; };
 const corto = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e4 ? (n >= 1e5 ? Math.round(n / 1e3) : (n / 1e3).toFixed(1).replace(".0", "")) + "k" : String(n));
+// Iconos dibujados (SVG): el emoji 🪙/🪵 no se ve en algunos equipos, así que oro, madera y tablón se dibujan.
+const SVG = (d) => '<svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true" style="vertical-align:-.15em">' + d + "</svg>";
+const ICO = {
+  // Lingote de oro: dos barras apiladas con brillo
+  oro: SVG('<defs><linearGradient id="gO" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3a0"/><stop offset=".5" stop-color="#ffcb2f"/><stop offset="1" stop-color="#c78400"/></linearGradient></defs>' +
+    '<path d="M2 20 L4 14 H13 L15 20 Z" fill="url(#gO)" stroke="#8a5a00" stroke-width="1.2" stroke-linejoin="round"/>' +
+    '<path d="M9 14 L11 8 H20 L22 14 Z" fill="url(#gO)" stroke="#8a5a00" stroke-width="1.2" stroke-linejoin="round"/>' +
+    '<path d="M5.5 16 H11 M12.5 10 H18" stroke="#fffbe0" stroke-width="1.3" stroke-linecap="round" opacity=".85"/>' +
+    '<path d="M18 3 v4 M16 5 h4" stroke="#fff6b0" stroke-width="1.2" stroke-linecap="round"/>'),
+  // Tronco: lado con corteza y extremo con anillos
+  madera: SVG('<rect x="6" y="6" width="16" height="12" rx="2" fill="#8b5a2b" stroke="#4a2c0f" stroke-width="1.2"/>' +
+    '<path d="M9 9 H21 M9 12 H21 M9 15 H21" stroke="#5e3a17" stroke-width="1" opacity=".7"/>' +
+    '<ellipse cx="6" cy="12" rx="3.6" ry="6" fill="#e6b877" stroke="#4a2c0f" stroke-width="1.2"/>' +
+    '<ellipse cx="6" cy="12" rx="2" ry="3.6" fill="none" stroke="#b07a3a" stroke-width="1"/>' +
+    '<circle cx="6" cy="12" r=".9" fill="#b07a3a"/>'),
+  // Tablón: tabla clara con vetas y clavos
+  tablon: SVG('<rect x="2" y="7" width="20" height="10" rx="1.5" fill="#d9a35f" stroke="#6b4217" stroke-width="1.2"/>' +
+    '<path d="M4 10 H15 M9 13.5 H20 M5 15 H9" stroke="#a9763a" stroke-width="1" stroke-linecap="round"/>' +
+    '<circle cx="4.6" cy="12" r=".9" fill="#6b4217"/><circle cx="19.4" cy="12" r=".9" fill="#6b4217"/>'),
+};
 const RES_HUD = [
-  ["oro", "🪙", "Monedas de oro", () => dinero], ["plata", "🥈", "Plata", () => totalDe("plata")], ["cobre", "🟠", "Cobre", () => totalDe("cobre")], ["carbon", "⚫", "Carbón", () => totalDe("carbon")],
-  ["madera", "🪵", "Madera (troncos y tablones)", () => totalDe("tronco", "tablon")], ["fibra", "🧶", "Fibra", () => (stock && stock.fibra) || 0], ["carne", "🥩", "Carne", () => (stock && stock.carne) || 0], ["piel", "🧥", "Piel", () => (stock && stock.piel) || 0],
+  ["oro", ICO.oro, "Oro", () => dinero], ["plata", "🥈", "Plata", () => totalDe("plata")], ["cobre", "🟠", "Cobre", () => totalDe("cobre")], ["carbon", "⚫", "Carbón", () => totalDe("carbon")],
+  ["madera", ICO.madera, "Madera (troncos y tablones)", () => totalDe("tronco", "tablon")], ["fibra", "🧶", "Fibra", () => (stock && stock.fibra) || 0], ["carne", "🥩", "Carne", () => (stock && stock.carne) || 0], ["piel", "🧥", "Piel", () => (stock && stock.piel) || 0],
 ];
-const chipsRec = RES_HUD.map(([, , nom]) => { const c = document.createElement("span"); c.className = "chip"; c.title = nom; $("datos").appendChild(c); return c; });
+const chipsRec = RES_HUD.map(([, ico, nom]) => {
+  const c = document.createElement("span"); c.className = "chip"; c.title = nom;
+  c.innerHTML = '<span class="ri">' + ico + '</span><span class="rn"></span>'; $("datos").appendChild(c); return c.lastChild;
+});
 function hud() {
-  RES_HUD.forEach(([, ico, , val], i) => (chipsRec[i].textContent = ico + " " + corto(Math.floor(val())))); invHud();
+  RES_HUD.forEach(([, , , val], i) => (chipsRec[i].textContent = corto(Math.floor(val())))); invHud();
   $("pobl").textContent = "👥 " + us.length; $("botin").textContent = "Cuero " + stock.cuero;
 }
 function ajustar() { const d = devicePixelRatio || 1, r = cv.getBoundingClientRect(); W = r.width; H = r.height; cv.width = W * d; cv.height = H * d; cx.setTransform(d, 0, 0, d, 0, 0); }
 addEventListener("resize", ajustar);
 // ----- Reino: lista de soldados -----
 const ESTADO = (u) => !u.o ? "libre" : u.o.t == "mov" ? "caminando" : u.o.t == "atk" ? "atacando" : u.o.t == "con" ? "construyendo" : u.o.t == "pic" ? "picando" : u.o.f == "cav" ? "juntando" : u.o.f == "vol" ? "llevando carga" : "yendo al recurso";
-let sigReino = "";
+let sigReino = "", grAbierto = new Set();
 function reino(forzar) {
   const z = $("reino"); if (z.hidden) return;
-  const sig = us.map((u) => u.k + Math.ceil(u.hp) + ESTADO(u)).join("|") + (sel ? us.indexOf(sel) : "");
+  const sig = us.map((u) => u.k + Math.ceil(u.hp) + ESTADO(u) + (u.gr == null ? "" : u.gr) + (u.jug ? "J" : "")).join("|") + (sel ? us.indexOf(sel) : "") + [...grAbierto].join(",") + grupos.map((g) => g.tarea).join(",");
   if (!forzar && sig == sigReino) return; sigReino = sig; z.innerHTML = "";
-  const cuenta = (k) => us.filter((u) => u.k == k).length, t = document.createElement("div"); t.className = "resumen";
-  t.textContent = "Soldados: " + us.length + "  ·  🔨 " + cuenta("c") + "  ⚔️ " + cuenta("g") + "  ⛏️ " + cuenta("r"); z.appendChild(t);
-  if (!us.length) { const p = document.createElement("p"); p.textContent = "Todavía no tienes soldados. Créalos tocando el refugio."; z.appendChild(p); }
-  us.forEach((u) => {
-    const b = document.createElement("button"); b.className = "soldado" + (u === sel ? " activo" : "");
-    b.textContent = UN[u.k].ico + " " + UN[u.k].nom + (u.gr != null ? " (G" + (u.gr + 1) + ")" : "") + " · vida " + Math.ceil(u.hp) + "/" + u.mh + " · " + ESTADO(u);
+  const cu = (k, l = us) => l.filter((u) => u.k == k).length, soldados = us.filter((u) => !esHeroe(u));
+  const el = (cls, txt) => { const d = document.createElement("div"); d.className = cls; d.textContent = txt; z.appendChild(d); return d; };
+  const texto = (txt) => { const p = document.createElement("p"); p.textContent = txt; z.appendChild(p); };
+  const fila = (u, sub) => {
+    const b = document.createElement("button"); b.className = "soldado" + (sub ? " sub" : "") + (u === sel ? " activo" : "");
+    b.textContent = UN[u.k].ico + " " + UN[u.k].nom + (u.jug ? " (tu personaje)" : "") + " · vida " + Math.ceil(u.hp) + "/" + u.mh + " · " + ESTADO(u);
     b.addEventListener("click", () => { sel = u; colocar = null; const c = P(u.x, u.y); cam.x += W / 2 - c[0]; cam.y += H / 2 - c[1]; z.hidden = true; panel(); });
     z.appendChild(b);
+  };
+  el("resumen", "Soldados: " + soldados.length + "  ·  🔨 " + cu("c", soldados) + "  ⚔️ " + cu("g", soldados) + "  ⛏️ " + cu("r", soldados));
+  el("sub-titulo", "👤 Personaje"); const h = heroe(); if (h) fila(h); else texto("Tu personaje no está.");
+  const ids = grupos.map((g) => g.id).filter((id) => soldados.some((u) => u.gr === id));
+  el("sub-titulo", "👥 Grupos (" + ids.length + ")");
+  if (!ids.length) texto("Todavía no tienes grupos. Se forman solos al crear soldados tocando el refugio.");
+  ids.forEach((id) => {
+    const m = soldados.filter((u) => u.gr === id), abierto = grAbierto.has(id), b = document.createElement("button");
+    b.className = "soldado grupo" + (id === grSel ? " activo" : "");
+    b.textContent = (abierto ? "▾ " : "▸ ") + "Grupo " + (id + 1) + " · " + m.length + "/" + MAX_GRUPO + " · 🔨" + cu("c", m) + " ⚔️" + cu("g", m) + " ⛏️" + cu("r", m) + " · " + ({ madera: "recoge madera", mineral: "recoge minerales" }[grupos[id].tarea] || "en espera");
+    b.addEventListener("click", () => { abierto ? grAbierto.delete(id) : grAbierto.add(id); reino(true); });
+    z.appendChild(b); if (abierto) m.forEach((u) => fila(u, true));
   });
+  const solos = soldados.filter((u) => u.gr == null || !grupos[u.gr]);
+  if (solos.length) { el("sub-titulo", "Sin grupo"); solos.forEach((u) => fila(u)); }
 }
-const alternar = (id) => { const v = $(id).hidden; ["reino", "crea", "tropas"].forEach((p) => ($(p).hidden = true)); $(id).hidden = !v; }; // solo un panel abierto a la vez
+const alternar = (id) => { const v = $(id).hidden; ["reino", "crea", "edif", "tropas"].forEach((p) => ($(p).hidden = true)); $(id).hidden = !v; }; // solo un panel abierto a la vez
 $("bReino").addEventListener("click", () => { alternar("reino"); reino(true); });
 // ----- Creaciones: fabricar tablones y contenedores con lo que lleva el personaje -----
 let sigCrea = "";
 function crea(forzar) {
   const z = $("crea"); if (z.hidden) return;
-  const h = heroe(), sig = h ? JSON.stringify(h.inv) + colocar + nPostes : "";
+  const h = heroe(), sig = h ? JSON.stringify(h.inv) + colocar + nPostes + h.k : "";
   if (!forzar && sig == sigCrea) return; sigCrea = sig; z.innerHTML = ""; if (!h) return;
+  if (h.k != "h") { const p = document.createElement("p"); p.textContent = "Ahora juegas con un soldado: puede atacar y juntar recursos. Fabricar tablones, postes y cofres solo lo hace tu personaje original."; z.appendChild(p); return; }
   const t = document.createElement("div"); t.className = "resumen"; t.textContent = "Troncos: " + cuenta(h.inv, "tronco") + "  ·  Tablones: " + cuenta(h.inv, "tablon") + "  ·  Postes: " + nPostes; z.appendChild(t);
-  const boton = (txt, f, off) => { const b = document.createElement("button"); b.className = "soldado"; b.textContent = txt; b.disabled = !!off; b.addEventListener("click", f); z.appendChild(b); };
-  boton("🪵 Fabricar 4 tablones (1 tronco)", () => {
+  // Cuadrícula de 4 columnas: botones cuadrados con el dibujo de lo que se fabrica, su nombre y el costo en tablones
+  const rej = document.createElement("div"); rej.className = "cuadricula"; z.appendChild(rej);
+  const boton = (ico, nom, info, color, f, off, activo) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "b3d cuad " + color + (activo ? " on" : ""); b.disabled = !!off;
+    b.title = nom; b.setAttribute("aria-label", nom);
+    b.innerHTML = '<span class="b-ico">' + ico + '</span><span class="b-nom">' + nom + '</span>' + (info ? '<span class="b-info">' + info + '</span>' : "");
+    b.addEventListener("click", f); rej.appendChild(b);
+  };
+  boton(ICO.tablon, "Tablones", "×4", "b-azul", () => {
     const v = h.inv; if (!cuenta(v, "tronco")) return aviso("Necesitas 1 tronco");
     quitar(v, "tronco", 1); if (espacio(v, "tablon") < 4) { anadir(v, "tronco", 1); return aviso("Inventario lleno"); }
-    anadir(v, "tablon", 4); invHud(); crea(true); aviso("+4 Tablones");
+    anadir(v, "tablon", 4); invHud(); crea(true); aviso("+4 Tablones (gastó 1 tronco)");
   }, !cuenta(h.inv, "tronco"));
-  [["poste", "🚩 Poste de imperio · marca la zona (2 tablones)"], ["baul", "📦 Baúl · 20 espacios, cualquier material (4 tablones)"], ["cajonM", "Cajón de madera · 10 espacios (4 tablones)"], ["cajonN", "Cajón de minerales · 10 espacios (4 tablones)"]].forEach(([k, n]) =>
-    boton((colocar == k ? "✔ Toca el mapa: " : "") + n, () => {
+  [["poste", "🚩", "Poste", "Poste de imperio: marca la zona", "b-oro"], ["baul", "📦", "Baúl", "Baúl: 20 espacios, cualquier material", "b-verde"],
+   ["cajonM", "🗄️", "Cajón madera", "Cajón de madera: 10 espacios", "b-verde"], ["cajonN", "💎", "Cajón minerales", "Cajón de minerales: 10 espacios", "b-morado"]].forEach(([k, ico, nom, desc, color]) =>
+    boton(ico, nom, COSTO_FAB[k] + ICO.tablon, color, () => {
       if (cuenta(h.inv, "tablon") < COSTO_FAB[k]) return aviso("Necesitas " + COSTO_FAB[k] + " tablones");
       if (k != "poste" && !nPostes) return aviso("Primero pon un poste de imperio: los cofres solo van dentro de su zona");
-      colocar = colocar == k ? null : k; if (colocar) { z.hidden = true; aviso("Toca una casilla libre y cercana para colocarlo"); } panel(); crea(true);
-    }, cuenta(h.inv, "tablon") < COSTO_FAB[k] && colocar != k));
+      colocar = colocar == k ? null : k; if (colocar) { z.hidden = true; aviso("Toca una casilla libre y cercana para colocar: " + desc); } panel(); crea(true);
+    }, cuenta(h.inv, "tablon") < COSTO_FAB[k] && colocar != k, colocar == k));
   const p = document.createElement("p"); p.textContent = "Cada poste marca una zona de " + RADIO_ZONA + " casillas (se ve dorada). Los cofres y los postes nuevos van dentro de la zona: pon más postes para agrandarla. Para guardar objetos, acércate al cofre, tócalo y usa Guardar / Sacar todo."; z.appendChild(p);
 }
 $("bCrea").addEventListener("click", () => { alternar("crea"); crea(true); });
+// ----- Edificios: todos los que se pueden construir, con candado si no alcanza el dinero -----
+const LISTA_EDIF = [["almacen", "🏪", "b-azul"], ["torre", "🏰", "b-gris"], ["arqueros", "🏹", "b-verde"], ["canon", "💣", "b-negro"], ["hospital", "🏥", "b-rojo"], ["herrero", "⚒️", "b-morado"], ["muroM", ICO.tablon, "b-oro"], ["muroP", "🧱", "b-gris"]];
+let sigEdif = "";
+function edif(forzar) {
+  const z = $("edif"); if (z.hidden) return;
+  const sig = LISTA_EDIF.map(([k]) => (dinero >= ED[k].costo ? 1 : 0)).join("") + colocar + Math.floor(dinero) + us.filter((u) => u.k == "c").length;
+  if (!forzar && sig == sigEdif) return; sigEdif = sig; z.innerHTML = "";
+  const t = document.createElement("div"); t.className = "resumen"; t.textContent = "Dinero: $" + Math.floor(dinero) + "  ·  🔨 Constructores: " + us.filter((u) => u.k == "c").length; z.appendChild(t);
+  const rej = document.createElement("div"); rej.className = "cuadricula"; z.appendChild(rej);
+  LISTA_EDIF.forEach(([k, ico, color]) => {
+    const d = ED[k], falta = dinero < d.costo, b = document.createElement("button"); b.type = "button";
+    b.className = "b3d cuad " + color + (falta ? " cerrado" : "") + (colocar == k ? " on" : ""); b.title = d.nom + " · $" + d.costo + (falta ? " (te faltan $" + Math.ceil(d.costo - dinero) + ")" : ""); b.setAttribute("aria-label", b.title);
+    b.innerHTML = '<span class="b-ico">' + ico + '</span><span class="b-nom">' + d.nom.replace("Torre de arqueros", "Arqueros").replace("Cañón con ruedas", "Cañón") + '</span><span class="b-info">$' + d.costo + '</span>' + (falta ? '<span class="b-lock">🔒</span>' : "");
+    b.addEventListener("click", () => {
+      if (dinero < d.costo) return aviso("Te faltan $" + Math.ceil(d.costo - dinero) + " para " + d.nom);
+      const cs = us.filter((u) => u.k == "c"); if (!cs.length) return aviso("Necesitas un Constructor: créalo tocando el refugio");
+      if (!sel || sel.k != "c") sel = cs.find((u) => !u.o) || cs[0]; // el constructor libre construye
+      colocar = colocar == k ? null : k;
+      if (colocar) { z.hidden = true; aviso("Toca una casilla libre para construir: " + d.nom); }
+      panel(); edif(true);
+    });
+    rej.appendChild(b);
+  });
+  const p = document.createElement("p"); p.textContent = "Elige un edificio y toca una casilla libre del mapa: un Constructor lo construye (se elige solo). Los muros se pueden poner uno tras otro."; z.appendChild(p);
+}
+$("bEdif").addEventListener("click", () => { alternar("edif"); edif(true); });
 // ----- Seleccionar tropas: elegir un grupo y darle una tarea -----
 let sigTropas = "";
 function tropas(forzar) {
@@ -797,7 +1068,7 @@ function tropas(forzar) {
     () => { grSel = id; const c = P(grupos[id].x, grupos[id].y); cam.x += W / 2 - c[0]; cam.y += H / 2 - c[1]; tropas(true); }, id === grSel ? "activo" : ""));
   if (grSel == null) return texto("Elige un grupo para darle una tarea.");
   const g = grSel;
-  boton("🪵 Recoger madera (guardar en baúl o cajón de madera)", () => { asignarTarea(g, "madera"); tropas(true); });
+  boton("🌲 Recoger madera (guardar en baúl o cajón de madera)", () => { asignarTarea(g, "madera"); tropas(true); });
   boton("⛏️ Recoger minerales y piedra (guardar en baúl o cajón de minerales)", () => { asignarTarea(g, "mineral"); tropas(true); });
   boton("📍 Mover el grupo (toca el mapa)", () => { moverGrupo = g; $("tropas").hidden = true; aviso("Toca el mapa para mandar al grupo " + (g + 1)); panel(); });
   boton("🛑 Detener y reunir", () => { asignarTarea(g, null); tropas(true); });
@@ -805,6 +1076,7 @@ function tropas(forzar) {
 }
 $("bTropas").addEventListener("click", () => { alternar("tropas"); tropas(true); });
 $("zmas").addEventListener("click", () => zoom(1.2)); $("zmenos").addEventListener("click", () => zoom(.83));
+$("revFin").addEventListener("click", () => { $("revivir").hidden = true; $("finTxt").textContent = "Tu personaje fue derrotado."; $("fin").hidden = false; });
 $("otra").addEventListener("click", () => { nuevo(); guardar(); entrar(); });
 let ult = performance.now(), th = 0, ta = 0;
 // ----- Partidas guardadas (varias, en este dispositivo) y menú -----
@@ -825,29 +1097,29 @@ const descomprimir = (t, n) => { const a = new Uint8Array(n); let p = 0; if (t) 
 function estado() {
   return { n: N, dinero, oleada, tReloj, tOleada, muertes, cam, expl: comprimir(expl), bio: comprimir(bio),
     res: res.map((r, i) => r && (r.t == "mina" ? [i, r.t, r.n, r.g || 0, r.oro, r.plata, r.cobre, r.carbon] : [i, r.t, r.n, r.g || 0])).filter(Boolean),
-    us: us.map((u) => [u.k, u.x, u.y, u.hp, u.carry.t, u.carry.n, u.o && u.o.t == "rec" ? [u.o.i, u.o.tipo] : 0, u.inv || 0, u.gr == null ? -1 : u.gr, u.reu ? 1 : 0]),
-    anim: anim.map((a) => [a.k, a.x, a.y, a.hp, a.g || 0]), stock, eds: eds.map((b) => [b.k, b.x, b.y, b.hp, b.prog, b.inv || 0]), enem: enem.map((e) => [e.x, e.y, e.hp, e.mh]), grupos: grupos.map((g) => [g.x, g.y, g.tarea || 0]) };
+    us: us.map((u) => [u.k, u.x, u.y, u.hp, u.carry.t, u.carry.n, u.o && u.o.t == "rec" ? [u.o.i, u.o.tipo] : 0, u.inv || 0, u.gr == null ? -1 : u.gr, u.reu ? 1 : 0, u.jug ? 1 : 0]),
+    anim: anim.map((a) => [a.k, a.x, a.y, a.hp, a.g || 0]), stock, eds: eds.map((b) => [b.k, b.x, b.y, b.hp, b.prog, b.inv || 0, b.nv || 0]), enem: enem.map((e) => [e.x, e.y, e.hp, e.mh]), grupos: grupos.map((g) => [g.x, g.y, g.tarea || 0]) };
 }
 function cargar(s) {
   N = s.n || N_ORIGINAL; // las partidas viejas no traen «n» y son de 44×44
   res = new Array(N * N).fill(null); bloq = new Uint8Array(N * N); vis = new Uint8Array(N * N); expl = s.n ? descomprimir(s.expl, N * N) : Uint8Array.from(s.expl.split(""), Number);
   bio = s.bio ? (s.n ? descomprimir(s.bio, N * N) : Uint8Array.from(s.bio.split(""), Number)) : new Uint8Array(N * N); bio.forEach((v, i) => v == 3 && (bloq[i] = 1)); // partidas viejas: todo llanura
   s.res.forEach(([i, t, n, g, o, pl, co, ca]) => { res[i] = { t, n, g: g || 0 }; if (t == "mina") Object.assign(res[i], { oro: o, plata: pl, cobre: co, carbon: ca }); bloq[i] = 1; });
-  eds = []; s.eds.forEach(([k, x, y, hp, prog, inv]) => { const b = ponerEdificio(k, x, y, true); b.hp = hp; b.prog = prog; if (inv) b.inv = inv; }); ponerRefugio(); // partidas viejas: se agrega el refugio si falta
-  us = s.us.map(([k, x, y, hp, ct, cn, o, inv, gr, reu]) => ({ k, x, y, hp, gr: k == "h" || gr == null || gr < 0 ? null : gr, reu: reu === undefined ? true : !!reu, mh: UN[k].hp, p: [], cd: 0, inv: inv || (k == "h" ? [] : null), carry: { t: ct, n: cn }, o: o ? { t: "rec", i: o[0], tipo: o[1], f: cn >= 5 ? "vol" : "ir" } : null }));
+  eds = []; s.eds.forEach(([k, x, y, hp, prog, inv, nv]) => { const b = ponerEdificio(k, x, y, true); b.hp = hp; b.prog = prog; if (inv) b.inv = inv; if (nv) b.nv = nv; }); ponerRefugio(); // partidas viejas: se agrega el refugio si falta
+  us = s.us.map(([k, x, y, hp, ct, cn, o, inv, gr, reu, jug]) => ({ k, jug: !!jug, x, y, hp, gr: k == "h" || gr == null || gr < 0 ? null : gr, reu: reu === undefined ? true : !!reu, mh: UN[k].hp, p: [], cd: 0, inv: inv || (k == "h" ? [] : null), carry: { t: ct, n: cn }, o: o ? { t: "rec", i: o[0], tipo: o[1], f: cn >= 5 ? "vol" : "ir" } : null }));
   enem = s.enem.map(([x, y, hp, mh]) => ({ k: "e", x, y, hp, mh, cd: 0 }));
   grupos = (s.grupos || []).map(([x, y, t], id) => ({ id, x, y, tarea: t || null })); grSel = null; moverGrupo = null;
   nPostes = eds.filter((b) => b.k == "poste").length; recalcZona();
-  us.forEach((u) => { if (u.k != "h" && (u.gr == null || !grupos[u.gr])) u.gr = asignarGrupo(); }); // partidas viejas: las tropas se reparten en grupos
+  us.forEach((u) => { if (!esHeroe(u) && (u.gr == null || !grupos[u.gr])) u.gr = asignarGrupo(); }); // partidas viejas: las tropas se reparten en grupos
   ({ dinero, oleada, tReloj, tOleada, muertes, cam } = s); anim = (s.anim || []).map(([k, x, y, hp, g]) => ({ ...nuevoAnimal(k, x, y), hp, g })); stock = s.stock || { carne: 0, piel: 0, cuero: 0 };
-  if (!us.some((u) => u.k == "h")) crearUnidad("h"); sel = heroe(); fx = []; colocar = null; fin = false; pend = 0; // partidas viejas: se agrega el personaje
+  if (!heroe()) crearUnidad("h"); sel = heroe(); fx = []; colocar = null; fin = false; pend = 0; // partidas viejas: se agrega el personaje
 }
 function guardar() {
   if (!slot) return; const l = leerTodo(), i = l.findIndex((p) => p.id == slot.id), p = { id: slot.id, nombre: slot.nombre, fecha: Date.now(), estado: estado() };
   if (i < 0) l.push(p); else l[i] = p; escribir(l);
 }
-function pantalla(id) { $("menu").hidden = !id; ["mPrincipal", "mPers", "mNiv"].forEach((m) => ($(m).hidden = m != id)); $("datos").hidden = !!id; $("sub").hidden = !!id; $("bMenu").hidden = !!id; $("pausa").hidden = true; pausado = false; $("bReino").hidden = !!id; $("bCrea").hidden = !!id; $("bTropas").hidden = !!id; teclas.clear(); if (id) { $("reino").hidden = true; $("crea").hidden = true; $("tropas").hidden = true; } if (id == "mPers") listar(); }
-function entrar() { $("fin").hidden = true; jugando = true; pantalla(null); ult = performance.now(); panel(); }
+function pantalla(id) { $("menu").hidden = !id; ["mPrincipal", "mPers", "mNiv"].forEach((m) => ($(m).hidden = m != id)); $("datos").hidden = !!id; $("sub").hidden = !!id; $("bMenu").hidden = !!id; $("pausa").hidden = true; pausado = false; $("bReino").hidden = !!id; $("bCrea").hidden = !!id; $("bTropas").hidden = !!id; $("bEdif").hidden = !!id; teclas.clear(); if (id) { $("reino").hidden = true; $("crea").hidden = true; $("edif").hidden = true; $("tropas").hidden = true; } if (id == "mPers") listar(); }
+function entrar() { $("fin").hidden = true; $("revivir").hidden = true; jugando = true; pantalla(null); ult = performance.now(); panel(); }
 // Sustituye a confirm(): un aviso dentro de la página (confirm() saca al navegador de la pantalla completa)
 function preguntar(texto) {
   $("confTxt").textContent = texto; $("confirmar").hidden = false;
@@ -882,7 +1154,7 @@ function pausar(si) {
 }
 $("bMenu").addEventListener("click", () => pausar(!pausado));
 $("pContinuar").addEventListener("click", () => pausar(false));
-$("pSalir").addEventListener("click", () => { guardar(); enviarPuntos(); subir(); jugando = false; $("fin").hidden = true; pantalla("mPrincipal"); });
+$("pSalir").addEventListener("click", () => { guardar(); enviarPuntos(); subir(); jugando = false; $("fin").hidden = true; $("revivir").hidden = true; pantalla("mPrincipal"); });
 addEventListener("pagehide", () => { if (jugando && !fin) guardar(); enviarPuntos(); });
 document.addEventListener("visibilitychange", () => { if (document.hidden) { if (jugando && !fin) guardar(); enviarPuntos(); } });
 ajustar(); pantalla("mPrincipal");
@@ -890,7 +1162,7 @@ ajustar(); pantalla("mPrincipal");
   const dt = Math.min(.05, (n - ult) / 1000); ult = n;
   if (jugando && !pausado) {
     tick(dt); dibujar();
-    if ((th += dt) > .25) { th = 0; hud(); if (sel) panel(true); reino(); crea(); tropas(); }
+    if ((th += dt) > .25) { th = 0; hud(); if (sel) panel(true); reino(); crea(); edif(); tropas(); }
     if ((ta += dt) > 5) { ta = 0; if (!fin) guardar(); }
   }
   requestAnimationFrame(bucle);

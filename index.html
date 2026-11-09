@@ -1,11 +1,11 @@
 <!doctype html>
 <!-- Ruta: index.html (portal, en la raíz del repo) -->
-<html lang="es">
+<html lang="es" data-tema="claro">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Juegos</title>
-  <meta name="theme-color" content="#121316" />
+  <meta name="theme-color" content="#ffffff" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="iconos/icono-192.png" />
   <link rel="apple-touch-icon" href="iconos/icono-180.png" />
@@ -13,27 +13,103 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Juegos" />
   <link rel="stylesheet" href="compartido/estilos.css" />
+  <script>
+    // Tema guardado (claro por defecto). Va aquí, antes de pintar, para que no parpadee.
+    try {
+      const t = localStorage.getItem("tema_portal") === "oscuro" ? "oscuro" : "claro";
+      document.documentElement.dataset.tema = t;
+      document.querySelector('meta[name="theme-color"]').content = t === "oscuro" ? "#121316" : "#ffffff";
+    } catch (e) {}
+  </script>
   <style>
     [hidden] { display: none !important; }
+
+    /* ----- Tema claro (por defecto en el portal). Solo afecta a esta página: los juegos siguen con su propia paleta ----- */
+    html[data-tema="claro"] { --fondo: #ffffff; --tarjeta: #f1f3f6; --borde: #d3d7de; --texto: #16181d; --suave: #5a6070; --acento: #6a4cf0; color-scheme: light; }
+    html[data-tema="oscuro"] { color-scheme: dark; }
+    body { min-height: 100dvh; background: #ffffff; }
+    html[data-tema="oscuro"] body { background: radial-gradient(ellipse at 50% 0%, #23252b, #101114 70%) fixed; }
+
+    /* ----- Botones grandes de zona (arriba de todo) ----- */
+    .zonas { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 900px; margin: 0 auto; padding: max(12px, env(safe-area-inset-top)) 16px 4px; }
+    .zona-btn {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+      min-height: 76px; padding: 10px 12px; font: inherit; font-size: clamp(1.05rem, 3.6vw, 1.5rem); font-weight: 800; line-height: 1.15; text-align: center;
+      color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.3); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+      border: 3px solid var(--c3); border-radius: 20px;
+      background: linear-gradient(180deg, var(--c1), var(--c2) 60%, var(--c3) 160%);
+      box-shadow: 0 6px 0 var(--c3), 0 10px 14px rgba(0,0,0,.25), inset 0 2px 0 rgba(255,255,255,.55);
+      transition: transform .07s, box-shadow .07s, filter .15s;
+    }
+    .zona-btn small { font-size: .62em; font-weight: 600; opacity: .92; }
+    .zona-btn:hover { filter: brightness(1.06); }
+    .zona-btn:focus-visible { outline: 3px solid var(--texto); outline-offset: 3px; }
+    .zona-btn.verde { --c1: #8ff08a; --c2: #2fc04a; --c3: #187a2b; }
+    .zona-btn.azul  { --c1: #9fd8ff; --c2: #2f86ff; --c3: #1450a8; }
+    /* Zona elegida: botón hundido y con aro, para saber dónde estás */
+    .zona-btn[aria-selected="true"] { transform: translateY(5px); filter: brightness(1.08);
+      box-shadow: 0 1px 0 var(--c3), 0 0 0 4px var(--fondo), 0 0 0 7px var(--c2), inset 0 2px 0 rgba(255,255,255,.5); }
+
     /* Cabecera sin fondo ni borde: se funde con la página (el portal sí se desplaza porque hay muchos juegos) */
-    .barra { background: transparent; border-bottom: 0; padding-top: max(12px, env(safe-area-inset-top)); }
-    body { background: radial-gradient(ellipse at 50% 0%, #23252b, #101114 70%) fixed; min-height: 100dvh; }
+    .barra { background: transparent; border-bottom: 0; padding-top: 12px; }
     .titulo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .mini { padding: 3px 8px; font-size: .7rem; color: var(--suave); text-decoration: none; border: 1px dashed var(--borde); border-radius: 999px; opacity: .7; }
+    .mini { padding: 3px 8px; font-size: .7rem; color: var(--suave); text-decoration: none; border: 1px dashed var(--borde); border-radius: 999px; opacity: .8; }
     .mini:hover, .mini:focus-visible { opacity: 1; border-color: var(--acento); color: var(--texto); }
     .rejilla { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
     .rejilla .tarjeta { position: relative; aspect-ratio: 1 / 1; padding: 0; overflow: hidden; align-items: center; justify-content: center; text-align: center; gap: 4px; }
     .rejilla .tarjeta img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     .rejilla .tarjeta-ico { font-size: 2.6rem; }
+    /* Distintivo en las tarjetas que aún se programan */
+    .rejilla .tarjeta.dev::after { content: "🚧 En desarrollo"; position: absolute; top: 6px; left: 6px; padding: 2px 8px; font-size: .68rem; font-weight: 800; color: #fff; background: #1f6fe0; border: 2px solid #fff; border-radius: 999px; box-shadow: 0 2px 0 rgba(0,0,0,.35); }
     #sinred { font-size: .75rem; color: var(--suave); border: 1px solid var(--borde); border-radius: 999px; padding: 3px 8px; }
     #ayudaIos { margin: 8px 12px 0; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 10px; font-size: .9rem; color: var(--suave); }
     #ayudaIos button { margin-left: 8px; }
+
+    /* Aviso de la zona en desarrollo */
+    .aviso { display: flex; gap: 12px; align-items: flex-start; margin: 0 0 14px; padding: 12px 14px; font-size: .92rem; line-height: 1.45; color: var(--texto); background: #e8f1ff; border: 2px solid #2f86ff; border-radius: 14px; }
+    html[data-tema="oscuro"] .aviso { background: #14233f; border-color: #3a78d8; }
+    .aviso .aviso-ico { font-size: 1.6rem; line-height: 1; }
+    .aviso p { margin: 0 0 6px; }
+    .aviso p:last-child { margin: 0; }
+    .vacio { padding: 24px 12px; text-align: center; color: var(--suave); }
+    main { padding-bottom: 90px; } /* espacio para el botón de tema y el de pantalla completa */
+
+    /* ----- Botón circular de tema (esquina inferior izquierda) ----- */
+    #tema {
+      position: fixed; z-index: 2147482999; width: 52px; height: 52px; padding: 0; display: flex; align-items: center; justify-content: center;
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px)); left: calc(12px + env(safe-area-inset-left, 0px));
+      border-radius: 50%; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+      transition: transform .07s, box-shadow .07s;
+    }
+    #tema:active { transform: translateY(3px); }
+    #tema:focus-visible { outline: 3px solid var(--acento); outline-offset: 3px; }
+    #tema svg { width: 30px; height: 30px; }
+    /* En claro: círculo azul noche con luna y estrellas (toca para pasar a oscuro) */
+    html[data-tema="claro"] #tema { background: linear-gradient(180deg, #3b4a86, #1b2250); border: 2px solid #0f1433; box-shadow: 0 4px 0 #0f1433, 0 6px 10px rgba(0,0,0,.3), inset 0 2px 0 rgba(255,255,255,.3); }
+    html[data-tema="claro"] #tema .ico-sol { display: none; }
+    /* En oscuro: círculo amarillo con sol (toca para pasar a claro) */
+    html[data-tema="oscuro"] #tema { background: linear-gradient(180deg, #ffe27a, #ffb020); border: 2px solid #a85d00; box-shadow: 0 4px 0 #a85d00, 0 6px 10px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.6); }
+    html[data-tema="oscuro"] #tema .ico-luna { display: none; }
+
+    @media (max-width: 380px) { .zona-btn { min-height: 68px; } }
+    @media (prefers-reduced-motion: reduce) { .zona-btn, #tema { transition: none; } }
   </style>
 </head>
 <body>
+  <!-- Zonas: Juegos (verde) y Juegos en desarrollo (azul) -->
+  <nav class="zonas" role="tablist" aria-label="Zonas del portal">
+    <button class="zona-btn verde" id="tabJuegos" role="tab" aria-selected="true" aria-controls="zonaJuegos">
+      🎮 Juegos
+      <small id="cuentaJuegos"></small>
+    </button>
+    <button class="zona-btn azul" id="tabDev" role="tab" aria-selected="false" aria-controls="zonaDev">
+      🚧 Juegos en desarrollo
+      <small id="cuentaDev"></small>
+    </button>
+  </nav>
+
   <header class="barra">
     <div class="titulo">
-      <h1>🎮 Juegos</h1>
       <!-- Juego escondido: «Reflejos» (carpeta ejemplo/), ya no está en juegos.js -->
       <a class="mini" href="ejemplo/index-ejemplo.html">Juego de prueba</a>
       <button class="btn" id="instalar" hidden>📲 Instalar</button>
@@ -46,19 +122,53 @@
     <button class="btn" id="cerrarAyuda">Entendido</button>
   </div>
   <main>
-    <div id="lista" class="rejilla"></div>
+    <section id="zonaJuegos" role="tabpanel" aria-labelledby="tabJuegos">
+      <div id="lista" class="rejilla"></div>
+      <p id="vacioJuegos" class="vacio" hidden>Todavía no hay juegos terminados. Mira los que están en desarrollo.</p>
+    </section>
+    <section id="zonaDev" role="tabpanel" aria-labelledby="tabDev" hidden>
+      <div class="aviso" role="note">
+        <span class="aviso-ico" aria-hidden="true">🚧</span>
+        <div>
+          <p><b>Estos juegos todavía se están programando.</b> Cuando estén terminados pasarán a la zona <b>Juegos</b>.</p>
+          <p>Puedes jugarlos y divertirte desde ahora. Tus datos (puntos, niveles y partidas) se guardan, pero es posible que se borren con la actualización final, cuando el juego pase a la zona de Juegos.</p>
+        </div>
+      </div>
+      <div id="listaDev" class="rejilla"></div>
+      <p id="vacioDev" class="vacio" hidden>Por ahora no hay juegos en desarrollo.</p>
+    </section>
   </main>
-  <script type="module">
-    import { JUEGOS } from "./juegos.js";
 
-    // Lista de juegos: cada tarjeta lleva a su carpeta (o a su repo propio si tiene «url»)
-    const lista = document.getElementById("lista");
-    JUEGOS.forEach((j) => {
+  <!-- Botón de modo oscuro / claro -->
+  <button id="tema" type="button" aria-label="Cambiar a modo oscuro" title="Modo oscuro">
+    <svg class="ico-luna" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M20.5 4.5a11.5 11.5 0 1 0 7 20.6A10 10 0 0 1 20.5 4.5z" fill="#fff4c2" stroke="#fff4c2" stroke-linejoin="round" stroke-width="1"/>
+      <path d="M25 5l.9 2.1L28 8l-2.1.9L25 11l-.9-2.1L22 8l2.1-.9z" fill="#fff"/>
+      <path d="M28.5 14l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z" fill="#fff"/>
+      <path d="M17 2.5l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5z" fill="#fff"/>
+    </svg>
+    <svg class="ico-sol" viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="16" cy="16" r="6.5" fill="#fff" stroke="#a85d00" stroke-width="1.5"/>
+      <g stroke="#fff" stroke-width="2.6" stroke-linecap="round">
+        <path d="M16 3v4M16 25v4M3 16h4M25 16h4M6.8 6.8l2.8 2.8M22.4 22.4l2.8 2.8M25.2 6.8l-2.8 2.8M9.6 22.4l-2.8 2.8"/>
+      </g>
+    </svg>
+  </button>
+
+  <script type="module">
+    import { JUEGOS, EN_DESARROLLO } from "./juegos.js";
+
+    // ----- Lista de juegos: cada tarjeta lleva a su carpeta (o a su repo propio si tiene «url») -----
+    // Los ids de EN_DESARROLLO (juegos.js) van a la zona «Juegos en desarrollo»; el resto, a «Juegos».
+    const $ = (id) => document.getElementById(id);
+    const enDev = new Set(EN_DESARROLLO || []);
+
+    function tarjeta(j, dev) {
       const a = document.createElement("a");
-      a.className = "tarjeta";
+      a.className = "tarjeta" + (dev ? " dev" : "");
       a.href = j.url || j.carpeta + "/index-" + j.carpeta + ".html"; // ej.: ajedrez/index-ajedrez.html
       a.title = j.nombre;
-      a.setAttribute("aria-label", j.nombre);
+      a.setAttribute("aria-label", j.nombre + (dev ? " (en desarrollo)" : ""));
       if (j.imagen) {
         const img = document.createElement("img");
         img.src = j.imagen;
@@ -73,11 +183,47 @@
         n.textContent = j.nombre;
         a.append(ico, n);
       }
-      lista.appendChild(a);
+      return a;
+    }
+
+    let nJuegos = 0, nDev = 0;
+    JUEGOS.forEach((j) => {
+      const dev = enDev.has(j.id);
+      (dev ? $("listaDev") : $("lista")).appendChild(tarjeta(j, dev));
+      dev ? nDev++ : nJuegos++;
     });
+    $("cuentaJuegos").textContent = nJuegos + (nJuegos === 1 ? " juego listo" : " juegos listos");
+    $("cuentaDev").textContent = nDev + (nDev === 1 ? " juego en prueba" : " juegos en prueba");
+    $("vacioJuegos").hidden = nJuegos > 0;
+    $("vacioDev").hidden = nDev > 0;
+
+    // ----- Zonas (pestañas): se recuerda la elegida en la dirección (#desarrollo) -----
+    function mostrarZona(dev, guardar) {
+      $("zonaJuegos").hidden = dev;
+      $("zonaDev").hidden = !dev;
+      $("tabJuegos").setAttribute("aria-selected", String(!dev));
+      $("tabDev").setAttribute("aria-selected", String(dev));
+      if (guardar) history.replaceState(null, "", dev ? "#desarrollo" : location.pathname + location.search);
+    }
+    $("tabJuegos").addEventListener("click", () => mostrarZona(false, true));
+    $("tabDev").addEventListener("click", () => mostrarZona(true, true));
+    addEventListener("hashchange", () => mostrarZona(location.hash === "#desarrollo", false));
+    mostrarZona(location.hash === "#desarrollo", false);
+
+    // ----- Modo claro / oscuro -----
+    const raiz = document.documentElement;
+    function aplicarTema(t, guardar) {
+      raiz.dataset.tema = t;
+      const oscuro = t === "oscuro";
+      $("tema").setAttribute("aria-label", oscuro ? "Cambiar a modo claro" : "Cambiar a modo oscuro");
+      $("tema").title = oscuro ? "Modo claro" : "Modo oscuro";
+      document.querySelector('meta[name="theme-color"]').content = oscuro ? "#121316" : "#ffffff";
+      if (guardar) { try { localStorage.setItem("tema_portal", t); } catch (e) {} }
+    }
+    aplicarTema(raiz.dataset.tema === "oscuro" ? "oscuro" : "claro", false);
+    $("tema").addEventListener("click", () => aplicarTema(raiz.dataset.tema === "oscuro" ? "claro" : "oscuro", true));
 
     // ----- Sin conexión + instalar en la pantalla de inicio -----
-    const $ = (id) => document.getElementById(id);
     const marcarRed = () => ($("sinred").hidden = navigator.onLine);
     addEventListener("online", marcarRed);
     addEventListener("offline", marcarRed);

@@ -63,14 +63,15 @@ Al final de la partida el jugador tendrá construido algo bastante grande: un im
 | 🚩 Poste de imperio | Marca la zona donde puedes poner cofres | ✅ |
 | 📦 Baúl y cajones | Guardan materiales | ✅ |
 | Almacén | Recibe lo que traen los recolectores | ✅ |
-| Torre | Dispara a los enemigos | ✅ |
-| 🏹 Torre de arqueros | Defiende y extiende un poco la visión del mapa | 🔜 |
-| 💣 Cañón con ruedas | Cuida el reino | 🔜 |
-| 🏥 Hospital | Cura a las tropas | 🔜 |
-| 🧱 Muros | De madera o de piedra | 🔜 |
-| 🔨 Herrero | Fabrica mejores herramientas y armas | 🔜 |
+| Torre | Dispara a los enemigos ($120) | ✅ |
+| 🏹 Torre de arqueros | $150. Dispara flechas a 9 casillas (10 de daño cada 0.7 s) a enemigos y animales hostiles, y ve más lejos en el mapa (11 casillas) | ✅ |
+| 💣 Cañón con ruedas | $250. Dispara a 8 casillas (45 de daño cada 2.5 s) con daño en área: a los cercanos al impacto les hace el 60 % | ✅ |
+| 🏥 Hospital | $200, ocupa 2×2. Cura 4 de vida por segundo a tus tropas a 5 casillas | ✅ |
+| 🧱 Muros | De madera ($15, vida 150) o de piedra ($30, vida 400): bloquean el paso y se unen con los vecinos | ✅ |
+| ⚒️ Herrero | $220, ocupa 2×2. Forja 5 espadas en orden (madera $80, cobre $160, plata $300, oro $500, diamante $800): cada una sube +25 % el golpe del personaje y las tropas | ✅ (🔜 herramientas y costo en materiales) |
 
-### Herrero y mejoras 🔜
+### Herrero y mejoras
+- ✅ El botón **🏗️ Edificios** (debajo de 🛠️) muestra todos los edificios en cuadrados de colores; los que no alcanzan por dinero llevan 🔒. Un Constructor libre los construye y puede hacer varias obras en fila.
 - Entre las herramientas habrá **espadas de 5 niveles**: cada una cuesta más material que la anterior y es mejor.
 - **Al mejorar el herrero mejoran las tropas.**
 - Los demás edificios también se podrán mejorar poco a poco.
