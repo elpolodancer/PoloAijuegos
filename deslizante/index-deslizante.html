@@ -49,7 +49,7 @@
     .datos b { display: block; color: var(--texto); font-size: 1.1rem; font-variant-numeric: tabular-nums; }
     #msg { margin: 0; min-height: 1.3em; text-align: center; font-size: .8rem; }
 
-    #tablero { --n: 3; position: relative; flex: none; width: min(100%, max(220px, calc(100vh - 350px)), 520px); width: min(100%, max(220px, calc(100dvh - 350px)), 520px);
+    #tablero { --n: 3; position: relative; flex: none; width: min(100%, max(220px, calc(100vh - 376px)), 520px); width: min(100%, max(220px, calc(100dvh - 376px)), 520px);
       aspect-ratio: 1 / 1; container-type: inline-size; background: #1a1b20; border: 2px solid var(--borde); border-radius: 16px; padding: 6px;
       box-shadow: 0 6px 0 #0c0d0f, 0 12px 20px rgba(0,0,0,.5); touch-action: none; user-select: none; }
     #fichas { position: relative; width: 100%; height: 100%; }
@@ -63,6 +63,52 @@
       background: rgba(10,10,12,.88); border-radius: 14px; text-align: center; padding: 12px; }
     #victoria h2 { margin: 0; font-size: 1.6rem; }
     #victoria .botones { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+    #victoria { overflow-y: auto; justify-content: safe center; gap: 6px; }
+    #victoria h2 { font-size: 1.4rem; }
+
+    /* La sesión puede tener un nombre largo: se recorta con «…» para no tapar el botón de monedas ni «Menú principal» */
+    #sesion { display: inline-block; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 30px; }
+    #sesion:empty { display: none; }
+
+    /* ----- Estrellas: doradas y moradas (las moradas brillan con reflejo de arcoíris y centellean) ----- */
+    /* El tamaño se cambia con --e en el contenedor (.fila-est o su padre) */
+    .fila-est { display: inline-flex; align-items: center; gap: 3px; position: relative; }
+    .est { position: relative; display: inline-block; flex: none; width: var(--e, 16px); height: var(--e, 16px); }
+    .est::before { content: ""; position: absolute; inset: 0;
+      clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+    .est.vacia::before { background: rgba(255,255,255,.16); }
+    .est.oro { filter: drop-shadow(0 1px 1px rgba(0,0,0,.55)); }
+    .est.oro::before { background: linear-gradient(160deg, #fff6b0 0%, #ffc61f 45%, #c97a00 100%); }
+    .est.mor { filter: drop-shadow(0 0 3px rgba(200,130,255,.95)) drop-shadow(0 0 9px rgba(120,80,255,.6)); }
+    .est.mor::before {
+      background:
+        linear-gradient(115deg, transparent 38%, rgba(255,255,255,.95) 48%, rgba(255,255,255,0) 58%) 150% 0 / 260% 100% no-repeat, /* destello que cruza */
+        linear-gradient(135deg, rgba(255,70,200,.5), rgba(255,225,90,.42), rgba(70,255,170,.42), rgba(70,200,255,.5), rgba(180,70,255,.5), rgba(255,70,200,.5)) 0% 50% / 200% 200%, /* reflejo de arcoíris */
+        radial-gradient(circle at 35% 28%, #f0c8ff, #a52df0 50%, #5a0fa8);                                                                                                   /* base morada */
+      animation: reflejo 2.2s linear infinite; }
+    .est.mor::after { content: ""; position: absolute; inset: -35%; pointer-events: none; /* brillitos alrededor */
+      background:
+        radial-gradient(circle at 12% 22%, #fff 0 1px, transparent 1.7px),
+        radial-gradient(circle at 88% 30%, #ffd1f5 0 1px, transparent 1.7px),
+        radial-gradient(circle at 78% 86%, #c9f3ff 0 1px, transparent 1.7px),
+        radial-gradient(circle at 20% 80%, #fff2a8 0 1px, transparent 1.7px),
+        radial-gradient(circle at 50% 8%, #b8ffd9 0 1px, transparent 1.7px);
+      animation: centelleo 1.3s ease-in-out infinite alternate; }
+    @keyframes reflejo { to { background-position: -60% 0, 100% 50%, 0 0; } }
+    @keyframes centelleo { from { opacity: .2; transform: scale(.85) rotate(0deg); } to { opacity: 1; transform: scale(1.1) rotate(25deg); } }
+    .est.pop { animation: pop .55s cubic-bezier(.2,1.7,.4,1) both; animation-delay: calc(var(--i, 0) * .22s); }
+    @keyframes pop { from { transform: scale(0) rotate(-120deg); opacity: 0; } to { transform: none; opacity: 1; } }
+    /* Estela de brillantina que suelta cada estrella morada al ganar (la crea el JS) */
+    .chispa { position: absolute; width: var(--tam, 3px); height: var(--tam, 3px); border-radius: 50%; pointer-events: none; box-shadow: 0 0 6px 1px rgba(255,255,255,.9); animation: estela .9s ease-out forwards; }
+    @keyframes estela { from { opacity: 1; transform: translate(0,0) scale(1); } to { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(.2); } }
+
+    .meta-estrellas { display: flex; align-items: center; justify-content: center; gap: 8px; --e: 16px; color: var(--suave); font-size: .75rem; }
+    .rejilla-niveles .fila-est { --e: 12px; gap: 2px; }
+    .estrellas-vic { --e: 40px; }
+    .estrellas-vic .fila-est { gap: 8px; }
+    .monedas-vic { font-weight: 800; color: #ffe08a; }
+    .meta-vic { color: var(--suave); font-size: .8rem; }
+    @media (prefers-reduced-motion: reduce) { .est::before, .est::after, .est.pop, .chispa { animation: none !important; } }
     @media (prefers-reduced-motion: reduce) { .ficha { transition: none; } }
 
     /* Celular horizontal: los controles pasan a la izquierda y el tablero ocupa toda la altura */
@@ -81,7 +127,7 @@
     <a class="b3d txt b-gris" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
     <button class="b3d txt b-gris" id="btn-menu" type="button" title="Volver al menú principal" hidden><span class="b-ico">☰</span> Menú principal</button>
   </nav>
-  <div class="hud hud-der"><span class="chip" id="sesion"></span></div>
+  <div class="hud hud-der"><span class="chip" id="monedas" title="Monedas ganadas con las estrellas"></span><span class="chip" id="sesion"></span></div>
   <!-- Nivel anterior / siguiente: solo dentro de un nivel (no en modo libre); cada botón aparece solo si ese nivel existe y está abierto -->
   <div class="nav-nivel" id="nav-nivel" hidden>
     <button class="b3d chico b-azul" id="btn-anterior" type="button" title="Nivel anterior" aria-label="Nivel anterior" hidden><span class="b-ico">◀</span></button>
@@ -111,6 +157,7 @@
     <section class="pantalla" id="juego" hidden>
       <div class="lado">
         <div class="titulo-nivel" id="titulo"></div>
+        <div class="meta-estrellas" id="meta-estrellas" hidden></div>
         <div class="datos">
           <div>Movimientos<b id="movs">0</b></div>
           <div>Tiempo<b id="tiempo">0:00</b></div>

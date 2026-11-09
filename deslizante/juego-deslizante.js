@@ -9,7 +9,8 @@ const $ = (id) => document.getElementById(id);
 
 // ----- Progreso (local primero; se sincroniza con la cuenta de Google si hay internet y sesión) -----
 // { hechos: [true|null por nivel], mejores: { "<número de nivel>": { mov, ms } },
-//   libre: { "<tamaño>": { mov, ms, ganados } } }
+//   libre: { "<tamaño>": { mov, ms, ganados } },
+//   estrellas: { "<número de nivel>": mejor escalón 1 a 6 (ver «Estrellas y monedas» más abajo) } }
 //   mov = menos movimientos y ms = menor tiempo en milisegundos: son dos récords independientes (pueden venir de partidas distintas).
 //   libre = modo libre: mejores marcas y tableros resueltos por tamaño.
 const CLAVE = ID + "_progreso";
@@ -29,8 +30,14 @@ function marcas(o, conGanados) {
   }
   return r;
 }
-const limpiar = (p) => (p && typeof p === "object" && (Array.isArray(p.hechos) || p.mejores || p.libre))
-  ? { hechos: Array.isArray(p.hechos) ? p.hechos : [], mejores: marcas(p.mejores), libre: marcas(p.libre, true) }
+// Escalones de estrellas guardados: { "<nivel>": 1 a 6 }
+function escalones(o) {
+  const r = {};
+  for (const k in obj(o)) { const v = Math.floor(Number(o[k])); if (v >= 1) r[k] = Math.min(6, v); }
+  return r;
+}
+const limpiar = (p) => (p && typeof p === "object" && (Array.isArray(p.hechos) || p.mejores || p.libre || p.estrellas))
+  ? { hechos: Array.isArray(p.hechos) ? p.hechos : [], mejores: marcas(p.mejores), libre: marcas(p.libre, true), estrellas: escalones(p.estrellas) }
   : null; // formato viejo (récords sueltos por tamaño): se ignora
 
 // Tiempo como m:ss.d (con horas si hace falta); ms = milisegundos
@@ -39,7 +46,7 @@ function fmtMs(ms) {
   const sec = String(s % 60).padStart(2, "0"), min = Math.floor(s / 60) % 60, h = Math.floor(s / 3600);
   return (h ? h + ":" + String(min).padStart(2, "0") : min) + ":" + sec + "." + dec;
 }
-let prog = { hechos: [], mejores: {}, libre: {} }, nube = null;
+let prog = { hechos: [], mejores: {}, libre: {}, estrellas: {} }, nube = null;
 try { prog = limpiar(JSON.parse(localStorage.getItem(CLAVE))) || prog; } catch (e) {}
 function guardarProg() {
   try { localStorage.setItem(CLAVE, JSON.stringify(prog)); } catch (e) {}
@@ -65,12 +72,91 @@ function tamanoAbierto(m) {
   return i >= 0 && desbloqueado(i);
 }
 
+// ----- Estrellas y monedas -----
+// 6 escalones por nivel según el tiempo (el cronómetro cuenta desde el primer movimiento; se pide «menos de»):
+//   1 a 3 = estrellas doradas   (1: pasarlo · 2: menos de 2 min · 3: menos de 1 min)
+//   4 a 6 = estrellas moradas, que reemplazan a las doradas una por una (4: menos de 40 s · 5: menos de 30 s · 6: menos de 20 s)
+// MONEDAS[escalón] = total de monedas que el nivel ya pagó al llegar a ese escalón. Cada nivel paga una sola vez por escalón:
+// al mejorar solo se cobra la diferencia (de 15 a 25 = +10; de 25 a 40 = +15).
+const MONEDAS = [0, 8, 15, 25, 40, 50, 80];
+// Tiempos límite en milisegundos por tamaño: LIMITES[tamaño][escalón - 1]. Un tamaño que no esté aquí todavía no da estrellas ni monedas.
+const LIMITES = { 3: [Infinity, 120000, 60000, 40000, 30000, 20000] };
+const conEstrellas = (m) => !!LIMITES[m];
+// Escalón (0 a 6) que corresponde a un tiempo en ese tamaño
+function tierPorTiempo(m, ms) {
+  const L = LIMITES[m];
+  if (!L) return 0;
+  for (let k = 6; k >= 1; k--) if (ms < L[k - 1]) return k;
+  return 1;
+}
+// Mejor escalón del nivel i. Los niveles pasados antes de que existieran las estrellas lo reciben según su mejor tiempo.
+function tierNivel(i) {
+  const m = NIVELES[i].n;
+  if (!conEstrellas(m) || !hecho(i)) return 0;
+  const mk = prog.mejores[i + 1];
+  return Math.max(1, Number(prog.estrellas[i + 1]) || 0, mk ? tierPorTiempo(m, mk.ms) : 0);
+}
+// Monedas = lo que ya pagó cada nivel (todavía no se gastan en nada)
+function totalMonedas() {
+  let s = 0;
+  for (let i = 0; i < NIVELES.length; i++) s += MONEDAS[tierNivel(i)];
+  return s;
+}
+const pintarMonedas = () => { $("monedas").textContent = "💰 " + totalMonedas(); };
+const fmtLimite = (ms) => (ms >= 60000 ? ms / 60000 + " min" : ms / 1000 + " s");
+function metaTexto(m, tier) {
+  if (tier >= 6) return "¡Tienes todas las estrellas!";
+  const sig = tier + 1;
+  if (sig === 1) return "Pasa el nivel para ganar la primera estrella";
+  return "Próxima estrella" + (sig >= 4 ? " morada" : "") + ": menos de " + fmtLimite(LIMITES[m][sig - 1]);
+}
+const textoEstrellas = (t) => (t <= 3 ? t + " de 3 estrellas" : (t - 3) + " de 3 estrellas moradas");
+// 3 estrellas según el escalón: las moradas van reemplazando a las doradas de izquierda a derecha
+function htmlEstrellas(tier, pop) {
+  const mor = Math.max(0, tier - 3), oro = Math.min(tier, 3);
+  let h = "";
+  for (let k = 0; k < 3; k++) {
+    const c = k < mor ? "mor" : k < oro ? "oro" : "vacia";
+    h += '<span class="est ' + c + (pop && c !== "vacia" ? " pop" : "") + '" style="--i:' + k + '"></span>';
+  }
+  return '<span class="fila-est" aria-hidden="true">' + h + "</span>";
+}
+// Estela de brillantina: cada estrella morada de la pantalla de victoria suelta chispas que se van apagando
+function brillantina(caja) {
+  clearInterval(chispas);
+  const moradas = caja.querySelectorAll(".est.mor");
+  if (!moradas.length || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const colores = ["#ffffff", "#ffd1f5", "#c9f3ff", "#fff2a8", "#d9c2ff", "#b8ffd9"];
+  const soltar = () => {
+    if (!caja.isConnected || caja.offsetParent === null) { clearInterval(chispas); return; }
+    const c = caja.getBoundingClientRect();
+    moradas.forEach((s) => {
+      const r = s.getBoundingClientRect();
+      for (let k = 0; k < 2; k++) {
+        const p = document.createElement("i");
+        p.className = "chispa";
+        p.style.left = (r.left - c.left + Math.random() * r.width) + "px";
+        p.style.top = (r.top - c.top + Math.random() * r.height) + "px";
+        p.style.setProperty("--dx", (-18 - Math.random() * 32) + "px");
+        p.style.setProperty("--dy", (8 + Math.random() * 30) + "px");
+        p.style.setProperty("--tam", (2 + Math.random() * 3) + "px");
+        p.style.background = colores[Math.floor(Math.random() * colores.length)];
+        p.addEventListener("animationend", () => p.remove());
+        caja.appendChild(p);
+      }
+    });
+  };
+  soltar();
+  chispas = setInterval(soltar, 220);
+}
+
 // ----- Pantallas -----
 function mostrar(nombre) {
   for (const p of ["inicio", "pantalla-niveles", "pantalla-libre", "juego"]) $(p).hidden = p !== nombre;
   $("btn-menu").hidden = nombre === "inicio"; // «Menú principal» solo fuera del menú principal
-  if (nombre !== "juego") clearInterval(reloj);
+  if (nombre !== "juego") { clearInterval(reloj); clearInterval(chispas); }
   pintarNavNivel();
+  pintarMonedas();
   if (nombre === "inicio") pintarInicio();
   if (nombre === "pantalla-niveles") pintarNiveles();
   if (nombre === "pantalla-libre") pintarLibre();
@@ -112,10 +198,12 @@ function pintarNiveles() {
         const a = document.createElement("span"), c = document.createElement("span");
         a.className = "nivel-num"; a.textContent = String(k + 1);
         c.className = "nivel-t"; c.textContent = mk ? fmtMs(mk.ms) : "–";
-        b.append(a, c);
+        b.append(a);
+        if (conEstrellas(n)) { const t = document.createElement("span"); t.innerHTML = htmlEstrellas(tierNivel(i)); b.append(t.firstElementChild); }
+        b.append(c);
       } else b.textContent = "🔒";
       b.disabled = !libre;
-      b.setAttribute("aria-label", "Nivel " + (k + 1) + " de " + n + "×" + n + (libre ? (mk ? ", mejor tiempo " + fmtMs(mk.ms) : "") : " (bloqueado)"));
+      b.setAttribute("aria-label", "Nivel " + (k + 1) + " de " + n + "×" + n + (libre ? (mk ? ", mejor tiempo " + fmtMs(mk.ms) : "") + (conEstrellas(n) ? ", " + textoEstrellas(tierNivel(i)) : "") : " (bloqueado)"));
       b.addEventListener("click", () => jugarNivel(i));
       r.appendChild(b);
     });
@@ -152,6 +240,7 @@ let modo = "nivel";                                // "nivel" (niveles fijos) o 
 let libreN = 3, libreNum = 0, inicial = [];        // modo libre: tamaño, número de tablero de esta sesión y tablero de partida
 let idx = 0, n = 3, t = [];                        // t[pos] = número de la ficha (0 = hueco)
 let movs = 0, inicio = 0, reloj = null, jugando = false;
+let chispas = null;                                // intervalo de la brillantina de la victoria
 const fichas = new Map();                          // número → elemento
 
 const resuelto = () => t.every((v, i) => (i === t.length - 1 ? v === 0 : v === i + 1));
@@ -219,6 +308,15 @@ function mover(dx, dy) {                            // flechas: mueve la ficha q
 const transcurrido = () => Date.now() - inicio;     // milisegundos desde el primer movimiento
 function mostrarTiempo() { $("tiempo").textContent = fmtMs(transcurrido()); }
 const mejorActual = () => (modo === "libre" ? prog.libre[libreN] : prog.mejores[idx + 1]);
+// Fila de estrellas bajo el título del nivel: las que llevas y qué falta para la siguiente (solo en niveles con estrellas)
+function pintarMetaJuego() {
+  const caja = $("meta-estrellas");
+  const ver = modo === "nivel" && conEstrellas(n);
+  caja.hidden = !ver;
+  if (!ver) return;
+  const t = tierNivel(idx);
+  caja.innerHTML = htmlEstrellas(t) + "<span>" + metaTexto(n, t) + "</span>";
+}
 function pintarMejor() { const m = mejorActual(); $("mejor").textContent = m ? fmtMs(m.ms) : "–"; }
 
 // Tablero al azar con solución garantizada (hueco al final y número par de inversiones)
@@ -245,17 +343,27 @@ async function ganar() {
   const recordMs = !m || ms < m.ms, recordMov = !m || movs < m.mov;
   const nueva = { mov: m ? Math.min(m.mov, movs) : movs, ms: m ? Math.min(m.ms, ms) : ms };
   const primera = !libre && !hecho(idx);
+  // Estrellas y monedas (antes de actualizar los récords): el nivel solo cobra la diferencia entre su mejor escalón anterior y el nuevo
+  const cE = !libre && conEstrellas(n);
+  const antes = cE ? tierNivel(idx) : 0;
+  const nuevoTier = Math.max(antes, cE ? tierPorTiempo(n, ms) : 0);
+  const ganadas = MONEDAS[nuevoTier] - MONEDAS[antes];
   if (libre) prog.libre[libreN] = { ...nueva, ganados: ((prog.libre[libreN] && prog.libre[libreN].ganados) || 0) + 1 };
-  else { prog.mejores[idx + 1] = nueva; prog.hechos[idx] = true; }
+  else { prog.mejores[idx + 1] = nueva; prog.hechos[idx] = true; if (cE) prog.estrellas[idx + 1] = nuevoTier; }
   guardarProg();
   pintarMejor();
+  pintarMonedas();
+  pintarMetaJuego();
   pintarNavNivel();                                 // si este nivel abrió el siguiente, aparece ▶
 
   const l = libre ? {} : NIVELES[idx], hay = !libre && idx + 1 < NIVELES.length;
   const v = document.createElement("div");
   v.id = "victoria";
-  v.innerHTML = "<h2>🎉 ¡Resuelto!</h2><div>⏱️ " + fmtMs(ms) + (recordMs ? " 🏆 ¡mejor tiempo!" : "") +
-    "<br>" + movs + " movimientos" + (recordMov ? " 🏆 ¡récord!" : "") + (l.optimo ? "<br>Mínimo posible: " + l.optimo : "") + (!libre && !hay ? "<br>🏁 ¡Pasaste todos los niveles!" : "") + "</div>";
+  v.innerHTML = "<h2>🎉 ¡Resuelto!</h2>" + (cE ? '<div class="estrellas-vic">' + htmlEstrellas(nuevoTier, true) + "</div>" : "") +
+    "<div>⏱️ " + fmtMs(ms) + (recordMs ? " 🏆 ¡mejor tiempo!" : "") +
+    "<br>" + movs + " movimientos" + (recordMov ? " 🏆 ¡récord!" : "") + (l.optimo ? "<br>Mínimo posible: " + l.optimo : "") + (!libre && !hay ? "<br>🏁 ¡Pasaste todos los niveles!" : "") + "</div>" +
+    (cE ? '<div class="monedas-vic">' + (ganadas > 0 ? "💰 +" + ganadas + " monedas" : "💰 Sin monedas nuevas en este intento") + "</div>" +
+      (nuevoTier < 6 ? '<div class="meta-vic">' + metaTexto(n, nuevoTier) + "</div>" : "") : "");
   const caja = document.createElement("div");
   caja.className = "botones";
   const boton = (texto, clase, fn) => { const b = document.createElement("button"); b.className = "b3d txt " + clase; b.textContent = texto; b.addEventListener("click", fn); caja.appendChild(b); };
@@ -269,6 +377,7 @@ async function ganar() {
   }
   v.appendChild(caja);
   $("tablero").appendChild(v);
+  if (cE) brillantina(v);
 
   if (!primera) { if (libre) $("msg").textContent = "Modo libre: no da puntos al perfil, pero guarda tu mejor marca."; return; } // los puntos se dan solo la primera vez que se pasa un nivel
   const pts = puntosDe(NIVELES[idx].n);
@@ -281,7 +390,7 @@ async function ganar() {
 }
 
 function empezar() {
-  clearInterval(reloj);
+  clearInterval(reloj); clearInterval(chispas);
   const v = $("victoria"); if (v) v.remove();
   if (modo === "libre") {
     n = libreN; t = inicial.slice();
@@ -297,6 +406,7 @@ function empezar() {
   $("msg").textContent = "Toca una ficha en la fila o columna del hueco para deslizarla.";
   construir(); pintar(); pintarMejor();
   pintarNavNivel();
+  pintarMetaJuego();
 }
 function jugarNivel(i) {
   if (!NIVELES[i] || !desbloqueado(i)) return;
@@ -349,14 +459,17 @@ import("../compartido/progreso.js").then((m) => {
         const gana = mejorMarca(x, y);
         lib[k] = { mov: gana.mov, ms: gana.ms, ganados: Math.max((x && Number(x.ganados)) || 0, (y && Number(y.ganados)) || 0) };
       }
-      return { hechos: m.unirHechos(a && a.hechos, b && b.hechos) || [], mejores: mej, libre: lib };
+      const est = { ...(b ? b.estrellas : {}) };                       // estrellas: gana el mayor escalón de cada nivel
+      for (const k in (a ? a.estrellas : {})) est[k] = Math.max(a.estrellas[k], est[k] || 0);
+      return { hechos: m.unirHechos(a && a.hechos, b && b.hechos) || [], mejores: mej, libre: lib, estrellas: est };
     },
     alCambiar: (v) => {
       prog = limpiar(v) || prog;
       if (!$("inicio").hidden) pintarInicio();
       if (!$("pantalla-niveles").hidden) pintarNiveles();
       if (!$("pantalla-libre").hidden) pintarLibre();
-      if (!$("juego").hidden) { pintarMejor(); pintarNavNivel(); }
+      pintarMonedas();
+      if (!$("juego").hidden) { pintarMejor(); pintarNavNivel(); pintarMetaJuego(); }
     },
   });
   nube.guardado(); // sube lo que ya hubiera en el dispositivo

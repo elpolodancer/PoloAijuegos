@@ -49,13 +49,28 @@ No hace falta probar jugadas ni hacer backtracking: la solubilidad depende solo 
 - Se guarda en milisegundos (`ms`). Los récords viejos en segundos (`seg`) se convierten solos.
 - Al sincronizar con la cuenta se conserva el menor tiempo y los menos movimientos de cada nivel.
 
-## Estrellas y monedas (pendiente)
-- Idea: 15 a 30 monedas por nivel según 3 estrellas por tiempo.
-- Falta definir los **tiempos límite** de cada estrella; se decidirán a partir de los mejores tiempos que se vayan viendo en la pantalla de Niveles.
+## Estrellas y monedas
+- **Solo en los niveles 3×3 por ahora**: los demás tamaños no dan estrellas ni monedas hasta calcular sus tiempos. Se activan por tamaño agregando su fila en `LIMITES` (arriba de `juego-deslizante.js`, ahí también se cambian los tiempos). El modo libre no da estrellas ni monedas.
+- Cada nivel tiene **6 escalones** según el tiempo (el cronómetro cuenta desde el primer movimiento y se pide «menos de»). Las 3 estrellas moradas reemplazan a las doradas una por una:
+
+| Escalón | Estrellas | Tiempo | Monedas del nivel (total) |
+|---|---|---|---|
+| 1 | ★ dorada | pasarlo | 8 |
+| 2 | ★★ doradas | menos de 2 min | 15 |
+| 3 | ★★★ doradas | menos de 1 min | 25 |
+| 4 | 1 morada | menos de 40 s | 40 |
+| 5 | 2 moradas | menos de 30 s | 50 |
+| 6 | 3 moradas | menos de 20 s | 80 |
+
+- **Las monedas de un nivel nunca se pagan dos veces**: se guarda el mejor escalón y, al mejorarlo, solo se cobra la diferencia (de 15 a 25 = +10; de 25 a 40 = +15). Los escalones se pueden conseguir por separado en intentos distintos.
+- **Total de monedas** = suma de lo que ya pagó cada nivel (💰 arriba a la derecha). Todavía no se gastan en nada.
+- Dónde se ven: en cada botón de «Niveles» (3×3), bajo el título dentro del nivel (con lo que falta para la siguiente estrella) y en la pantalla de victoria. Las moradas llevan brillo con reflejo de arcoíris, centelleo y estela de brillantina (se apaga con «reducir movimiento» del sistema).
+- Se guarda en `estrellas` dentro de `deslizante_progreso` (`{ "<número de nivel>": escalón 1 a 6 }`) y se sincroniza con la cuenta: de cada nivel gana el escalón mayor. Los niveles 3×3 que ya estaban pasados antes de este sistema reciben sus estrellas según su mejor tiempo.
+- Pendiente: tiempos de los demás tamaños y en qué se gastan las monedas.
 
 ## Puntos y progreso
 - Los puntos se dan **solo la primera vez** que se pasa un nivel: `max(2, redondear(n·n / 4))` (3×3 = 2, 4×4 = 4, 10×10 = 25, 30×30 = 225). Se anotan con `encolarPuntos` y se envían al perfil cuando hay internet y sesión.
-- Progreso en `localStorage` con la clave `deslizante_progreso`: `{ hechos, mejores, libre }`. Se sincroniza con la cuenta (`compartido/progreso.js`): un nivel pasado en cualquier sitio cuenta como pasado, y de cada récord se queda el mejor (ver «Tiempos y récords»).
+- Progreso en `localStorage` con la clave `deslizante_progreso`: `{ hechos, mejores, libre, estrellas }`. Se sincroniza con la cuenta (`compartido/progreso.js`): un nivel pasado en cualquier sitio cuenta como pasado, y de cada récord se queda el mejor (ver «Tiempos y récords»).
 - Los récords sueltos por tamaño de la versión anterior (modo libre 3×3 a 8×8) ya no se usan.
 
 ## Pendiente / ideas
