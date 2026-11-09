@@ -69,4 +69,4 @@ export const JUEGOS = [
 
 // ids (campo «id» de arriba) de los juegos que todavía se están programando. Se ven en la zona «Juegos en desarrollo».
 // Cuando uno esté terminado, quita su id de aquí y pasará solo a la zona «Juegos».
-export const EN_DESARROLLO = ["bloques", "fate", "pasteles", "flappybird"];
+export const EN_DESARROLLO = ["piano", "doodle", "corredor", "dulces", "solitario", "rompeladrillos", "gominolas", "burbujas", "globos", "puzles", "pixelart", "supermercado", "pradera", "rompecabezas", "buscaminas", "restaurantes", "defensa", "guerrerodepuntos", "agario", "botellascolores", "pantano", "jardin", "ladrillos", "estacionamiento", "fusionanumeros", "cadenanumeros", "hoyo", "pelota", "rana", "deslizante", "isla", "minas", "cavar", "paperio", "jetpack", "2048", "ajedrez", "imperio", "fichas", "zuma", "pasteles", "flappybird", "fate", "bloques"];
