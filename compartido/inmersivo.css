@@ -32,6 +32,39 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
 .nav-juego { position: fixed; z-index: 6; top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); display: flex; flex-direction: column; align-items: stretch; }
 .nav-juego .b3d { --t: 40px; border-radius: 12px; font-size: 14px; }
 
+/* ===================================================================================================================
+   ESPECIFICACIÓN DE LOS BOTONES FIJOS (obligatoria en TODOS los juegos)
+   Cada esquina de la ventana tiene un dueño. El juego NO pone sus propios controles encima de estas zonas ni cambia
+   su tamaño, posición o color: así el jugador siempre encuentra «volver» y «modo oscuro» en el mismo lugar.
+   Medidas en px desde el borde de la VENTANA (no del marco del juego), más env(safe-area-inset-*) de muescas/barras.
+
+   | Botón                | Esquina        | Distancia      | Tamaño                    | Color (clase)      | Lo crea / clase        |
+   |----------------------|----------------|----------------|---------------------------|--------------------|------------------------|
+   | 🎮 Juegos (portal)   | arriba-izq.    | 8 arr., 8 izq. | alto 40, ancho auto (≈110)| gris  .b-gris      | <a class="b3d txt b-gris"> en .nav-juego |
+   | ☰ Menú / Pausa       | arriba-izq.    | justo debajo   | alto 40, MISMO ancho      | gris  .b-gris      | <button class="b3d txt b-gris"> en .nav-juego |
+   | 🌙 / ☀️ (madera)     | abajo-izq.     | 10 izq,14 abj. | 40 × 40 (cuadrado)        | oro   .b-oro       | compartido/fondo-madera.js (.btn-fondo) |
+   | ⛶ / ✕ pantalla compl.| abajo-der.     | 10 der,14 abj. | 40 × 40 (cuadrado)        | gris (fijo en JS)  | compartido/pantalla-completa.js |
+   | monedas, 🔊 sonido…  | arriba-der.    | 8 arr., 8 der. | chips 34 alto; botones 40 | gris  .b-gris      | .hud.hud-der (los chips son del juego) |
+
+   • 🎮 Juegos = vuelve al PORTAL (href="../"), siempre visible.
+     ☰ = vuelve al INICIO DEL JUEGO: fuera de partida dice «Menú principal» y va directo al menú del juego; dentro de una
+     partida dice «Pausa» y abre compartido/menu-pausa.js (Continuar / opciones / Salir). Oculto en el menú principal.
+   • 🌙/☀️: 🌙 en madera clara (pasa a oscura), ☀️ en madera oscura. Guarda la elección en localStorage «fondo_madera».
+   • Colores (degradado de arriba a abajo, ver .b-gris y .b-oro más abajo):
+       gris  #d5d9e0 → #8b93a0 → #4f5662        oro  #fff08c → #ffb020 → #a85d00
+   • Zonas RESERVADAS (el juego no pone nada interactivo ahí, ni dentro de su propio marco):
+       arriba-izquierda   ≈ 120 × 92   (🎮 Juegos + ☰)
+       abajo-izquierda    ≈  56 × 60   (🌙/☀️)
+       abajo-derecha      ≈  56 × 60   (⛶)
+       arriba-derecha     lo que ocupe .hud-der (monedas, sonido); en horizontal con poco alto no pasar de 54 px de alto.
+     Si el marco del juego llega hasta la esquina (pantallas 4:3 o verticales), el juego mueve SUS controles hacia
+     adentro (ejemplo: los boosts de zuma/index-zuma.html empiezan a 64 px del borde izquierdo).
+   • Fondo: madera clara (imagenes/fondomaderaclara.webp) u oscura con luna (imagenes/fondomaderaoscura.webp), 688×1540,
+     la pone compartido/fondo-madera.js. El juego no pone fondo propio en html/body.
+   • Sombra/contraste: los botones llevan borde del color oscuro de su degradado y sombra inferior de 5 px (ya incluidos en
+     .b3d); no se les cambia el radio (12 px los de 40 px, 15 px los de 52 px, 18 px los grandes).
+   =================================================================================================================== */
+
 /* Etiqueta tipo píldora (monedas, puntos, nivel…) */
 .chip { display: inline-flex; align-items: center; height: 34px; padding: 0 12px; font-weight: 800; font-size: 15px; color: #fff4c2;
   background: linear-gradient(180deg, #4a4f57, #2b2f35); border: 2px solid #15171a; border-radius: 999px;

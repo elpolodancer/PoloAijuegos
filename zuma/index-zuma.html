@@ -5,19 +5,38 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <title>Zuma</title>
-  <meta name="theme-color" content="#000000" />
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
   <link rel="stylesheet" href="../compartido/estilos.css" />
   <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
     #lienzo { cursor: crosshair; }
     #velo { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; text-align: center; background: rgba(12, 14, 18, .72); }
     #veloTitulo { margin: 0; font-size: 1.6rem; }
-    #veloTexto { margin: 0; color: var(--suave); max-width: 32ch; }
-    #veloNiveles { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-height: 40%; overflow: auto; touch-action: pan-y; }
+    #veloTexto { margin: 0; color: var(--suave); max-width: 36ch; }
+
+    /* Rejilla de botones (niveles o formas) y su paginador */
+    #veloNiveles { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; width: min(100%, 540px); max-height: 44%; overflow: auto; touch-action: pan-y; }
     .nv { padding: 8px 12px; font: inherit; font-weight: 700; color: var(--texto); background: #2a2f38; border: 2px solid #4a515c; border-radius: 12px; cursor: pointer; }
     .nv.bloq { opacity: .4; cursor: default; }
     .nv:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
-    .btn.sec { background: rgba(60, 66, 76, .7); border: 1px solid #5a626b; color: inherit; }
+    #veloPager { display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--suave); font-weight: 700; }
+
+    /* Botones del menú (los mismos botones 3D del resto de los juegos) */
+    .veloAcc { display: flex; flex-direction: column; gap: 8px; width: min(100%, 300px); }
+    .veloAcc .b3d.txt { --t: 46px; width: 100%; height: auto; min-height: var(--t); padding: 6px 14px; white-space: normal; line-height: 1.15; font-size: 16px; }
+    .veloAcc .b3d > span { position: relative; }
+    .veloAcc .b3d > .b-ico { margin-right: 8px; }
+    .veloAcc small { display: block; font-size: 11px; font-weight: 600; opacity: .9; }
+
+    /* Boosts DENTRO del tablero, en la esquina inferior izquierda del marco */
+    /* left: 64px = deja libre la esquina inferior izquierda de la ventana para el botón 🌙/☀️ (en pantallas 4:3 el marco llega hasta ahí) */
+    .boosts { position: absolute; z-index: 3; left: 64px; bottom: 6px; display: flex; align-items: flex-end; gap: 10px; }
+    .boosts .b3d { --t: 46px; }
+    /* Colores brillantes detrás del emoji */
+    .b-amarillo { --c1: #fffbb0; --c2: #ffe81a; --c3: #b89b00; }
+    .b-limon    { --c1: #eaffbf; --c2: #a6ff4d; --c3: #4f9d0c; }
+    @media (max-height: 420px) { .boosts .b3d { --t: 40px; } #veloTitulo { font-size: 1.3rem; } }
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto="horizontal">
@@ -29,25 +48,30 @@
         <h2 id="veloTitulo"></h2>
         <p id="veloTexto"></p>
         <div id="veloNiveles" hidden></div>
-        <button class="btn" id="veloBtn" type="button"></button>
-        <button class="btn sec" id="veloBtn2" type="button" hidden></button>
+        <div id="veloPager" hidden></div>
+        <div id="veloAcc" class="veloAcc"></div>
+      </div>
+      <!-- Boosts: esquina inferior izquierda del tablero (solo se ven durante una partida) -->
+      <div class="boosts" id="boosts" hidden>
+        <button class="b3d b-limon"    id="bTiempo" type="button" aria-label="Detener tiempo"><span class="b-ico">⏳</span><span class="b-info"></span></button>
+        <button class="b3d b-amarillo" id="bMetal"  type="button" aria-label="4 bolas metálicas"><span class="b-ico">🔩</span><span class="b-info"></span></button>
       </div>
     </div>
   </div>
 
+  <!-- Navegación estándar: «🎮 Juegos» y, fuera del menú principal, «☰» (Pausa en partida / Menú principal en las demás pantallas) -->
+  <div class="nav-juego">
+    <a class="b3d txt b-gris" href="../" aria-label="Volver al portal"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btnMenu" type="button" hidden><span class="b-ico">☰</span> <span id="btnMenuTxt">Menú principal</span></button>
+  </div>
+
   <!-- Botones flotantes -->
-  <div class="hud hud-izq">
-    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal"><span class="b-ico">←</span></a>
-    <span class="chip" id="monedas">🪙 0</span>
-  </div>
   <div class="hud hud-der">
+    <span class="chip" id="monedas">🪙 0</span>
     <button class="b3d chico b-gris" id="sonido" type="button" aria-label="Sonido"><span class="b-ico">🔊</span></button>
-  </div>
-  <div class="hud hud-abajo">
-    <button class="b3d b-azul"  id="bTiempo" type="button" aria-label="Detener tiempo"><span class="b-ico">⏳</span><span class="b-info"></span></button>
-    <button class="b3d b-oro"   id="bMetal"  type="button" aria-label="4 bolas metálicas"><span class="b-ico">🔩</span><span class="b-info"></span></button>
   </div>
   <script type="module" src="juego-zuma.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
 </body>
 </html>

@@ -1,22 +1,25 @@
 // Ruta: zuma/validar-zuma.mjs
 // Comprueba que los niveles cumplen las metas de metas-zuma.mjs: los bots de bot-zuma.mjs juegan cada ronda con la física
-// real del juego (logica-zuma.js) y se revisan el porcentaje de partidas ganadas y la duración. También revisa las monedas.
+// real del juego (logica-zuma.js) y se revisan el porcentaje de partidas ganadas y la duración. También revisa que las monedas por estrellas sean válidas.
 // Es determinista: da siempre el mismo resultado para el mismo archivo de niveles.
 // Uso: node zuma/validar-zuma.mjs [partidas=20] [archivo-de-niveles=./niveles-zuma.js]
 import { evaluar } from "./bot-zuma.mjs";
 import { META } from "./metas-zuma.mjs";
 
 const PARTIDAS = Number(process.argv[2]) || 20;
-const { NIVELES, PALETA } = await import(process.argv[3] || "./niveles-zuma.js");
+const { NIVELES, PALETA, MONEDAS_POR_ESTRELLAS } = await import(process.argv[3] || "./niveles-zuma.js");
 
-const rangos = [[15, 20], [25, 30], [35, 40]]; // monedas con 1, 2 y 3 estrellas
 let fallos = 0;
+// Las monedas son iguales en todos los niveles: 3 números enteros positivos que van subiendo (1, 2 y 3 estrellas)
+const M = MONEDAS_POR_ESTRELLAS;
+if (!(Array.isArray(M) && M.length === 3 && M.every((m, i) => Number.isInteger(m) && m > 0 && (i === 0 || m > M[i - 1])))) {
+  fallos++; console.log("FALLA", "MONEDAS_POR_ESTRELLAS debe ser [1 estrella, 2, 3] con enteros positivos que suben:", M);
+}
 const ids = new Set();
 for (const n of NIVELES) {
   if (ids.has(n.id)) { fallos++; console.log("FALLA", n.id, "id repetido"); }
   ids.add(n.id);
-  const monOk = n.monedas?.length === 3 && n.monedas.every((m, i) => m >= rangos[i][0] && m <= rangos[i][1]);
-  if (!monOk) { fallos++; console.log("FALLA", n.id, "monedas fuera de rango:", n.monedas); }
+  if (n.monedas !== undefined) { fallos++; console.log("FALLA", n.id, "ya no lleva «monedas» (se usa MONEDAS_POR_ESTRELLAS)"); }
   if (n.rondas?.length !== 3) { fallos++; console.log("FALLA", n.id, "debe tener 3 rondas"); continue; }
   n.rondas.forEach((ronda, ri) => {
     const m = META[ri], partes = [];
