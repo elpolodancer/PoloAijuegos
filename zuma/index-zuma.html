@@ -59,15 +59,15 @@
     </div>
   </div>
 
-  <!-- Navegación estándar: «🎮 Juegos» y, fuera del menú principal, «☰» (Pausa en partida / Menú principal en las demás pantallas) -->
-  <div class="nav-juego">
-    <a class="b3d txt b-gris" href="../" aria-label="Volver al portal"><span class="b-ico">🎮</span> Juegos</a>
+  <!-- Navegación estándar: «🎮 Juegos» (portal) y, fuera del menú principal, «☰» (Pausa en partida / Menú principal en el resto del mapa y en Infinito) -->
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
     <button class="b3d txt b-gris" id="btnMenu" type="button" hidden><span class="b-ico">☰</span> <span id="btnMenuTxt">Menú principal</span></button>
-  </div>
+  </nav>
 
   <!-- Botones flotantes -->
   <div class="hud hud-der">
-    <span class="chip" id="monedas">🪙 0</span>
+    <span class="chip chip-monedas" id="monedas"><span class="moneda"></span>0</span>
     <button class="b3d chico b-gris" id="sonido" type="button" aria-label="Sonido"><span class="b-ico">🔊</span></button>
   </div>
   <script type="module" src="juego-zuma.js"></script>

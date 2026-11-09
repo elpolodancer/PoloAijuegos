@@ -5,6 +5,8 @@ import { NIVELES, PALETA, ANCHO, ALTO, CENTRO, COSTE_BOOST, MONEDAS_POR_ESTRELLA
 import { encolarPuntos } from "../compartido/cola-puntos.js"; // no usa Firebase: anota puntos aunque no haya internet o sesión
 import { crearMenuPausa } from "../compartido/menu-pausa.js";   // menú de pausa estándar (☰)
 import { FORMAS, TOTAL_FORMAS } from "./formas-zuma.js";
+import { montarMapa } from "../compartido/mapa-niveles.js";   // menú principal estándar: México con agua, mundo y listas de niveles
+import { crearEtapas } from "../compartido/etapas-mapa.js";
 
 // ----- Ajustes -----
 const ID = "zuma";
@@ -13,7 +15,10 @@ const CLAVE = "zuma_progreso_v2"; // { monedas, boosts:{tiempo,metal}, niveles:{
 const VEL_METAL = 900;            // px/s de las bolas metálicas
 const VEL_DISPARO = 720;          // px/s de la bola disparada
 const RECARGA = 0.28;             // segundos entre disparos
-const POR_PAGINA = 50;            // botones por página en las listas de niveles y de formas
+const POR_PAGINA = 50;            // botones por página en la lista de formas (Infinito)
+// Etapas del mapa: cada estado tiene 10 niveles. NIVELES[i] es el nivel i + 1 del mapa, así que los niveles se escriben en el orden de ETAPAS.estados
+// (hoy solo hay los 10 de Aguascalientes; los siguientes 10 serán el segundo estado de la lista, etc.). No cambies este orden después de publicar.
+const ETAPAS = crearEtapas({ porEtapa: 10, primeros: ["ags"] });
 
 const $ = (id) => document.getElementById(id);
 const cv = $("lienzo"), g = cv.getContext("2d");
@@ -54,8 +59,7 @@ function aplicarNube(v) { // la nube trajo algo nuevo: se toma y se repinta
   if (!v) return;
   datos = { ...datos, ...v, boosts: { ...datos.boosts, ...(v.boosts || {}) } };
   refrescarBarra();
-  if (pantalla === "principal") menuPrincipal(); // en un menú: se repinta con lo nuevo
-  else if (pantalla === "niveles") pantallaNiveles();
+  if (pantalla === "principal") mapa.refrescar(); // en el mapa: se repinta con lo nuevo
   else if (pantalla === "infinito") pantallaInfinito();
 }
 if (datos.gastadas === undefined) datos.gastadas = gastadasDe(datos);
@@ -196,7 +200,7 @@ function dibujarRana(ang) {
 let p = null, tiros = [], chispas = [], textos = [], ang = -Math.PI / 2, carga = 0, sig = 0, recarga = 0, ultimo = 0, enMarcha = false, metal = 0;
 let nivelIdx = 0, rondaIdx = 0;
 // Pantalla actual: "principal" | "niveles" | "infinito" | "partida" | "resultado". modo: "nivel" (3 rondas fijas) o "infinito" (rondas sin fin en una forma)
-let pantalla = "principal", modo = "nivel", pausado = false, pagNiveles = 0, pagFormas = 0;
+let pantalla = "principal", modo = "nivel", pausado = false, pagFormas = 0;
 let formaIdx = 0, rondaInf = 0, puntosInf = 0, cfgInf = null; // modo Infinito: forma elegida, ronda en curso (0 = la 1.ª), puntos de las rondas ya superadas y ajustes de la ronda
 // Formas que abre pasar la ronda 1 del nivel i: las FORMAS (menos la 1.ª, que ya está abierta) se reparten en partes iguales entre los niveles, en orden
 const formasDelNivel = (i) => {
@@ -210,7 +214,7 @@ const desbloqueado = (i) => i === 0 || estrellasDe(i - 1) >= 1; // con 1 estrell
 const estrellasTxt = (n) => "★".repeat(n) + "☆".repeat(3 - n);
 
 function refrescarBarra() {
-  $("monedas").textContent = "🪙 " + datos.monedas;
+  $("monedas").innerHTML = '<span class="moneda"></span>' + datos.monedas; // chip dorado estándar (la moneda se dibuja con CSS)
   const jugando = !!p && p.estado === "jugando";
   $("boosts").hidden = !jugando; // los boosts solo se ven durante una partida
   for (const [k, id, ico, nom] of [["tiempo", "bTiempo", "⏱", "Detener tiempo"], ["metal", "bMetal", "⚙️", "4 metálicas"]]) {
@@ -245,19 +249,24 @@ $("bMetal").addEventListener("click", () => usarBoost("metal"));
 
 // ----- Navegación y pausa estándar -----
 function actualizarNav() {
-  $("btnMenu").hidden = pantalla === "principal"; // en el menú principal no se muestra el ☰
+  const enMapa = mapa.abierto();
+  $("btnMenu").hidden = enMapa && mapa.esPrincipal(); // en la vista principal del mapa no se muestra el ☰
   $("btnMenuTxt").textContent = pantalla === "partida" ? "Pausa" : "Menú principal";
+  document.querySelector(".hud-der").hidden = enMapa; // el mapa no usa monedas ni sonido
 }
 const pausa = crearMenuPausa({
   puedeAbrir: () => pantalla === "partida" && !!p && p.estado === "jugando",
   alAbrir: () => { pausado = true; rumorOff(); },
   alContinuar: () => { pausado = false; ultimo = performance.now(); if (p && p.estado === "jugando") rumorOn(); },
   extras: () => [{ icono: "🔄", texto: "Reiniciar ronda", clase: "b-azul", alElegir: () => { pausado = false; empezar(); } }],
+  textoSalir: "Salir al mapa",
   alSalir: () => { pausado = false; menuPrincipal(); },
   ayudaSalir: "Pierdes el avance de esta ronda",
 });
 $("btnMenu").addEventListener("click", () => {
-  if (pantalla === "partida") pausa.abrir(); else if (pantalla !== "principal") menuPrincipal();
+  if (pantalla === "partida") pausa.abrir();
+  else if (mapa.abierto()) mapa.principal(); // dentro del mapa: vuelve a la vista principal
+  else menuPrincipal();
 });
 
 // ----- Partida -----
@@ -282,6 +291,7 @@ function empezar() {
   tiros = []; chispas = []; textos = []; recarga = 0; metal = 0; pausado = false;
   carga = colorDisparo(p); sig = colorDisparo(p);
   $("velo").hidden = true;
+  if (mapa.abierto()) mapa.cerrar();
   pantalla = "partida";
   actualizarNav();
   rumorOn();
@@ -358,35 +368,43 @@ function siguienteNivel() {
   return i < 0 ? 0 : i;
 }
 
-function menuPrincipal() {
-  p = null; modo = "nivel"; pausado = false;
-  const i = siguienteNivel();
-  const pasados = NIVELES.filter((_, k) => estrellasDe(k) > 0).length;
-  const abiertas = FORMAS.filter(formaAbierta).length;
-  velo({
-    pantalla: "principal", titulo: "🐸 Zuma",
-    texto: "Niveles pasados: " + pasados + "/" + NIVELES.length + " · Formas: " + abiertas + "/" + TOTAL_FORMAS,
-    acciones: [
-      { icono: "▶", txt: "Continuar", ayuda: NIVELES[i].nombre, clase: "b-verde", fn: () => { audio(); iniciarNivel(i); } },
-      { icono: "🗺️", txt: "Niveles", clase: "b-azul", fn: () => { pagNiveles = Math.floor(i / POR_PAGINA); pantallaNiveles(); } },
-      { icono: "♾️", txt: "Infinito", clase: "b-morado", fn: () => { pantallaInfinito(); } },
-    ],
-  });
+// ----- Mapa (menú principal estándar: compartido/mapa-niveles.js) -----
+// Progreso para el mapa: los niveles se abren en orden y basta 1 estrella para pasar uno, así que «hecho» = cuántos niveles seguidos ya pasaste.
+function progresoMapa() {
+  let hecho = 0;
+  while (hecho < NIVELES.length && estrellasDe(hecho) >= 1) hecho++;
+  return { hecho, max: Math.min(NIVELES.length, hecho + 1) };
 }
+const CLASE_ESTRELLAS = ["b-azul", "b-verde", "b-morado", "b-oro"]; // sin estrellas · 1 · 2 · 3
+const mapa = montarMapa({
+  prefijo: "zuma",
+  etapas: ETAPAS,
+  progreso: progresoMapa,
+  jugarNivel: (n) => { if (!NIVELES[n - 1]) return; audio(); iniciarNivel(n - 1); },
+  nivelContinuar: () => siguienteNivel() + 1,
+  infoNivel: (n) => {
+    const e = NIVELES[n - 1] ? estrellasDe(n - 1) : 0;
+    return { sub: estrellasTxt(e), clase: CLASE_ESTRELLAS[e], aria: e + (e === 1 ? " estrella" : " estrellas"), sinMarca: true }; // las estrellas ya dicen si lo pasaste
+  },
+  leyenda: "Las estrellas son las rondas que pasaste (★ ronda 1 · ★★ ronda 2 · ★★★ ronda 3). Con 1 estrella se abre el siguiente nivel. Color: 🟦 sin estrellas · 🟩 1 · 🟪 2 · 🟨 3.",
+  botonesExtra: [{ icono: "♾️", texto: "Infinito", clase: "b-morado", fn: () => { mapa.cerrar(); pantallaInfinito(); } }],
+  avisoPrincipal: () => {
+    const pasados = NIVELES.filter((_, k) => estrellasDe(k) > 0).length;
+    return "Niveles pasados: " + pasados + "/" + NIVELES.length + " · Formas: " + FORMAS.filter(formaAbierta).length + "/" + TOTAL_FORMAS + (pasados >= NIVELES.length ? " · ¡Pronto habrá más estados!" : "");
+  },
+  alCambiarVista: () => actualizarNav(),
+});
 
-function pantallaNiveles() {
-  const total = Math.max(1, Math.ceil(NIVELES.length / POR_PAGINA));
-  pagNiveles = Math.min(Math.max(0, pagNiveles), total - 1);
-  const ini = pagNiveles * POR_PAGINA;
-  const rejilla = NIVELES.slice(ini, ini + POR_PAGINA).map((n, k) => {
-    const i = ini + k, ok = desbloqueado(i);
-    return { txt: (i + 1) + " " + (ok ? estrellasTxt(estrellasDe(i)) : "🔒"), bloq: !ok, titulo: n.nombre, fn: () => { audio(); iniciarNivel(i); } };
-  });
-  velo({
-    pantalla: "niveles", titulo: "🗺️ Niveles", texto: "Pasa la ronda 1 de un nivel para abrir el siguiente", rejilla,
-    pager: total > 1 ? { pag: pagNiveles, total, ir: (n) => { pagNiveles = n; pantallaNiveles(); } } : null,
-    acciones: [{ icono: "↩", txt: "Menú principal", clase: "b-gris", fn: menuPrincipal }],
-  });
+// Abre el mapa. Si vienes de un nivel, se muestra la lista de niveles de su estado; al pasar el último de la etapa, la vista principal para VER SUBIR el agua.
+function menuPrincipal() {
+  const deNivel = modo === "nivel" && !!p;
+  p = null; modo = "nivel"; pausado = false;
+  $("velo").hidden = true;
+  pantalla = "principal";
+  if (deNivel) mapa.abrir(nivelIdx + 1, (nivelIdx + 1) % ETAPAS.porEtapa === 0 && estrellasDe(nivelIdx) >= 1);
+  else mapa.abrir();
+  actualizarNav();
+  refrescarBarra();
 }
 
 function pantallaInfinito() {
@@ -406,7 +424,7 @@ function pantallaInfinito() {
     pantalla: "infinito", titulo: "♾️ Infinito",
     texto: "Elige una forma de banda (R = rondas que superaste). Las demás se abren al pasar la ronda 1 de cada nivel.", rejilla,
     pager: total > 1 ? { pag: pagFormas, total, ir: (n) => { pagFormas = n; pantallaInfinito(); } } : null,
-    acciones: [{ icono: "↩", txt: "Menú principal", clase: "b-gris", fn: menuPrincipal }],
+    acciones: [{ icono: "↩", txt: "Mapa", clase: "b-gris", fn: menuPrincipal }],
   });
 }
 
@@ -432,10 +450,10 @@ async function gano() {
   const txt = estrellasTxt(rec.estrellas) + " · " + p.puntos + " pts" + (ganadas ? " · +" + ganadas + " 🪙" : "") + forma;
   if (rondaIdx < 2) {
     velo({
-      titulo: "⭐ ¡Ronda " + est + " superada!", texto: txt + (est === 1 ? " · ¡Siguiente nivel desbloqueado!" : ""),
+      titulo: "⭐ ¡Ronda " + est + " superada!", texto: txt + (est === 1 && nivelIdx < NIVELES.length - 1 ? " · ¡Siguiente nivel desbloqueado!" : ""),
       acciones: [
         { icono: "▶", txt: "Ronda " + (est + 1), ayuda: "más difícil", clase: "b-verde", fn: () => { rondaIdx++; empezar(); } },
-        { icono: "🏠", txt: "Menú", clase: "b-gris", fn: menuPrincipal },
+        { icono: "🗺️", txt: "Mapa", clase: "b-gris", fn: menuPrincipal },
       ],
     });
   } else {
@@ -444,7 +462,7 @@ async function gano() {
       titulo: "🌟 ¡Nivel perfecto!", texto: txt,
       acciones: [
         { icono: "▶", txt: hay ? "Siguiente nivel" : "Jugar otra vez", clase: "b-verde", fn: () => iniciarNivel(hay ? nivelIdx + 1 : nivelIdx) },
-        { icono: "🏠", txt: "Menú", clase: "b-gris", fn: menuPrincipal },
+        { icono: "🗺️", txt: "Mapa", clase: "b-gris", fn: menuPrincipal },
       ],
     });
   }
@@ -466,7 +484,7 @@ function ganoInfinito() {
     titulo: "✅ Ronda " + n + " superada", texto: f.nombre + " · " + puntosInf + " pts · tu mejor: " + rec.rondas + " rondas",
     acciones: [
       { icono: "▶", txt: "Ronda " + (n + 1), ayuda: "más difícil", clase: "b-verde", fn: () => { rondaInf++; cfgInf = rondaInfinita(f, rondaInf); empezar(); } },
-      { icono: "🏠", txt: "Menú", clase: "b-gris", fn: menuPrincipal },
+      { icono: "🗺️", txt: "Mapa", clase: "b-gris", fn: menuPrincipal },
     ],
   });
 }
@@ -485,7 +503,7 @@ function perdio() {
       acciones: [
         { icono: "🔁", txt: "Jugar otra vez", clase: "b-verde", fn: () => iniciarInfinito(formaIdx) },
         { icono: "♾️", txt: "Elegir forma", clase: "b-morado", fn: pantallaInfinito },
-        { icono: "🏠", txt: "Menú", clase: "b-gris", fn: menuPrincipal },
+        { icono: "🗺️", txt: "Mapa", clase: "b-gris", fn: menuPrincipal },
       ],
     });
     return;
@@ -495,7 +513,7 @@ function perdio() {
     texto: "Ronda " + (rondaIdx + 1) + " de 3 · " + estrellasTxt(estrellasDe(nivelIdx)) + (rondaIdx ? " (conservas tus estrellas)" : ""),
     acciones: [
       { icono: "🔁", txt: "Reintentar ronda " + (rondaIdx + 1), clase: "b-verde", fn: empezar },
-      { icono: "🏠", txt: "Menú", clase: "b-gris", fn: menuPrincipal },
+      { icono: "🗺️", txt: "Mapa", clase: "b-gris", fn: menuPrincipal },
     ],
   });
 }
