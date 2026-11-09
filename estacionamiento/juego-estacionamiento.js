@@ -325,7 +325,10 @@ function tocarAuto(c) {
     aviso("La vía de salida está ocupada, espera un momento");
     return;
   }
-  Object.assign(c, plan, { estado: 1, t0: T, liberado: false });
+  // Su hitbox desaparece AL INSTANTE: las casillas quedan libres en cuanto se toca, aunque el auto siga animándose hacia la salida.
+  // Así se puede tocar de inmediato a los autos que estorbaba (la vía de salida sigue protegida por viaOcupada).
+  Object.assign(c, plan, { estado: 1, t0: T, liberado: true });
+  celdasDe(c).forEach(([x, y]) => { if (occ[y * N + x] === c.id) occ[y * N + x] = -1; });
   movs++;
 }
 

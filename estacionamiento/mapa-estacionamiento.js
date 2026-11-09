@@ -49,7 +49,7 @@ const ESTILO = `
 .m-acciones{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
 .m-acciones .b3d{--t:42px;font-size:15px}
 .m-cuerpo{flex:1 1 0;min-height:0;display:flex;flex-direction:column;align-items:center;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 2px 12px}
-.m-cuerpo>svg{display:block;width:100%;flex:1 1 auto;min-height:0;max-height:100%}
+.m-cuerpo>svg{display:block;width:100%;flex:1 1 auto;min-height:0;max-height:100%;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
 .m-cuerpo.m-mundo>svg{flex:none;height:auto;max-height:42vh}
 .m-leyenda{margin:0 0 8px;font-size:.78rem;color:#5b6b7c;text-align:center}
 .m-rej{display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:12px 10px;width:100%;max-width:880px;padding:6px 6px 14px}
@@ -101,6 +101,90 @@ function accesible(nodo, etiqueta, accion) {
 function etiqueta(svg, x, y, texto, tam) { // texto con borde blanco para que se lea sobre el agua
   const t = el("text", { x, y, "text-anchor": "middle", "font-size": tam, "font-weight": 700, fill: TINTA, "paint-order": "stroke", stroke: "#fff", "stroke-width": 4, "stroke-linejoin": "round", "pointer-events": "none" }, svg);
   t.textContent = texto;
+}
+
+// ---------- Zoom y desplazamiento de un mapa SVG ----------
+// Rueda / pellizco / botones ➕➖ para acercar; arrastrar para mover. Un toque corto sigue funcionando en los puntos.
+// base = { x, y, w, h } es el viewBox completo (zoom 1, no se puede alejar más). alZoom(k) avisa del zoom actual (1..MAX_ZOOM).
+const MAX_ZOOM = 10;
+const ZOOM_ESTADO_ACTUAL = 3; // cuánto se acerca el mapa de México al estado actual al abrirlo (1 = México entero)
+function hacerZoomable(svg, base, alZoom) {
+  let vb = { ...base };
+  const dedos = new Map();
+  let movido = false, inicio = null;
+  const zoomActual = () => base.w / vb.w;
+  function aplicar() {
+    vb.x = acotar(vb.x, base.x, base.x + base.w - vb.w);
+    vb.y = acotar(vb.y, base.y, base.y + base.h - vb.h);
+    svg.setAttribute("viewBox", vb.x + " " + vb.y + " " + vb.w + " " + vb.h);
+    if (alZoom) alZoom(zoomActual());
+  }
+  // pantalla → coordenadas del SVG (el viewBox se ajusta con «meet», así que puede haber franjas vacías a los lados)
+  function aSvg(cx, cy) {
+    const r = svg.getBoundingClientRect();
+    const k = Math.min(r.width / vb.w, r.height / vb.h) || 1;
+    const ox = (r.width - vb.w * k) / 2, oy = (r.height - vb.h * k) / 2;
+    return { x: vb.x + (cx - r.left - ox) / k, y: vb.y + (cy - r.top - oy) / k, k };
+  }
+  function zoom(f, cx, cy) {
+    const nz = acotar(zoomActual() * f, 1, MAX_ZOOM), ff = nz / zoomActual();
+    if (ff === 1) return;
+    const r = svg.getBoundingClientRect();
+    const p = aSvg(cx == null ? r.left + r.width / 2 : cx, cy == null ? r.top + r.height / 2 : cy);
+    const w = base.w / nz, hh = base.h / nz;
+    vb = { x: p.x - (p.x - vb.x) * (w / vb.w), y: p.y - (p.y - vb.y) * (hh / vb.h), w, h: hh };
+    aplicar();
+  }
+  // Va a un punto (cx, cy en coordenadas del SVG) con el zoom k; con animar = true se desliza suave (quieto si «reducir movimiento»)
+  let anim = 0;
+  const parar = () => { if (anim) cancelAnimationFrame(anim); anim = 0; };
+  function irA(cx, cy, k, animar) {
+    parar();
+    k = acotar(k, 1, MAX_ZOOM);
+    const w = base.w / k, hh = base.h / k;
+    const fin = { x: acotar(cx - w / 2, base.x, base.x + base.w - w), y: acotar(cy - hh / 2, base.y, base.y + base.h - hh), w, h: hh };
+    if (!animar || quieto()) { vb = fin; aplicar(); return; }
+    const ini = { ...vb }, t0 = performance.now(), dur = 700;
+    const paso = (ahora) => {
+      const f = Math.min(1, (ahora - t0) / dur), e = 1 - Math.pow(1 - f, 3); // frena al llegar
+      vb = { x: ini.x + (fin.x - ini.x) * e, y: ini.y + (fin.y - ini.y) * e, w: ini.w + (fin.w - ini.w) * e, h: ini.h + (fin.h - ini.h) * e };
+      aplicar();
+      anim = f < 1 ? requestAnimationFrame(paso) : 0;
+    };
+    anim = requestAnimationFrame(paso);
+  }
+  svg.addEventListener("wheel", (e) => { parar(); e.preventDefault(); zoom(e.deltaY < 0 ? 1.25 : 1 / 1.25, e.clientX, e.clientY); }, { passive: false });
+  svg.addEventListener("pointerdown", (e) => {
+    parar(); // si la persona toca el mapa, se cancela el acercamiento automático
+    dedos.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (dedos.size === 1) { movido = false; inicio = { x: e.clientX, y: e.clientY }; } else movido = true;
+  });
+  svg.addEventListener("pointermove", (e) => {
+    const v = dedos.get(e.pointerId);
+    if (!v) return;
+    const nuevo = { x: e.clientX, y: e.clientY };
+    if (dedos.size === 1) {
+      if (!movido && Math.hypot(nuevo.x - inicio.x, nuevo.y - inicio.y) > 8) { movido = true; try { svg.setPointerCapture(e.pointerId); } catch (_) {} }
+      if (movido) {
+        const k = aSvg(0, 0).k;
+        vb.x -= (nuevo.x - v.x) / k; vb.y -= (nuevo.y - v.y) / k;
+        aplicar();
+      }
+    } else if (dedos.size === 2) {
+      const otro = [...dedos.entries()].find(([id]) => id !== e.pointerId)[1];
+      const d0 = Math.hypot(v.x - otro.x, v.y - otro.y) || 1, d1 = Math.hypot(nuevo.x - otro.x, nuevo.y - otro.y) || 1;
+      const k = aSvg(0, 0).k;
+      vb.x -= ((nuevo.x - v.x) / 2) / k; vb.y -= ((nuevo.y - v.y) / 2) / k; // el punto medio también arrastra
+      zoom(d1 / d0, (nuevo.x + otro.x) / 2, (nuevo.y + otro.y) / 2);
+    }
+    dedos.set(e.pointerId, nuevo);
+  });
+  const soltar = (e) => { dedos.delete(e.pointerId); if (!dedos.size) setTimeout(() => { movido = false; }, 0); };
+  svg.addEventListener("pointerup", soltar);
+  svg.addEventListener("pointercancel", soltar);
+  // Si el toque fue en realidad un arrastre o pellizco, no cuenta como clic sobre un punto o botón del mapa
+  svg.addEventListener("click", (e) => { if (movido) { e.stopPropagation(); e.preventDefault(); } }, true);
+  return { irA, mas: () => { parar(); zoom(1.4); }, menos: () => { parar(); zoom(1 / 1.4); }, centrar: () => irA(base.x + base.w / 2, base.y + base.h / 2, 1, true) };
 }
 
 // ---------- Memoria de dónde estaba el agua ----------
@@ -211,6 +295,13 @@ export function montarMapa(o) {
     acciones.appendChild(b);
     return b;
   }
+  // Botones ➕ ➖ 🎯 del mapa (además de rueda, pellizco y arrastre)
+  function botonesZoom(z) {
+    const mk = (icono, titulo, fn) => { const b = boton("", icono, "b-azul", fn); b.title = titulo; b.setAttribute("aria-label", titulo); return b; };
+    mk("➕", "Acercar el mapa", z.mas);
+    mk("➖", "Alejar el mapa", z.menos);
+    mk("🎯", "Ver todo el mapa", z.centrar).classList.replace("b-azul", "b-oro");
+  }
   function botonContinuar() {
     const p = prog();
     boton("Continuar · nivel " + p.max, "▶", "b-verde", () => o.jugarNivel(p.max));
@@ -254,7 +345,8 @@ export function montarMapa(o) {
     }
 
     const P = proyector(-118.8, -86.2, 33.2, 14, 20, 0.9);
-    const svg = el("svg", { viewBox: "-6 0 " + (P.w + 12) + " " + P.h, role: "img", "aria-label": "México: " + p.estadosHechos + " de " + NUM_ESTADOS + " estados completados" }, cuerpo);
+    const baseMx = { x: -6, y: 0, w: P.w + 12, h: P.h };
+    const svg = el("svg", { viewBox: baseMx.x + " " + baseMx.y + " " + baseMx.w + " " + baseMx.h, role: "img", "aria-label": "México: " + p.estadosHechos + " de " + NUM_ESTADOS + " estados completados" }, cuerpo);
     const dm = trazo(MEXICO, P);
     el("path", { d: dm, fill: SOMBRA, transform: "translate(0 5)" }, svg);
     el("path", { d: dm, fill: "#fff" }, svg);
@@ -263,10 +355,13 @@ export function montarMapa(o) {
     aguas.push(crearAgua(svg, "agua" + ++idAgua, dm, { x0: -6, x1: P.w + 6, yBase: P.p(0, 14.4)[1], yTope: P.p(0, 32.8)[1], fondo: P.h + 30, amp: 4.5 }, objetivo, desde));
     el("path", { d: dm, fill: "none", stroke: BORDE, "stroke-width": 2, "stroke-linejoin": "round", "pointer-events": "none" }, svg);
 
+    const puntos = []; // para que los puntos conserven su tamaño en pantalla al acercar
     ESTADOS_ORDEN.forEach((e, i) => {
       const [x, y] = P.p(e.lon, e.lat);
       const hecho = i < p.estadosHechos, abierto = i * NIVELES_POR_ETAPA + 1 <= p.max, esActual = i === p.estadoActual && !p.mexicoCompleto;
+      if (!abierto && !hecho) return; // los estados que aún no se desbloquean ni se dibujan
       const g = el("g", { class: "m-punto" }, svg);
+      puntos.push({ g, x, y });
       if (esActual) el("circle", { cx: x, cy: y, r: 8, fill: "none", stroke: COLOR_ACTUAL, "stroke-width": 2.5, class: "m-pulso", "pointer-events": "none" }, g);
       el("circle", { cx: x, cy: y, r: esActual ? 8 : 6, fill: esActual ? COLOR_ACTUAL : hecho ? COLOR_HECHO : abierto ? "#fff" : COLOR_BLOQUEADO, stroke: abierto || hecho ? COLOR_HECHO : "#fff", "stroke-width": 2, "pointer-events": "none" }, g);
       el("circle", { cx: x, cy: y, r: 15, fill: "transparent", class: "m-zona" }, g);
@@ -274,8 +369,17 @@ export function montarMapa(o) {
         if (abierto) ir("estado", i);
         else info.textContent = "🔒 " + e.nombre + ": primero termina " + ESTADOS_ORDEN[Math.max(0, i - 1)].nombre + ".";
       });
-      if (esActual) etiqueta(svg, x, y - 13, e.nombre, 15);
+      if (esActual) etiqueta(g, x, y - 13, e.nombre, 15);
     });
+    const z = hacerZoomable(svg, baseMx, (k) => {
+      for (const q of puntos) q.g.setAttribute("transform", "translate(" + q.x + " " + q.y + ") scale(" + (1 / k).toFixed(4) + ") translate(" + -q.x + " " + -q.y + ")");
+    });
+    botonesZoom(z);
+    // Al entrar al mapa, la vista se acerca sola al estado donde vas (con México completo se deja entero)
+    if (!p.mexicoCompleto) {
+      const e = ESTADOS_ORDEN[p.estadoActual], [ex, ey] = P.p(e.lon, e.lat);
+      z.irA(ex, ey, ZOOM_ESTADO_ACTUAL, true);
+    }
   }
 
   // --- vista: un estado ---
@@ -299,6 +403,7 @@ export function montarMapa(o) {
     cuerpo.classList.add("m-mundo");
 
     const P = proyector(-170, 180, 84, -57, 2, 1);
+    const baseMu = { x: 0, y: 0, w: P.w, h: P.h };
     const svg = el("svg", { viewBox: "0 0 " + P.w + " " + P.h, role: "img", "aria-label": "Mundo: " + p.paisesHechos + " de " + NUM_PAISES + " países completados" }, cuerpo);
     const d = CONTINENTES.map((c) => trazo(c, P)).join("");
     el("path", { d, fill: SOMBRA, transform: "translate(0 2.5)" }, svg);
@@ -309,10 +414,12 @@ export function montarMapa(o) {
     for (const l of LAGOS) el("path", { d: trazo(l, P), fill: "#fff", "pointer-events": "none" }, svg);
     el("path", { d, fill: "none", stroke: BORDE, "stroke-width": 0.9, "stroke-linejoin": "round", "pointer-events": "none" }, svg);
 
+    botonesZoom(hacerZoomable(svg, baseMu));
     const lista = h("div", "m-paises");
     PAISES_ORDEN.forEach((codigo, i) => {
       const hechos = acotar(p.hecho - basePais(i), 0, NIVELES_POR_ETAPA);
       const abierto = basePais(i) + 1 <= p.max;
+      if (!abierto) return; // los países sin desbloquear no aparecen en la lista
       const b = h("button", "m-pais" + (hechos >= NIVELES_POR_ETAPA ? " m-hecho" : "") + (abierto && hechos < NIVELES_POR_ETAPA && i === p.paisActual ? " m-actual" : ""));
       b.type = "button";
       b.disabled = !abierto;

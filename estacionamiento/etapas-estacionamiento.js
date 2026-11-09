@@ -5,27 +5,28 @@
 // cambiar el orden cambia qué estado/país corresponde a cada nivel; los niveles en sí no cambian).
 import { NIVELES_MEXICO, NIVELES_POR_ETAPA, TOTAL_NIVELES } from "./niveles-estacionamiento.js";
 
-// ----- Estados: de SUR a NORTE por la latitud de su capital, para que el agua que sube por México
-// (de abajo hacia arriba) coincida más o menos con los estados que el jugador ya terminó. lon/lat = capital (puntos del mapa). -----
+// ----- Estados: empiezan por el sureste (abajo a la derecha del mapa: Quintana Roo, Yucatán, Campeche, Tabasco, Chiapas, Oaxaca, Guerrero,
+// Estado de México, CDMX, Puebla, Tlaxcala) y siguen de SUR a NORTE (por la latitud de su capital) hasta Baja California, para que el agua que sube
+// por México coincida más o menos con los estados que el jugador ya terminó. lon/lat = capital (puntos del mapa). -----
 export const ESTADOS_ORDEN = [
+  { id: "qroo", nombre: "Quintana Roo", lon: -88.30, lat: 18.50 },
+  { id: "yuc", nombre: "Yucatán", lon: -89.62, lat: 20.97 },
+  { id: "camp", nombre: "Campeche", lon: -90.53, lat: 19.85 },
+  { id: "tab", nombre: "Tabasco", lon: -92.93, lat: 17.99 },
   { id: "chis", nombre: "Chiapas", lon: -93.11, lat: 16.75 },
   { id: "oax", nombre: "Oaxaca", lon: -96.73, lat: 17.07 },
   { id: "gro", nombre: "Guerrero", lon: -99.50, lat: 17.55 },
-  { id: "tab", nombre: "Tabasco", lon: -92.93, lat: 17.99 },
-  { id: "qroo", nombre: "Quintana Roo", lon: -88.30, lat: 18.50 },
-  { id: "mor", nombre: "Morelos", lon: -99.23, lat: 18.92 },
-  { id: "pue", nombre: "Puebla", lon: -98.20, lat: 19.04 },
-  { id: "col", nombre: "Colima", lon: -103.72, lat: 19.24 },
   { id: "mex", nombre: "Estado de México", lon: -99.66, lat: 19.29 },
-  { id: "tlax", nombre: "Tlaxcala", lon: -98.24, lat: 19.32 },
   { id: "cdmx", nombre: "Ciudad de México", lon: -99.13, lat: 19.43 },
+  { id: "pue", nombre: "Puebla", lon: -98.20, lat: 19.04 },
+  { id: "tlax", nombre: "Tlaxcala", lon: -98.24, lat: 19.32 },
+  { id: "mor", nombre: "Morelos", lon: -99.23, lat: 18.92 },
+  { id: "col", nombre: "Colima", lon: -103.72, lat: 19.24 },
   { id: "ver", nombre: "Veracruz", lon: -96.92, lat: 19.54 },
   { id: "mich", nombre: "Michoacán", lon: -101.19, lat: 19.70 },
-  { id: "camp", nombre: "Campeche", lon: -90.53, lat: 19.85 },
   { id: "hgo", nombre: "Hidalgo", lon: -98.74, lat: 20.12 },
   { id: "qro", nombre: "Querétaro", lon: -100.39, lat: 20.59 },
   { id: "jal", nombre: "Jalisco", lon: -103.35, lat: 20.67 },
-  { id: "yuc", nombre: "Yucatán", lon: -89.62, lat: 20.97 },
   { id: "gto", nombre: "Guanajuato", lon: -101.26, lat: 21.02 },
   { id: "nay", nombre: "Nayarit", lon: -104.89, lat: 21.51 },
   { id: "ags", nombre: "Aguascalientes", lon: -102.30, lat: 21.88 },
