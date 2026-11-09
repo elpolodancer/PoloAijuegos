@@ -104,7 +104,7 @@ function etiqueta(svg, x, y, texto, tam) { // texto con borde blanco para que se
 }
 
 // ---------- Zoom y desplazamiento de un mapa SVG ----------
-// Rueda / pellizco / botones ➕➖ para acercar; arrastrar para mover. Un toque corto sigue funcionando en los puntos.
+// Rueda (scroll) o pellizco para acercar; arrastrar para mover. Un toque corto sigue funcionando en los puntos.
 // base = { x, y, w, h } es el viewBox completo (zoom 1, no se puede alejar más). alZoom(k) avisa del zoom actual (1..MAX_ZOOM).
 const MAX_ZOOM = 10;
 const ZOOM_ESTADO_ACTUAL = 3; // cuánto se acerca el mapa de México al estado actual al abrirlo (1 = México entero)
@@ -184,7 +184,7 @@ function hacerZoomable(svg, base, alZoom) {
   svg.addEventListener("pointercancel", soltar);
   // Si el toque fue en realidad un arrastre o pellizco, no cuenta como clic sobre un punto o botón del mapa
   svg.addEventListener("click", (e) => { if (movido) { e.stopPropagation(); e.preventDefault(); } }, true);
-  return { irA, mas: () => { parar(); zoom(1.4); }, menos: () => { parar(); zoom(1 / 1.4); }, centrar: () => irA(base.x + base.w / 2, base.y + base.h / 2, 1, true) };
+  return { irA };
 }
 
 // ---------- Memoria de dónde estaba el agua ----------
@@ -295,13 +295,6 @@ export function montarMapa(o) {
     acciones.appendChild(b);
     return b;
   }
-  // Botones ➕ ➖ 🎯 del mapa (además de rueda, pellizco y arrastre)
-  function botonesZoom(z) {
-    const mk = (icono, titulo, fn) => { const b = boton("", icono, "b-azul", fn); b.title = titulo; b.setAttribute("aria-label", titulo); return b; };
-    mk("➕", "Acercar el mapa", z.mas);
-    mk("➖", "Alejar el mapa", z.menos);
-    mk("🎯", "Ver todo el mapa", z.centrar).classList.replace("b-azul", "b-oro");
-  }
   function botonContinuar() {
     const p = prog();
     boton("Continuar · nivel " + p.max, "▶", "b-verde", () => o.jugarNivel(p.max));
@@ -311,7 +304,7 @@ export function montarMapa(o) {
   // Lista de los 100 niveles de una etapa. base = nivel anterior al primero de la etapa.
   function rejillaNiveles(base) {
     const p = prog();
-    const leyenda = h("p", "m-leyenda", "El color indica las monedas que da: 🟩 15 · 🟦 25 · 🟪 35 · 🟨 45 · 🟥 60 🪙 — el número chico es el tamaño del tablero.");
+    const leyenda = h("p", "m-leyenda", "El color indica las monedas que da: 🟩 15 · 🟦 25 · 🟪 35 · 🟨 45 · 🟥 60 monedas — el número chico es el tamaño del tablero.");
     const rej = h("div", "m-rej");
     let actual = null;
     for (let k = 1; k <= NIVELES_POR_ETAPA; k++) {
@@ -374,7 +367,6 @@ export function montarMapa(o) {
     const z = hacerZoomable(svg, baseMx, (k) => {
       for (const q of puntos) q.g.setAttribute("transform", "translate(" + q.x + " " + q.y + ") scale(" + (1 / k).toFixed(4) + ") translate(" + -q.x + " " + -q.y + ")");
     });
-    botonesZoom(z);
     // Al entrar al mapa, la vista se acerca sola al estado donde vas (con México completo se deja entero)
     if (!p.mexicoCompleto) {
       const e = ESTADOS_ORDEN[p.estadoActual], [ex, ey] = P.p(e.lon, e.lat);
@@ -414,7 +406,7 @@ export function montarMapa(o) {
     for (const l of LAGOS) el("path", { d: trazo(l, P), fill: "#fff", "pointer-events": "none" }, svg);
     el("path", { d, fill: "none", stroke: BORDE, "stroke-width": 0.9, "stroke-linejoin": "round", "pointer-events": "none" }, svg);
 
-    botonesZoom(hacerZoomable(svg, baseMu));
+    hacerZoomable(svg, baseMu);
     const lista = h("div", "m-paises");
     PAISES_ORDEN.forEach((codigo, i) => {
       const hechos = acotar(p.hecho - basePais(i), 0, NIVELES_POR_ETAPA);

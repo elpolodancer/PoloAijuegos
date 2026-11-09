@@ -88,12 +88,14 @@ function unirCartera(a, b) {
   a = a || {}; b = b || {};
   return { gastado: unirMapas(a.gastado, b.gastado), compradas: unirMapas(a.compradas, b.compradas), usadas: unirMapas(a.usadas, b.usadas) };
 }
+// El emoji 🪙 (Unicode 13) no se ve en Windows/Android viejos: la moneda es un dibujo CSS (.moneda en index-estacionamiento.html), igual en todos.
+const MONEDA = '<span class="moneda" aria-hidden="true"></span>';
 const chipMonedas = document.createElement("span");
-chipMonedas.className = "chip";
+chipMonedas.className = "chip chip-madera chip-monedas"; // madera como el fondo, al doble de tamaño, a la derecha del botón ☰ Pausa
 chipMonedas.title = "Monedas";
-const pintarMonedas = () => { chipMonedas.textContent = "🪙 " + monedas().toLocaleString("es-MX"); };
+const pintarMonedas = () => { chipMonedas.innerHTML = MONEDA + monedas().toLocaleString("es-MX"); chipMonedas.setAttribute("aria-label", monedas() + " monedas"); };
 pintarMonedas();
-document.querySelector(".hud-centro").appendChild(chipMonedas);
+document.querySelector(".nav-juego").appendChild(chipMonedas);
 
 // ----- Boosts (paso 2a): «Quitar un auto» (30 🪙, o gratis si ya tienes usos) y «Paquete ×3» (50 🪙 = 3 usos). La bomba va aparte (2b). -----
 // «Quitar un auto» se paga AL USARLO: tocas el botón, tocas el auto y entonces se gasta un uso (o 30 monedas). Si te arrepientes, tocas el botón otra vez.
@@ -112,22 +114,18 @@ function botonBoost(clase, icono, titulo) {
 }
 const bQuitar = botonBoost("b-azul", "🚗", "Quitar un auto");
 const bPaquete = botonBoost("b-oro sin", "📦", "Paquete ×3: tres usos de «Quitar un auto»");
-bPaquete.info.textContent = PRECIO_PAQUETE + "🪙";
+bPaquete.info.innerHTML = PRECIO_PAQUETE + MONEDA;
 const bBomba = botonBoost("b-rojo sin", "💣", "Bomba: borra los autos de una zona de 5×5");
-bBomba.info.textContent = PRECIO_BOMBA + "🪙";
+bBomba.info.innerHTML = PRECIO_BOMBA + MONEDA;
 const zBoosts = document.createElement("div");
 zBoosts.style.cssText = "display:flex;gap:10px";
 zBoosts.setAttribute("role", "group"); zBoosts.setAttribute("aria-label", "Boosts");
 zBoosts.append(bQuitar.b, bPaquete.b, bBomba.b);
-{ // los boosts van arriba del selector de nivel, abajo al centro
-  const zN = $("niveles"), padre = zN.parentElement;
-  padre.style.flexDirection = "column";
-  padre.insertBefore(zBoosts, zN);
-}
+$("boosts").appendChild(zBoosts); // los boosts van abajo al centro (el rótulo del nivel ahora va arriba)
 
 function pintarBoosts() {
   const tiene = usosQuitar() > 0;
-  bQuitar.info.textContent = tiene ? "×" + usosQuitar() : PRECIO_QUITAR + "🪙";
+  bQuitar.info.innerHTML = tiene ? "×" + usosQuitar() : PRECIO_QUITAR + MONEDA;
   bQuitar.b.classList.toggle("sin", !tiene);
   bQuitar.b.classList.toggle("on", modoQuitar);
   bQuitar.b.setAttribute("aria-pressed", String(modoQuitar));
@@ -439,7 +437,7 @@ function dibujarSuelo() {
     flecha(-0.5, i + 0.5, 0, -1);
   }
   // salidas en las esquinas
-  const fs = Math.max(8, Math.round(9 * cam.s * 2));
+  const fs = Math.max(4, Math.round(9 * cam.s)); // letrero «SALIDA» (la mitad de su tamaño anterior)
   ctx.font = "bold " + fs + "px system-ui,sans-serif";
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   for (const [x, y] of [[-1, -1], [N, -1], [N, N], [-1, N]]) {
@@ -570,7 +568,7 @@ function victoria() {
   if (nivel > prog.hecho) {
     // Monedas: igual que los puntos, solo la primera vez que se pasa el nivel (repetirlo no da monedas).
     // No se anotan aparte: salen de prog.hecho (ver monedas()), así que no se pueden duplicar al sincronizar.
-    txt += " +" + cfg.premio + " 🪙";
+    txt += " +" + cfg.premio + " monedas";
     // Los puntos del nivel se dan una sola vez: se anotan en la cola local (nunca se pierden) y se envían al haber sesión y conexión
     pts = 10 * cfg.premio; // 150 a 600 puntos según el tamaño del nivel (antes 100 × nivel, que en el nivel 22 600 sería enorme)
     prog.hecho = mio;
@@ -600,18 +598,18 @@ function aviso(t) {
   tMsg = setTimeout(() => m.classList.remove("ver"), 1600);
 }
 
-// Rótulo del nivel en juego. El cambio de nivel se hace desde el mapa (antes había un selector ◀ ▶ provisional).
+// Rótulo del nivel en juego (arriba al centro): botón verde claro, al doble de tamaño, que solo dice el nivel.
+// El cambio de nivel se hace desde el mapa.
 function hudNiveles() {
   const z = $("niveles");
   z.innerHTML = "";
-  const info = document.createElement("span");
-  info.className = "chip";
-  const pe = document.createElement("small"); pe.textContent = "Nivel";
-  const num = document.createElement("b"); num.textContent = nivel;
-  const det = document.createElement("small"); det.style.cssText = "margin:0 0 0 8px";
-  det.textContent = cfg.tam + "×" + cfg.tam + " · 🪙" + cfg.premio;
-  info.append(pe, num, det);
-  z.append(info);
+  const b = document.createElement("span");
+  b.className = "b3d txt grande b-nivel";
+  const t = document.createElement("span");
+  t.className = "b-ico";
+  t.textContent = "Nivel " + nivel;
+  b.append(t);
+  z.append(b);
 }
 
 // ----- Controles: tocar, arrastrar, pellizcar, rueda -----
@@ -696,6 +694,7 @@ function botonMenu() {
   btnMenu.hidden = enMapa && mapa.esPrincipal();
   btnMenu.innerHTML = '<span class="b-ico">☰</span> ' + (enMapa ? "Menú principal" : "Pausa");
   btnMenu.title = enMapa ? "Volver al mapa principal" : "Pausa";
+  chipMonedas.hidden = enMapa; // el saldo solo se ve en partida
 }
 const mapa = montarMapa({
   progreso: () => prog,
