@@ -12,6 +12,7 @@ import { crearMenuPausa } from "../compartido/menu-pausa.js";
 
 let N = 25;                         // casillas por lado (cambia con cada nivel)
 const TW = 16, TH = 8;              // medio ancho / medio alto de una casilla (isométrico)
+const ZOOM_DETALLE = 0.75;          // con menos zoom que esto (tableros enormes de lejos) los autos se dibujan sin sombra, cabina ni luces: no se ven y cuestan mucho
 const VEL = 16;                     // casillas por segundo al salir
 const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0]; // 0 arriba, 1 derecha, 2 abajo, 3 izquierda
 const ID_JUEGO = "estacionamiento";
@@ -26,17 +27,71 @@ let prog = { max: 1, hecho: 0 };
 try { prog = Object.assign(prog, JSON.parse(localStorage.getItem(CLAVE) || "{}")); } catch (e) {}
 const guardar = () => { try { localStorage.setItem(CLAVE, JSON.stringify(prog)); } catch (e) {} if (nube) nube.guardado(); };
 
-// ----- Monedas (cartera): por ahora solo en el dispositivo. Las monedas se gastan, así que NO van en «prog» (unirMaximos las inflaría);
-//       cuando se haga la sincronización (paso 3) necesitarán su propia regla de fusión. -----
-const CLAVE_MONEDAS = "estacionamiento-monedas";
-let cartera = { monedas: 0 };
-try { cartera = Object.assign(cartera, JSON.parse(localStorage.getItem(CLAVE_MONEDAS) || "{}")); } catch (e) {}
-cartera.monedas = Math.max(0, Math.floor(Number(cartera.monedas)) || 0);
-const guardarCartera = () => { try { localStorage.setItem(CLAVE_MONEDAS, JSON.stringify(cartera)); } catch (e) {} };
+// ----- Monedas y usos de «quitar un auto»: guardado local + sincronización con la cuenta -----
+// Se gastan, así que NO se guardan como un número (al unir dos dispositivos habría que adivinar cuál es el «verdadero»). En su lugar:
+//   · Monedas GANADAS: no se guardan; salen de los niveles terminados (prog.hecho, que ya se une con el mayor). Un nivel solo paga una vez
+//     aunque se termine en dos dispositivos antes de sincronizar.
+//   · Lo GASTADO / COMPRADO / USADO: cada dispositivo anota solo lo suyo (contadores que solo suben) y al unir se queda con el mayor de CADA
+//     dispositivo. Los gastos hechos sin internet en dos dispositivos se SUMAN al sincronizar, no se pisan.
+//   monedas = ganadas − Σ gastado      usos de quitar = Σ compradas − Σ usadas      (nunca menos de 0)
+// Si dos dispositivos gastan sin conexión más de lo que tenían, al unirse el saldo queda en 0 (no hay deudas).
+const CLAVE_CARTERA = "estacionamiento-cartera";      // localStorage (y, tal cual, lo que se sube a la nube)
+const ID_CARTERA = "estacionamiento-cartera";         // documento en la nube (progreso/{uid}/juegos/estacionamiento-cartera)
+const CLAVE_DISPOSITIVO = "estacionamiento-dispositivo";
+const CLAVE_MONEDAS_VIEJA = "estacionamiento-monedas"; // versión anterior (un solo número): se migra una vez
+
+let miId = "";
+try {
+  miId = localStorage.getItem(CLAVE_DISPOSITIVO) || "";
+  if (!miId) { miId = Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4); localStorage.setItem(CLAVE_DISPOSITIVO, miId); }
+} catch (e) { miId = miId || Math.random().toString(36).slice(2, 10); }
+
+let nubeCartera = null; // se llena al cargar compartido/progreso.js
+const numeros = (o) => { const r = {}; for (const k in o || {}) { const v = Math.floor(Number(o[k])); if (v > 0) r[k] = v; } return r; };
+const normalizar = (c) => ({ gastado: numeros(c && c.gastado), compradas: numeros(c && c.compradas), usadas: numeros(c && c.usadas) });
+let cartera = normalizar(null);
+let existiaCartera = false;
+try { const c = JSON.parse(localStorage.getItem(CLAVE_CARTERA) || "null"); if (c) { cartera = normalizar(c); existiaCartera = true; } } catch (e) {}
+
+// monedas que dan los niveles 1..h (acumulado, se calcula una sola vez y crece solo si hace falta)
+const acumPremios = [0];
+function premiosHasta(h) {
+  h = clamp(Math.floor(Number(h)) || 0, 0, TOTAL_NIVELES);
+  for (let n = acumPremios.length; n <= h; n++) acumPremios[n] = acumPremios[n - 1] + configNivel(n).premio;
+  return acumPremios[h];
+}
+const suma = (o) => Object.values(o).reduce((t, v) => t + v, 0);
+const monedas = () => Math.max(0, premiosHasta(prog.hecho) - suma(cartera.gastado));
+const usosQuitar = () => Math.max(0, suma(cartera.compradas) - suma(cartera.usadas));
+const anotar = (campo, n) => { cartera[campo][miId] = (cartera[campo][miId] || 0) + n; guardarCartera(); };
+const guardarCartera = () => { try { localStorage.setItem(CLAVE_CARTERA, JSON.stringify(cartera)); } catch (e) {} if (nubeCartera) nubeCartera.guardado(); };
+
+// Migración única: si había monedas guardadas como número, se anota como «ya gastado» lo que falta para que el saldo quede igual
+if (!existiaCartera) {
+  try {
+    const vieja = JSON.parse(localStorage.getItem(CLAVE_MONEDAS_VIEJA) || "null");
+    if (vieja) {
+      const ganadas = premiosHasta(prog.hecho), tengo = Math.max(0, Math.floor(Number(vieja.monedas)) || 0);
+      if (ganadas > tengo) cartera.gastado[miId] = ganadas - tengo;
+      const q = Math.max(0, Math.floor(Number(vieja.quitar)) || 0);
+      if (q) cartera.compradas[miId] = q;
+      guardarCartera();
+      localStorage.removeItem(CLAVE_MONEDAS_VIEJA);
+    }
+  } catch (e) {}
+}
+
+// Unir dos carteras (para progreso.js → «fusionar»): por dispositivo, el contador mayor
+function unirMapas(a, b) { const r = { ...(b || {}) }; for (const k in a || {}) r[k] = Math.max(Number(a[k]) || 0, Number(r[k]) || 0); return r; }
+function unirCartera(a, b) {
+  if (!a && !b) return null;
+  a = a || {}; b = b || {};
+  return { gastado: unirMapas(a.gastado, b.gastado), compradas: unirMapas(a.compradas, b.compradas), usadas: unirMapas(a.usadas, b.usadas) };
+}
 const chipMonedas = document.createElement("span");
 chipMonedas.className = "chip";
 chipMonedas.title = "Monedas";
-const pintarMonedas = () => { chipMonedas.textContent = "🪙 " + cartera.monedas.toLocaleString("es-MX"); };
+const pintarMonedas = () => { chipMonedas.textContent = "🪙 " + monedas().toLocaleString("es-MX"); };
 pintarMonedas();
 document.querySelector(".hud-centro").appendChild(chipMonedas);
 
@@ -44,7 +99,6 @@ document.querySelector(".hud-centro").appendChild(chipMonedas);
 // «Quitar un auto» se paga AL USARLO: tocas el botón, tocas el auto y entonces se gasta un uso (o 30 monedas). Si te arrepientes, tocas el botón otra vez.
 const PRECIO_QUITAR = 30, PRECIO_PAQUETE = 50, USOS_PAQUETE = 3;
 const PRECIO_BOMBA = 100, LADO_BOMBA = 5; // la bomba se paga al soltarla (no se guarda en inventario) y borra una zona de 5×5 casillas
-cartera.quitar = Math.max(0, Math.floor(Number(cartera.quitar)) || 0); // usos de «quitar un auto» que tienes
 let modoQuitar = false;
 let modoBomba = false, zonaBomba = null, efectoBomba = null; // zonaBomba = { x, y } esquina de la zona de 5×5 elegida; efectoBomba = destello tras explotar
 
@@ -72,8 +126,8 @@ zBoosts.append(bQuitar.b, bPaquete.b, bBomba.b);
 }
 
 function pintarBoosts() {
-  const tiene = cartera.quitar > 0;
-  bQuitar.info.textContent = tiene ? "×" + cartera.quitar : PRECIO_QUITAR + "🪙";
+  const tiene = usosQuitar() > 0;
+  bQuitar.info.textContent = tiene ? "×" + usosQuitar() : PRECIO_QUITAR + "🪙";
   bQuitar.b.classList.toggle("sin", !tiene);
   bQuitar.b.classList.toggle("on", modoQuitar);
   bQuitar.b.setAttribute("aria-pressed", String(modoQuitar));
@@ -93,7 +147,7 @@ function salirModoBomba() {
 bQuitar.b.addEventListener("click", () => {
   if (modoQuitar) { salirModoQuitar(); return; }
   if (ganado) return;
-  if (cartera.quitar <= 0 && cartera.monedas < PRECIO_QUITAR) { aviso("Necesitas " + PRECIO_QUITAR + " monedas"); return; }
+  if (usosQuitar() <= 0 && monedas() < PRECIO_QUITAR) { aviso("Necesitas " + PRECIO_QUITAR + " monedas"); return; }
   salirModoBomba();
   modoQuitar = true;
   $("lienzo").style.cursor = "crosshair";
@@ -103,7 +157,7 @@ bQuitar.b.addEventListener("click", () => {
 bBomba.b.addEventListener("click", () => {
   if (modoBomba) { salirModoBomba(); return; }
   if (ganado) return;
-  if (cartera.monedas < PRECIO_BOMBA) { aviso("Necesitas " + PRECIO_BOMBA + " monedas"); return; }
+  if (monedas() < PRECIO_BOMBA) { aviso("Necesitas " + PRECIO_BOMBA + " monedas"); return; }
   salirModoQuitar();
   modoBomba = true; zonaBomba = null;
   $("lienzo").style.cursor = "crosshair";
@@ -111,9 +165,9 @@ bBomba.b.addEventListener("click", () => {
   aviso("Toca donde quieres la bomba; toca otra vez dentro del cuadro para soltarla");
 });
 bPaquete.b.addEventListener("click", () => {
-  if (cartera.monedas < PRECIO_PAQUETE) { aviso("Necesitas " + PRECIO_PAQUETE + " monedas"); return; }
-  cartera.monedas -= PRECIO_PAQUETE; cartera.quitar += USOS_PAQUETE;
-  guardarCartera(); pintarMonedas(); pintarBoosts();
+  if (monedas() < PRECIO_PAQUETE) { aviso("Necesitas " + PRECIO_PAQUETE + " monedas"); return; }
+  anotar("gastado", PRECIO_PAQUETE); anotar("compradas", USOS_PAQUETE);
+  pintarMonedas(); pintarBoosts();
   aviso("Paquete comprado: +" + USOS_PAQUETE + " usos de quitar un auto");
 });
 pintarBoosts();
@@ -123,6 +177,7 @@ const cabeza = (c) => [c.dir === 1 ? c.x + c.len - 1 : c.x, c.dir === 2 ? c.y + 
 
 // ----- Estado -----
 let nivel = 1, cfg = null, autos = [], occ = [], restantes = 0, movs = 0, T = 0, ganado = false;
+let escenaVer = 0, firmaPrev = "", animPrev = false; // para dibujar solo cuando algo cambió (ver bucle)
 let cam = { s: 1, ox: 0, oy: 0 }, camMin = 0.3, camMax = 6;
 let camTocada = false; // true cuando el jugador movió o acercó la vista (así un cambio de tamaño de ventana no se la deshace)
 let ultAutos = "", ultMovs = -1; // últimos textos puestos en pantalla (para no reescribirlos 60 veces por segundo)
@@ -140,6 +195,7 @@ function cargarNivel(n) {
   }
   restantes = autos.length;
   movs = 0; ganado = false;
+  escenaVer++;
   salirModoQuitar();
   salirModoBomba();
   efectoBomba = null;
@@ -214,13 +270,13 @@ function viaOcupada(nuevo) {
 
 // Boost «Quitar un auto»: gasta un uso (o 30 monedas) y el auto desaparece; sus casillas quedan libres
 function quitarAuto(c) {
-  if (cartera.quitar > 0) cartera.quitar--;
-  else if (cartera.monedas >= PRECIO_QUITAR) cartera.monedas -= PRECIO_QUITAR;
+  if (usosQuitar() > 0) anotar("usadas", 1);
+  else if (monedas() >= PRECIO_QUITAR) anotar("gastado", PRECIO_QUITAR);
   else { aviso("Necesitas " + PRECIO_QUITAR + " monedas"); salirModoQuitar(); return; }
   celdasDe(c).forEach(([x, y]) => { if (occ[y * N + x] === c.id) occ[y * N + x] = -1; });
   c.estado = 2;
   restantes--;
-  guardarCartera(); pintarMonedas();
+  pintarMonedas();
   salirModoQuitar();
 }
 
@@ -245,11 +301,11 @@ function soltarBomba() {
   const dentro = (c) => celdasDe(c).some(([x, y]) => x >= z.x && x < z.x + LADO_BOMBA && y >= z.y && y < z.y + LADO_BOMBA);
   const blancos = autos.filter((c) => c.estado === 0 && dentro(c)); // los autos que ya van saliendo no cuentan
   if (!blancos.length) { aviso("No hay autos en esa zona: mueve el cuadro"); return; } // no se cobra
-  if (cartera.monedas < PRECIO_BOMBA) { aviso("Necesitas " + PRECIO_BOMBA + " monedas"); salirModoBomba(); return; }
-  cartera.monedas -= PRECIO_BOMBA;
+  if (monedas() < PRECIO_BOMBA) { aviso("Necesitas " + PRECIO_BOMBA + " monedas"); salirModoBomba(); return; }
+  anotar("gastado", PRECIO_BOMBA);
   for (const c of blancos) retirarAuto(c);
   efectoBomba = { x: z.x, y: z.y, t: 0.5 };
-  guardarCartera(); pintarMonedas();
+  pintarMonedas();
   aviso("💥 " + blancos.length + (blancos.length === 1 ? " auto eliminado" : " autos eliminados"));
   salirModoBomba();
 }
@@ -366,7 +422,10 @@ function dibujarSuelo() {
 
   // flechas de la vía (sentido horario)
   ctx.fillStyle = "rgba(240,215,80,.55)";
+  const mf = 2 * TW * cam.s + 10; // margen: las flechas fuera de la pantalla no se dibujan
   const flecha = (cx, cy, dx, dy) => {
+    const o = P(cx, cy);
+    if (o[0] < -mf || o[0] > cw + mf || o[1] < -mf || o[1] > ch + mf) return;
     const px = -dy, py = dx;
     poli([P(cx + dx * 0.3, cy + dy * 0.3), P(cx - dx * 0.2 + px * 0.25, cy - dy * 0.2 + py * 0.25), P(cx - dx * 0.2 - px * 0.25, cy - dy * 0.2 - py * 0.25)], "rgba(240,215,80,.55)");
   };
@@ -407,19 +466,20 @@ function prisma(cx, cy, dx, dy, l, w, z0, z1, lado, tapa) {
   poli(q.map((p) => P(p[0], p[1], z1)), tapa);
 }
 
-function dibujarAuto(c) {
-  const { cx, cy, dx, dy, alfa } = poseDe(c);
+function dibujarAuto(c, pose) {
+  const { cx, cy, dx, dy, alfa } = pose || poseDe(c);
   const L = c.len - 0.18, Wd = 0.72, ZB = 8, ZC = 13;
+  const simple = cam.s < ZOOM_DETALLE;
   ctx.globalAlpha = alfa;
   const sombra = (nx, ny) => 0;
   // sombra en el suelo
-  prisma(cx + 0.05, cy + 0.05, dx, dy, L, Wd, 0, 0, sombra, "rgba(0,0,0,.28)");
+  if (!simple) prisma(cx + 0.05, cy + 0.05, dx, dy, L, Wd, 0, 0, sombra, "rgba(0,0,0,.28)");
   const col = (f) => "hsl(" + c.tono + ",68%," + (c.luz * f).toFixed(1) + "%)";
   const ladoCarro = (nx, ny) => col(0.8 + 0.14 * (ny - nx));
   prisma(cx, cy, dx, dy, L, Wd, 1, ZB, ladoCarro, col(1.12));
   // cabina
   const sh = 0.08 * c.len;
-  prisma(cx - dx * sh, cy - dy * sh, dx, dy, L * 0.5, Wd * 0.82, ZB, ZC,
+  if (!simple) prisma(cx - dx * sh, cy - dy * sh, dx, dy, L * 0.5, Wd * 0.82, ZB, ZC,
     (nx, ny) => "hsl(200,30%," + (60 + 14 * (ny - nx)).toFixed(1) + "%)", col(1.2));
   // flecha en el cofre
   const qx = -dy, qy = dx, pcx = cx + dx * L * 0.34, pcy = cy + dy * L * 0.34;
@@ -428,7 +488,7 @@ function dibujarAuto(c) {
   const delante = dx + dy > 0;
   const fx = cx + (delante ? dx : -dx) * L / 2, fy = cy + (delante ? dy : -dy) * L / 2;
   ctx.fillStyle = delante ? "#fff6a8" : "#ff4d4d";
-  for (const sg of [-1, 1]) {
+  if (!simple) for (const sg of [-1, 1]) {
     const p = P(fx + qx * sg * 0.24, fy + qy * sg * 0.24, 4.5);
     ctx.beginPath(); ctx.arc(p[0], p[1], Math.max(1, 1.9 * cam.s), 0, Math.PI * 2); ctx.fill();
   }
@@ -444,9 +504,18 @@ function dibujar() {
   ctx.clearRect(0, 0, cw, ch); // transparente: detrás se ve el fondo de madera (compartido/fondo-madera.js)
   ctx.lineJoin = "round";
   dibujarSuelo();
-  const lista = autos.filter((c) => c.estado !== 2).map((c) => ({ c, p: poseDe(c) }));
+  // Solo se dibujan los autos que caen dentro de la pantalla (con margen por su largo y su altura): al acercar un tablero de 50×50 son pocos
+  const lista = [];
+  for (const c of autos) {
+    if (c.estado === 2) continue;
+    const p = poseDe(c);
+    const sx = cam.ox + (p.cx - p.cy) * TW * cam.s, sy = cam.oy + (p.cx + p.cy) * TH * cam.s;
+    const mg = ((c.len + 2) * TW + 16) * cam.s;
+    if (sx < -mg || sx > cw + mg || sy < -mg || sy > ch + mg) continue;
+    lista.push({ c, p });
+  }
   lista.sort((a, b) => a.p.cx + a.p.cy - (b.p.cx + b.p.cy));
-  for (const it of lista) dibujarAuto(it.c);
+  for (const it of lista) dibujarAuto(it.c, it.p);
   if (modoBomba && zonaBomba) { // vista previa de la zona que borrará la bomba
     ctx.lineWidth = 2;
     poli(rect(zonaBomba.x, zonaBomba.y, zonaBomba.x + LADO_BOMBA, zonaBomba.y + LADO_BOMBA, 0.3), "rgba(255,70,50,.28)", "rgba(255,110,70,.95)");
@@ -461,6 +530,12 @@ function dibujar() {
 }
 
 // ----- Bucle -----
+const firmaVista = () => [cam.s, cam.ox, cam.oy, cw, ch, dpr, escenaVer, restantes, modoBomba && zonaBomba ? zonaBomba.x + "," + zonaBomba.y : "-"].join("|");
+function hayAnimacion() {
+  if (efectoBomba) return true;
+  for (const c of autos) if (c.estado === 1 || c.bump > 0 || c.flash > 0) return true;
+  return false;
+}
 function actualizar(dt) {
   T += dt;
   if (efectoBomba) { efectoBomba.t -= dt; if (efectoBomba.t <= 0) efectoBomba = null; }
@@ -490,10 +565,8 @@ function victoria() {
   const mio = nivel;
   let pts = 0;
   if (nivel > prog.hecho) {
-    // Monedas: igual que los puntos, solo la primera vez que se pasa el nivel (repetirlo no da monedas)
-    cartera.monedas += cfg.premio;
-    guardarCartera();
-    pintarMonedas();
+    // Monedas: igual que los puntos, solo la primera vez que se pasa el nivel (repetirlo no da monedas).
+    // No se anotan aparte: salen de prog.hecho (ver monedas()), así que no se pueden duplicar al sincronizar.
     txt += " +" + cfg.premio + " 🪙";
     // Los puntos del nivel se dan una sola vez: se anotan en la cola local (nunca se pierden) y se envían al haber sesión y conexión
     pts = 10 * cfg.premio; // 150 a 600 puntos según el tamaño del nivel (antes 100 × nivel, que en el nivel 22 600 sería enorme)
@@ -507,6 +580,7 @@ function victoria() {
   prog.max = Math.max(prog.max, Math.min(TOTAL_NIVELES, nivel + 1));
   guardar();
   hudNiveles();
+  pintarMonedas(); // ya con prog.hecho al día
   const ultimo = nivel >= TOTAL_NIVELES;
   $("vtitulo").textContent = ultimo ? "¡Terminaste los " + TOTAL_NIVELES.toLocaleString("es-MX") + " niveles! 🎉" : "¡Nivel " + nivel + " completado!";
   $("vtexto").textContent = txt + (pts ? " +" + pts + " puntos" : "");
@@ -648,7 +722,14 @@ function bucle(ahora) {
   const dt = Math.min(0.05, (ahora - ultimo) / 1000);
   ultimo = ahora;
   actualizar(dt);
-  if (!mapa.abierto()) dibujar(); // con el mapa encima no hace falta dibujar el tablero
+  if (mapa.abierto()) firmaPrev = ""; // con el mapa encima no se dibuja; al cerrarlo se redibuja
+  else {
+    // El tablero solo se redibuja si cambió la vista (cámara, tamaño, bomba, autos que quedan, nivel nuevo) o si algo se está moviendo.
+    // Con el tablero quieto no se gasta CPU ni batería. Un cuadro extra al terminar cada animación deja la imagen final.
+    const f = firmaVista(), anima = hayAnimacion();
+    if (anima || animPrev || f !== firmaPrev) dibujar();
+    firmaPrev = f; animPrev = anima;
+  }
   requestAnimationFrame(bucle);
 }
 requestAnimationFrame(bucle);
@@ -663,7 +744,14 @@ import("../compartido/progreso.js").then((m) => {
       prog.max = clamp(Number(v.max) || 1, 1, TOTAL_NIVELES);
       prog.hecho = Math.max(0, Number(v.hecho) || 0);
       hudNiveles(); // repinta el rótulo con lo que trajo la nube
+      pintarMonedas(); pintarBoosts(); // las monedas ganadas dependen de prog.hecho
       mapa.refrescar(); // y el mapa, por si está abierto
     },
+  });
+  // Monedas y usos de «quitar un auto»: documento aparte con su propia regla de fusión (unirCartera)
+  nubeCartera = m.conectar(ID_CARTERA, {
+    clave: CLAVE_CARTERA,
+    fusionar: unirCartera,
+    alCambiar: (v) => { cartera = normalizar(v); pintarMonedas(); pintarBoosts(); },
   });
 }).catch(() => {});
