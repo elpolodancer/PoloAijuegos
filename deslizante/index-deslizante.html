@@ -21,12 +21,20 @@
     #inicio .b3d { --t: 56px; min-width: 220px; font-size: 18px; }
 
     /* Niveles */
-    #pantalla-niveles { justify-content: flex-start; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
-    #pantalla-niveles h2 { margin: 0; font-size: 1.4rem; }
+    #inicio { overflow-y: auto; justify-content: safe center; touch-action: pan-y; }
+    #pantalla-niveles, #pantalla-libre { justify-content: flex-start; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+    #pantalla-niveles h2, #pantalla-libre h2 { margin: 0; font-size: 1.4rem; }
+    /* Modo libre: tamaños disponibles */
+    .nota-libre { flex: none; width: min(100%, 520px); margin: 0; text-align: center; color: var(--suave); font-size: .85rem; }
+    .rejilla-libre { flex: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 8px; width: min(100%, 520px); }
+    .rejilla-libre .b3d { width: 100%; --t: 46px; font-size: 15px; font-weight: 800; }
     .grupo { flex: none; width: min(100%, 520px); }
     .grupo h3 { margin: 8px 0 8px; font-size: 1rem; color: var(--suave); }
     .rejilla-niveles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px 8px; }
-    .rejilla-niveles .b3d { width: 100%; --t: 46px; font-size: 16px; font-weight: 800; }
+    /* Cuadrados (el doble de alto que antes): número del nivel arriba y mejor tiempo abajo */
+    .rejilla-niveles .b3d { width: 100%; height: auto; aspect-ratio: 1 / 1; min-width: 0; padding: 0 2px; flex-direction: column; gap: 3px; border-radius: 16px; font-size: 16px; font-weight: 800; }
+    .nivel-num { position: relative; font-size: 24px; line-height: 1; }
+    .nivel-t { position: relative; font-size: 11px; font-weight: 700; line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; opacity: .95; }
     .proximamente { flex: none; width: min(100%, 520px); margin: 6px 0 0; text-align: center; color: var(--suave); font-size: .85rem; }
 
     /* Juego */
@@ -59,7 +67,8 @@
       #juego { flex-direction: row; gap: 18px; padding: 8px calc(56px + env(safe-area-inset-right, 0px)) 8px calc(12px + env(safe-area-inset-left, 0px)); }
       #juego .lado { width: 230px; padding-top: 100px; gap: 6px; }
       #tablero { width: min(calc(100vh - 24px), calc(100vw - 324px), 520px); width: min(calc(100dvh - 24px), calc(100vw - 324px), 520px); } /* deja libre la esquina del ⛶ */
-      #inicio, #pantalla-niveles { padding-top: calc(96px + env(safe-area-inset-top, 0px)); }
+      #inicio, #pantalla-niveles, #pantalla-libre { padding-top: calc(96px + env(safe-area-inset-top, 0px)); }
+      #inicio .b3d.grande { --t: 48px; }
     }
   </style>
 </head>
@@ -77,11 +86,18 @@
       <p id="resumen"></p>
       <button class="b3d txt grande b-verde" id="btn-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
       <button class="b3d txt grande b-azul" id="btn-niveles" type="button"><span class="b-ico">🗂️</span> Niveles</button>
+      <button class="b3d txt grande b-morado" id="btn-libre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
     </section>
 
     <section class="pantalla" id="pantalla-niveles" hidden>
       <h2>Niveles</h2>
       <div id="lista-niveles" style="display:contents"></div>
+    </section>
+
+    <section class="pantalla" id="pantalla-libre" hidden>
+      <h2>♾️ Modo libre</h2>
+      <p class="nota-libre">Tableros al azar, sin fin. Cada tamaño se abre al desbloquear su etapa en «Niveles».</p>
+      <div class="rejilla-libre" id="rejilla-libre"></div>
     </section>
 
     <section class="pantalla" id="juego" hidden>
@@ -90,7 +106,7 @@
         <div class="datos">
           <div>Movimientos<b id="movs">0</b></div>
           <div>Tiempo<b id="tiempo">0:00</b></div>
-          <div>Mejor<b id="mejor">–</b></div>
+          <div>Mejor tiempo<b id="mejor">–</b></div>
         </div>
         <button class="b3d chico b-oro" id="reiniciar" type="button" title="Reiniciar nivel" aria-label="Reiniciar nivel"><span class="b-ico">🔄</span></button>
         <p id="msg"></p>

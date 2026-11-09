@@ -8,12 +8,38 @@ const ID = "deslizante";
 const $ = (id) => document.getElementById(id);
 
 // ----- Progreso (local primero; se sincroniza con la cuenta de Google si hay internet y sesión) -----
-// { hechos: [true|null por nivel], mejores: { "<número de nivel>": { mov, seg } } }
+// { hechos: [true|null por nivel], mejores: { "<número de nivel>": { mov, ms } },
+//   libre: { "<tamaño>": { mov, ms, ganados } } }
+//   mov = menos movimientos y ms = menor tiempo en milisegundos: son dos récords independientes (pueden venir de partidas distintas).
+//   libre = modo libre: mejores marcas y tableros resueltos por tamaño.
 const CLAVE = ID + "_progreso";
-const limpiar = (p) => (p && typeof p === "object" && (Array.isArray(p.hechos) || p.mejores))
-  ? { hechos: Array.isArray(p.hechos) ? p.hechos : [], mejores: p.mejores && typeof p.mejores === "object" ? p.mejores : {} }
+const obj = (x) => (x && typeof x === "object" ? x : {});
+// Una marca válida { mov, ms }. Las de antes traían «seg» (segundos enteros): se pasan a milisegundos.
+function marca(x) {
+  if (!x || typeof x !== "object") return null;
+  const mov = Number(x.mov) || 0;
+  const ms = Number(x.ms) > 0 ? Number(x.ms) : Math.max(1, (Number(x.seg) || 0) * 1000);
+  return mov > 0 ? { mov, ms } : null;
+}
+function marcas(o, conGanados) {
+  const r = {};
+  for (const k in obj(o)) {
+    const m = marca(o[k]);
+    if (m) r[k] = conGanados ? { ...m, ganados: Math.max(0, Number(o[k].ganados) || 0) } : m;
+  }
+  return r;
+}
+const limpiar = (p) => (p && typeof p === "object" && (Array.isArray(p.hechos) || p.mejores || p.libre))
+  ? { hechos: Array.isArray(p.hechos) ? p.hechos : [], mejores: marcas(p.mejores), libre: marcas(p.libre, true) }
   : null; // formato viejo (récords sueltos por tamaño): se ignora
-let prog = { hechos: [], mejores: {} }, nube = null;
+
+// Tiempo como m:ss.d (con horas si hace falta); ms = milisegundos
+function fmtMs(ms) {
+  const dec = Math.floor(ms / 100) % 10, s = Math.floor(ms / 1000);
+  const sec = String(s % 60).padStart(2, "0"), min = Math.floor(s / 60) % 60, h = Math.floor(s / 3600);
+  return (h ? h + ":" + String(min).padStart(2, "0") : min) + ":" + sec + "." + dec;
+}
+let prog = { hechos: [], mejores: {}, libre: {} }, nube = null;
 try { prog = limpiar(JSON.parse(localStorage.getItem(CLAVE))) || prog; } catch (e) {}
 function guardarProg() {
   try { localStorage.setItem(CLAVE, JSON.stringify(prog)); } catch (e) {}
@@ -33,13 +59,20 @@ function siguientePendiente() {
   return i < 0 ? NIVELES.length - 1 : i;
 }
 
+// Modo libre: un tamaño está abierto cuando su etapa está desbloqueada (su primer nivel se puede jugar). El 3×3 siempre.
+function tamanoAbierto(m) {
+  const i = NIVELES.findIndex((l) => l.n === m);
+  return i >= 0 && desbloqueado(i);
+}
+
 // ----- Pantallas -----
 function mostrar(nombre) {
-  for (const p of ["inicio", "pantalla-niveles", "juego"]) $(p).hidden = p !== nombre;
+  for (const p of ["inicio", "pantalla-niveles", "pantalla-libre", "juego"]) $(p).hidden = p !== nombre;
   $("btn-menu").hidden = nombre === "inicio"; // «Menú principal» solo fuera del menú principal
   if (nombre !== "juego") clearInterval(reloj);
   if (nombre === "inicio") pintarInicio();
   if (nombre === "pantalla-niveles") pintarNiveles();
+  if (nombre === "pantalla-libre") pintarLibre();
 }
 function pintarInicio() {
   const pasados = prog.hechos.filter(Boolean).length;
@@ -64,9 +97,15 @@ function pintarNiveles() {
       const b = document.createElement("button");
       const libre = desbloqueado(i);
       b.className = "b3d txt " + (hecho(i) ? "b-verde" : libre ? "b-azul" : "b-gris");
-      b.textContent = libre ? String(k + 1) : "🔒";
+      const mk = prog.mejores[i + 1];
+      if (libre) {
+        const a = document.createElement("span"), c = document.createElement("span");
+        a.className = "nivel-num"; a.textContent = String(k + 1);
+        c.className = "nivel-t"; c.textContent = mk ? fmtMs(mk.ms) : "–";
+        b.append(a, c);
+      } else b.textContent = "🔒";
       b.disabled = !libre;
-      b.setAttribute("aria-label", "Nivel " + (k + 1) + " de " + n + "×" + n + (libre ? "" : " (bloqueado)"));
+      b.setAttribute("aria-label", "Nivel " + (k + 1) + " de " + n + "×" + n + (libre ? (mk ? ", mejor tiempo " + fmtMs(mk.ms) : "") : " (bloqueado)"));
       b.addEventListener("click", () => jugarNivel(i));
       r.appendChild(b);
     });
@@ -81,7 +120,26 @@ function pintarNiveles() {
   }
 }
 
+function pintarLibre() {
+  const cont = $("rejilla-libre");
+  cont.innerHTML = "";
+  for (let m = 3; m <= TAMANO_MAX; m++) {
+    const abierto = tamanoAbierto(m), r = prog.libre[m];
+    const b = document.createElement("button");
+    b.className = "b3d txt " + (abierto ? "b-morado" : "b-gris");
+    b.textContent = abierto ? m + "×" + m : "🔒 " + m;
+    b.disabled = !abierto;
+    b.title = abierto ? (r ? "Mejor tiempo: " + fmtMs(r.ms) + " · mejor: " + r.mov + " mov. · " + r.ganados + " resueltos" : "Aún sin resolver") : "Se abre al desbloquear la etapa " + m + "×" + m + " en Niveles";
+    b.setAttribute("aria-label", abierto ? "Modo libre " + m + "×" + m : m + "×" + m + " bloqueado");
+    if (abierto && r && r.ganados) { const i = document.createElement("span"); i.className = "b-info"; i.textContent = "×" + r.ganados; b.appendChild(i); }
+    b.addEventListener("click", () => jugarLibre(m));
+    cont.appendChild(b);
+  }
+}
+
 // ----- Juego -----
+let modo = "nivel";                                // "nivel" (niveles fijos) o "libre" (tableros al azar sin fin)
+let libreN = 3, libreNum = 0, inicial = [];        // modo libre: tamaño, número de tablero de esta sesión y tablero de partida
 let idx = 0, n = 3, t = [];                        // t[pos] = número de la ficha (0 = hueco)
 let movs = 0, inicio = 0, reloj = null, jugando = false;
 const fichas = new Map();                          // número → elemento
@@ -137,7 +195,7 @@ function tocar(pos) {
   for (let i = h; i !== pos; i -= paso) t[i] = t[i - paso]; // desliza toda la fila/columna
   t[pos] = 0;
   movs++;
-  if (!jugando) { jugando = true; inicio = Date.now(); reloj = setInterval(mostrarTiempo, 250); }
+  if (!jugando) { jugando = true; inicio = Date.now(); reloj = setInterval(mostrarTiempo, 100); }
   pintar();
   if (resuelto()) ganar();
 }
@@ -148,40 +206,61 @@ function mover(dx, dy) {                            // flechas: mueve la ficha q
   tocar(f * n + c);
 }
 
-const fmt = (s) => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
-const seg = () => Math.floor((Date.now() - inicio) / 1000);
-function mostrarTiempo() { $("tiempo").textContent = fmt(seg()); }
-function pintarMejor() { const m = prog.mejores[idx + 1]; $("mejor").textContent = m ? m.mov + " mov." : "–"; }
+const transcurrido = () => Date.now() - inicio;     // milisegundos desde el primer movimiento
+function mostrarTiempo() { $("tiempo").textContent = fmtMs(transcurrido()); }
+const mejorActual = () => (modo === "libre" ? prog.libre[libreN] : prog.mejores[idx + 1]);
+function pintarMejor() { const m = mejorActual(); $("mejor").textContent = m ? fmtMs(m.ms) : "–"; }
+
+// Tablero al azar con solución garantizada (hueco al final y número par de inversiones)
+function mezclarAzar(m) {
+  let a;
+  do {
+    a = Array.from({ length: m * m - 1 }, (_, i) => i + 1);
+    for (let i = a.length - 1; i > 0; i--) { const k = Math.floor(Math.random() * (i + 1)); [a[i], a[k]] = [a[k], a[i]]; }
+    let inv = 0;
+    for (let i = 0; i < a.length; i++) for (let k = i + 1; k < a.length; k++) if (a[i] > a[k]) inv++;
+    if (inv % 2) [a[0], a[1]] = [a[1], a[0]];
+  } while (a.every((v, i) => v === i + 1));        // que no salga ya resuelto
+  a.push(0);
+  return a;
+}
 
 async function ganar() {
   clearInterval(reloj);
-  const s = seg();
+  const ms = transcurrido();
   jugando = "fin";
-  mostrarTiempo();
-  const m = prog.mejores[idx + 1];
-  const record = !m || movs < m.mov;
-  const primera = !hecho(idx);
-  if (record) prog.mejores[idx + 1] = { mov: movs, seg: s };
-  prog.hechos[idx] = true;
+  $("tiempo").textContent = fmtMs(ms);
+  const libre = modo === "libre";
+  const m = mejorActual();
+  const recordMs = !m || ms < m.ms, recordMov = !m || movs < m.mov;
+  const nueva = { mov: m ? Math.min(m.mov, movs) : movs, ms: m ? Math.min(m.ms, ms) : ms };
+  const primera = !libre && !hecho(idx);
+  if (libre) prog.libre[libreN] = { ...nueva, ganados: ((prog.libre[libreN] && prog.libre[libreN].ganados) || 0) + 1 };
+  else { prog.mejores[idx + 1] = nueva; prog.hechos[idx] = true; }
   guardarProg();
   pintarMejor();
 
-  const d = info(idx), l = NIVELES[idx], hay = idx + 1 < NIVELES.length;
+  const l = libre ? {} : NIVELES[idx], hay = !libre && idx + 1 < NIVELES.length;
   const v = document.createElement("div");
   v.id = "victoria";
-  v.innerHTML = "<h2>🎉 ¡Resuelto!</h2><div>" + movs + " movimientos · " + fmt(s) + (l.optimo ? "<br>Mínimo posible: " + l.optimo : "") +
-    (record ? "<br>⭐ ¡Nuevo récord!" : "") + (hay ? "" : "<br>🚧 Más niveles pronto") + "</div>";
+  v.innerHTML = "<h2>🎉 ¡Resuelto!</h2><div>⏱️ " + fmtMs(ms) + (recordMs ? " 🏆 ¡mejor tiempo!" : "") +
+    "<br>" + movs + " movimientos" + (recordMov ? " 🏆 ¡récord!" : "") + (l.optimo ? "<br>Mínimo posible: " + l.optimo : "") + (!libre && !hay ? "<br>🏁 ¡Pasaste todos los niveles!" : "") + "</div>";
   const caja = document.createElement("div");
   caja.className = "botones";
   const boton = (texto, clase, fn) => { const b = document.createElement("button"); b.className = "b3d txt " + clase; b.textContent = texto; b.addEventListener("click", fn); caja.appendChild(b); };
-  if (hay) boton("Siguiente nivel", "b-verde", () => jugarNivel(idx + 1));
-  boton("Repetir", "b-oro", empezar);
-  boton("Niveles", "b-azul", () => mostrar("pantalla-niveles"));
+  if (libre) {
+    boton("Otro tablero", "b-verde", () => jugarLibre(libreN));
+    boton("Tamaños", "b-morado", () => mostrar("pantalla-libre"));
+  } else {
+    if (hay) boton("Siguiente nivel", "b-verde", () => jugarNivel(idx + 1));
+    boton("Repetir", "b-oro", empezar);
+    boton("Niveles", "b-azul", () => mostrar("pantalla-niveles"));
+  }
   v.appendChild(caja);
   $("tablero").appendChild(v);
 
-  if (!primera) return;                             // los puntos se dan solo la primera vez que se pasa el nivel
-  const pts = puntosDe(d.n);
+  if (!primera) { if (libre) $("msg").textContent = "Modo libre: no da puntos al perfil, pero guarda tu mejor marca."; return; } // los puntos se dan solo la primera vez que se pasa un nivel
+  const pts = puntosDe(NIVELES[idx].n);
   encolarPuntos(ID, pts);                           // se anotan en el dispositivo y se envían al perfil cuando haya internet y sesión
   let pendientes = 1;
   try { pendientes = await (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
@@ -193,17 +272,29 @@ async function ganar() {
 function empezar() {
   clearInterval(reloj);
   const v = $("victoria"); if (v) v.remove();
-  const l = NIVELES[idx], d = info(idx);
-  n = l.n; t = l.fichas.slice(); movs = 0; jugando = false;
-  if (!esResoluble(n, t)) console.warn("deslizante: el nivel " + (idx + 1) + " no tiene solución");
-  $("titulo").innerHTML = "Nivel " + d.num + " · " + n + "×" + n + (l.optimo ? "<small>Mínimo posible: " + l.optimo + " movimientos</small>" : "");
-  $("tiempo").textContent = "0:00";
+  if (modo === "libre") {
+    n = libreN; t = inicial.slice();
+    $("titulo").innerHTML = "♾️ Modo libre · " + n + "×" + n + "<small>Tablero " + libreNum + " de esta sesión</small>";
+  } else {
+    const l = NIVELES[idx], d = info(idx);
+    n = l.n; t = l.fichas.slice();
+    $("titulo").innerHTML = "Nivel " + d.num + " · " + n + "×" + n + (() => { const mk = prog.mejores[idx + 1], p = []; if (l.optimo) p.push("Mínimo posible: " + l.optimo); if (mk) p.push("Tu mejor: " + mk.mov + " mov."); return p.length ? "<small>" + p.join(" · ") + "</small>" : ""; })();
+  }
+  movs = 0; jugando = false;
+  if (!esResoluble(n, t)) console.warn("deslizante: este tablero no tiene solución");
+  $("tiempo").textContent = fmtMs(0);
   $("msg").textContent = "Toca una ficha en la fila o columna del hueco para deslizarla.";
   construir(); pintar(); pintarMejor();
 }
 function jugarNivel(i) {
   if (!NIVELES[i] || !desbloqueado(i)) return;
-  idx = i;
+  modo = "nivel"; idx = i;
+  mostrar("juego");
+  empezar();
+}
+function jugarLibre(m) {
+  if (!tamanoAbierto(m)) return;
+  modo = "libre"; libreN = m; libreNum++; inicial = mezclarAzar(m);
   mostrar("juego");
   empezar();
 }
@@ -211,6 +302,7 @@ function jugarNivel(i) {
 // ----- Botones y teclado -----
 $("btn-jugar").addEventListener("click", () => jugarNivel(siguientePendiente()));
 $("btn-niveles").addEventListener("click", () => mostrar("pantalla-niveles"));
+$("btn-libre").addEventListener("click", () => mostrar("pantalla-libre"));
 $("btn-menu").addEventListener("click", () => mostrar("inicio"));
 $("reiniciar").addEventListener("click", empezar);
 addEventListener("keydown", (e) => {
@@ -226,24 +318,30 @@ import("../compartido/jugador.js").then(({ alCambiarSesion }) =>
   alCambiarSesion((u) => ($("sesion").textContent = u ? (u.displayName || "Jugador") : "Sin sesión"))
 ).catch(() => {});
 
-// Niveles pasados: se unen (pasado en cualquier sitio = pasado). Récords: por nivel, menos movimientos (y si empatan, menos tiempo).
+// Niveles pasados: se unen (pasado en cualquier sitio = pasado). Récords: por nivel (o por tamaño en el modo libre),
+// el menor número de movimientos y el menor tiempo (cada uno por separado); de los tableros resueltos en modo libre gana el mayor.
+const mejorMarca = (x, y) => (!x ? y : !y ? x : { mov: Math.min(x.mov, y.mov), ms: Math.min(x.ms, y.ms) });
 import("../compartido/progreso.js").then((m) => {
   nube = m.conectar(ID, {
     clave: CLAVE,
     fusionar: (a, b) => {
       a = limpiar(a); b = limpiar(b);
       if (!a && !b) return null;
-      const mej = { ...((b && b.mejores) || {}) };
-      for (const k in (a && a.mejores) || {}) {
-        const x = a.mejores[k], y = mej[k];
-        mej[k] = !y || (x && (x.mov < y.mov || (x.mov === y.mov && x.seg < y.seg))) ? x : y;
+      const mej = { ...(b ? b.mejores : {}) };
+      for (const k in (a ? a.mejores : {})) mej[k] = mejorMarca(a.mejores[k], mej[k]);
+      const lib = {};
+      for (const k of new Set([...Object.keys(a ? a.libre : {}), ...Object.keys(b ? b.libre : {})])) {
+        const x = a && a.libre[k], y = b && b.libre[k];
+        const gana = mejorMarca(x, y);
+        lib[k] = { mov: gana.mov, ms: gana.ms, ganados: Math.max((x && Number(x.ganados)) || 0, (y && Number(y.ganados)) || 0) };
       }
-      return { hechos: m.unirHechos(a && a.hechos, b && b.hechos) || [], mejores: mej };
+      return { hechos: m.unirHechos(a && a.hechos, b && b.hechos) || [], mejores: mej, libre: lib };
     },
     alCambiar: (v) => {
       prog = limpiar(v) || prog;
       if (!$("inicio").hidden) pintarInicio();
       if (!$("pantalla-niveles").hidden) pintarNiveles();
+      if (!$("pantalla-libre").hidden) pintarLibre();
       if (!$("juego").hidden) pintarMejor();
     },
   });
