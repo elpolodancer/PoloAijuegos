@@ -38,7 +38,7 @@ Al final de la partida el jugador tendrá construido algo bastante grande: un im
 - ✅ **Constructor** (naranja, martillo): construye y repara edificios.
 - ✅ **Guerrero** (morado, espada y escudo): explora y pelea con animales.
 - 🔜 **Tropas de exploración**: grupos que salen a pelear con animales para conseguir carne, piel y otros recursos (los guerreros ya pueden cazar; falta la parte de explorar en grupo con misiones).
-- ✅ **Grupos**: hasta 10 tropas por grupo, con tarea de juntar madera o minerales. 🔜 Formar grupos mixtos a gusto (por ejemplo 10 guerreros, 1 constructor y 8 recolectores).
+- ✅ **Grupos**: hasta 15 tropas por grupo (`MAX_GRUPO`). Al reunirse forman una **fila ordenada** (primero guerreros, luego constructores y al final recolectores). En 🎯 los grupos son cuadrados de 4 columnas; con **Seleccionar grupo** tocas el mapa para mandarlo. Al tocar una tropa puedes elegirle grupo (o crear uno nuevo). Tarea de juntar madera o minerales. 🔜 Formar grupos mixtos a gusto (por ejemplo 10 guerreros, 1 constructor y 8 recolectores) con un editor de grupos.
 
 ## El mapa
 

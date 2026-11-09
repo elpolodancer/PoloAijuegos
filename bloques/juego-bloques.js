@@ -2,12 +2,12 @@
 // Bloques de madera: arrastra cada una de las 3 piezas al tablero de 8×8. Cada fila o columna completa se limpia.
 // Cada ronda trae piezas que SÍ caben, pero con trampas: poner una en otro hueco válido puede dejar sin sitio a las demás.
 // Pierdes cuando ninguna de las piezas que te quedan cabe en el tablero. La lógica y el generador están en logica-bloques.js.
-// Zonas: ♾️ Infinito (3 dificultades: Fácil, Normal, Difícil) y 🗺️ Niveles fijos (meta: limpiar N líneas). Sus reglas están en niveles-bloques.js.
+// Zonas: ♾️ Infinito (3 dificultades: Fácil, Normal, Difícil) y 🗺️ Niveles fijos (cada nivel tiene un reto: llegar a N puntos o eliminar bloques con candado). Sus reglas están en niveles-bloques.js.
 // Guardado: la partida en curso (bloques_partida_v1) queda solo en el dispositivo; el récord de cada dificultad y las estrellas de los niveles
 // (bloques_record_v1 = { mejor (Normal), facil, dificil, est: [estrellas del nivel 1, 2…] }) se sincronizan con la cuenta.
 import { encolarPuntos } from "../compartido/cola-puntos.js";
-import { N, FORMAS, cabe, hayLugar, colocar } from "./logica-bloques.js";
-import { DIFICULTADES, ORDEN_DIF, NIVELES_FIJOS, nivelFijo, estrellasDe, partidaInfinita, partidaNivel, avanzarRonda } from "./niveles-bloques.js";
+import { N, FORMAS, cabe, hayLugar, colocar, capas, puntosJugada } from "./logica-bloques.js";
+import { DIFICULTADES, ORDEN_DIF, NIVELES_FIJOS, RETOS, nivelFijo, estrellasDe, partidaInfinita, partidaNivel, avanzarRonda, actualizarObj, restantes, cumplido } from "./niveles-bloques.js";
 
 const ID = "bloques", CLAVE_PARTIDA = "bloques_partida_v1", CLAVE_RECORD = "bloques_record_v1";
 const W = 480, H = 720, CELL = 50, BX = 40, BY = 156;       // lienzo y tablero (8 × 50 = 400 px)
@@ -30,11 +30,18 @@ const unirRecord = (a, b) => {
 function cargarPartida() {
   try {
     const o = JSON.parse(localStorage.getItem(CLAVE_PARTIDA));
-    if (o && Array.isArray(o.tab) && (o.tab.length === N || o.tab.length === 2 * N) && o.tab.every((v) => Number.isInteger(v) && v >= 0 && v < 256) &&
+    if (o && Array.isArray(o.tab) && (o.tab.length === N || o.tab.length === 2 * N || o.tab.length === 3 * N) && o.tab.every((v) => Number.isInteger(v) && v >= 0 && v < 256) &&
         Array.isArray(o.pz) && o.pz.length === 3 && o.pz.every((v) => v === null || !!FORMAS[v])) {
-      const tab = o.tab.slice(); while (tab.length < 2 * N) tab.push(0); // partidas guardadas antes de los candados
+      const tab = o.tab.slice(); while (tab.length < 3 * N) tab.push(0); // partidas guardadas antes de los candados (8 números) o antes de los dobles y triples (16)
       const base = { tab, pz: o.pz, pt: o.pt | 0, ro: (o.ro | 0) || 1, env: o.env | 0 };
-      if (o.m === "n") return nivelFijo(o.n | 0) ? { ...base, m: "n", n: o.n | 0, lin: o.lin | 0 } : null;
+      if (o.m === "n") {
+        // los niveles fijos se rehicieron (retos, v: 2): una partida de nivel guardada con los niveles viejos se descarta
+        const L = o.v === 2 ? nivelFijo(o.n | 0, o.sem) : null;
+        if (!L) return null;
+        const obj = Array.isArray(o.obj) && o.obj.length === N && o.obj.every((v) => Number.isInteger(v) && v >= 0 && v < 256) ? o.obj : null;
+        if (L.reto === "candados" && !obj) return null;
+        return { ...base, m: "n", n: o.n | 0, sem: L.sem, v: 2, obj, lin: o.lin | 0 };
+      }
       return { ...base, m: "i", d: DIFICULTADES[o.d] ? o.d : "normal" }; // las partidas de antes de las dificultades cuentan como Normal
     }
   } catch (e) {}
@@ -105,9 +112,9 @@ function celdaDe(f, x, y) { // casilla (esquina superior izquierda) donde caerí
 }
 function poner(i, f, r, c) {
   const res = colocar(S.tab, f, r, c);
-  const ganados = f.n + (res.lineas ? 10 * res.lineas * res.lineas : 0) + 5 * res.rotos.length;
+  const ganados = puntosJugada(f, res), faltaAntes = S.obj ? restantes(S) : 0;
   S.tab = res.t; S.pz[i] = null; S.pt += ganados;
-  if (S.m === "n") S.lin += res.lineas;
+  if (S.m === "n") { S.lin += res.lineas; actualizarObj(S); }
   if (res.lineas) {
     flashes.push({ filas: res.filas, cols: res.cols, vida: 0.4 });
     const cel = (rr, cc, color) => { for (let k = 0; k < 2; k++) { const a = Math.random() * 6.28, v = 50 + Math.random() * 120; parts.push({ x: BX + (cc + 0.5) * CELL, y: BY + (rr + 0.5) * CELL, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, vida: 0.6, c: color }); } };
@@ -118,7 +125,11 @@ function poner(i, f, r, c) {
     if (res.rotos.length) sonido(240, 0.12, "square", 0.06);
   } else sonido(300, 0.08, "square", 0.04);
   textos.push({ x: BX + (c + f.w / 2) * CELL, y: BY + (r + f.h / 2) * CELL, t: "+" + ganados, vida: 0.9 });
-  if (S.m === "n" && S.lin >= nivelFijo(S.n).meta) { ganar(); return; }
+  if (S.obj && restantes(S) < faltaAntes) { // se eliminó un bloque con candado del todo
+    textos.push({ x: BX + (c + f.w / 2) * CELL, y: BY + (r + f.h / 2) * CELL - 28, t: "🔓", vida: 1.1 });
+    setTimeout(() => sonido(780, 0.2, "triangle", 0.06), 120);
+  }
+  if (S.m === "n" && cumplido(S)) { ganar(); return; }
   if (S.pz.every((x) => x === null)) nuevaRonda();
   else if (!hayMovimiento()) { terminar(); return; }
   guardarPartida();
@@ -151,10 +162,10 @@ function menuNiveles() {
   for (let n = pag * POR_PAG + 1; n <= Math.min(NIVELES_FIJOS, (pag + 1) * POR_PAG); n++) {
     const e = estrellasDeNivel(n);
     lista += TODOS || n === 1 || estrellasDeNivel(n - 1) > 0
-      ? '<button class="b3d nvl ' + (e ? "b-oro" : "b-azul") + '" data-nivel="' + n + '"><span class="b-ico">' + n + "</span><small>" + (e ? estrellasTxt(e) : "") + "</small></button>"
+      ? '<button class="b3d nvl ' + (e ? "b-oro" : "b-azul") + '" data-nivel="' + n + '"><span class="b-ico">' + n + "</span><small>" + (e ? estrellasTxt(e) : RETOS[nivelFijo(n).reto].icono) + "</small></button>"
       : '<button class="b3d nvl b-gris" disabled><span class="b-ico">🔒</span><small></small></button>';
   }
-  mostrar("<h2>🗺️ Niveles fijos</h2><p>Limpia las líneas que pide cada nivel. ⭐ " + estrellas + "/" + NIVELES_FIJOS * 3 + "</p>" + '<div class="nivs">' + lista + "</div>" +
+  mostrar("<h2>🗺️ Niveles fijos</h2><p>Cumple el reto de cada nivel. ⭐ " + estrellas + "/" + NIVELES_FIJOS * 3 + "</p>" + '<div class="nivs">' + lista + "</div>" +
     '<div class="fila">' + (paginas > 1 ? boton("b-gris", 'data-pag="-1"' + (pag ? "" : " disabled"), "◀") + '<span class="pg">' + (pag + 1) + "/" + paginas + "</span>" + boton("b-gris", 'data-pag="1"' + (pag < paginas - 1 ? "" : " disabled"), "▶") : "") +
     boton("b-gris", "data-menu", "Atrás") + "</div>");
 }
@@ -167,7 +178,7 @@ function terminar() {
   try { localStorage.removeItem(CLAVE_PARTIDA); } catch (e) {}
   sonido(130, 0.5, "sawtooth", 0.05);
   mostrar('<h2>Sin espacio</h2><p>Ya no cabe ninguna de tus piezas.</p><div class="grande-num">' + S.pt + "</div><p>" +
-    (inf ? (nuevo ? "¡Nuevo récord! 👑" : "Récord " + DIFICULTADES[S.d].nombre + ": " + (REC[k] || 0)) : "Te faltaron " + (nivelFijo(S.n).meta - S.lin) + " línea(s) para pasar el nivel.") +
+    (inf ? (nuevo ? "¡Nuevo récord! 👑" : "Récord " + DIFICULTADES[S.d].nombre + ": " + (REC[k] || 0)) : RETOS[nivelFijo(S.n).reto].falta(S, nivelFijo(S.n))) +
     '</p><div class="fila">' + boton("b-verde", "data-rep", inf ? "Jugar de nuevo" : "Reintentar") + boton("b-gris", "data-menu", "Menú") + "</div>");
 }
 function ganar() { // meta del nivel fijo cumplida
@@ -181,10 +192,15 @@ function ganar() { // meta del nivel fijo cumplida
     (!antes ? "<p>+" + PUNTOS_NIVEL + " puntos de perfil 🎉</p>" : "") + (S.n >= NIVELES_FIJOS ? "<p>Por ahora es el último nivel: ¡pronto habrá más!</p>" : "") +
     '<div class="fila">' + (S.n < NIVELES_FIJOS ? boton("b-verde", "data-sig", "Siguiente ▶") : "") + boton("b-azul", "data-rep", "Repetir") + boton("b-gris", "data-lista", "Niveles") + "</div>");
 }
-function empezar(P) { // empieza una partida nueva (guarda antes el récord y los puntos de la que había)
+function empezar(P, intro = false) { // empieza una partida nueva (guarda antes el récord y los puntos de la que había). intro: muestra el cartel del reto (niveles fijos)
   cierre();
   S = P; fin = false; arr = null; parts = []; textos = []; flashes = [];
   ocultar(); guardarPartida();
+  if (intro && S.m === "n") cartelNivel();
+}
+function cartelNivel() { // instrucciones del reto antes de jugar el nivel
+  const L = nivelFijo(S.n), R = RETOS[L.reto];
+  mostrar("<h2>Nivel " + S.n + "</h2><p>" + R.icono + " <b>" + R.titulo + "</b></p>" + R.texto(L) + '<div class="fila">' + boton("b-verde", "data-no", "¡Jugar!") + "</div>");
 }
 const reiniciar = () => empezar(S.m === "n" ? partidaNivel(S.n) : partidaInfinita(S.d));
 $("velo").addEventListener("click", (e) => {
@@ -192,11 +208,11 @@ $("velo").addEventListener("click", (e) => {
   const d = b.dataset;
   if (d.no !== undefined || d.cont !== undefined) ocultar();
   else if (d.dif) empezar(partidaInfinita(d.dif));
-  else if (d.nivel) empezar(partidaNivel(Number(d.nivel)));
+  else if (d.nivel) empezar(partidaNivel(Number(d.nivel)), true);
   else if (d.lista !== undefined) { pag = S.m === "n" ? Math.floor((S.n - 1) / POR_PAG) : 0; menuNiveles(); }
   else if (d.pag) { pag += Number(d.pag); menuNiveles(); }
   else if (d.menu !== undefined) menuPrincipal();
-  else if (d.sig !== undefined) empezar(partidaNivel(S.n + 1));
+  else if (d.sig !== undefined) empezar(partidaNivel(S.n + 1), true);
   else reiniciar(); // data-si (partida nueva) y data-rep (jugar de nuevo / reintentar / repetir)
 });
 $("bNueva").addEventListener("click", () => {
@@ -262,16 +278,24 @@ function bloque(x, y, s, a = 1) {
   for (const k of [0.3, 0.55, 0.78]) { ctx.beginPath(); ctx.moveTo(x + s * 0.12, y + s * k); ctx.lineTo(x + s * 0.88, y + s * k + 1); ctx.stroke(); }
   ctx.globalAlpha = 1;
 }
-function bloqueCandado(x, y, s) { // bloque de hierro con candado: hay que completar su línea dos veces
+// Colores por número de capas: 1 = hierro gris, 2 = acero azul, 3 = hierro morado. Además se dibujan tantos puntitos abajo como capas (para distinguirlos sin depender del color)
+const CAPAS = { 1: ["#b4bcc6", "#6f7883", "#3f464e", "#2b2f35"], 2: ["#a9cdf2", "#4f7fb8", "#1f4068", "#17304d"], 3: ["#d2b0f5", "#7a4bb3", "#38195f", "#2a1247"] };
+function bloqueCandado(x, y, s, k = 1) { // bloque de hierro con candado: pierde una capa cada vez que se completa su línea
+  const [c1, c2, borde, oscuro] = CAPAS[k] || CAPAS[1];
   const g = ctx.createLinearGradient(x, y, x, y + s);
-  g.addColorStop(0, "#b4bcc6"); g.addColorStop(1, "#6f7883");
+  g.addColorStop(0, c1); g.addColorStop(1, c2);
   ctx.fillStyle = "rgba(40,45,52,.55)"; rr(x + 1, y + 2, s - 2, s - 2, s * 0.09); ctx.fill();
   ctx.fillStyle = g; rr(x + 1, y + 1, s - 3, s - 3, s * 0.09); ctx.fill();
-  ctx.strokeStyle = "#3f464e"; ctx.lineWidth = Math.max(2, s * 0.06); rr(x + 3, y + 3, s - 7, s - 7, s * 0.07); ctx.stroke();
-  const cx = x + s / 2 - 1, cy = y + s / 2 + 2;
-  ctx.strokeStyle = "#2b2f35"; ctx.lineWidth = s * 0.075; ctx.beginPath(); ctx.arc(cx, cy - s * 0.07, s * 0.135, Math.PI, 0); ctx.stroke();
-  ctx.fillStyle = "#2b2f35"; rr(cx - s * 0.2, cy - s * 0.06, s * 0.4, s * 0.3, s * 0.05); ctx.fill();
-  ctx.fillStyle = "#b4bcc6"; ctx.beginPath(); ctx.arc(cx, cy + s * 0.06, s * 0.04, 0, 6.2832); ctx.fill(); ctx.fillRect(cx - s * 0.015, cy + s * 0.06, s * 0.03, s * 0.09);
+  ctx.strokeStyle = borde; ctx.lineWidth = Math.max(2, s * (0.05 + 0.015 * k)); rr(x + 3, y + 3, s - 7, s - 7, s * 0.07); ctx.stroke();
+  const cx = x + s / 2 - 1, cy = y + s / 2 + (k > 1 ? 0 : 2);
+  ctx.strokeStyle = oscuro; ctx.lineWidth = s * 0.075; ctx.beginPath(); ctx.arc(cx, cy - s * 0.07, s * 0.135, Math.PI, 0); ctx.stroke();
+  ctx.fillStyle = oscuro; rr(cx - s * 0.2, cy - s * 0.06, s * 0.4, s * 0.3, s * 0.05); ctx.fill();
+  ctx.fillStyle = c1; ctx.beginPath(); ctx.arc(cx, cy + s * 0.06, s * 0.04, 0, 6.2832); ctx.fill(); ctx.fillRect(cx - s * 0.015, cy + s * 0.06, s * 0.03, s * 0.09);
+  if (k > 1) for (let i = 0; i < k; i++) { ctx.fillStyle = oscuro; ctx.beginPath(); ctx.arc(x + s / 2 - 1 + (i - (k - 1) / 2) * s * 0.17, y + s - s * 0.13, s * 0.055, 0, 6.2832); ctx.fill(); ctx.fillStyle = c1; ctx.beginPath(); ctx.arc(x + s / 2 - 1 + (i - (k - 1) / 2) * s * 0.17, y + s - s * 0.13, s * 0.03, 0, 6.2832); ctx.fill(); }
+}
+function marcaObjetivo(x, y, s) { // aro rojo: este bloque hay que eliminarlo del todo (también cuando ya no le quedan candados)
+  ctx.strokeStyle = "#ff4d2e"; ctx.lineWidth = Math.max(2, s * 0.06); rr(x + 1.5, y + 1.5, s - 4, s - 4, s * 0.1); ctx.stroke();
+  ctx.fillStyle = "#ff4d2e"; ctx.beginPath(); ctx.moveTo(x + 2, y + 2); ctx.lineTo(x + s * 0.3, y + 2); ctx.lineTo(x + 2, y + s * 0.3); ctx.closePath(); ctx.fill();
 }
 function forma(f, x0, y0, s, a = 1) { for (const [r, c] of f.celdas) bloque(x0 + c * s, y0 + r * s, s, a); }
 function texto(t, x, y, tam, color) { ctx.font = "800 " + tam + "px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "rgba(60,30,10,.85)"; ctx.strokeText(t, x, y); ctx.fillStyle = color; ctx.fillText(t, x, y); }
@@ -279,19 +303,23 @@ function texto(t, x, y, tam, color) { ctx.font = "800 " + tam + "px system-ui, s
 function dibujar() {
   ctx.drawImage(fondo, 0, 0);
   // marcadores: récord (morado) y puntos
-  const esN = S.m === "n", rec = esN ? 0 : Math.max(REC[DIFICULTADES[S.d].clave] || 0, S.pt);
-  ctx.font = "30px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText(esN ? "🎯" : "👑", 150, 72);
+  const esN = S.m === "n", rec = esN ? 0 : Math.max(REC[DIFICULTADES[S.d].clave] || 0, S.pt), hud = esN ? RETOS[nivelFijo(S.n).reto].hud(S, nivelFijo(S.n)) : null;
+  ctx.font = "30px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText(esN ? hud.icono : "👑", 150, 72);
   const g = ctx.createLinearGradient(0, 78, 0, 134); g.addColorStop(0, "#9a6cf5"); g.addColorStop(1, "#6a3fd0");
   ctx.fillStyle = "#3a2410"; rr(68, 78, 164, 60, 14); ctx.fill(); ctx.fillStyle = g; rr(72, 80, 156, 52, 11); ctx.fill();
   ctx.fillStyle = "#3a2410"; rr(248, 78, 164, 60, 14); ctx.fill(); ctx.fillStyle = "#5a3418"; rr(252, 80, 156, 52, 11); ctx.fill();
-  texto(esN ? S.lin + "/" + nivelFijo(S.n).meta : String(rec), 150, 118, 34, "#ffe27a"); texto(String(S.pt), 330, 118, 34, "#fff4d6");
+  const izq = esN ? hud.txt : String(rec); texto(izq, 150, 118, izq.length > 5 ? 26 : 34, "#ffe27a"); texto(String(S.pt), 330, 118, 34, "#fff4d6");
   texto(nombreModo(), 240, 46, 22, "#fff4d6");
   // tablero
   ctx.fillStyle = "#8a5226"; rr(BX - 14, BY - 14, N * CELL + 28, N * CELL + 28, 16); ctx.fill();
   ctx.fillStyle = "#d39a52"; rr(BX - 11, BY - 11, N * CELL + 22, N * CELL + 22, 14); ctx.fill();
   ctx.fillStyle = "#3e2414"; rr(BX - 6, BY - 6, N * CELL + 12, N * CELL + 12, 10); ctx.fill();
   for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
-    if ((S.tab[r] >> c) & 1) { if ((S.tab[N + r] >> c) & 1) bloqueCandado(BX + c * CELL, BY + r * CELL, CELL); else bloque(BX + c * CELL, BY + r * CELL, CELL); }
+    if ((S.tab[r] >> c) & 1) {
+      const k = capas(S.tab, r, c);
+      if (k) bloqueCandado(BX + c * CELL, BY + r * CELL, CELL, k); else bloque(BX + c * CELL, BY + r * CELL, CELL);
+      if (S.obj && ((S.obj[r] >> c) & 1)) marcaObjetivo(BX + c * CELL, BY + r * CELL, CELL);
+    }
     else { ctx.fillStyle = "#4a2a18"; rr(BX + c * CELL + 1, BY + r * CELL + 1, CELL - 2, CELL - 2, 5); ctx.fill(); }
   }
   for (const fl of flashes) { ctx.globalAlpha = Math.min(1, fl.vida * 2.5); ctx.fillStyle = "#fff6c8"; for (const r of fl.filas) ctx.fillRect(BX, BY + r * CELL, N * CELL, CELL); for (let c = 0; c < N; c++) if ((fl.cols >> c) & 1) ctx.fillRect(BX + c * CELL, BY, CELL, N * CELL); }

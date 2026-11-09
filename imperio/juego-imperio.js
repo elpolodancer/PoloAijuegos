@@ -368,7 +368,7 @@ function enviarPuntos() {
 }
 function puntos(n) { pend += n; if (pend >= 10 || (fin && pend > 0)) enviarPuntos(); }
 // ----- Zona del imperio (postes), grupos de tropas y tareas -----
-const MAX_GRUPO = 10, RADIO_ZONA = 6; // tropas por grupo; radio (en casillas) que marca cada poste de imperio
+const MAX_GRUPO = 15, RADIO_ZONA = 6; // tropas por grupo; radio (en casillas) que marca cada poste de imperio
 const CAT = { madera: ["arbol"], mineral: ["roca", "mina", "carbon", "cobre", "plata", "hierro", "oro", "diamante"] };
 const itemDe = (t) => (t == "arbol" ? "tronco" : t);
 const aceptaCont = (b, t) => b.k == "baul" || (b.k == "cajonM") == MADERA.includes(t);
@@ -389,17 +389,25 @@ function libreCerca(x, y) { // centro de la casilla libre más cercana
   for (let j = -8; j <= 8; j++) for (let i = -8; i <= 8; i++) { const a = (x | 0) + i, b = (y | 0) + j; if (a < 0 || b < 0 || a >= N || b >= N || bloq[b * N + a]) continue; const d = Math.hypot(a + .5 - x, b + .5 - y); if (d < md) { md = d; m = { x: a + .5, y: b + .5 }; } }
   return m || { x: 10.5, y: 10.5 };
 }
-function nuevoRally(id) { const p = eds.find((b) => b.k == "refugio") || eds.find((b) => b.k == "poste"), bx = p ? p.x + p.w / 2 : 10, by = p ? p.y + p.w + .5 : 11, a = id * 2.1, r = Math.min(5, 2.5 + (id >> 1) * 1.5); return libreCerca(bx + Math.cos(a) * r, by + Math.sin(a) * r); }
-function asignarGrupo() { // el primer grupo con menos de 10 tropas; si todos están llenos, uno nuevo
+// Cada grupo se reúne en una fila (de izquierda a derecha en la pantalla). Los grupos nuevos se acomodan en filas una debajo de otra, de dos en dos.
+function nuevoRally(id) {
+  const p = eds.find((b) => b.k == "refugio") || eds.find((b) => b.k == "poste"), bx = p ? p.x + p.w / 2 : 10, by = p ? p.y + p.w + .5 : 11;
+  const baja = 2.5 + (id >> 1) * 1.4, lado = id & 1 ? 5 : -5; // baja = hacia abajo en la pantalla; lado = izquierda o derecha
+  return libreCerca(bx + .7071 * baja + .7071 * lado, by + .7071 * baja - .7071 * lado);
+}
+function asignarGrupo() { // el primer grupo con menos de MAX_GRUPO tropas; si todos están llenos, uno nuevo
   for (let id = 0; id < grupos.length; id++) if (us.filter((u) => u.gr === id).length < MAX_GRUPO) return id;
   const id = grupos.length, q = nuevoRally(id); grupos.push({ id, x: q.x, y: q.y, tarea: null }); return id;
 }
-function hueco(u) { // lugar de la unidad alrededor del punto de reunión de su grupo
+const ORDEN_K = { g: 0, c: 1, r: 2 }, ESP_FILA = .6; // en la fila van primero los guerreros, luego constructores y al final recolectores
+let _ord = {}; // miembros de cada grupo en orden de fila (se rehace en cada tick)
+const ordenGrupo = (id) => _ord[id] || (_ord[id] = us.filter((u) => u.gr === id && !esHeroe(u)).sort((a, b) => (ORDEN_K[a.k] ?? 3) - (ORDEN_K[b.k] ?? 3)));
+function hueco(u) { // lugar de la unidad en la fila de su grupo (centrada en el punto de reunión)
   const g = grupos[u.gr]; if (!g) return null;
   if (bloq[(g.y | 0) * N + (g.x | 0)]) { const q = libreCerca(g.x, g.y); g.x = q.x; g.y = q.y; }
-  let s = 0; for (const o of us) { if (o === u) break; if (o.gr === u.gr) s++; }
-  const a = s * 2.4, r = s ? .45 + .3 * Math.sqrt(s) : 0, x = g.x + Math.cos(a) * r, y = g.y + Math.sin(a) * r;
-  return x < 0 || y < 0 || x >= N || y >= N || bloq[(y | 0) * N + (x | 0)] ? { x: g.x, y: g.y } : { x, y };
+  const m = ordenGrupo(u.gr), s = m.indexOf(u); if (s < 0) return { x: g.x, y: g.y };
+  const off = (s - (m.length - 1) / 2) * ESP_FILA, x = g.x + off * .7071, y = g.y - off * .7071;
+  return x < 0 || y < 0 || x >= N || y >= N || bloq[(y | 0) * N + (x | 0)] ? libreCerca(x, y) : { x, y };
 }
 function reunir(u, dt) {
   const h = hueco(u); if (!h) return;
@@ -510,12 +518,18 @@ function revivirEn(k) {
   sel = u; fin = false; $("revivir").hidden = true; const c = P(u.x, u.y); cam.x += W / 2 - c[0]; cam.y += H / 2 - c[1];
   invHud(); panel(); aviso("Ahora juegas con tu " + UN[k].nom + ": ataca y junta recursos"); guardar();
 }
+function asignarA(u, id) { // pasa una tropa a otro grupo (se reúne en su fila)
+  if (!grupos[id]) return;
+  if (us.filter((x) => x.gr === id && x !== u).length >= MAX_GRUPO) return aviso("Ese grupo está lleno (" + MAX_GRUPO + ")");
+  u.gr = id; u.o = null; u.p = []; u.pr = []; u.reu = true; u.rt2 = 0; u.cola = null;
+  aviso(UN[u.k].nom + " pasa al Grupo " + (id + 1)); panel();
+}
 function sigObra(u) {
   u.o = null; u.p = [];
   while (u.cola && u.cola.length) { const b = u.cola.shift(); if (b.hp > 0 && (b.prog < 1 || b.hp < b.mh)) { u.o = { t: "con", b }; return; } }
 }
 function tick(dt) {
-  if (fin) return;
+  if (fin) return; _ord = {};
   tReloj += dt; controlHeroe(dt);
   us.forEach((u) => actualizar(u, dt)); enem.forEach((e) => actualizar(e, dt)); anim.forEach((a) => iaAnimal(a, dt));
   const blancos = enem.concat(anim.filter((a) => ANI[a.k].dmg > 0)); // enemigos y animales que atacan
@@ -782,6 +796,7 @@ function hombre(x, y, z, k, col, paso, bob) {
 function dibU(u) {
   const z = cam.z, c = P(u.x, u.y), d = UN[u.k];
   cx.fillStyle = "#0005"; cx.beginPath(); cx.ellipse(c[0], c[1], 8 * z, 4 * z, 0, 0, 7); cx.fill();
+  if (moverGrupo != null && u.gr === moverGrupo) { cx.strokeStyle = "#4de1ff"; cx.lineWidth = 2.5 * z; cx.beginPath(); cx.ellipse(c[0], c[1], 12 * z, 6 * z, 0, 0, 7); cx.stroke(); } // grupo seleccionado
   if (u.jug) { cx.strokeStyle = "#ffd23f"; cx.lineWidth = 2.5 * z; cx.beginPath(); cx.ellipse(c[0], c[1], 13 * z, 6.5 * z, 0, 0, 7); cx.stroke(); } // tú
   if (sel === u) { cx.strokeStyle = "#fff"; cx.lineWidth = 2; cx.beginPath(); cx.ellipse(c[0], c[1], 11 * z, 5.5 * z, 0, 0, 7); cx.stroke(); }
   const mov = !!(u.p && u.p.length), t = performance.now() / 1000;
@@ -817,9 +832,12 @@ addEventListener("blur", () => teclas.clear());
 function zoom(f) { const nz = Math.min(2, Math.max(.35, cam.z * f)), k = nz / cam.z, mx = W / 2, my = H / 2; cam.x = mx - (mx - cam.x) * k; cam.y = my - (my - cam.y) * k; cam.z = nz; }
 function toque(w, raton) {
   if (fin) return; const tx = Math.floor(w.x), ty = Math.floor(w.y), i = ty * N + tx;
-  if (moverGrupo != null) { // nuevo punto de reunión del grupo
-    if (tx < 0 || ty < 0 || tx >= N || ty >= N || !expl[i] || bloq[i]) return aviso("Ahí no pueden ir: elige una casilla libre y explorada");
-    const id = moverGrupo, g = grupos[id]; moverGrupo = null; g.x = tx + .5; g.y = ty + .5; return asignarTarea(id, null);
+  if (moverGrupo != null) { // grupo seleccionado: cada toque en una casilla libre es su nuevo punto de reunión
+    if (us.some((u) => Math.hypot(u.x - w.x, u.y - w.y - .3) < .8)) moverGrupo = null; // tocar una tropa suelta el grupo y la elige
+    else {
+      if (tx < 0 || ty < 0 || tx >= N || ty >= N || !expl[i] || bloq[i]) return aviso("Ahí no pueden ir: elige una casilla libre y explorada");
+      const g = grupos[moverGrupo]; g.x = tx + .5; g.y = ty + .5; return asignarTarea(moverGrupo, null);
+    }
   }
   if (colocar && colocar in COSTO_FAB && heroe() && heroe().k != "h") { colocar = null; panel(); return aviso("Solo tu personaje original fabrica y coloca postes y cofres"); }
   if (colocar && colocar in COSTO_FAB && heroe()) { // poste, baúl o cajón: lo coloca el personaje
@@ -878,7 +896,7 @@ function figuraSVG(k) {
 }
 function panel(soloTexto) {
   const z = $("acciones"); if (!soloTexto) z.innerHTML = "";
-  const boton = (t, f, off) => { const b = document.createElement("button"); b.className = "btn"; b.textContent = t; b.disabled = !!off; b.addEventListener("click", f); z.appendChild(b); };
+  const boton = (t, f, off) => { const b = document.createElement("button"); b.className = "btn"; b.textContent = t; b.disabled = !!off; b.addEventListener("click", f); z.appendChild(b); if (t == "Siguiente libre") b.classList.add("sec"); return b; };
   if (!soloTexto && sel && sel.k == "refugio" && sel.prog >= 1) ["r", "c", "g"].forEach((k) => { // las tropas se crean tocando el refugio
     const b = document.createElement("button"); b.type = "button"; b.className = "b3d fig " + ({ r: "b-azul", c: "b-oro", g: "b-morado" })[k];
     b.title = b.ariaLabel = UN[k].nom + " $" + UN[k].costo;
@@ -891,6 +909,13 @@ function panel(soloTexto) {
     z.appendChild(b);
   });
   if (!soloTexto) boton("Siguiente libre", () => { const l = us.filter((u) => !u.o); if (!l.length) return aviso("Todos están ocupados"); const j = l.indexOf(sel); sel = l[(j + 1) % l.length]; const c = P(sel.x, sel.y); cam.x += W / 2 - c[0]; cam.y += H / 2 - c[1]; panel(); });
+  if (!soloTexto && sel && ["r", "c", "g"].includes(sel.k) && !esHeroe(sel)) { // tocar una tropa permite elegirle grupo
+    grupos.map((g) => g.id).filter((id) => id === sel.gr || us.some((u) => u.gr === id && !esHeroe(u))).forEach((id) => {
+      const n = us.filter((u) => u.gr === id && !esHeroe(u)).length, b = boton("Grupo " + (id + 1) + " (" + n + "/" + MAX_GRUPO + ")", () => asignarA(sel, id), id !== sel.gr && n >= MAX_GRUPO);
+      if (id !== sel.gr) b.classList.add("sec");
+    });
+    const nb = boton("➕ Grupo nuevo", () => { const id = grupos.length, q = nuevoRally(id); grupos.push({ id, x: q.x, y: q.y, tarea: null }); asignarA(sel, id); }); nb.classList.add("sec");
+  }
   if (!soloTexto && sel && sel.k == "c") boton("🏗️ Edificios", () => { alternar("edif"); edif(true); });
   if (!soloTexto && sel && sel.k == "herrero" && sel.prog >= 1) {
     const n = sel.nv || 0;
@@ -913,7 +938,8 @@ function panel(soloTexto) {
   else if (sel.k == "herrero") s.textContent = "Herrero · " + ((sel.nv || 0) ? ARMAS[sel.nv - 1][0] : "sin armas todavía") + " (" + (sel.nv || 0) + "/" + ARMAS.length + ") · tus tropas golpean +" + Math.round(BONO_ARMA * 100 * (sel.nv || 0)) + " % · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
   else if (sel.k == "hospital") s.textContent = "Hospital · cura " + CURA.hps + " de vida por segundo a tus tropas a " + CURA.r + " casillas · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
   else if (sel.w) s.textContent = ED[sel.k].nom + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
-  else s.textContent = UN[sel.k].nom + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + " · golpe " + Math.round(dmgDe(sel)) + " · " + ({ r: "toca un recurso para juntarlo", c: "toca una obra o edificio dañado; o elige qué construir", g: "toca el mapa para explorar o un animal para atacar", h: "flechas o WASD para moverte · barra espaciadora o clic para atacar y picar (10 golpes por árbol o roca) · en pantalla táctil, toca el mapa" })[sel.k];
+  else s.textContent = UN[sel.k].nom + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + " · golpe " + Math.round(dmgDe(sel)) + (sel.gr != null && grupos[sel.gr] ? " · Grupo " + (sel.gr + 1) : "") + " · " + ({ r: "toca un recurso para juntarlo", c: "toca una obra o edificio dañado; o elige qué construir", g: "toca el mapa para explorar o un animal para atacar", h: "flechas o WASD para moverte · barra espaciadora o clic para atacar y picar (10 golpes por árbol o roca) · en pantalla táctil, toca el mapa" })[sel.k];
+  if (moverGrupo != null && !colocar) s.textContent = "Grupo " + (moverGrupo + 1) + " seleccionado: toca el mapa para mandarlo (Esc para soltarlo; tocar una tropa también lo suelta)";
   if (colocar && ED[colocar] && !(colocar in COSTO_FAB)) s.textContent = "Toca una casilla libre para construir: " + ED[colocar].nom + " $" + ED[colocar].costo + (esMuro(colocar) ? " (puedes poner varios seguidos; Esc para terminar)" : " (Esc para cancelar)");
   if (colocar && colocar in COSTO_FAB) s.textContent = "Toca una casilla libre y cercana (dentro de la zona del imperio, salvo el primer poste) para colocar: " + ED[colocar].nom + " (Esc para cancelar)";
   if (moverGrupo != null) s.textContent = "Toca el mapa para mandar al grupo " + (moverGrupo + 1) + " (Esc para cancelar)";
@@ -1055,24 +1081,35 @@ $("bEdif").addEventListener("click", () => { alternar("edif"); edif(true); });
 let sigTropas = "";
 function tropas(forzar) {
   const z = $("tropas"); if (z.hidden) return;
-  const cu = (id, k) => us.filter((u) => u.gr === id && (!k || u.k === k)).length, lista = grupos.map((g) => g.id).filter((id) => cu(id) > 0);
+  const cu = (id, k) => us.filter((u) => u.gr === id && !esHeroe(u) && (!k || u.k === k)).length, lista = grupos.map((g) => g.id).filter((id) => cu(id) > 0);
   if (grSel == null && lista.length == 1) grSel = lista[0];
   if (grSel != null && !lista.includes(grSel)) grSel = null;
-  const sig = lista.map((id) => id + ":" + cu(id) + ":" + grupos[id].tarea).join("|") + "#" + grSel + "#" + nPostes;
+  const sig = lista.map((id) => id + ":" + cu(id) + ":" + grupos[id].tarea).join("|") + "#" + grSel + "#" + nPostes + "#" + moverGrupo;
   if (!forzar && sig == sigTropas) return; sigTropas = sig; z.innerHTML = "";
-  const t = document.createElement("div"); t.className = "resumen"; t.textContent = "Grupos: " + lista.length + "  ·  tropas: " + us.filter((u) => u.gr != null).length + " (máx. " + MAX_GRUPO + " por grupo)"; z.appendChild(t);
-  const boton = (txt, f, cls) => { const b = document.createElement("button"); b.className = "soldado" + (cls ? " " + cls : ""); b.textContent = txt; b.addEventListener("click", f); z.appendChild(b); };
+  const t = document.createElement("div"); t.className = "resumen"; t.textContent = "Grupos: " + lista.length + "  ·  tropas: " + us.filter((u) => u.gr != null && !esHeroe(u)).length + " (máx. " + MAX_GRUPO + " por grupo)"; z.appendChild(t);
   const texto = (txt) => { const p = document.createElement("p"); p.textContent = txt; z.appendChild(p); };
-  if (!lista.length) return texto("Todavía no tienes tropas. Pon un poste de imperio y crea soldados o trabajadores con los botones de abajo.");
-  lista.forEach((id) => boton("Grupo " + (id + 1) + " · " + cu(id) + "/" + MAX_GRUPO + " · 🔨" + cu(id, "c") + " ⚔️" + cu(id, "g") + " ⛏️" + cu(id, "r") + " · " + ({ madera: "recoge madera", mineral: "recoge minerales" }[grupos[id].tarea] || "en espera"),
-    () => { grSel = id; const c = P(grupos[id].x, grupos[id].y); cam.x += W / 2 - c[0]; cam.y += H / 2 - c[1]; tropas(true); }, id === grSel ? "activo" : ""));
+  if (!lista.length) return texto("Todavía no tienes tropas. Crea soldados o trabajadores tocando el refugio.");
+  // Cada grupo es un cuadrado: dibujo de lo que hace, nombre y cuántos son
+  const rej = document.createElement("div"); rej.className = "cuadricula"; z.appendChild(rej);
+  lista.forEach((id) => {
+    const g = grupos[id], b = document.createElement("button"); b.type = "button";
+    b.className = "b3d cuad " + (g.tarea == "madera" ? "b-oro" : g.tarea == "mineral" ? "b-azul" : "b-verde") + (id === grSel ? " on" : "");
+    b.title = "Grupo " + (id + 1) + " · " + cu(id) + "/" + MAX_GRUPO + " · 🔨" + cu(id, "c") + " ⚔️" + cu(id, "g") + " ⛏️" + cu(id, "r") + " · " + ({ madera: "recoge madera", mineral: "recoge minerales" }[g.tarea] || "en espera"); b.setAttribute("aria-label", b.title);
+    b.innerHTML = '<span class="b-ico">' + (g.tarea == "madera" ? ICO.madera : g.tarea == "mineral" ? "⛏️" : "👥") + '</span><span class="b-nom">Grupo ' + (id + 1) + '</span><span class="b-info">' + cu(id) + "/" + MAX_GRUPO + "</span>";
+    b.addEventListener("click", () => { grSel = id; const c = P(g.x, g.y); cam.x += W / 2 - c[0]; cam.y += H / 2 - c[1]; tropas(true); });
+    rej.appendChild(b);
+  });
   if (grSel == null) return texto("Elige un grupo para darle una tarea.");
-  const g = grSel;
+  const g = grSel, boton = (txt, f, cls) => { const b = document.createElement("button"); b.className = "soldado" + (cls ? " " + cls : ""); b.textContent = txt; b.addEventListener("click", f); z.appendChild(b); };
+  texto("Grupo " + (g + 1) + ": " + cu(g) + " tropas (🔨" + cu(g, "c") + " ⚔️" + cu(g, "g") + " ⛏️" + cu(g, "r") + "), en fila.");
+  boton("🎯 " + (moverGrupo === g ? "Soltar grupo" : "Seleccionar grupo (toca el mapa para mandarlo)"), () => {
+    if (moverGrupo === g) { moverGrupo = null; tropas(true); panel(); return; }
+    moverGrupo = g; $("tropas").hidden = true; aviso("Grupo " + (g + 1) + " seleccionado: toca el mapa para mandarlo"); panel();
+  }, moverGrupo === g ? "activo" : "");
   boton("🌲 Recoger madera (guardar en baúl o cajón de madera)", () => { asignarTarea(g, "madera"); tropas(true); });
   boton("⛏️ Recoger minerales y piedra (guardar en baúl o cajón de minerales)", () => { asignarTarea(g, "mineral"); tropas(true); });
-  boton("📍 Mover el grupo (toca el mapa)", () => { moverGrupo = g; $("tropas").hidden = true; aviso("Toca el mapa para mandar al grupo " + (g + 1)); panel(); });
   boton("🛑 Detener y reunir", () => { asignarTarea(g, null); tropas(true); });
-  texto("La tarea solo empieza si hay un cofre con espacio dentro de la zona del imperio.");
+  texto("La tarea solo empieza si hay un cofre con espacio dentro de la zona del imperio. Para cambiar a una tropa de grupo, tócala y elige el grupo abajo.");
 }
 $("bTropas").addEventListener("click", () => { alternar("tropas"); tropas(true); });
 $("zmas").addEventListener("click", () => zoom(1.2)); $("zmenos").addEventListener("click", () => zoom(.83));

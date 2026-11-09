@@ -1,9 +1,12 @@
 // Ruta: bloques/logica-bloques.js
 // Reglas y generador de rondas de «Bloques de madera». No toca el DOM (se puede probar con Node).
-// Tablero 8×8: un arreglo de 16 números. Los primeros 8 son las filas (el bit c de la fila r vale 1 si la casilla está ocupada);
-// los otros 8 son los candados (el bit vale 1 si esa casilla ocupada tiene candado).
+// Tablero 8×8: un arreglo de 24 números. Los primeros 8 son las filas (el bit c de la fila r vale 1 si la casilla está ocupada);
+// los siguientes 16 son las CAPAS DE CANDADO de cada casilla ocupada (0 a 3), repartidas en dos «planos» de 8 filas:
+//   plano bajo  t[N + r]      bit bajo de las capas
+//   plano alto  t[2N + r]     bit alto de las capas        → capas = bajo + 2 × alto  (0 = bloque normal, 1 = candado, 2 = doble, 3 = triple)
 // Al completar una fila o columna (o varias a la vez) se limpian las casillas normales; una casilla con candado solo pierde
-// el candado y se queda como bloque normal: hay que completar la línea otra vez para quitarla.
+// UNA capa y se queda: un candado simple pide completar su línea 2 veces, el doble 3 veces y el triple 4 veces.
+// (Las partidas guardadas con 16 números se completan con ceros: ver cargarPartida en juego-bloques.js.)
 //
 // Cada ronda se construye "al revés" para que SIEMPRE tenga solución: se eligen las 3 piezas colocándolas una por una
 // en huecos que de verdad existen (con preferencia por los huecos donde encajan justo). Después se cuentan cuántos de los
@@ -56,7 +59,17 @@ for (const [txt, peso] of BASES) {
 }
 
 // ----- Tablero -----
-export const tableroVacio = () => Array(2 * N).fill(0);
+export const tableroVacio = () => Array(3 * N).fill(0);
+// Capas de candado de una casilla (0 a 3) y cómo fijarlas (modifica el tablero que le pases)
+export const capas = (t, r, c) => ((t[N + r] >> c) & 1) | (((t[2 * N + r] >> c) & 1) << 1);
+export function fijarCapas(t, r, c, k) {
+  t[N + r] = (t[N + r] & ~(1 << c)) | ((k & 1) << c);
+  t[2 * N + r] = (t[2 * N + r] & ~(1 << c)) | (((k >> 1) & 1) << c);
+}
+// Suma de capas de todo el tablero (sirve para medir cuánto falta por romper)
+export function totalCapas(t) { let n = 0; for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) n += capas(t, r, c); return n; }
+// Puntos de una jugada (la usan el juego y el bot, para que cuenten igual)
+export const puntosJugada = (f, res) => f.n + (res.lineas ? 10 * res.lineas * res.lineas : 0) + 5 * res.rotos.length;
 const bits = (v) => { let n = 0; while (v) { n += v & 1; v >>= 1; } return n; };
 export const llenas = (t) => t.slice(0, N).reduce((s, f) => s + bits(f), 0);
 
@@ -70,7 +83,7 @@ export function hayLugar(t, f) {
   return false;
 }
 // Pone la pieza y limpia las filas y columnas que quedaron completas (todas a la vez).
-// Devuelve { t: tablero nuevo, filas: [filas completas], cols: máscara de columnas completas, lineas: cuántas, rotos: [[r, c]…] candados quitados }
+// Devuelve { t: tablero nuevo, filas: [filas completas], cols: máscara de columnas completas, lineas: cuántas, rotos: [[r, c]…] capas de candado quitadas }
 export function colocar(t, f, r0, c0) {
   const x = t.slice();
   for (let i = 0; i < f.h; i++) x[r0 + i] |= f.filas[i] << c0;
@@ -81,10 +94,12 @@ export function colocar(t, f, r0, c0) {
   for (let r = 0; r < N; r++) {
     const m = filas.includes(r) ? TODO : cols; // casillas de esta fila que se limpian (por la fila, por columnas o por ambas)
     if (!m) continue;
-    const dur = x[N + r] & m;                  // las que tienen candado solo lo pierden
-    for (let c = 0; c < N; c++) if ((dur >> c) & 1) rotos.push([r, c]);
-    x[N + r] &= ~dur;
-    x[r] &= ~(m & ~dur);
+    for (let c = 0; c < N; c++) {
+      if (!((m >> c) & 1)) continue;
+      const k = capas(x, r, c);
+      if (k > 0) { fijarCapas(x, r, c, k - 1); rotos.push([r, c]); } // con candado: pierde una capa y se queda
+      else x[r] &= ~(1 << c);                                         // normal: se limpia
+    }
   }
   return { t: x, filas, cols, lineas: filas.length + bits(cols), rotos };
 }
@@ -201,4 +216,5 @@ export const tableroInicial = (rnd = Math.random) => sembrar(tableroVacio(), INI
 export const tableroCon = (cubos, rnd = Math.random) => sembrar(tableroVacio(), cubos, rnd);
 // Si quedan pocos cubos, aparecen más (así siempre hay algo que armar)
 // pCandado: probabilidad de que cada pieza sembrada lleve un cubo con candado (los niveles sencillos pasan 0)
-export const rellenar = (t, rnd = Math.random, pCandado = 0.12) => (llenas(t) >= MINIMO ? t : sembrar(t, MINIMO + 8 + Math.floor(rnd() * 5), rnd, pCandado));
+// piso: si quedan menos cubos que esto aparecen más, hasta «piso + 8» más o menos (por defecto 13, como siempre; los niveles fijos pasan el suyo para poder ser más ligeros)
+export const rellenar = (t, rnd = Math.random, pCandado = 0.12, piso = MINIMO, extra = 8) => (llenas(t) >= piso ? t : sembrar(t, piso + extra + Math.floor(rnd() * 5), rnd, pCandado));

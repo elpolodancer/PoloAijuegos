@@ -22,22 +22,50 @@ Partida sin fin; termina cuando ninguna pieza cabe. Cada dificultad tiene su pro
 
 Medido con `node bot-bloques.mjs dificultades 100 150` (rondas que aguanta): el **bot medio** (no mira adelante) llega a una mediana de 10 en Fácil, 7 en Normal y 3 en Difícil. El **bot bueno** casi nunca pierde (Fácil: nunca en 100 partidas hasta la ronda 150; Normal y Difícil a veces antes), así que sirve poco para medir; la prueba de verdad es jugarlo a mano.
 
-### 🗺️ Niveles fijos (3 por ahora; meta: unos 2000)
-Cada nivel pide **limpiar N líneas** (🎯 arriba a la izquierda). El tablero inicial y las piezas de cada ronda salen siempre igual para todos (semilla por nivel y ronda, `rngRonda`), y cada ronda sigue teniendo solución. Se abren de uno en uno (al pasar el 1 se abre el 2…). Con `?todos` en la dirección se abren todos para probar.
+### 🗺️ Niveles fijos (20 publicados; meta: 2000)
+Cada nivel tiene un **reto** (`RETOS` en `niveles-bloques.js`). Al empezar sale un cartel con las instrucciones. El tablero inicial y las piezas de cada ronda salen siempre igual para todos (semilla por nivel, ronda y variante `sem`), y cada ronda sigue teniendo solución. Se abren de uno en uno. Con `?todos` en la dirección se abren todos para probar.
 
-- **Estrellas** según las rondas que tardas: 3 ★ si llegas al «par» del nivel, 2 ★ hasta un 50 % más, 1 ★ si lo pasas. El par sale del bot: lo que tarda el bot bueno ×1.5 + 1.
-- **Puntos de perfil:** 5 la primera vez que pasas cada nivel (repetirlo no da más). Los puntos del juego dentro de un nivel no cuentan para el perfil.
-- **Primeros 10 niveles:** sencillos y sin nada extra (sin candados, rondas casi siempre fáciles). Publicados hoy: 1 a 3.
+**Retos que existen hoy**
 
-| Nivel | Meta | Cubos al empezar | Par (3 ★) | Bot bueno | Bot al azar gana |
-|---|---|---|---|---|---|
-| 1 | 3 líneas | 13 | 6 rondas | 3 rondas | ~30 % |
-| 2 | 4 líneas | 14 | 7 | 4 | ~15-25 % |
-| 3 | 4 líneas | 13 | 4 | 2 | ~20 % |
+| Reto | Qué pide | Cómo se define |
+|---|---|---|
+| 🎯 `puntos` | Llegar a N puntos | `meta` |
+| 🔒 `candados` | Eliminar del todo los bloques con candado. Cada línea que pasa por un bloque le quita **una capa**; sin capas, otra línea lo elimina. Candado simple = 2 líneas, doble = 3, triple = 4 | `cand: [1, 1, 2…]` (capas de cada bloque) |
+
+El tablero guarda las capas (0 a 3) en dos planos de bits (`logica-bloques.js`: `capas`, `fijarCapas`). Los bloques por eliminar se recuerdan en `S.obj` (un número por fila): el aro rojo del tablero los marca, incluso cuando ya no tienen candados. Para inventar un reto nuevo: añade una entrada a `RETOS` (`texto`, `hud`, `cumplido`, `falta`) y úsala en la fila del nivel.
+
+**Los 20 niveles publicados** (medido con `node bot-bloques.mjs niveles`; «aficionado» = jugador simulado que elige entre sus 2 mejores jugadas; los niveles 1 a 10 son solo de puntos)
+
+| Niveles | Reto | Bot bueno tarda | Aficionado pasa |
+|---|---|---|---|
+| 1 a 5 | puntos 50 a 105 | 3 a 4 rondas | 82 a 96 % |
+| 6 a 10 | puntos 120 a 180 | 5 a 8 rondas | 38 a 63 % |
+| 11 | 1 candado | 4 | 57 % |
+| 12, 14, 17 | puntos 200, 215, 225 | 8 a 9 | 27 a 38 % |
+| 13, 16 | 2 candados | 5 y 9 | 28 a 30 % |
+| 15, 18, 19 | 3 candados | 7 a 8 | 21 a 30 % |
+| 20 | 4 candados | 9 | 26 % |
+
+- **Estrellas** según las rondas: 3 ★ si llegas al `par` del nivel, 2 ★ hasta un 50 % más, 1 ★ si lo pasas. El par es lo que tarda el bot bueno ×1.5 + 1.
+- **Puntos de perfil:** 5 la primera vez que pasas cada nivel. Los puntos del juego dentro de un nivel no cuentan para el perfil.
+- Una persona tarda más rondas que el bot bueno (cuenta con 1.3 a 1.5 veces).
+
+**Plan de dificultad (por implementar)**
+
+| Niveles | Qué aparece |
+|---|---|
+| 1 a 10 | Solo puntos, sin candados (tutorial) |
+| 11 a 100 | Candados simples |
+| 101 a 200 | Aparecen los dobles |
+| 201 a 300 | Aparecen los triples (menos seguido) |
+| 301 a 600 | Dificultad baja |
+| 601 a 800 · 801 a 1000 · 1001 a 1500 · 1501 a 2000 | Sube un escalón en cada tramo |
+
+Regla de oro: **ningún nivel debe depender de una solución muy específica.** Por eso cada nivel se elige con el bot (ver abajo) y se exige que un jugador aficionado simulado lo pase con frecuencia. Medido en los niveles 16 a 20 antes de pasar a candados simples, un aficionado pasaba solo el 3 al 11 % de los niveles con doble o triple candado; al llegar al 101 y al 201 hay que calibrar esos niveles con más holgura (menos cubos, `limpia` alto, candados en filas llenas) y comprobar que el aficionado los pase con un porcentaje razonable.
 
 ## Guardado
 
-- `bloques_partida_v1`: la partida en curso (zona, dificultad o nivel, tablero, piezas, puntos). Solo en el dispositivo. «Continuar» aparece en el menú si hay una a medias; empezar otra la pierde.
+- `bloques_partida_v1`: la partida en curso (zona, dificultad o nivel, tablero de 24 números, piezas, puntos; en niveles también `obj` y `sem`). Las partidas con tablero de 8 o 16 números (antes de los candados y de las capas) se completan con ceros. Las partidas de niveles guardadas antes de los retos (sin `v: 2`) se descartan. Solo en el dispositivo. «Continuar» aparece en el menú si hay una a medias; empezar otra la pierde.
 - `bloques_record_v1`: `{ mejor (Normal), facil, dificil, est: [estrellas del nivel 1, 2…] }`. Se sincroniza con la cuenta (`unirRecord` en `juego-bloques.js`: gana el mayor de cada marca y la mayor estrella de cada nivel).
 
 ## Archivos
@@ -46,20 +74,25 @@ Cada nivel pide **limpiar N líneas** (🎯 arriba a la izquierda). El tablero i
 |---|---|
 | `index-bloques.html` | Página, pantalla de inicio «Polo Blocks», menú y carteles |
 | `juego-bloques.js` | Pantalla, controles, menús, guardado y sonido |
-| `logica-bloques.js` | Reglas del tablero y generador de rondas (`generarRonda`, con `limpia`; `tableroCon`; `rellenar` con `pCandado`) |
-| `niveles-bloques.js` | Dificultades, niveles fijos (`nivelFijo`, `estrellasDe`), partidas nuevas y `avanzarRonda` (reglas de cada ronda). No toca el DOM |
-| `bot-bloques.mjs` | Herramienta de Node: `dificultades`, `niveles` y `validar` |
+| `logica-bloques.js` | Reglas del tablero con capas de candado (`capas`, `fijarCapas`, `colocar`, `puntosJugada`) y generador de rondas (`generarRonda`, con `limpia`; `tableroCon`; `rellenar` con `pCandado`, `piso`, `extra`) |
+| `niveles-bloques.js` | Dificultades, catálogo de retos (`RETOS`), tabla `NIVELES`, niveles fijos (`nivelFijo`, `estrellasDe`), partidas nuevas y `avanzarRonda` (reglas de cada ronda). No toca el DOM |
+| `bot-bloques.mjs` | Herramienta de Node: `dificultades`, `niveles`, `validar`, `buscar`, `calibrar` y `curva` |
 
 ## Cómo agregar niveles fijos
 
-1. En `niveles-bloques.js`, añade una fila a `SENCILLOS` (líneas, cubos, par) y sube `NIVELES_FIJOS`. Para pasar del 10, hace falta una curva nueva dentro de `nivelFijo()` (retos, candados, etc.).
-2. `node bot-bloques.mjs niveles` muestra si el bot bueno lo gana y cuántas rondas tarda (de ahí sale el par). `node bot-bloques.mjs validar` comprueba que los sencillos no tengan candados y que el bot gane todos.
-3. Sube `VERSION` en `sw.js`.
+1. En `niveles-bloques.js`, añade una fila a `NIVELES` y sube `NIVELES_FIJOS`. Campos: `reto` (`"puntos"` con `meta`, o `"candados"` con `cand: [capas de cada bloque]`), `cubos`, `dif`, `par`, y opcionales `limpia`, `sesgo`, `piso`/`extra`, `sem`. Cuanto más fáciles se quieran, `dif` 0, `limpia` alto (30 a 40) y `sesgo: -1` (candados en filas llenas).
+2. Elige la variante con `node bot-bloques.mjs buscar <nivel> 24 <minRondas> <maxRondas>`: prueba `sem` 0, 1, 2… y recomienda la que dura lo previsto y más pasan los aficionados. Anota la `sem` recomendada en la fila.
+3. `node bot-bloques.mjs niveles <desde> <hasta>` da el `par` sugerido (rondas del bot bueno ×1.5 + 1) y los porcentajes de aficionado y novato. Escribe el `par`.
+4. `node bot-bloques.mjs validar` comprueba que el bot gane todos, que los 10 primeros sean solo de puntos y que ningún par quede por debajo de lo que tarda el bot.
+5. Sube `VERSION` en `sw.js`. Si la fila usa una variante nueva del reto, anota el cambio aquí.
+
+Otras ayudas del bot: `calibrar [desde] [hasta] [%]` propone la meta de puntos que pasaría ese porcentaje de aficionados; `curva` muestra los puntos de cada ronda. Todo corre solo en Node (no se carga en el juego).
 
 ## Pendiente / ideas
 
-- Niveles 4 a 10 (sencillos) y luego la curva hacia ~2000 niveles con variedad de dificultad y algunos retos. Ideas: metas distintas a «limpiar líneas», candados, tableros con formas, límite de rondas.
-- Generador de niveles más sofisticado: traer el de otro de tus juegos (en «Defensa del castillo»: semilla por nivel, calibración con un bot que se guarda en un archivo generado). Con 2000 niveles conviene repartirlos en tandas de archivos.
-- Con muchos niveles, la lista ya está paginada (50 por página, `POR_PAG`); falta decidir cómo se desbloquean (hoy: pasar el anterior).
-- Ajustar a mano Fácil y Difícil jugando; el bot no sustituye a una persona.
-- La zona infinita ya no guarda el progreso en la nube más que el récord; las estrellas sí.
+- Niveles 21 a 2000 siguiendo el plan de dificultad de arriba. Conviene repartirlos en tandas de archivos y generarlos con un script que use `buscar`.
+- Dobles (101 a 200) y triples (201 a 300): el motor ya los soporta (`cand: [2]`, `[3]`) y se dibujan, pero ningún nivel publicado los usa todavía. Calibrarlos con `buscar` antes de publicarlos.
+- Más retos distintos (a añadir en `RETOS`): límite de rondas, hacer N combos de 2 líneas, limpiar todo el tablero, tableros con formas, bloques que aparecen con el tiempo.
+- Decidir cómo se desbloquean los niveles cuando haya muchos (hoy: pasar el anterior). La lista ya está paginada (50 por página, `POR_PAG`).
+- Ajustar a mano Fácil y Difícil del infinito jugando; el bot no sustituye a una persona. Lo mismo vale para los niveles: probar los 20 a mano y reajustar con `buscar`.
+- La zona infinita no guarda el progreso en la nube más que el récord; las estrellas sí.
