@@ -37,10 +37,16 @@ const CLAVE_MUNDO = "estacionamiento-mundo-visto"; // «1» cuando ya entraste a
 const AZUL_ATRAS = "#bfe4fb", AZUL_FRENTE = "#8ccdf5", BORDE = "#8fa9c0", SOMBRA = "#e3e9ef", TINTA = "#2b3a4a";
 const COLOR_HECHO = "#1f78c8", COLOR_ACTUAL = "#ff9a1f", COLOR_BLOQUEADO = "#b4bcc6";
 
+// Fondo: la misma madera que el resto de los juegos (clara u oscura según el modo; la clase «oscura» la pone compartido/fondo-madera.js en <html>)
+const MADERA_CLARA = new URL("../imagenes/fondomaderaclara.webp", import.meta.url).href;
+const MADERA_OSCURA = new URL("../imagenes/fondomaderaoscura.webp", import.meta.url).href;
 const ESTILO = `
-.m-raiz{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;gap:6px;background:#fff;color:${TINTA};font-family:system-ui,sans-serif;
+.m-raiz{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;gap:6px;background:url("${MADERA_CLARA}") center/cover no-repeat,#d9a866;color:${TINTA};font-family:system-ui,sans-serif;
   padding:max(8px,env(safe-area-inset-top)) max(110px,env(safe-area-inset-right)) 8px max(110px,env(safe-area-inset-left));touch-action:pan-y}
 .m-raiz[hidden]{display:none}
+html.oscura .m-raiz{background:url("${MADERA_OSCURA}") center/cover no-repeat,#1d2024;color:#f1f2f4}
+html.oscura .m-info,html.oscura .m-leyenda{color:#c9ccd3}
+.m-info:empty{display:none}
 @media (max-aspect-ratio:1/1){.m-raiz{padding:calc(104px + env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) calc(66px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}}
 .m-cab{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px 14px;text-align:center}
 .m-textos{min-width:0}
@@ -330,7 +336,7 @@ export function montarMapa(o) {
   function vistaMexico() {
     const p = prog();
     titulo.textContent = "México";
-    info.textContent = "💧 " + p.estadosHechos + " de " + NUM_ESTADOS + " estados completados · toca un punto para ver sus niveles" + (nuevoMundo() ? " · ¡Apareció algo nuevo! 🌍" : "");
+    info.textContent = nuevoMundo() ? "¡Apareció algo nuevo! 🌍" : ""; // (se quitó el texto «0 de 32 estados completados · toca un punto…»)
     botonContinuar();
     if (p.mexicoCompleto) {
       const b = boton("Mundo", "🌍", "b-azul" + (nuevoMundo() ? " m-nuevo" : ""), () => { marcarMundoVisto(); ir("mundo"); });

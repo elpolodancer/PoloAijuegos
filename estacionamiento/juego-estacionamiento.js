@@ -598,18 +598,11 @@ function aviso(t) {
   tMsg = setTimeout(() => m.classList.remove("ver"), 1600);
 }
 
-// Rótulo del nivel en juego (arriba al centro): botón verde claro, al doble de tamaño, que solo dice el nivel.
-// El cambio de nivel se hace desde el mapa.
+// Rótulo del nivel (arriba al centro, botón de madera: solo el número) y tamaño del tablero (botón aparte, a su izquierda).
+// No muestra las monedas del nivel. El cambio de nivel se hace desde el mapa.
 function hudNiveles() {
-  const z = $("niveles");
-  z.innerHTML = "";
-  const b = document.createElement("span");
-  b.className = "b3d txt grande b-nivel";
-  const t = document.createElement("span");
-  t.className = "b-ico";
-  t.textContent = "Nivel " + nivel;
-  b.append(t);
-  z.append(b);
+  $("nivel-num").textContent = nivel;
+  $("tam-txt").textContent = cfg.tam + "×" + cfg.tam;
 }
 
 // ----- Controles: tocar, arrastrar, pellizcar, rueda -----
