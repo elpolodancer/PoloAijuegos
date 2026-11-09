@@ -36,7 +36,7 @@ function quitar(inv, t, n) { for (let i = inv.length - 1; i >= 0 && n > 0; i--) 
 function pasar(de, a, ok, r = RANURAS) { de.slice().forEach((s) => { if (!ok(s.t)) return; const k = Math.min(cuenta(de, s.t), espacio(a, s.t, r)); if (k > 0) { quitar(de, s.t, k); anadir(a, s.t, k); } }); }
 const heroe = () => us.find((u) => u.k == "h");
 const ED = {
-  poste: { nom: "Poste de imperio", w: 1, hp: 120, c: "#c0392b" }, baul: { nom: "Baúl", w: 1, hp: 80, c: "#8b5a2b", ran: 20 }, cajonM: { nom: "Cajón de madera", w: 1, hp: 60, c: "#a1763f" }, cajonN: { nom: "Cajón de minerales", w: 1, hp: 60, c: "#6b7280" }, centro: { nom: "Centro", w: 2, hp: 400, c: "#c9a66b" }, almacen: { nom: "Almacén", costo: 60, w: 1, hp: 150, c: "#a47148" }, torre: { nom: "Torre", costo: 120, w: 1, hp: 200, c: "#8a8fa3" } };
+  poste: { nom: "Poste de imperio", w: 1, hp: 120, c: "#c0392b" }, baul: { nom: "Baúl", w: 1, hp: 80, c: "#8b5a2b", ran: 20 }, cajonM: { nom: "Cajón de madera", w: 1, hp: 60, c: "#a1763f" }, cajonN: { nom: "Cajón de minerales", w: 1, hp: 60, c: "#6b7280" }, centro: { nom: "Castillo destruido", w: 2, hp: 400, c: "#9e9588" }, refugio: { nom: "Refugio", w: 2, hp: 200, c: "#8d6e63" }, almacen: { nom: "Almacén", costo: 60, w: 1, hp: 150, c: "#a47148" }, torre: { nom: "Torre", costo: 120, w: 1, hp: 200, c: "#8a8fa3" } };
 const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const capac = (b) => ED[b.k].ran || RANURAS; // ranuras de un contenedor
 const cv = $("lienzo"), cx = cv.getContext("2d");
@@ -45,10 +45,10 @@ let zona = new Uint8Array(N * N), grupos = [], nPostes = 0, grSel = null, moverG
 
 function nuevo() {
   res = new Array(N * N).fill(null); bloq = new Uint8Array(N * N); expl = new Uint8Array(N * N); vis = new Uint8Array(N * N);
-  us = []; eds = []; anim = []; stock = { carne: 0, piel: 0, cuero: 0 }; enem = []; fx = []; dinero = 100; oleada = 0; tReloj = 0; tOleada = 70; sel = null; colocar = null; fin = false; muertes = 0; pend = 0;
+  us = []; eds = []; anim = []; stock = { carne: 0, piel: 0, cuero: 0, fibra: 0 }; enem = []; fx = []; dinero = 250; oleada = 0; tReloj = 0; tOleada = 70; sel = null; colocar = null; fin = false; muertes = 0; pend = 0;
   grupos = []; grSel = null; moverGrupo = null; nPostes = 0; zona = new Uint8Array(N * N);
   generarMapa();
-  ponerEdificio("centro", 8, 8, true); sel = crearUnidad("h");
+  ponerEdificio("centro", 8, 8, true); ponerRefugio(); sel = crearUnidad("h");
   cam = { x: W / 2 - 0 * TW, y: H / 3, z: 1 };
   cam.x = W / 2; cam.y = H / 3 - 17 * TH;
 }
@@ -120,9 +120,21 @@ function ponerEdificio(k, x, y, listo) {
   for (let i = 0; i < w; i++) for (let j = 0; j < w; j++) bloq[(y + j) * N + x + i] = 1;
   eds.push(b); return b;
 }
+// Refugio: estructura inicial donde se crean las tropas, pegada al castillo destruido (8,8; 2×2).
+// En partidas viejas que no lo tienen se agrega al cargar; si el sitio ideal está ocupado, busca el hueco libre más cercano.
+function ponerRefugio() {
+  if (eds.some((b) => b.k == "refugio")) return;
+  const w = ED.refugio.w;
+  const ok = (x, y) => { for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) { const a = x + i, b = y + j; if (a < 0 || b < 0 || a >= N || b >= N || bloq[b * N + a] || bio[b * N + a] == 3) return false; } return true; };
+  for (const [x, y] of [[11, 8], [11, 10], [6, 8], [8, 11], [8, 6]]) if (ok(x, y)) return ponerEdificio("refugio", x, y, true);
+  for (let r = 3; r < 10; r++) for (let y = 8 - r; y <= 8 + r; y++) for (let x = 8 - r; x <= 8 + r; x++) if (ok(x, y)) return ponerEdificio("refugio", x, y, true);
+}
 function crearUnidad(k) { // el personaje aparece junto a la base; las tropas, en el punto de reunión de su grupo
   let bx = 9, by = 9, gr = null;
-  if (k != "h") { gr = asignarGrupo(); bx = grupos[gr].x | 0; by = grupos[gr].y | 0; }
+  if (k != "h") { // las tropas salen por el lado sur del refugio y de ahí caminan a su punto de reunión
+    gr = asignarGrupo(); const rf = eds.find((b) => b.k == "refugio" && b.hp > 0);
+    if (rf) { bx = rf.x; by = rf.y + rf.w; } else { bx = grupos[gr].x | 0; by = grupos[gr].y | 0; }
+  }
   for (let r = k == "h" ? 2 : 1; r < 6; r++) for (let a = 0; a < 40; a++) {
     const x = bx + ((Math.random() * (2 * r + 1)) | 0) - r, y = by + ((Math.random() * (2 * r + 1)) | 0) - r;
     if (x >= 0 && y >= 0 && x < N && y < N && !bloq[y * N + x]) { const u = { k, x: x + .5, y: y + .5, hp: UN[k].hp, mh: UN[k].hp, p: [], o: null, cd: 0, carry: { t: null, n: 0 }, inv: k == "h" ? [] : null, gr, reu: true }; us.push(u); return u; }
@@ -299,7 +311,7 @@ function libreCerca(x, y) { // centro de la casilla libre más cercana
   for (let j = -8; j <= 8; j++) for (let i = -8; i <= 8; i++) { const a = (x | 0) + i, b = (y | 0) + j; if (a < 0 || b < 0 || a >= N || b >= N || bloq[b * N + a]) continue; const d = Math.hypot(a + .5 - x, b + .5 - y); if (d < md) { md = d; m = { x: a + .5, y: b + .5 }; } }
   return m || { x: 10.5, y: 10.5 };
 }
-function nuevoRally(id) { const p = eds.find((b) => b.k == "poste"), bx = p ? p.x + .5 : 10, by = p ? p.y + .5 : 11, a = id * 2.1, r = Math.min(5, 2.5 + (id >> 1) * 1.5); return libreCerca(bx + Math.cos(a) * r, by + Math.sin(a) * r); }
+function nuevoRally(id) { const p = eds.find((b) => b.k == "refugio") || eds.find((b) => b.k == "poste"), bx = p ? p.x + p.w / 2 : 10, by = p ? p.y + p.w + .5 : 11, a = id * 2.1, r = Math.min(5, 2.5 + (id >> 1) * 1.5); return libreCerca(bx + Math.cos(a) * r, by + Math.sin(a) * r); }
 function asignarGrupo() { // el primer grupo con menos de 10 tropas; si todos están llenos, uno nuevo
   for (let id = 0; id < grupos.length; id++) if (us.filter((u) => u.gr === id).length < MAX_GRUPO) return id;
   const id = grupos.length, q = nuevoRally(id); grupos.push({ id, x: q.x, y: q.y, tarea: null }); return id;
@@ -463,6 +475,7 @@ function dibEd(b) {
   const z = cam.z, d = ED[b.k], h = b.k == "torre" ? 40 : b.k == "centro" ? 26 : 14;
   cx.globalAlpha = b.prog < 1 ? .6 : 1; caja(b.x + .1, b.y + .1, b.w - .2, h * (b.prog < 1 ? .4 + b.prog * .6 : 1), d.c); cx.globalAlpha = 1;
   const c = P(b.x + b.w / 2, b.y + b.w / 2); if (b.hp < b.mh) barra(c[0], c[1] - (h + 14) * z, b.hp / b.mh, "#59d96b");
+  if (b.k == "centro" || b.k == "refugio") { cx.font = 24 * z + "px system-ui"; cx.textAlign = "center"; cx.fillStyle = "#fff"; cx.fillText(b.k == "centro" ? "🏚️" : "⛺", c[0], c[1] - (h + 2) * z); }
   if (sel === b) { cx.strokeStyle = "#fff"; cx.lineWidth = 2; cx.strokeRect(c[0] - 20 * z, c[1] - (h + 4) * z, 40 * z, h * z + 10 * z); }
 }
 function dibA(a) {
@@ -600,15 +613,14 @@ function figuraSVG(k) {
 function panel(soloTexto) {
   const z = $("acciones"); if (!soloTexto) z.innerHTML = "";
   const boton = (t, f, off) => { const b = document.createElement("button"); b.className = "btn"; b.textContent = t; b.disabled = !!off; b.addEventListener("click", f); z.appendChild(b); };
-  if (!soloTexto) ["r", "c", "g"].forEach((k) => {
-    const b = document.createElement("button"); b.type = "button"; b.className = "b3d fig " + ({ r: "b-azul", c: "b-oro", g: "b-morado" })[k] + (nPostes ? "" : " sin");
+  if (!soloTexto && sel && sel.k == "refugio" && sel.prog >= 1) ["r", "c", "g"].forEach((k) => { // las tropas se crean tocando el refugio
+    const b = document.createElement("button"); b.type = "button"; b.className = "b3d fig " + ({ r: "b-azul", c: "b-oro", g: "b-morado" })[k];
     b.title = b.ariaLabel = UN[k].nom + " $" + UN[k].costo;
-    b.innerHTML = '<svg viewBox="0 0 28 32" aria-hidden="true">' + figuraSVG(k) + '</svg><span class="b-nom">' + UN[k].nom + '</span><span class="b-info">' + (nPostes ? "" : "🔒 ") + "$" + UN[k].costo + "</span>";
+    b.innerHTML = '<svg viewBox="0 0 28 32" aria-hidden="true">' + figuraSVG(k) + '</svg><span class="b-nom">' + UN[k].nom + '</span><span class="b-info">' + "$" + UN[k].costo + "</span>";
     b.addEventListener("click", () => {
-      if (!nPostes) return aviso("Necesitas un poste de imperio (fabrícalo en 🛠️ Creaciones)");
       if (dinero < UN[k].costo) return aviso("No alcanza el dinero");
-      const nu = crearUnidad(k); if (!nu) return aviso("No hay espacio libre para crearla");
-      dinero -= UN[k].costo; sel = nu; colocar = null; panel();
+      const nu = crearUnidad(k); if (!nu) return aviso("No hay espacio libre junto al refugio");
+      dinero -= UN[k].costo; colocar = null; aviso(UN[k].nom + " creado en el refugio"); panel(); // el refugio sigue elegido: puedes crear varios
     });
     z.appendChild(b);
   });
@@ -620,8 +632,9 @@ function panel(soloTexto) {
     boton("Sacar todo", () => { if (!cerca()) return aviso("Acércate (a menos de 2 casillas)"); pasar(sel.inv, heroe().inv, () => true); invHud(); panel(); });
   }
   const s = $("seleccion");
-  if (!sel) s.textContent = us.length ? "Toca una unidad para elegirla y luego toca el mapa para darle una orden." : (nPostes ? "Compra tu primer soldado con los botones de abajo: cuestan $10 cada uno." : "Primero fabrica un poste de imperio en 🛠️ Creaciones: sin él no puedes crear soldados ni cofres.");
+  if (!sel) s.textContent = us.length ? "Toca una unidad para elegirla y luego toca el mapa para darle una orden." : "Toca el refugio para crear tropas ($10 cada una).";
   else if (sel.w && sel.inv) s.textContent = ED[sel.k].nom + " · " + (sel.inv.length ? sel.inv.map((x) => ITEM[x.t] + " ×" + x.n).join(", ") : "vacío") + " · " + sel.inv.length + "/" + capac(sel) + " ranuras (hasta " + STACK + " por ranura)";
+  else if (sel.k == "refugio") s.textContent = "Refugio · aquí se crean tus tropas: $" + UN.r.costo + " cada una · vida " + Math.ceil(sel.hp) + "/" + sel.mh;
   else if (sel.w) s.textContent = ED[sel.k].nom + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
   else s.textContent = UN[sel.k].nom + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + " · golpe " + UN[sel.k].dmg + " · " + ({ r: "toca un recurso para juntarlo", c: "toca una obra o edificio dañado; o elige qué construir", g: "toca el mapa para explorar o un animal para atacar", h: "flechas o WASD para moverte · barra espaciadora o clic para atacar y picar (10 golpes por árbol o roca) · en pantalla táctil, toca el mapa" })[sel.k];
   if (colocar && colocar in COSTO_FAB) s.textContent = "Toca una casilla libre y cercana (dentro de la zona del imperio, salvo el primer poste) para colocar: " + ED[colocar].nom + " (Esc para cancelar)";
@@ -631,9 +644,19 @@ function invHud() {
   const h = heroe(), z = $("inv"); z.innerHTML = ""; if (!h) return;
   for (let i = 0; i < RANURAS; i++) { const s = h.inv[i], d = document.createElement("span"); d.className = "ranura" + (s ? " llena" : ""); d.textContent = s ? ITEM[s.t] + " ×" + s.n : ""; z.appendChild(d); }
 }
+// Barra de recursos (4 columnas × 2 filas): [id, emoji, nombre, valor]. Para cambiar un emoji, edítalo aquí.
+// Madera/cobre/carbón/plata = lo que lleva el personaje + lo guardado en baúles y cajones; carne, piel y fibra salen de «stock».
+// (plata y fibra todavía no se pueden conseguir en el juego: se quedan en 0.)
+const totalDe = (...items) => { let n = 0; const h = heroe(); if (h) items.forEach((t) => (n += cuenta(h.inv, t))); eds.forEach((b) => { if (b.inv && b.prog >= 1) items.forEach((t) => (n += cuenta(b.inv, t))); }); return n; };
+const corto = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e4 ? (n >= 1e5 ? Math.round(n / 1e3) : (n / 1e3).toFixed(1).replace(".0", "")) + "k" : String(n));
+const RES_HUD = [
+  ["oro", "🪙", "Monedas de oro", () => dinero], ["plata", "🥈", "Plata", () => totalDe("plata")], ["cobre", "🟠", "Cobre", () => totalDe("cobre")], ["carbon", "⚫", "Carbón", () => totalDe("carbon")],
+  ["madera", "🪵", "Madera (troncos y tablones)", () => totalDe("tronco", "tablon")], ["fibra", "🧶", "Fibra", () => (stock && stock.fibra) || 0], ["carne", "🥩", "Carne", () => (stock && stock.carne) || 0], ["piel", "🧥", "Piel", () => (stock && stock.piel) || 0],
+];
+const chipsRec = RES_HUD.map(([, , nom]) => { const c = document.createElement("span"); c.className = "chip"; c.title = nom; $("datos").appendChild(c); return c; });
 function hud() {
-  $("dinero").textContent = "$" + Math.floor(dinero); invHud();
-  $("pobl").textContent = us.length + " unidades"; $("botin").textContent = "🥩 " + stock.carne + " · Piel " + stock.piel + " · Cuero " + stock.cuero;
+  RES_HUD.forEach(([, ico, , val], i) => (chipsRec[i].textContent = ico + " " + corto(Math.floor(val())))); invHud();
+  $("pobl").textContent = "👥 " + us.length; $("botin").textContent = "Cuero " + stock.cuero;
 }
 function ajustar() { const d = devicePixelRatio || 1, r = cv.getBoundingClientRect(); W = r.width; H = r.height; cv.width = W * d; cv.height = H * d; cx.setTransform(d, 0, 0, d, 0, 0); }
 addEventListener("resize", ajustar);
@@ -646,7 +669,7 @@ function reino(forzar) {
   if (!forzar && sig == sigReino) return; sigReino = sig; z.innerHTML = "";
   const cuenta = (k) => us.filter((u) => u.k == k).length, t = document.createElement("div"); t.className = "resumen";
   t.textContent = "Soldados: " + us.length + "  ·  🔨 " + cuenta("c") + "  ⚔️ " + cuenta("g") + "  ⛏️ " + cuenta("r"); z.appendChild(t);
-  if (!us.length) { const p = document.createElement("p"); p.textContent = "Todavía no tienes soldados. Compra el primero con los botones de abajo."; z.appendChild(p); }
+  if (!us.length) { const p = document.createElement("p"); p.textContent = "Todavía no tienes soldados. Créalos tocando el refugio."; z.appendChild(p); }
   us.forEach((u) => {
     const b = document.createElement("button"); b.className = "soldado" + (u === sel ? " activo" : "");
     b.textContent = UN[u.k].ico + " " + UN[u.k].nom + (u.gr != null ? " (G" + (u.gr + 1) + ")" : "") + " · vida " + Math.ceil(u.hp) + "/" + u.mh + " · " + ESTADO(u);
@@ -675,7 +698,7 @@ function crea(forzar) {
       if (k != "poste" && !nPostes) return aviso("Primero pon un poste de imperio: los cofres solo van dentro de su zona");
       colocar = colocar == k ? null : k; if (colocar) { z.hidden = true; aviso("Toca una casilla libre y cercana para colocarlo"); } panel(); crea(true);
     }, cuenta(h.inv, "tablon") < COSTO_FAB[k] && colocar != k));
-  const p = document.createElement("p"); p.textContent = "Cada poste marca una zona de " + RADIO_ZONA + " casillas (se ve dorada). Sin poste no puedes crear tropas; los cofres y los postes nuevos van dentro de la zona: pon más postes para agrandarla. Para guardar objetos, acércate al cofre, tócalo y usa Guardar / Sacar todo."; z.appendChild(p);
+  const p = document.createElement("p"); p.textContent = "Cada poste marca una zona de " + RADIO_ZONA + " casillas (se ve dorada). Los cofres y los postes nuevos van dentro de la zona: pon más postes para agrandarla. Para guardar objetos, acércate al cofre, tócalo y usa Guardar / Sacar todo."; z.appendChild(p);
 }
 $("bCrea").addEventListener("click", () => { alternar("crea"); crea(true); });
 // ----- Seleccionar tropas: elegir un grupo y darle una tarea -----
@@ -707,7 +730,7 @@ $("otra").addEventListener("click", () => { nuevo(); guardar(); entrar(); });
 let ult = performance.now(), th = 0, ta = 0;
 // ----- Partidas guardadas (varias, en este dispositivo) y menú -----
 const CLAVE = "imperio:partidas";
-let slot = null, jugando = false;
+let slot = null, jugando = false, pausado = false; // pausado: menú de pausa abierto (☰), el juego se congela
 // La lista guardada incluye las partidas borradas como «lápidas» { id, borrada: true, fecha }: así, al sincronizar con la cuenta,
 // una partida borrada en un dispositivo no «revive» desde otro. leer() devuelve solo las partidas vivas.
 let nube = null; // se llena al cargar compartido/progreso.js (abajo del todo)
@@ -727,7 +750,7 @@ function cargar(s) {
   res = new Array(N * N).fill(null); bloq = new Uint8Array(N * N); vis = new Uint8Array(N * N); expl = Uint8Array.from(s.expl.split(""), Number);
   bio = s.bio ? Uint8Array.from(s.bio.split(""), Number) : new Uint8Array(N * N); bio.forEach((v, i) => v == 3 && (bloq[i] = 1)); // partidas viejas: todo llanura
   s.res.forEach(([i, t, n, g]) => { res[i] = { t, n, g: g || 0 }; bloq[i] = 1; });
-  eds = []; s.eds.forEach(([k, x, y, hp, prog, inv]) => { const b = ponerEdificio(k, x, y, true); b.hp = hp; b.prog = prog; if (inv) b.inv = inv; });
+  eds = []; s.eds.forEach(([k, x, y, hp, prog, inv]) => { const b = ponerEdificio(k, x, y, true); b.hp = hp; b.prog = prog; if (inv) b.inv = inv; }); ponerRefugio(); // partidas viejas: se agrega el refugio si falta
   us = s.us.map(([k, x, y, hp, ct, cn, o, inv, gr, reu]) => ({ k, x, y, hp, gr: k == "h" || gr == null || gr < 0 ? null : gr, reu: reu === undefined ? true : !!reu, mh: UN[k].hp, p: [], cd: 0, inv: inv || (k == "h" ? [] : null), carry: { t: ct, n: cn }, o: o ? { t: "rec", i: o[0], tipo: o[1], f: cn >= 5 ? "vol" : "ir" } : null }));
   enem = s.enem.map(([x, y, hp, mh]) => ({ k: "e", x, y, hp, mh, cd: 0 }));
   grupos = (s.grupos || []).map(([x, y, t], id) => ({ id, x, y, tarea: t || null })); grSel = null; moverGrupo = null;
@@ -740,7 +763,7 @@ function guardar() {
   if (!slot) return; const l = leerTodo(), i = l.findIndex((p) => p.id == slot.id), p = { id: slot.id, nombre: slot.nombre, fecha: Date.now(), estado: estado() };
   if (i < 0) l.push(p); else l[i] = p; escribir(l);
 }
-function pantalla(id) { $("menu").hidden = !id; ["mPrincipal", "mPers", "mNiv"].forEach((m) => ($(m).hidden = m != id)); $("datos").hidden = !!id; $("bMenu").hidden = id == "mPrincipal"; $("bReino").hidden = !!id; $("bCrea").hidden = !!id; $("bTropas").hidden = !!id; teclas.clear(); if (id) { $("reino").hidden = true; $("crea").hidden = true; $("tropas").hidden = true; } if (id == "mPers") listar(); }
+function pantalla(id) { $("menu").hidden = !id; ["mPrincipal", "mPers", "mNiv"].forEach((m) => ($(m).hidden = m != id)); $("datos").hidden = !!id; $("sub").hidden = !!id; $("bMenu").hidden = !!id; $("pausa").hidden = true; pausado = false; $("bReino").hidden = !!id; $("bCrea").hidden = !!id; $("bTropas").hidden = !!id; teclas.clear(); if (id) { $("reino").hidden = true; $("crea").hidden = true; $("tropas").hidden = true; } if (id == "mPers") listar(); }
 function entrar() { $("fin").hidden = true; jugando = true; pantalla(null); ult = performance.now(); panel(); }
 // Sustituye a confirm(): un aviso dentro de la página (confirm() saca al navegador de la pantalla completa)
 function preguntar(texto) {
@@ -768,13 +791,21 @@ $("crear").addEventListener("click", () => {
   const nombre = $("nombre").value.trim() || "Partida " + (leer().length + 1); $("nombre").value = "";
   slot = { id: Date.now().toString(36), nombre }; nuevo(); guardar(); subir(); entrar();
 });
-$("bMenu").addEventListener("click", () => { if (jugando) { guardar(); enviarPuntos(); subir(); jugando = false; } $("fin").hidden = true; pantalla("mPrincipal"); }); // en una partida guarda y sale; en las pantallas del menú solo regresa
+// ☰ abre el menú de pausa (Continuar / Salir); pulsarlo otra vez equivale a Continuar
+function pausar(si) {
+  if (!jugando) return;
+  pausado = si; $("pausa").hidden = !si; teclas.clear();
+  if (si) guardar(); else ult = performance.now(); // al pausar se guarda; al continuar no se acumula tiempo
+}
+$("bMenu").addEventListener("click", () => pausar(!pausado));
+$("pContinuar").addEventListener("click", () => pausar(false));
+$("pSalir").addEventListener("click", () => { guardar(); enviarPuntos(); subir(); jugando = false; $("fin").hidden = true; pantalla("mPrincipal"); });
 addEventListener("pagehide", () => { if (jugando && !fin) guardar(); enviarPuntos(); });
 document.addEventListener("visibilitychange", () => { if (document.hidden) { if (jugando && !fin) guardar(); enviarPuntos(); } });
 ajustar(); pantalla("mPrincipal");
 (function bucle(n) {
   const dt = Math.min(.05, (n - ult) / 1000); ult = n;
-  if (jugando) {
+  if (jugando && !pausado) {
     tick(dt); dibujar();
     if ((th += dt) > .25) { th = 0; hud(); if (sel) panel(true); reino(); crea(); tropas(); }
     if ((ta += dt) > 5) { ta = 0; if (!fin) guardar(); }

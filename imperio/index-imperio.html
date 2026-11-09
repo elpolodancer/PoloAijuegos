@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
     html.inmersivo { --fondo-juego: #101114; }
-    :root { --safe-t: max(8px, env(safe-area-inset-top)); --safe-l: max(8px, env(safe-area-inset-left)); --nav-w: 150px; }
+    :root { --safe-t: max(8px, env(safe-area-inset-top)); --safe-l: max(8px, env(safe-area-inset-left)); --nav-w: 104px; }
 
     /* Juego de ventana completa: el lienzo ocupa toda la pantalla y todo lo demás flota encima */
     #zona { position: fixed; inset: 0; }
@@ -30,8 +30,11 @@
     /* Marcadores */
     .hud-izq { left: calc(max(8px, env(safe-area-inset-left)) + var(--nav-w) + 8px); flex-wrap: wrap; gap: 6px; max-width: calc(100vw - var(--nav-w) - 40px); }
     .hud .chip { height: 30px; padding: 0 10px; font-size: 13px; }
-    #botin { height: 26px; font-size: 12px; font-weight: 600; color: #e8e9ed; }
-    .hud-sub { top: calc(var(--safe-t) + 40px); }
+    /* Recursos: 4 columnas × 2 filas, a la derecha de los botones 🎮 y ☰ */
+    .rejilla-rec { position: static; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+    .hud .rejilla-rec .chip, .rejilla-rec .chip { justify-content: center; height: 28px; padding: 0 6px; font-size: 12px; }
+    #botin, #pobl { height: 26px; font-size: 12px; font-weight: 600; color: #e8e9ed; }
+    .hud-sub { top: calc(var(--safe-t) + 66px); }
     .hud-col { flex-direction: column; align-items: flex-start; gap: 0; }
     .hud-col.izq { top: calc(var(--safe-t) + 98px); left: var(--safe-l); max-width: none; }
     .hud-col.der { align-items: flex-end; }
@@ -78,24 +81,24 @@
     .fila .btn.sec { --c1: #ffb3a8; --c2: #f0483a; --c3: #8f1c12; }
     #fin, #confirmar { position: fixed; inset: 0; z-index: 7; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; text-align: center; background: #000c; }
     #confirmar { z-index: 9; }
+    #pausa { position: fixed; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 20px; background: #000b; }
+    #pausa h2 { margin: 0 0 6px; font-size: 2rem; }
+    #pausa .grande { width: min(300px, 80vw); }
     #confirmar .fila { gap: 10px; background: none; border: 0; }
     #confTxt { max-width: 32ch; margin: 0; font-size: 1.05rem; }
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>
   <!-- Arriba a la izquierda (estándar de todos los juegos): «Juegos» y, fuera del menú principal, «Menú principal» -->
-  <nav class="nav-juego">
+  <nav class="nav-juego"> <!-- «Menú» (☰) solo se ve jugando y abre #pausa -->
     <a class="b3d txt chico b-gris" href="../" aria-label="Volver al portal de juegos" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
-    <button class="b3d txt chico b-negro" id="bMenu" type="button" hidden title="Volver al menú principal (guarda la partida)"><span class="b-ico">☰</span> Menú principal</button>
+    <button class="b3d txt chico b-negro" id="bMenu" type="button" hidden title="Menú de pausa"><span class="b-ico">☰</span> Menú</button>
   </nav>
   <!-- Marcadores (el dinero y los demás solo se ven jugando) -->
   <div class="hud hud-izq">
-    <div class="hud" id="datos" style="position:static;gap:6px" hidden>
-      <span class="chip" id="dinero" title="Dinero">$0</span>
-      <span class="chip" id="pobl" title="Unidades"></span>
-    </div>
+    <div class="hud rejilla-rec" id="datos" hidden></div> <!-- 8 recursos: los crea el JS (RES_HUD) -->
   </div>
-  <div class="hud hud-izq hud-sub"><span class="chip" id="botin" title="Botín de caza"></span></div>
+  <div class="hud hud-izq hud-sub" id="sub"><span class="chip" id="pobl" title="Unidades"></span><span class="chip" id="botin" title="Cuero"></span></div>
 
   <!-- Columna izquierda: paneles -->
   <div class="hud hud-col izq">
@@ -127,6 +130,13 @@
   </div>
 
   <div id="inferior"><div id="inv"></div><div id="seleccion"></div><div id="acciones"></div></div>
+
+  <!-- Menú de pausa (estándar de todos los juegos): por debajo de los botones de arriba a la izquierda, que siguen a la vista -->
+  <div id="pausa" hidden>
+    <h2>⏸ Pausa</h2>
+    <button class="btn grande" id="pContinuar" type="button">▶ Continuar</button>
+    <button class="btn grande sec" id="pSalir" type="button">Salir al menú del juego</button>
+  </div>
 
   <!-- Sustituye a confirm(): no saca al navegador de la pantalla completa -->
   <div id="confirmar" hidden>
