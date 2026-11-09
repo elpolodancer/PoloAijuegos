@@ -27,7 +27,8 @@ Ruta: `deslizante/README-deslizante.md` · Aquí se anotan las especificaciones 
 - **Los niveles son siempre fijos**: nada de aleatorio ni procedural en el juego. Cada tablero está escrito tal cual en `niveles-deslizante.js` (se generaron una sola vez, fuera del juego, y se pegaron). Todo nivel nuevo debe pasar la comprobación de paridad (ver más abajo) antes de agregarse.
 - Los niveles son iguales para todos. Cada uno trae su mínimo posible de movimientos; deslizar varias fichas de una fila o columna cuenta como 1 movimiento.
 - **Hechos:** 3×3 (10 niveles, mínimo de 4 a 22 movimientos) y 4×4 (10 niveles: del 1 al 7 con mínimo exacto de 4 a 16 movimientos; los niveles 8, 9 y 10 son mezclas largas sin mínimo calculado).
-- **Pendientes:** 5×5 hasta 30×30.
+- 5×5 al 10×10 (10 niveles cada uno, 60 en total): mezclas con jugadas legales desde el tablero resuelto, sin mínimo calculado. Dentro de cada tamaño la dificultad sube con la distancia total de las fichas a su lugar (del ~12 % al ~90 % de un tablero totalmente revuelto).
+- **Pendientes:** 11×11 hasta 30×30.
 
 ## Cómo se sabe que un nivel tiene solución
 No hace falta probar jugadas ni hacer backtracking: la solubilidad depende solo de la paridad de las inversiones (parejas de fichas donde una mayor va antes que una menor) y, en tableros de lado par, de la fila del hueco. Medio total de las mezclas posibles NO tiene solución, así que un nivel armado a mano o al azar puede ser imposible; por eso se genera mezclando desde el tablero resuelto con jugadas válidas y se comprueba con `esResoluble()` (el juego avisa en consola si alguno falla).
@@ -38,5 +39,5 @@ No hace falta probar jugadas ni hacer backtracking: la solubilidad depende solo 
 - Los récords sueltos por tamaño de la versión anterior (modo libre 3×3 a 8×8) ya no se usan.
 
 ## Pendiente / ideas
-- Crear los niveles del 5×5 en adelante (correr siempre el verificador antes de subirlos).
+- Crear los niveles del 11×11 en adelante (correr siempre el verificador antes de subirlos).
 - Nombre definitivo del juego (se busca el del juguete de plástico mexicano).
