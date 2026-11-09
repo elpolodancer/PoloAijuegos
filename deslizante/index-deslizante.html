@@ -20,7 +20,19 @@
     /* Inicio */
     #inicio h1 { margin: 0; font-size: clamp(1.8rem, 7vw, 2.6rem); text-align: center; text-shadow: var(--sombra-txt); }
     #inicio p { margin: 0 0 8px; color: var(--txt-fondo-suave); text-align: center; }
-    #inicio .b3d { --t: 56px; min-width: 220px; font-size: 18px; }
+    /* Botones del menú de inicio: cuadrados, del mismo tamaño que los de «Niveles», en una fila (libre · continuar · niveles) */
+    .fila-inicio { flex: none; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px 8px; width: min(100%, 520px); }
+    .fila-inicio .b3d { width: 100%; height: auto; aspect-ratio: 1 / 1; min-width: 0; padding: 0 2px; flex-direction: column; gap: 3px; border-radius: 16px; font-size: 16px; font-weight: 800; }
+    .fila-inicio .b3d:nth-child(1) { grid-column: 1; }   /* Modo libre, al inicio */
+    .fila-inicio .b3d:nth-child(2) { grid-column: 3; }   /* Continuar / Jugar, en medio */
+    .fila-inicio .b3d:nth-child(3) { grid-column: 5; }   /* Niveles, al final */
+    .fila-inicio .b-ico { font-size: 26px; line-height: 1; }
+    .b-rot { position: relative; font-size: 11px; font-weight: 700; line-height: 1.1; text-align: center; }
+
+    /* Navegación arriba a la izquierda: botones cuadrados solo con icono (🎮 azul oscuro, ☰ verde claro) */
+    .nav-juego .b3d { font-size: 20px; }
+    .b-azuloscuro { --c1: #6c8ee0; --c2: #2a4fa8; --c3: #122a66; }
+    .b-verdeclaro { --c1: #e4ffd6; --c2: #9be87a; --c3: #4aa22f; }
 
     /* Niveles */
     #inicio { overflow-y: auto; justify-content: safe center; touch-action: pan-y; }
@@ -120,15 +132,14 @@
       #juego .lado { width: 230px; padding-top: 100px; gap: 6px; }
       #tablero { width: min(calc(100vh - 24px), calc(100vw - 324px), 520px); width: min(calc(100dvh - 24px), calc(100vw - 324px), 520px); } /* deja libre la esquina del ⛶ */
       #inicio, #pantalla-niveles, #pantalla-libre { padding-top: calc(96px + env(safe-area-inset-top, 0px)); }
-      #inicio .b3d.grande { --t: 48px; }
     }
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>
   <!-- Navegación estándar (compartido/inmersivo.css): «Juegos» siempre; «Menú principal» solo fuera del menú de inicio -->
   <nav class="nav-juego">
-    <a class="b3d txt b-gris" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
-    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Volver al menú principal" hidden><span class="b-ico">☰</span> Menú principal</button>
+    <a class="b3d chico b-azuloscuro" href="../" title="Juegos: volver al portal" aria-label="Juegos: volver al portal"><span class="b-ico">🎮</span></a>
+    <button class="b3d chico b-verdeclaro" id="btn-menu" type="button" title="Volver al menú principal" aria-label="Volver al menú principal" hidden><span class="b-ico">☰</span></button>
   </nav>
   <div class="hud hud-der"><span class="chip" id="monedas" title="Monedas ganadas con las estrellas"></span><span class="chip" id="sesion"></span></div>
   <!-- Nivel anterior / siguiente: solo dentro de un nivel (no en modo libre); cada botón aparece solo si ese nivel existe y está abierto -->
@@ -141,9 +152,11 @@
     <section class="pantalla" id="inicio">
       <h1>🔢 Puzle deslizante</h1>
       <p id="resumen"></p>
-      <button class="b3d txt grande b-morado" id="btn-libre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
-      <button class="b3d txt grande b-verde" id="btn-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
-      <button class="b3d txt grande b-azul" id="btn-niveles" type="button"><span class="b-ico">🗂️</span> Niveles</button>
+      <div class="fila-inicio">
+        <button class="b3d b-morado" id="btn-libre" type="button" title="Modo libre" aria-label="Modo libre"><span class="b-ico">♾️</span><span class="b-rot">Modo libre</span></button>
+        <button class="b3d b-verde" id="btn-jugar" type="button"><span class="b-ico">▶</span><span class="b-rot">Jugar</span></button>
+        <button class="b3d b-azul" id="btn-niveles" type="button" title="Niveles" aria-label="Niveles"><span class="b-ico">🗂️</span><span class="b-rot">Niveles</span></button>
+      </div>
     </section>
 
     <section class="pantalla" id="pantalla-niveles" hidden>

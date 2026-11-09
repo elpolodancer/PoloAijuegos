@@ -179,8 +179,9 @@ function mostrar(nombre) {
   for (const p of ["inicio", "pantalla-niveles", "pantalla-libre", "juego"]) $(p).hidden = p !== nombre;
   $("btn-menu").hidden = nombre === "inicio"; // el ☰ solo fuera del menú principal
   // Dentro de una partida abre el menú de pausa; en las demás pantallas vuelve directo al menú principal
-  $("btn-menu").innerHTML = '<span class="b-ico">☰</span> ' + (nombre === "juego" ? "Pausa" : "Menú principal");
-  $("btn-menu").title = nombre === "juego" ? "Pausa: continuar, guardar progreso y salir, o salir" : "Volver al menú principal";
+  $("btn-menu").innerHTML = '<span class="b-ico">☰</span>'; // cuadrado, solo icono: el texto va en title y aria-label
+  const textoMenu = nombre === "juego" ? "Pausa: continuar, guardar progreso y salir, o salir" : "Volver al menú principal";
+  $("btn-menu").title = textoMenu; $("btn-menu").setAttribute("aria-label", textoMenu);
   if (nombre !== "juego") { clearInterval(reloj); clearInterval(chispas); }
   pintarNavNivel();
   pintarMonedas();
@@ -201,7 +202,7 @@ function pintarInicio() {
   const pasados = prog.hechos.filter(Boolean).length;
   $("resumen").textContent = pasados + " de " + NIVELES.length + " niveles pasados";
   const i = siguientePendiente(), d = info(i);
-  $("btn-jugar").innerHTML = '<span class="b-ico">▶</span> ' + (pasados ? "Continuar" : "Jugar");
+  $("btn-jugar").innerHTML = '<span class="b-ico">▶</span><span class="b-rot">' + (pasados ? "Continuar" : "Jugar") + "</span>";
   $("btn-jugar").title = "Nivel " + d.num + " de " + d.n + "×" + d.n + (parcialDe(i) ? " · partida guardada" : "");
 }
 function pintarNiveles() {

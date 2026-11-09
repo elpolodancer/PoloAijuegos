@@ -11,7 +11,7 @@ Ruta: `deslizante/README-deslizante.md` · Aquí se anotan las especificaciones 
 | `verificar-niveles-deslizante.mjs` | Herramienta de desarrollo (no va en `sw.js`): `node deslizante/verificar-niveles-deslizante.mjs` revisa que todos los niveles sean válidos y tengan solución |
 
 ## Pantallas
-- **Menú de inicio**: botones, en este orden, **Modo libre**, **Jugar / Continuar** y **Niveles**.
+- **Menú de inicio**: tres botones **cuadrados, del mismo tamaño que los de «Niveles»**, en una sola fila: **Modo libre** al inicio, **Jugar / Continuar** en medio y **Niveles** al final (icono arriba y nombre debajo; se colocan en las columnas 1, 3 y 5 de una rejilla de 5, igual que la de «Niveles»).
   - *Jugar* abre el primer nivel sin pasar (dice «Continuar» si ya se pasó alguno). Si ya se pasaron todos los que existen, abre el último.
   - *Niveles* muestra los niveles agrupados por tamaño.
 - **Modo libre**: lista los tamaños del 3×3 al 30×30; se elige uno y salen tableros al azar sin fin.
@@ -20,8 +20,8 @@ Ruta: `deslizante/README-deslizante.md` · Aquí se anotan las especificaciones 
   - Dentro de un nivel (no en modo libre), arriba a la derecha bajo el nombre de sesión: **◀** lleva al nivel anterior (si existe) y **▶** al siguiente (solo si ya está desbloqueado, por ejemplo después de pasar el nivel actual o si ya se había pasado). Cada uno se oculta cuando no aplica. Cambiar de nivel así reinicia el cronómetro.
 
 ## Navegación (estándar de `compartido/inmersivo.css`)
-- Arriba a la izquierda, **🎮 Juegos** (vuelve al portal), siempre visible.
-- Justo debajo, el botón **☰**, visible en todas las pantallas menos en el propio menú de inicio. En «Niveles» y «Modo libre» dice **☰ Menú principal** y vuelve al menú de inicio; **dentro de una partida dice ☰ Pausa y abre el menú de pausa** (ver abajo).
+- Arriba a la izquierda, **🎮** (vuelve al portal), siempre visible: botón **cuadrado de 40 px, azul oscuro** (`b-azuloscuro`), solo icono (el texto «Juegos» va en `title` y `aria-label`).
+- Justo debajo, el botón **☰**, **cuadrado, verde claro** (`b-verdeclaro`) y solo icono, visible en todas las pantallas menos en el propio menú de inicio. En «Niveles» y «Modo libre» vuelve al menú de inicio («Volver al menú principal» en su `title`); **dentro de una partida abre el menú de pausa** (ver abajo).
 
 ## Fondo de madera
 - Todas las pantallas (inicio, niveles, modo libre y partida) van sobre el fondo estándar de madera de `compartido/fondo-madera.js`: **madera clara** por defecto y **madera oscura con luna** con el botón **🌙/☀️** de abajo a la izquierda (`compartido/fondo-madera.js`; la elección se guarda en el dispositivo y vale para todos los juegos).
@@ -29,7 +29,7 @@ Ruta: `deslizante/README-deslizante.md` · Aquí se anotan las especificaciones 
 - La página trae un `<script>` pequeño en el `<head>` que pone la clase `oscura` antes de pintar, para que no parpadee la madera clara.
 
 ## Pausa y guardar progreso del nivel
-- Dentro de una partida, **☰ Pausa** (o la tecla **Esc**) abre el menú de pausa estándar de `compartido/menu-pausa.js`. Mientras está abierto el **cronómetro se detiene** y el tablero no responde. Opciones, en este orden:
+- Dentro de una partida, **☰** (o la tecla **Esc**) abre el menú de pausa estándar de `compartido/menu-pausa.js`. Mientras está abierto el **cronómetro se detiene** y el tablero no responde. Opciones, en este orden:
   1. **▶ Continuar**: cierra el menú y el tiempo sigue donde iba (también con Esc o tocando fuera de la ventana).
   2. **💾 Guardar progreso de este nivel y salir** (solo en niveles; en modo libre no aparece): guarda el tablero tal como está, los movimientos y el tiempo, y vuelve al menú de inicio. Está desactivada hasta que se haga al menos un movimiento.
   3. **🚪 Salir**: vuelve al menú de inicio **sin guardar** lo que se avanzó (lo avisa debajo del botón). Una partida guardada antes no se toca.
