@@ -24,7 +24,7 @@ Ruta: `deslizante/README-deslizante.md` · Aquí se anotan las especificaciones 
 - Justo debajo, el botón **☰**, visible en todas las pantallas menos en el propio menú de inicio. En «Niveles» y «Modo libre» dice **☰ Menú principal** y vuelve al menú de inicio; **dentro de una partida dice ☰ Pausa y abre el menú de pausa** (ver abajo).
 
 ## Fondo de madera
-- Todas las pantallas (inicio, niveles, modo libre y partida) van sobre el fondo estándar de madera de `compartido/inmersivo.css`: **madera clara** por defecto y **madera oscura con luna** con el botón **🌙/☀️** de abajo a la izquierda (`compartido/fondo-madera.js`; la elección se guarda en el dispositivo y vale para todos los juegos).
+- Todas las pantallas (inicio, niveles, modo libre y partida) van sobre el fondo estándar de madera de `compartido/fondo-madera.js`: **madera clara** por defecto y **madera oscura con luna** con el botón **🌙/☀️** de abajo a la izquierda (`compartido/fondo-madera.js`; la elección se guarda en el dispositivo y vale para todos los juegos).
 - Los textos sueltos sobre la madera (título, notas, encabezados de tamaño, título del nivel) usan `--txt-fondo`, `--txt-fondo-suave` y `--sombra-txt`; los paneles oscuros (datos, victoria, tablero) conservan sus colores.
 - La página trae un `<script>` pequeño en el `<head>` que pone la clase `oscura` antes de pintar, para que no parpadee la madera clara.
 
