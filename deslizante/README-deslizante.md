@@ -21,7 +21,16 @@ Ruta: `deslizante/README-deslizante.md` · Aquí se anotan las especificaciones 
 
 ## Navegación (estándar de `compartido/inmersivo.css`)
 - Arriba a la izquierda, **🎮 Juegos** (vuelve al portal), siempre visible.
-- Justo debajo, **☰ Menú principal** (vuelve al menú de inicio), visible en todas las pantallas menos en el propio menú de inicio.
+- Justo debajo, el botón **☰**, visible en todas las pantallas menos en el propio menú de inicio. En «Niveles» y «Modo libre» dice **☰ Menú principal** y vuelve al menú de inicio; **dentro de una partida dice ☰ Pausa y abre el menú de pausa** (ver abajo).
+
+## Pausa y guardar progreso del nivel
+- Dentro de una partida, **☰ Pausa** (o la tecla **Esc**) abre el menú de pausa estándar de `compartido/menu-pausa.js`. Mientras está abierto el **cronómetro se detiene** y el tablero no responde. Opciones, en este orden:
+  1. **▶ Continuar**: cierra el menú y el tiempo sigue donde iba (también con Esc o tocando fuera de la ventana).
+  2. **💾 Guardar progreso de este nivel y salir** (solo en niveles; en modo libre no aparece): guarda el tablero tal como está, los movimientos y el tiempo, y vuelve al menú de inicio. Está desactivada hasta que se haga al menos un movimiento.
+  3. **🚪 Salir**: vuelve al menú de inicio **sin guardar** lo que se avanzó (lo avisa debajo del botón). Una partida guardada antes no se toca.
+- **Retomar:** al abrir un nivel que tiene partida guardada (desde «Continuar», «Niveles», ◀ o ▶) se carga el tablero guardado y el tiempo sigue desde lo guardado (el cronómetro arranca con el siguiente movimiento). Los niveles con partida guardada llevan 💾 en «Niveles».
+- **Cuándo se borra la partida guardada:** al resolver el nivel y al pulsar 🔄 (reiniciar). Cambiar de nivel con ◀ ▶ o salir con «Salir» no la borran, pero tampoco guardan el avance de la partida en curso: solo «Guardar progreso de este nivel y salir» guarda.
+- Se guarda por nivel en `parciales` dentro de `deslizante_progreso` y se sincroniza con la cuenta (gana la más reciente; al borrar queda una marca `{ ts }` para que no regrese de la nube). «Continuar» del menú de inicio sigue yendo al primer nivel sin pasar (y ese nivel retoma su partida guardada si la tiene).
 
 ## Niveles
 - 10 niveles por tamaño: del 3×3 al 30×30 (280 en total).
@@ -70,7 +79,7 @@ No hace falta probar jugadas ni hacer backtracking: la solubilidad depende solo 
 
 ## Puntos y progreso
 - Los puntos se dan **solo la primera vez** que se pasa un nivel: `max(2, redondear(n·n / 4))` (3×3 = 2, 4×4 = 4, 10×10 = 25, 30×30 = 225). Se anotan con `encolarPuntos` y se envían al perfil cuando hay internet y sesión.
-- Progreso en `localStorage` con la clave `deslizante_progreso`: `{ hechos, mejores, libre, estrellas }`. Se sincroniza con la cuenta (`compartido/progreso.js`): un nivel pasado en cualquier sitio cuenta como pasado, y de cada récord se queda el mejor (ver «Tiempos y récords»).
+- Progreso en `localStorage` con la clave `deslizante_progreso`: `{ hechos, mejores, libre, estrellas, parciales }`. Se sincroniza con la cuenta (`compartido/progreso.js`): un nivel pasado en cualquier sitio cuenta como pasado, y de cada récord se queda el mejor (ver «Tiempos y récords»).
 - Los récords sueltos por tamaño de la versión anterior (modo libre 3×3 a 8×8) ya no se usan.
 
 ## Pendiente / ideas

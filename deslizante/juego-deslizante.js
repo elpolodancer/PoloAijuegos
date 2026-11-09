@@ -2,6 +2,7 @@
 // Puzle deslizante (estilo «15 puzzle»): ordena las fichas numeradas de 1 en adelante, con el hueco al final.
 // Menú de inicio (Jugar / Niveles) y niveles fijos que se desbloquean en orden (ver niveles-deslizante.js).
 import { encolarPuntos } from "../compartido/cola-puntos.js";
+import { crearMenuPausa } from "../compartido/menu-pausa.js";
 import { NIVELES, POR_TAMANO, TAMANO_MAX, puntosDe } from "./niveles-deslizante.js";
 
 const ID = "deslizante";
@@ -10,7 +11,9 @@ const $ = (id) => document.getElementById(id);
 // ----- Progreso (local primero; se sincroniza con la cuenta de Google si hay internet y sesión) -----
 // { hechos: [true|null por nivel], mejores: { "<número de nivel>": { mov, ms } },
 //   libre: { "<tamaño>": { mov, ms, ganados } },
-//   estrellas: { "<número de nivel>": mejor escalón 1 a 6 (ver «Estrellas y monedas» más abajo) } }
+//   estrellas: { "<número de nivel>": mejor escalón 1 a 6 (ver «Estrellas y monedas» más abajo) },
+//   parciales: { "<número de nivel>": { t: [tablero], movs, ms, ts } }  partida a medias guardada desde «☰ Pausa → Guardar progreso de
+//     este nivel y salir». Al terminar o reiniciar el nivel queda solo { ts } (marca de borrado, para que la nube no la devuelva) }
 //   mov = menos movimientos y ms = menor tiempo en milisegundos: son dos récords independientes (pueden venir de partidas distintas).
 //   libre = modo libre: mejores marcas y tableros resueltos por tamaño.
 const CLAVE = ID + "_progreso";
@@ -36,8 +39,21 @@ function escalones(o) {
   for (const k in obj(o)) { const v = Math.floor(Number(o[k])); if (v >= 1) r[k] = Math.min(6, v); }
   return r;
 }
-const limpiar = (p) => (p && typeof p === "object" && (Array.isArray(p.hechos) || p.mejores || p.libre || p.estrellas))
-  ? { hechos: Array.isArray(p.hechos) ? p.hechos : [], mejores: marcas(p.mejores), libre: marcas(p.libre, true), estrellas: escalones(p.estrellas) }
+// Partidas a medias: se revisa que el tablero sea válido y tenga solución. Un registro solo con { ts } es una marca de borrado.
+function parcialesLimpios(o) {
+  const r = {};
+  for (const k in obj(o)) {
+    const x = obj(o[k]), ts = Number(x.ts) || 0, lv = NIVELES[Number(k) - 1];
+    if (!lv || ts <= 0) continue;
+    const m2 = lv.n * lv.n, t = x.t;
+    const ok = Array.isArray(t) && t.length === m2 && new Set(t).size === m2 && t.every((v) => Number.isInteger(v) && v >= 0 && v < m2)
+      && esResoluble(lv.n, t) && !t.every((v, i) => (i === m2 - 1 ? v === 0 : v === i + 1));
+    r[k] = ok ? { t: t.slice(), movs: Math.max(1, Math.floor(Number(x.movs) || 0)), ms: Math.max(0, Math.floor(Number(x.ms) || 0)), ts } : { ts };
+  }
+  return r;
+}
+const limpiar = (p) => (p && typeof p === "object" && (Array.isArray(p.hechos) || p.mejores || p.libre || p.estrellas || p.parciales))
+  ? { hechos: Array.isArray(p.hechos) ? p.hechos : [], mejores: marcas(p.mejores), libre: marcas(p.libre, true), estrellas: escalones(p.estrellas), parciales: parcialesLimpios(p.parciales) }
   : null; // formato viejo (récords sueltos por tamaño): se ignora
 
 // Tiempo como m:ss.d (con horas si hace falta); ms = milisegundos
@@ -46,7 +62,7 @@ function fmtMs(ms) {
   const sec = String(s % 60).padStart(2, "0"), min = Math.floor(s / 60) % 60, h = Math.floor(s / 3600);
   return (h ? h + ":" + String(min).padStart(2, "0") : min) + ":" + sec + "." + dec;
 }
-let prog = { hechos: [], mejores: {}, libre: {}, estrellas: {} }, nube = null;
+let prog = { hechos: [], mejores: {}, libre: {}, estrellas: {}, parciales: {} }, nube = null;
 try { prog = limpiar(JSON.parse(localStorage.getItem(CLAVE))) || prog; } catch (e) {}
 function guardarProg() {
   try { localStorage.setItem(CLAVE, JSON.stringify(prog)); } catch (e) {}
@@ -54,6 +70,14 @@ function guardarProg() {
 }
 const hecho = (i) => !!prog.hechos[i];
 const desbloqueado = (i) => i === 0 || hecho(i - 1);
+// Partida a medias guardada del nivel i (o null)
+const parcialDe = (i) => { const x = prog.parciales[i + 1]; return x && x.t ? x : null; };
+// Borra la partida guardada de un nivel (deja una marca con la hora para que al sincronizar no vuelva de la nube)
+function descartarParcial(k) {
+  if (!prog.parciales[k]) return;
+  prog.parciales[k] = { ts: Date.now() };
+  guardarProg();
+}
 
 // Datos de un nivel: tamaño y número dentro de su tamaño (1 a 10)
 function info(i) {
@@ -153,7 +177,10 @@ function brillantina(caja) {
 // ----- Pantallas -----
 function mostrar(nombre) {
   for (const p of ["inicio", "pantalla-niveles", "pantalla-libre", "juego"]) $(p).hidden = p !== nombre;
-  $("btn-menu").hidden = nombre === "inicio"; // «Menú principal» solo fuera del menú principal
+  $("btn-menu").hidden = nombre === "inicio"; // el ☰ solo fuera del menú principal
+  // Dentro de una partida abre el menú de pausa; en las demás pantallas vuelve directo al menú principal
+  $("btn-menu").innerHTML = '<span class="b-ico">☰</span> ' + (nombre === "juego" ? "Pausa" : "Menú principal");
+  $("btn-menu").title = nombre === "juego" ? "Pausa: continuar, guardar progreso y salir, o salir" : "Volver al menú principal";
   if (nombre !== "juego") { clearInterval(reloj); clearInterval(chispas); }
   pintarNavNivel();
   pintarMonedas();
@@ -175,7 +202,7 @@ function pintarInicio() {
   $("resumen").textContent = pasados + " de " + NIVELES.length + " niveles pasados";
   const i = siguientePendiente(), d = info(i);
   $("btn-jugar").innerHTML = '<span class="b-ico">▶</span> ' + (pasados ? "Continuar" : "Jugar");
-  $("btn-jugar").title = "Nivel " + d.num + " de " + d.n + "×" + d.n;
+  $("btn-jugar").title = "Nivel " + d.num + " de " + d.n + "×" + d.n + (parcialDe(i) ? " · partida guardada" : "");
 }
 function pintarNiveles() {
   const cont = $("lista-niveles");
@@ -201,9 +228,10 @@ function pintarNiveles() {
         b.append(a);
         if (conEstrellas(n)) { const t = document.createElement("span"); t.innerHTML = htmlEstrellas(tierNivel(i)); b.append(t.firstElementChild); }
         b.append(c);
+        if (parcialDe(i)) { const g = document.createElement("span"); g.className = "b-info"; g.textContent = "💾"; b.append(g); }
       } else b.textContent = "🔒";
       b.disabled = !libre;
-      b.setAttribute("aria-label", "Nivel " + (k + 1) + " de " + n + "×" + n + (libre ? (mk ? ", mejor tiempo " + fmtMs(mk.ms) : "") + (conEstrellas(n) ? ", " + textoEstrellas(tierNivel(i)) : "") : " (bloqueado)"));
+      b.setAttribute("aria-label", "Nivel " + (k + 1) + " de " + n + "×" + n + (libre ? (mk ? ", mejor tiempo " + fmtMs(mk.ms) : "") + (conEstrellas(n) ? ", " + textoEstrellas(tierNivel(i)) : "") + (parcialDe(i) ? ", partida guardada" : "") : " (bloqueado)"));
       b.addEventListener("click", () => jugarNivel(i));
       r.appendChild(b);
     });
@@ -240,6 +268,7 @@ let modo = "nivel";                                // "nivel" (niveles fijos) o 
 let libreN = 3, libreNum = 0, inicial = [];        // modo libre: tamaño, número de tablero de esta sesión y tablero de partida
 let idx = 0, n = 3, t = [];                        // t[pos] = número de la ficha (0 = hueco)
 let movs = 0, inicio = 0, reloj = null, jugando = false;
+let previo = 0, pausadoMs = 0, enPausa = false;     // ms ya jugados antes de empezar/retomar · ms al abrir la pausa · ¿pausa abierta?
 let chispas = null;                                // intervalo de la brillantina de la victoria
 const fichas = new Map();                          // número → elemento
 
@@ -285,7 +314,7 @@ function pintar() {
 }
 
 function tocar(pos) {
-  if (pos < 0 || jugando === "fin") return;
+  if (pos < 0 || jugando === "fin" || enPausa) return;
   const h = t.indexOf(0);
   const fp = Math.floor(pos / n), cp = pos % n, fh = Math.floor(h / n), ch = h % n;
   if (fp !== fh && cp !== ch) return;               // solo misma fila o columna que el hueco
@@ -294,7 +323,7 @@ function tocar(pos) {
   for (let i = h; i !== pos; i -= paso) t[i] = t[i - paso]; // desliza toda la fila/columna
   t[pos] = 0;
   movs++;
-  if (!jugando) { jugando = true; inicio = Date.now(); reloj = setInterval(mostrarTiempo, 100); }
+  if (!jugando) { jugando = true; inicio = Date.now() - previo; reloj = setInterval(mostrarTiempo, 100); }
   pintar();
   if (resuelto()) ganar();
 }
@@ -349,7 +378,10 @@ async function ganar() {
   const nuevoTier = Math.max(antes, cE ? tierPorTiempo(n, ms) : 0);
   const ganadas = MONEDAS[nuevoTier] - MONEDAS[antes];
   if (libre) prog.libre[libreN] = { ...nueva, ganados: ((prog.libre[libreN] && prog.libre[libreN].ganados) || 0) + 1 };
-  else { prog.mejores[idx + 1] = nueva; prog.hechos[idx] = true; if (cE) prog.estrellas[idx + 1] = nuevoTier; }
+  else {
+    prog.mejores[idx + 1] = nueva; prog.hechos[idx] = true; if (cE) prog.estrellas[idx + 1] = nuevoTier;
+    if (prog.parciales[idx + 1]) prog.parciales[idx + 1] = { ts: Date.now() };   // el nivel ya se resolvió: su partida guardada deja de existir
+  }
   guardarProg();
   pintarMejor();
   pintarMonedas();
@@ -372,7 +404,7 @@ async function ganar() {
     boton("Tamaños", "b-morado", () => mostrar("pantalla-libre"));
   } else {
     if (hay) boton("Siguiente nivel", "b-verde", () => jugarNivel(idx + 1));
-    boton("Repetir", "b-oro", empezar);
+    boton("Repetir", "b-oro", () => empezar());
     boton("Niveles", "b-azul", () => mostrar("pantalla-niveles"));
   }
   v.appendChild(caja);
@@ -389,21 +421,24 @@ async function ganar() {
     : "+" + pts + " puntos anotados: se enviarán a tu perfil cuando tengas internet y hayas entrado con Google.";
 }
 
-function empezar() {
+function empezar(retomar) {
   clearInterval(reloj); clearInterval(chispas);
   const v = $("victoria"); if (v) v.remove();
+  let pp = null;                                    // partida guardada que se retoma (solo en niveles)
   if (modo === "libre") {
     n = libreN; t = inicial.slice();
     $("titulo").innerHTML = "♾️ Modo libre · " + n + "×" + n + "<small>Tablero " + libreNum + " de esta sesión</small>";
   } else {
     const l = NIVELES[idx], d = info(idx);
     n = l.n; t = l.fichas.slice();
+    pp = retomar === true ? parcialDe(idx) : null;
+    if (pp) t = pp.t.slice();
     $("titulo").innerHTML = "Nivel " + d.num + " · " + n + "×" + n + (() => { const mk = prog.mejores[idx + 1], p = []; if (l.optimo) p.push("Mínimo posible: " + l.optimo); if (mk) p.push("Tu mejor: " + mk.mov + " mov."); return p.length ? "<small>" + p.join(" · ") + "</small>" : ""; })();
   }
-  movs = 0; jugando = false;
+  movs = pp ? pp.movs : 0; previo = pp ? pp.ms : 0; jugando = false;
   if (!esResoluble(n, t)) console.warn("deslizante: este tablero no tiene solución");
-  $("tiempo").textContent = fmtMs(0);
-  $("msg").textContent = "Toca una ficha en la fila o columna del hueco para deslizarla.";
+  $("tiempo").textContent = fmtMs(previo);
+  $("msg").textContent = pp ? "💾 Retomaste tu partida guardada. El tiempo sigue desde donde lo dejaste; usa 🔄 para empezar de cero." : "Toca una ficha en la fila o columna del hueco para deslizarla.";
   construir(); pintar(); pintarMejor();
   pintarNavNivel();
   pintarMetaJuego();
@@ -412,7 +447,7 @@ function jugarNivel(i) {
   if (!NIVELES[i] || !desbloqueado(i)) return;
   modo = "nivel"; idx = i;
   mostrar("juego");
-  empezar();
+  empezar(true);                                    // si el nivel tiene partida guardada, la retoma
 }
 function jugarLibre(m) {
   if (!tamanoAbierto(m)) return;
@@ -425,12 +460,44 @@ function jugarLibre(m) {
 $("btn-jugar").addEventListener("click", () => jugarNivel(siguientePendiente()));
 $("btn-niveles").addEventListener("click", () => mostrar("pantalla-niveles"));
 $("btn-libre").addEventListener("click", () => mostrar("pantalla-libre"));
-$("btn-menu").addEventListener("click", () => mostrar("inicio"));
+// ☰: dentro de una partida abre la pausa (compartido/menu-pausa.js); en las demás pantallas vuelve al menú principal
+const hayAvance = () => jugando !== "fin" && movs > 0;   // ya hay algo que guardar (o que perder)
+function guardarYSalir() {
+  enPausa = false;
+  if (modo === "nivel" && hayAvance()) {
+    prog.parciales[idx + 1] = { t: t.slice(), movs, ms: Math.round(pausadoMs), ts: Date.now() };
+    guardarProg();
+    mostrar("inicio");
+    $("resumen").textContent = "💾 Progreso del nivel guardado. " + $("resumen").textContent;
+  } else mostrar("inicio");
+}
+const pausa = crearMenuPausa({
+  titulo: "Pausa",
+  puedeAbrir: () => !$("juego").hidden,
+  alAbrir() {                                       // congela el cronómetro
+    pausadoMs = jugando === true ? transcurrido() : previo;
+    if (jugando === true) clearInterval(reloj);
+    enPausa = true;
+  },
+  alContinuar() {                                   // lo reanuda justo donde iba
+    enPausa = false;
+    if (jugando === true) { inicio = Date.now() - pausadoMs; reloj = setInterval(mostrarTiempo, 100); }
+  },
+  extras: () => modo !== "nivel" ? [] : [{
+    icono: "💾", texto: "Guardar progreso de este nivel y salir", clase: "b-oro",
+    deshabilitado: !hayAvance(),
+    ayuda: hayAvance() ? "Podrás retomar este tablero con «Continuar» o desde «Niveles»." : "Haz al menos un movimiento para poder guardar.",
+    alElegir: guardarYSalir,
+  }],
+  ayudaSalir: () => (hayAvance() ? "No se guarda lo que avanzaste en esta partida." : ""),
+  alSalir() { enPausa = false; mostrar("inicio"); },
+});
+$("btn-menu").addEventListener("click", () => ($("juego").hidden ? mostrar("inicio") : pausa.abrir()));
 $("btn-anterior").addEventListener("click", () => jugarNivel(idx - 1));
 $("btn-siguiente").addEventListener("click", () => jugarNivel(idx + 1));
-$("reiniciar").addEventListener("click", empezar);
+$("reiniciar").addEventListener("click", () => { if (modo === "nivel") descartarParcial(idx + 1); empezar(); });   // reiniciar también borra la partida guardada de ese nivel
 addEventListener("keydown", (e) => {
-  if ($("juego").hidden) return;
+  if ($("juego").hidden || enPausa) return;
   const d = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [1, 0], ArrowRight: [-1, 0] }[e.key];
   if (d) { e.preventDefault(); mover(d[0], d[1]); }
 });
@@ -461,7 +528,9 @@ import("../compartido/progreso.js").then((m) => {
       }
       const est = { ...(b ? b.estrellas : {}) };                       // estrellas: gana el mayor escalón de cada nivel
       for (const k in (a ? a.estrellas : {})) est[k] = Math.max(a.estrellas[k], est[k] || 0);
-      return { hechos: m.unirHechos(a && a.hechos, b && b.hechos) || [], mejores: mej, libre: lib, estrellas: est };
+      const par = { ...(b ? b.parciales : {}) };                       // partidas guardadas: gana la más reciente (la marca de borrado también cuenta)
+      for (const k in (a ? a.parciales : {})) if (!par[k] || (Number(a.parciales[k].ts) || 0) > (Number(par[k].ts) || 0)) par[k] = a.parciales[k];
+      return { hechos: m.unirHechos(a && a.hechos, b && b.hechos) || [], mejores: mej, libre: lib, estrellas: est, parciales: par };
     },
     alCambiar: (v) => {
       prog = limpiar(v) || prog;
