@@ -95,7 +95,7 @@ chipMonedas.className = "chip chip-info chip-monedas"; // dorado; va en #fila-in
 chipMonedas.title = "Monedas";
 const pintarMonedas = () => { chipMonedas.innerHTML = MONEDA + monedas().toLocaleString("es-MX"); chipMonedas.setAttribute("aria-label", monedas() + " monedas"); };
 pintarMonedas();
-$("fila-info").prepend(chipMonedas); // primero de la fila: monedas · tamaño del tablero · movimientos
+($("fila-info") || document.querySelector(".nav-juego") || document.body).prepend(chipMonedas); // primero de la fila: monedas · tamaño del tablero · movimientos
 
 // ----- Boosts (paso 2a): «Quitar un auto» (30 🪙, o gratis si ya tienes usos) y «Paquete ×3» (50 🪙 = 3 usos). La bomba va aparte (2b). -----
 // «Quitar un auto» se paga AL USARLO: tocas el botón, tocas el auto y entonces se gasta un uso (o 30 monedas). Si te arrepientes, tocas el botón otra vez.
@@ -121,7 +121,7 @@ const zBoosts = document.createElement("div");
 zBoosts.style.cssText = "display:flex;gap:10px";
 zBoosts.setAttribute("role", "group"); zBoosts.setAttribute("aria-label", "Boosts");
 zBoosts.append(bQuitar.b, bPaquete.b, bBomba.b);
-$("boosts").appendChild(zBoosts); // los boosts van abajo al centro (el rótulo del nivel ahora va arriba)
+($("boosts") || document.querySelector(".hud-abajo") || document.body).appendChild(zBoosts); // los boosts van abajo al centro (el rótulo del nivel ahora va arriba)
 
 function pintarBoosts() {
   const tiene = usosQuitar() > 0;
@@ -555,7 +555,7 @@ function actualizar(dt) {
     }
   }
   if (!ganado && restantes <= 0) victoria();
-  if (movs !== ultMovs) { ultMovs = movs; $("movs").textContent = movs; }
+  if (movs !== ultMovs) { ultMovs = movs; const em = $("movs"); if (em) em.textContent = movs; }
 }
 
 function victoria() {
@@ -599,8 +599,10 @@ function aviso(t) {
 // Rótulo del nivel (arriba al centro, botón de madera: solo el número) y tamaño del tablero (botón aparte, a su izquierda).
 // No muestra las monedas del nivel. El cambio de nivel se hace desde el mapa.
 function hudNiveles() {
-  $("nivel-num").textContent = nivel;
-  $("tam-txt").textContent = cfg.tam + "×" + cfg.tam;
+  // Si la página es de otra versión y le faltan estos elementos, no se rompe nada (antes eso impedía abrir el mapa)
+  const n = $("nivel-num"), t = $("tam-txt");
+  if (n) n.textContent = nivel;
+  if (t) t.textContent = cfg.tam + "×" + cfg.tam;
 }
 
 // ----- Controles: tocar, arrastrar, pellizcar, rueda -----
@@ -684,8 +686,52 @@ function botonMenu() {
   btnMenu.title = enMapa ? "Volver al mapa principal" : "Pausa";
   chipMonedas.hidden = enMapa; // el saldo solo se ve en partida
 }
+// ----- Ventana «Info»: cómo se juega (usa los estilos .pausa-* de compartido/inmersivo.css) -----
+const TEXTO_INFO = [
+  ["🚗 Objetivo", "Saca todos los autos del estacionamiento. Ganas cuando no queda ninguno."],
+  ["👆 Cómo sacar un auto", "Toca un auto y avanzará hacia donde apunta su flecha hasta salir por las esquinas, dando la vuelta por la vía que rodea el tablero."],
+  ["🚧 Si algo le estorba", "Un auto no puede salir si otro está en su camino: saca primero al que estorba. Si la vía de salida está ocupada, espera un instante y vuelve a tocarlo. En cuanto tocas un auto, ya no estorba: puedes tocar los demás de inmediato."],
+  ["🔍 Mover la vista", "Arrastra para mover el tablero y pellizca (o usa la rueda del ratón) para acercar o alejar."],
+  ["💰 Monedas", "Ganas monedas la primera vez que terminas un nivel; mientras más grande el tablero, más monedas."],
+  ["💥 Boosts", "Quitar un auto (30 monedas): toca el botón y luego el auto que quieres quitar. Paquete ×3 (50 monedas): te da 3 usos de quitar un auto. Bomba (100 monedas): elige una zona de 5×5 casillas y borra todos los autos que haya ahí."],
+  ["🗺️ Mapa", "Los niveles se desbloquean en orden. Cada estado tiene 100 niveles; al terminarlo se desbloquea el siguiente y el agua del mapa sube. Con 🔄 reinicias el nivel y con ☰ Pausa puedes salir al mapa."],
+];
+let infoAbierta = null;
+function abrirInfo() {
+  if (infoAbierta) return;
+  const fondo = document.createElement("div");
+  fondo.className = "pausa-fondo";
+  fondo.setAttribute("role", "dialog"); fondo.setAttribute("aria-modal", "true"); fondo.setAttribute("aria-label", "Cómo jugar");
+  const panel = document.createElement("div");
+  panel.className = "pausa-panel";
+  panel.style.cssText = "width:min(100%,440px);text-align:left";
+  const h2 = document.createElement("h2");
+  h2.textContent = "ℹ️ Cómo jugar";
+  h2.style.textAlign = "center";
+  panel.appendChild(h2);
+  for (const [titulo, texto] of TEXTO_INFO) {
+    const b = document.createElement("b"); b.textContent = titulo; b.style.cssText = "display:block;margin:10px 0 2px";
+    const p = document.createElement("p"); p.textContent = texto; p.style.cssText = "margin:0;font-size:.9rem;line-height:1.35;color:#d8dbe2";
+    panel.append(b, p);
+  }
+  const ok = document.createElement("button");
+  ok.type = "button"; ok.className = "b3d txt b-verde"; ok.style.cssText = "display:flex;width:100%;margin:16px 0 4px";
+  ok.innerHTML = '<span class="b-ico">👍</span> Entendido';
+  panel.appendChild(ok);
+  fondo.appendChild(panel);
+  document.body.appendChild(fondo);
+  const cerrar = () => { removeEventListener("keydown", tecla, true); fondo.remove(); infoAbierta = null; };
+  const tecla = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); cerrar(); } };
+  addEventListener("keydown", tecla, true);
+  ok.addEventListener("click", cerrar);
+  fondo.addEventListener("click", (e) => { if (e.target === fondo) cerrar(); });
+  infoAbierta = fondo;
+  try { ok.focus({ preventScroll: true }); } catch (e) {}
+}
+
 const mapa = montarMapa({
   progreso: () => prog,
+  alInfo: abrirInfo,
   jugarNivel: (n) => { mapa.cerrar(); cargarNivel(n); botonMenu(); },
   alCambiarVista: () => botonMenu(),
 });

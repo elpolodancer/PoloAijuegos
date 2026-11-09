@@ -12,6 +12,7 @@
 //   const mapa = montarMapa({
 //     progreso: () => ({ max, hecho }),       // max = nivel más alto desbloqueado, hecho = nivel más alto terminado
 //     jugarNivel: (n) => { ... },             // la persona eligió el nivel n
+//     alInfo: () => { ... }                    // (opcional) botón «Info» de la vista principal
 //     alCambiarVista: (esPrincipal) => { ... } // para rotular el botón ☰ («Menú principal» no se muestra en la vista principal)
 //   });
 //   mapa.abrir();                // vista principal
@@ -338,6 +339,7 @@ export function montarMapa(o) {
     titulo.textContent = "México";
     info.textContent = nuevoMundo() ? "¡Apareció algo nuevo! 🌍" : ""; // (se quitó el texto «0 de 32 estados completados · toca un punto…»)
     botonContinuar();
+    if (o.alInfo) boton("Info", "ℹ️", "b-azul", o.alInfo); // explica cómo jugar
     if (p.mexicoCompleto) {
       const b = boton("Mundo", "🌍", "b-azul" + (nuevoMundo() ? " m-nuevo" : ""), () => { marcarMundoVisto(); ir("mundo"); });
       b.setAttribute("aria-label", "Abrir el mapa del mundo");

@@ -95,7 +95,7 @@ Interfaz sugerida: botones `.b3d` en la parte baja central (ver sección 6), con
 
 | Lugar | Botón | Qué hace |
 |---|---|---|
-| Arriba izquierda | **🎮 Juegos** (`.b3d.txt.b-gris`) | Vuelve al portal (`href="../"`) |
+| Arriba izquierda | **🎮 Juegos** (`.b3d.txt.b-azuloscuro`, alargado) | Vuelve al portal (`href="../"`) |
 | Arriba izquierda, justo debajo | **☰** (mismo ancho) | En una partida dice **«☰ Pausa»** y abre el menú de pausa. En el mapa/listas dice **«Menú principal»** y vuelve al menú del juego. En el menú principal del juego **no se muestra** |
 | Abajo izquierda | **🌙 / ☀️** | Alterna madera clara y oscura (lo crea `fondo-madera.js`; no se pone a mano) |
 | Abajo derecha | **⛶ / ✕** | Pantalla completa (lo crea `pantalla-completa.js`) |
@@ -113,9 +113,11 @@ Menú de pausa (`compartido/menu-pausa.js`): **▶ Continuar**, **🔄 Reiniciar
 | `juego-estacionamiento.js` | Juego: dibujo, controles, vía de salida, progreso. Ya usa tamaño de tablero variable |
 | `niveles-estacionamiento.js` | **Generador** de los 22 600 niveles (tamaños, autos, dificultad, monedas). No usa `document`: se prueba en Node |
 | `probar-niveles-estacionamiento.mjs` | Pruebas automáticas del generador (`node probar-niveles-estacionamiento.mjs`, Node 22+, junto a `niveles-estacionamiento.js`) |
-| `mapa.js` | **Aún no existe para este juego.** El `mapa_1.js` que se subió es el de Paperio (SVG: mundo → México → estado) y solo sirve de referencia |
+| `mapa-estacionamiento.js` | **El mapa** (menú principal): México con agua que sube un escalón por estado, mapa del mundo (solo tras los 3 200 niveles), listas de 100 niveles. Se monta con `montarMapa({ progreso, jugarNivel, alInfo, alCambiarVista })` |
+| `etapas-estacionamiento.js` | Orden de los 32 estados y los 194 países (con su lon/lat y código ISO) y cuentas de progreso (`resumen`, `etapaDe`) |
+| `geografia-estacionamiento.js` | Contornos simplificados de México, continentes y lagos para dibujar el mapa |
 
-Cuando el juego crezca conviene separar también `monedas.js` (premios, tienda y boosts) y `mapa.js` (México/mundo + agua).
+Cuando el juego crezca conviene separar también `monedas.js` (premios, tienda y boosts). El mapa, las etapas y la geografía están pensados para reutilizarse en otros juegos: ver `ESTANDARES-juegos.md`.
 Recordatorio: `niveles-estacionamiento.js` debe ir en la lista `ARCHIVOS` de `sw.js` (y subir `VERSION`) para que funcione sin internet.
 
 ## 8. Notas técnicas para las próximas sesiones
@@ -161,3 +163,14 @@ Para ajustar la dificultad, los números a tocar están en `configNivel` (`dif`,
 5. **Selector de nivel.** Es provisional (◀ Nivel ▶ con tamaño y premio). El mapa lo reemplaza.
 6. **Rendimiento en 50×50.** `dibujar()` filtra y ordena todos los autos en cada cuadro y dibuja el suelo casilla a casilla. Pendiente de medir en un celular real; si va lento: cachear el suelo en un canvas aparte y dibujar solo lo visible.
 7. **Progreso.** `prog = { max, hecho }` con `unirMaximos` sirve tal cual para «nivel más alto». Las monedas y boosts necesitan otra regla de fusión (se gastan).
+
+
+## 12. Menú de inicio: «Continuar» y «Juego libre / infinito» (por hacer)
+
+Hoy el juego abre directo en el mapa de México y ahí solo hay **▶ Continuar · nivel N** (más «Info» y, al terminar México, «Mundo»). Cambio pedido:
+
+- Añadir el botón **♾️ Juego libre** (también se puede rotular «Infinito») **a la derecha de «Continuar · nivel N»**, en la vista principal del mapa (México y, ya desbloqueado, Mundo). Orden de la fila: `▶ Continuar` · `♾️ Juego libre` · `ℹ️ Info` · `🌍 Mundo`.
+- **Qué es:** tableros al azar sin fin, sin pasar por el mapa ni por la lista de niveles. Se elige el tamaño (10×10 a 50×50) y salen tableros nuevos con solución garantizada (el mismo generador, con una semilla al azar en lugar del número de nivel).
+- **Por decidir (propuesta entre paréntesis):** ¿qué tamaños se ofrecen (los que ya abriste por el mapa, o todos)? ¿da monedas y puntos? (propuesta: **no**, como el modo libre de Deslizante, para que no se puedan repetir sin límite). ¿se guarda algo? (propuesta: mejor marca y cantidad de tableros resueltos por tamaño).
+- **Menú ☰ en el modo libre:** «Pausa» con Continuar / Reiniciar tablero / «Salir al mapa».
+- Los boosts (quitar auto, paquete ×3, bomba) siguen funcionando con las monedas que ya tiene el jugador.

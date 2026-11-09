@@ -40,11 +40,14 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
 
    | Botón                | Esquina        | Distancia      | Tamaño                    | Color (clase)      | Lo crea / clase        |
    |----------------------|----------------|----------------|---------------------------|--------------------|------------------------|
-   | 🎮 Juegos (portal)   | arriba-izq.    | 8 arr., 8 izq. | alto 40, ancho auto (≈110)| gris  .b-gris      | <a class="b3d txt b-gris"> en .nav-juego |
+   | 🎮 Juegos (portal)   | arriba-izq.    | 8 arr., 8 izq. | alto 40, ancho auto (≈110)| azul oscuro .b-azuloscuro | <a class="b3d txt b-azuloscuro"> en .nav-juego |
    | ☰ Menú / Pausa       | arriba-izq.    | justo debajo   | alto 40, MISMO ancho      | gris  .b-gris      | <button class="b3d txt b-gris"> en .nav-juego |
    | 🌙 / ☀️ (madera)     | abajo-izq.     | 10 izq,14 abj. | 40 × 40 (cuadrado)        | oro   .b-oro       | compartido/fondo-madera.js (.btn-fondo) |
    | ⛶ / ✕ pantalla compl.| abajo-der.     | 10 der,14 abj. | 40 × 40 (cuadrado)        | gris (fijo en JS)  | compartido/pantalla-completa.js |
    | monedas, 🔊 sonido…  | arriba-der.    | 8 arr., 8 der. | chips 34 alto; botones 40 | gris  .b-gris      | .hud.hud-der (los chips son del juego) |
+   | 💰 monedas (chip)    | (ver nota)     |                | chip 34 alto              | DORADO .chip-monedas | <span class="chip chip-monedas"><span class="moneda"></span>123</span> |
+   Nota de monedas: todos los juegos con monedas usan este mismo chip dorado con la moneda dibujada en CSS (.moneda; el emoji 🪙 no se ve en sistemas viejos).
+   Va en una zona libre: arriba-der. con el resto de chips, o (como en Estacionamiento) en una fila de información debajo de ☰.
 
    • 🎮 Juegos = vuelve al PORTAL (href="../"), siempre visible.
      ☰ = vuelve al INICIO DEL JUEGO: fuera de partida dice «Menú principal» y va directo al menú del juego; dentro de una
@@ -52,6 +55,7 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
    • 🌙/☀️: 🌙 en madera clara (pasa a oscura), ☀️ en madera oscura. Guarda la elección en localStorage «fondo_madera».
    • Colores (degradado de arriba a abajo, ver .b-gris y .b-oro más abajo):
        gris  #d5d9e0 → #8b93a0 → #4f5662        oro  #fff08c → #ffb020 → #a85d00
+       azul oscuro (🎮 Juegos)  #7d9cea → #3b63c4 → #1c3a82   (más claro que el de Deslizante, sin llegar a azul claro)
    • Zonas RESERVADAS (el juego no pone nada interactivo ahí, ni dentro de su propio marco):
        arriba-izquierda   ≈ 120 × 92   (🎮 Juegos + ☰)
        abajo-izquierda    ≈  56 × 60   (🌙/☀️)
@@ -117,6 +121,14 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
 .b-oro    { --c1: #fff08c; --c2: #ffb020; --c3: #a85d00; }
 .b-rojo   { --c1: #ffb3a8; --c2: #f0483a; --c3: #8f1c12; }
 .b-gris   { --c1: #d5d9e0; --c2: #8b93a0; --c3: #4f5662; }
+.b-azuloscuro { --c1: #7d9cea; --c2: #3b63c4; --c3: #1c3a82; } /* ESTÁNDAR: botón «🎮 Juegos» (portal) de todos los juegos */
+
+/* Chip de monedas ESTÁNDAR (dorado) y moneda dibujada con CSS */
+.chip.chip-monedas { color: #5a3300; text-shadow: 0 2px 0 rgba(255,255,255,.55); border-color: #a85d00;
+  background: linear-gradient(180deg, #fff08c 0%, #ffb020 55%, #e08a00 130%); box-shadow: 0 3px 0 #a85d00, inset 0 2px 0 rgba(255,255,255,.65); }
+.moneda { position: relative; display: inline-block; flex: none; width: 1em; height: 1em; margin-right: 8px; border-radius: 50%; box-sizing: border-box;
+  background: radial-gradient(circle at 35% 30%, #fff7b8, #ffc928 55%, #d59100); border: .09em solid #a86a00; box-shadow: 0 .06em 0 rgba(0,0,0,.25), inset 0 .05em 0 rgba(255,255,255,.6); }
+.moneda::after { content: "$"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: .62em; font-weight: 900; color: #a86a00; text-shadow: 0 1px 0 rgba(255,255,255,.55); }
 
 @media (max-height: 420px) { .b3d { --t: 44px; } .b3d.chico { --t: 36px; } }
 

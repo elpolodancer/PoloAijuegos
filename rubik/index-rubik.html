@@ -1,0 +1,80 @@
+<!doctype html>
+<!-- Ruta: rubik/index-rubik.html -->
+<html lang="es" class="inmersivo">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#d9a866">
+<title>Cubo de Rubik</title>
+<link rel="stylesheet" href="../compartido/estilos.css">
+<link rel="stylesheet" href="../compartido/inmersivo.css">
+<script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+<style>
+#vista { position: relative; width: 0; height: 0; margin-top: -10vh; perspective: 1400px; }
+#cubo, .cubie { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-style: preserve-3d; }
+.f { position: absolute; left: calc(var(--S) / -2); top: calc(var(--S) / -2); width: var(--S); height: var(--S);
+  background: #0c0d10 linear-gradient(135deg, rgba(255,255,255,.28), rgba(255,255,255,0) 55%); border: calc(var(--S) * .05) solid #0c0d10;
+  border-radius: calc(var(--S) * .18); backface-visibility: hidden; }
+/* Menú principal */
+.pantalla { position: fixed; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: 16px; text-align: center; overflow-y: auto;
+  color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+.menu-caja { max-width: 420px; margin: auto; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.menu-caja h1 { margin: 0; font-size: 2.2rem; }
+.menu-caja p { margin: 0; color: var(--txt-fondo-suave); line-height: 1.35; }
+.menu-caja .b3d { margin-top: 8px; }
+.modelos { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+/* Mandos: encima de las zonas reservadas de las esquinas de abajo */
+#mandos { position: fixed; z-index: 5; left: 50%; transform: translateX(-50%); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 62px);
+  display: flex; flex-direction: column; align-items: center; gap: 4px; }
+#mandos .fila { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+@media (max-height: 420px) { #mandos { bottom: max(8px, env(safe-area-inset-bottom)); } #vista { margin-top: -14vh; } }
+</style>
+</head>
+<body class="inmersivo">
+<div class="nav-juego">
+  <a class="b3d txt b-azuloscuro" href="../"><span class="b-ico">🎮</span> Juegos</a>
+  <button id="btn-menu" class="b3d txt b-gris" type="button" hidden>☰ Pausa</button>
+</div>
+
+<section id="menu" class="pantalla">
+  <div class="menu-caja">
+    <h1>🧊 Cubo de Rubik</h1>
+    <p>Gira las capas hasta que cada cara sea de un solo color. Arrastra una pegatina para girar su capa; arrastra el fondo para mover la vista.</p>
+    <div class="modelos" id="modelos"></div>
+    <p id="mejor"></p>
+    <p>Cubos de 2×2 hasta 10×10. Próximamente: Pyraminx, Megaminx y unos 100 modelos más (mira el README).</p>
+  </div>
+</section>
+
+<section id="juego" hidden>
+  <div class="escena" id="escena"><div id="vista"><div id="cubo"></div></div></div>
+  <div class="hud hud-der">
+    <span class="chip" id="chip-modelo"></span>
+    <span class="chip" id="chip-tiempo"></span>
+    <span class="chip" id="chip-mov"></span>
+  </div>
+  <div id="mandos">
+    <div class="fila" id="caras"></div>
+    <div class="fila" id="fila2">
+      <button id="b-mezclar" class="b3d chico txt b-oro" type="button"><span class="b-ico">🔀</span> Mezclar</button>
+      <button id="b-deshacer" class="b3d chico txt b-gris" type="button"><span class="b-ico">↶</span> Deshacer</button>
+    </div>
+  </div>
+</section>
+
+<div class="pausa-fondo" id="fin" hidden role="dialog" aria-modal="true" aria-label="Resuelto">
+  <div class="pausa-panel">
+    <h2>🎉 ¡Resuelto!</h2>
+    <p id="fin-txt"></p>
+    <div class="pausa-opciones">
+      <button id="b-otra" class="b3d txt b-verde" type="button"><span class="b-ico">🔀</span><span>Mezclar otra vez</span></button>
+      <button id="b-fin-menu" class="b3d txt b-rojo" type="button"><span class="b-ico">🚪</span><span>Menú principal</span></button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="juego-rubik.js"></script>
+<script type="module" src="../compartido/fondo-madera.js"></script>
+<script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>

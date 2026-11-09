@@ -62,16 +62,11 @@
 
     #msg { position: fixed; z-index: 6; left: 50%; top: calc(158px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); width: max-content; max-width: 92vw; padding: 6px 14px; text-align: center; color: #f1f2f4; background: rgba(10,10,12,.82); border: 1px solid var(--borde); border-radius: 16px; font-size: .9rem; pointer-events: none; opacity: 0; transition: opacity .2s; }
     #msg.ver { opacity: 1; }
-    #msg.ver ~ .ayuda { opacity: 0; } /* mientras sale un aviso, la ayuda no se encima */
-    /* Ayuda que se desvanece sola a los pocos segundos */
-    .ayuda { position: fixed; z-index: 4; left: 50%; top: calc(158px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); width: min(92vw, 420px); margin: 0; padding: 6px 12px; text-align: center; font-size: .78rem; color: #d8dbe2;
-      background: rgba(10,10,12,.7); border-radius: 12px; pointer-events: none; animation: desvanece .8s 9s forwards; }
-    @keyframes desvanece { to { opacity: 0; visibility: hidden; } }
 
     #victoria { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; text-align: center; color: #f1f2f4; background: rgba(10,10,12,.82); }
     #victoria[hidden] { display: none; }
     #victoria h2 { margin: 0; font-size: 1.6rem; }
-    @media (max-aspect-ratio: 1/1) { #msg, .ayuda { top: calc(220px + env(safe-area-inset-top, 0px)); } }
+    @media (max-aspect-ratio: 1/1) { #msg { top: calc(220px + env(safe-area-inset-top, 0px)); } }
     @media (prefers-reduced-motion: reduce) { #msg { transition: none; } }
   </style>
 </head>
@@ -80,11 +75,10 @@
     <canvas id="lienzo" class="lienzo"></canvas>
   </main>
   <div id="msg" role="status" aria-live="polite"></div>
-  <p class="ayuda">Toca un auto para sacarlo hacia donde apunta su flecha. Arrastra para mover la vista y pellizca (o usa la rueda) para acercar.</p>
 
   <!-- Navegación estándar: «🎮 Juegos» vuelve al portal; «☰ Pausa» abre el menú de pausa (arriba a la izquierda, mismo ancho) -->
   <nav class="nav-juego" aria-label="Navegación">
-    <a class="b3d txt b-gris" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
     <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa"><span class="b-ico">☰</span> Pausa</button>
   </nav>
 
