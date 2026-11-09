@@ -76,6 +76,7 @@ Cada archivo trae en su **primera línea** su ruta dentro del repo (`Ruta: ...`)
 
 ## Estado (actualízalo al terminar cada sesión)
 
+- [x] «Puzle deslizante» terminado (9 nov 2026, `VERSION` = 125): es el primer juego de la zona «Juegos» (sale de `EN_DESARROLLO` y está al inicio de `JUEGOS` en `juegos.js`).
 - [ ] Fondo de madera clara/oscura (9 nov 2026, `VERSION` = 124): hecho en `deslizante`; falta añadir `compartido/fondo-madera.js` (y quitar el `--fondo-juego` propio) en los demás juegos; sin probar a mano en celular.
 - [x] Configuración de Firebase pegada en `compartido/firebase.js` (proyecto `elpolodancer`)
 - [ ] Authentication (Google) y Firestore activados; reglas pegadas

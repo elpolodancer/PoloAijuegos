@@ -21,6 +21,7 @@
 // «Juegos en desarrollo» del portal; los demás salen en la zona «Juegos». Al terminar un juego, quita su id de esa lista.
 // «ejemplo» (Reflejos) no está en esta lista: se abre con el botón «Juego de prueba» de index.html.
 export const JUEGOS = [
+  { id: "deslizante", nombre: "Puzle deslizante", icono: "🔢", descripcion: "Desliza las fichas numeradas hasta ponerlas en orden: 280 niveles fijos de 3×3 a 30×30 que se desbloquean en orden, y un modo libre con tableros al azar sin fin en los tamaños que ya abriste.", carpeta: "deslizante" },
   { id: "piano", nombre: "Piano", icono: "🎹", descripcion: "Toca las teclas negras para tocar canciones clásicas y populares: elige una o juega en modo aleatorio.", carpeta: "piano", imagen: "imagenes/piano.webp" },
   { id: "doodle", nombre: "Saltarín", icono: "🦘", descripcion: "Sube lo más alto que puedas: plataformas trampa, enemigos, monedas y un gorro que te lanza 100 m (estilo Doodle Jump).", carpeta: "doodle", imagen: "imagenes/saltarin.webp" },
   { id: "corredor", nombre: "Corredor", icono: "🏃", descripcion: "Corre por las vías esquivando trenes y barreras y junta monedas (estilo Subway Surfers).", carpeta: "corredor", imagen: "imagenes/corredor.webp" },
@@ -50,7 +51,6 @@ export const JUEGOS = [
   { id: "hoyo", nombre: "Hoyo", icono: "🕳️", descripcion: "Mueve tu hoyo por la ciudad o por una playa con islas y traga todo lo que quepa: crece, devora a los hoyos más chicos y termina en primer lugar (estilo Hole.io, en vista isométrica).", carpeta: "hoyo" },
   { id: "pelota", nombre: "Pelota", icono: "🔴", descripcion: "Rueda, brinca, empuja cajas y aplasta monstruos para llegar a la bandera: 5 niveles.", carpeta: "pelota" },
   { id: "rana", nombre: "Rana", icono: "🐸", descripcion: "Cruza carreteras y ríos saltando entre coches, camiones y troncos: 50 niveles cada vez más difíciles.", carpeta: "rana" },
-  { id: "deslizante", nombre: "Puzle deslizante", icono: "🔢", descripcion: "Desliza las fichas numeradas hasta ponerlas en orden: 280 niveles fijos de 3×3 a 30×30 que se desbloquean en orden, y un modo libre con tableros al azar sin fin en los tamaños que ya abriste.", carpeta: "deslizante" },
   { id: "isla", nombre: "Isla", icono: "🏝️", descripcion: "Isla en vista isométrica: tala árboles, mina rocas, fabrica hacha y pico y construye pisos y paredes. Tu isla se guarda sola.", carpeta: "isla" },
   { id: "minas", nombre: "Minero Tycoon", icono: "⛏️", descripcion: "Compra pozos, sube de nivel a tus mineros, el ascensor y el almacén, contrata gerentes para que trabajen solos (también sin conexión) y haz prestigio para ganar estrellas.", carpeta: "minas" },
   { id: "cavar", nombre: "Cavar", icono: "⛏️", descripcion: "Cava un hoyo en el terreno junto a la casa y encuentra minerales de $1, $2, $5, $10, $20, $50 y $100: llena la mochila, véndela en la caja y mejora la pala, la mochila y la linterna para llegar a 100 m.", carpeta: "cavar" },
@@ -69,4 +69,4 @@ export const JUEGOS = [
 
 // ids (campo «id» de arriba) de los juegos que todavía se están programando. Se ven en la zona «Juegos en desarrollo».
 // Cuando uno esté terminado, quita su id de aquí y pasará solo a la zona «Juegos».
-export const EN_DESARROLLO = ["piano", "doodle", "corredor", "dulces", "solitario", "rompeladrillos", "gominolas", "burbujas", "globos", "puzles", "pixelart", "supermercado", "pradera", "rompecabezas", "buscaminas", "restaurantes", "defensa", "guerrerodepuntos", "agario", "botellascolores", "pantano", "jardin", "ladrillos", "estacionamiento", "fusionanumeros", "cadenanumeros", "hoyo", "pelota", "rana", "deslizante", "isla", "minas", "cavar", "paperio", "jetpack", "2048", "ajedrez", "imperio", "fichas", "zuma", "pasteles", "flappybird", "fate", "bloques"];
+export const EN_DESARROLLO = ["piano", "doodle", "corredor", "dulces", "solitario", "rompeladrillos", "gominolas", "burbujas", "globos", "puzles", "pixelart", "supermercado", "pradera", "rompecabezas", "buscaminas", "restaurantes", "defensa", "guerrerodepuntos", "agario", "botellascolores", "pantano", "jardin", "ladrillos", "estacionamiento", "fusionanumeros", "cadenanumeros", "hoyo", "pelota", "rana", "isla", "minas", "cavar", "paperio", "jetpack", "2048", "ajedrez", "imperio", "fichas", "zuma", "pasteles", "flappybird", "fate", "bloques"];
