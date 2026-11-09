@@ -6,7 +6,7 @@
 //   obj (solo niveles de «candados»: las casillas que hay que eliminar, un número por fila), v (versión de los niveles fijos) }.
 import { N, tableroInicial, tableroCon, rellenar, agregarBloqueo, generarRonda, capas, fijarCapas } from "./logica-bloques.js";
 
-export const NIVELES_FIJOS = 20; // niveles publicados por ahora (meta: 2000). Para ampliar: añade filas a NIVELES (ver «Cómo agregar niveles fijos» en el README) y sube esta cifra
+export const NIVELES_FIJOS = 30; // niveles publicados por ahora (meta: 2000). Para ampliar: añade filas a NIVELES (ver «Cómo agregar niveles fijos» en el README) y sube esta cifra
 
 export function mulberry32(a) {
   return function () {
@@ -110,6 +110,17 @@ const NIVELES = [
   { reto: "candados", cand: [1, 1, 1],    cubos: 9, dif: 0.02, par: 13, sesgo: -1, limpia: 30, sem: 21 },
   { reto: "candados", cand: [1, 1, 1],       cubos: 9, dif: 0.03, par: 12, sesgo: -1, limpia: 30, sem: 9 },
   { reto: "candados", cand: [1, 1, 1, 1], cubos: 12, dif: 0.06, par: 15, sesgo: -1, limpia: 30, sem: 20 },
+  // —— Candados simples (21 a 30) ——
+  { reto: "puntos",   meta: 235, cubos: 13, dif: 0.08, par: 16, sem: 15 },
+  { reto: "candados", cand: [1, 1, 1],       cubos: 10, dif: 0.04, par: 9, sesgo: -1, limpia: 30, sem: 19 },
+  { reto: "candados", cand: [1, 1, 1, 1],    cubos: 11, dif: 0.05, par: 12, sesgo: -1, limpia: 40, sem: 28 },
+  { reto: "puntos",   meta: 245, cubos: 14, dif: 0.09, par: 18, sem: 12 },
+  { reto: "candados", cand: [1, 1, 1, 1],    cubos: 11, dif: 0.06, par: 12, sesgo: -1, limpia: 35, sem: 2 },
+  { reto: "candados", cand: [1, 1, 1, 1, 1], cubos: 11, dif: 0.06, par: 16, sesgo: -1, limpia: 40, sem: 22 },
+  { reto: "puntos",   meta: 255, cubos: 14, dif: 0.10, par: 13, sem: 12 },
+  { reto: "candados", cand: [1, 1, 1, 1, 1], cubos: 11, dif: 0.07, par: 12, sesgo: -1, limpia: 40, sem: 25 },
+  { reto: "candados", cand: [1, 1, 1, 1, 1], cubos: 12, dif: 0.08, par: 10, sesgo: -1, limpia: 35, sem: 28 },
+  { reto: "candados", cand: [1, 1, 1, 1, 1, 1], cubos: 12, dif: 0.09, par: 15, sesgo: -1, limpia: 40, sem: 33 },
 ];
 const memo = {};
 // sem: variante del nivel (cambia el tablero inicial y las piezas de todas las rondas). Lo normal es no pasarla (se usa la del nivel);

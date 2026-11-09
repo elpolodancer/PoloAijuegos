@@ -22,7 +22,7 @@ Partida sin fin; termina cuando ninguna pieza cabe. Cada dificultad tiene su pro
 
 Medido con `node bot-bloques.mjs dificultades 100 150` (rondas que aguanta): el **bot medio** (no mira adelante) llega a una mediana de 10 en Fácil, 7 en Normal y 3 en Difícil. El **bot bueno** casi nunca pierde (Fácil: nunca en 100 partidas hasta la ronda 150; Normal y Difícil a veces antes), así que sirve poco para medir; la prueba de verdad es jugarlo a mano.
 
-### 🗺️ Niveles fijos (20 publicados; meta: 2000)
+### 🗺️ Niveles fijos (30 publicados; meta: 2000)
 Cada nivel tiene un **reto** (`RETOS` en `niveles-bloques.js`). Al empezar sale un cartel con las instrucciones. El tablero inicial y las piezas de cada ronda salen siempre igual para todos (semilla por nivel, ronda y variante `sem`), y cada ronda sigue teniendo solución. Se abren de uno en uno. Con `?todos` en la dirección se abren todos para probar.
 
 **Retos que existen hoy**
@@ -34,7 +34,7 @@ Cada nivel tiene un **reto** (`RETOS` en `niveles-bloques.js`). Al empezar sale 
 
 El tablero guarda las capas (0 a 3) en dos planos de bits (`logica-bloques.js`: `capas`, `fijarCapas`). Los bloques por eliminar se recuerdan en `S.obj` (un número por fila): el aro rojo del tablero los marca, incluso cuando ya no tienen candados. Para inventar un reto nuevo: añade una entrada a `RETOS` (`texto`, `hud`, `cumplido`, `falta`) y úsala en la fila del nivel.
 
-**Los 20 niveles publicados** (medido con `node bot-bloques.mjs niveles`; «aficionado» = jugador simulado que elige entre sus 2 mejores jugadas; los niveles 1 a 10 son solo de puntos)
+**Los 30 niveles publicados** (medido con `node bot-bloques.mjs niveles`; «aficionado» = jugador simulado que elige entre sus 2 mejores jugadas; los niveles 1 a 10 son solo de puntos)
 
 | Niveles | Reto | Bot bueno tarda | Aficionado pasa |
 |---|---|---|---|
@@ -45,7 +45,14 @@ El tablero guarda las capas (0 a 3) en dos planos de bits (`logica-bloques.js`: 
 | 13, 16 | 2 candados | 5 y 9 | 28 a 30 % |
 | 15, 18, 19 | 3 candados | 7 a 8 | 21 a 30 % |
 | 20 | 4 candados | 9 | 26 % |
+| 21, 24, 27 | puntos 235, 245, 255 | 8 a 11 | 24 a 29 % |
+| 22 | 3 candados | 5 | 39 % |
+| 23, 25 | 4 candados | 7 | 21 a 29 % |
+| 26 | 5 candados | 10 | 22 % |
+| 28, 29 | 5 candados | 6 a 7 | 12 a 21 % |
+| 30 | 6 candados | 9 | 15 % |
 
+- Los niveles 21 a 30 (9 nov 2026) siguen el mismo patrón de 11 a 20 (puntos y candados simples, sin dobles ni triples). Se eligieron con `buscar` (30 a 40 variantes por nivel) y se les puso `par` con `niveles`; `validar` da todo bien. Los porcentajes de aficionado cambian un poco entre corridas (son simulaciones al azar); el 29 y el 30 son los más duros de la tanda (conviene probarlos a mano).
 - **Estrellas** según las rondas: 3 ★ si llegas al `par` del nivel, 2 ★ hasta un 50 % más, 1 ★ si lo pasas. El par es lo que tarda el bot bueno ×1.5 + 1.
 - **Puntos de perfil:** 5 la primera vez que pasas cada nivel. Los puntos del juego dentro de un nivel no cuentan para el perfil.
 - Una persona tarda más rondas que el bot bueno (cuenta con 1.3 a 1.5 veces).
@@ -90,9 +97,9 @@ Otras ayudas del bot: `calibrar [desde] [hasta] [%]` propone la meta de puntos q
 
 ## Pendiente / ideas
 
-- Niveles 21 a 2000 siguiendo el plan de dificultad de arriba. Conviene repartirlos en tandas de archivos y generarlos con un script que use `buscar`.
+- Niveles 31 a 2000 siguiendo el plan de dificultad de arriba. Conviene repartirlos en tandas de archivos y generarlos con un script que use `buscar`.
 - Dobles (101 a 200) y triples (201 a 300): el motor ya los soporta (`cand: [2]`, `[3]`) y se dibujan, pero ningún nivel publicado los usa todavía. Calibrarlos con `buscar` antes de publicarlos.
 - Más retos distintos (a añadir en `RETOS`): límite de rondas, hacer N combos de 2 líneas, limpiar todo el tablero, tableros con formas, bloques que aparecen con el tiempo.
 - Decidir cómo se desbloquean los niveles cuando haya muchos (hoy: pasar el anterior). La lista ya está paginada (50 por página, `POR_PAG`).
-- Ajustar a mano Fácil y Difícil del infinito jugando; el bot no sustituye a una persona. Lo mismo vale para los niveles: probar los 20 a mano y reajustar con `buscar`.
+- Ajustar a mano Fácil y Difícil del infinito jugando; el bot no sustituye a una persona. Lo mismo vale para los niveles: probar los 30 a mano y reajustar con `buscar`.
 - La zona infinita no guarda el progreso en la nube más que el récord; las estrellas sí.
