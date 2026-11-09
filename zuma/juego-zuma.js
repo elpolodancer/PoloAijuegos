@@ -157,25 +157,20 @@ function dibujarMetal(x, y, t) {
   g.strokeStyle = "#000a"; g.lineWidth = 1.5; g.stroke();
 }
 
+const BORDE_SURCO = "#b5793f"; // café claro del trazo que rodea la banda
 let fondo = null, trFondo = null;
 function crearFondo(tr) {
   const c = document.createElement("canvas");
   c.width = ANCHO; c.height = ALTO;
   const f = c.getContext("2d");
-  const gr = f.createRadialGradient(ANCHO / 2, ALTO / 2, 40, ANCHO / 2, ALTO / 2, 420);
-  gr.addColorStop(0, "#7a828b"); gr.addColorStop(1, "#3a4047");
-  f.fillStyle = gr; f.fillRect(0, 0, ANCHO, ALTO);
-  const r = azarSemilla(7); // vetas y granos de la piedra
-  for (let i = 0; i < 260; i++) {
-    f.fillStyle = r() < 0.5 ? "rgba(0,0,0,.09)" : "rgba(255,255,255,.07)";
-    f.fillRect(r() * ANCHO, r() * ALTO, 2 + r() * 8, 1 + r() * 3);
-  }
+  // Sin fondo propio: el lienzo es transparente y se ve la madera de la página (clara u oscura). Solo se dibujan los bordes en café claro
   f.lineCap = "round"; f.lineJoin = "round";
   const trazo = () => { f.beginPath(); for (let s = 0; s <= tr.largo; s += 4) { const q = tr.pos(s); s ? f.lineTo(q.x, q.y) : f.moveTo(q.x, q.y); } f.stroke(); };
-  f.strokeStyle = "#2a3036"; f.lineWidth = 56; trazo();   // borde del surco
-  f.strokeStyle = "#13161a"; f.lineWidth = 46; trazo();   // fondo del surco
-  f.fillStyle = "#555d66"; f.strokeStyle = "#2a3036"; f.lineWidth = 4; // plataforma de la rana
-  f.beginPath(); f.arc(CENTRO.x, CENTRO.y, 58, 0, 7); f.fill(); f.stroke();
+  f.strokeStyle = BORDE_SURCO; f.lineWidth = 4; // plataforma de la rana: solo el aro
+  f.beginPath(); f.arc(CENTRO.x, CENTRO.y, 58, 0, 7); f.stroke();
+  f.strokeStyle = BORDE_SURCO; f.lineWidth = 47; trazo();  // borde del surco (47 de ancho: las vueltas más juntas están a 44 px)…
+  f.globalCompositeOperation = "destination-out"; f.lineWidth = 43; trazo(); // …y se vacía el interior (43): queda un trazo de 2 px por cada lado
+  f.globalCompositeOperation = "source-over";
   const h = tr.pos(tr.largo); // hoyo
   f.fillStyle = "#050607"; f.strokeStyle = "#c9a227"; f.lineWidth = 5;
   f.beginPath(); f.arc(h.x, h.y, 27, 0, 7); f.fill(); f.stroke();
