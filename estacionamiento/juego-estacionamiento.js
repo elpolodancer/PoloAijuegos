@@ -366,8 +366,7 @@ function dibujarAuto(c) {
 
 function dibujar() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = "#1a1d26";
-  ctx.fillRect(0, 0, cw, ch);
+  ctx.clearRect(0, 0, cw, ch); // transparente: detrás se ve el fondo de madera (compartido/fondo-madera.js)
   ctx.lineJoin = "round";
   dibujarSuelo();
   const lista = autos.filter((c) => c.estado !== 2).map((c) => ({ c, p: poseDe(c) }));

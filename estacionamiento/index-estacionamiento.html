@@ -5,21 +5,31 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Estacionamiento</title>
-  <meta name="theme-color" content="#15161a" />
+  <meta name="theme-color" content="#d9a866" />
+  <!-- Evita el parpadeo de la madera clara al abrir en modo oscuro -->
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
   <link rel="stylesheet" href="../compartido/estilos.css" />
   <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    html.inmersivo { --fondo-juego: #1b1d21; }
+    /* El fondo de madera lo pone compartido/fondo-madera.js; este color solo se ve un instante antes de que cargue */
+    html.inmersivo { --fondo-juego: #d9a866; }
+    html.inmersivo.oscura { --fondo-juego: #1d2024; }
+    body.inmersivo { background: transparent; }
     .b3d:disabled { filter: grayscale(.85) brightness(.7); }
 
-    /* El estacionamiento ocupa toda la pantalla (se mueve con el dedo y se acerca con pellizco); los botones flotan encima */
+    /* El estacionamiento ocupa toda la pantalla (se mueve con el dedo y se acerca con pellizco); los botones flotan encima.
+       El lienzo es TRANSPARENTE para que se vea la madera: el JS debe limpiar con clearRect, no pintar un fondo. */
     #escena { position: absolute; inset: 0; }
-    #lienzo { display: block; width: 100%; height: 100%; background: #1b1d21; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+    #lienzo { display: block; width: 100%; height: 100%; background: transparent; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+
+    /* Arriba a la izquierda va la navegación estándar (.nav-juego); los contadores pasan al centro */
+    .hud-centro { top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); }
     .hud-der { flex-direction: column; align-items: flex-end; gap: 6px; }
-    .hud-abajo { gap: 8px; }
+    /* Abajo a la izquierda queda 🌙/☀️ y abajo a la derecha ⛶, así que el selector de nivel / boosts va al centro */
+    .hud-abajo { left: 50%; transform: translateX(-50%); gap: 8px; }
     .chip small { margin-right: 5px; }
 
-    #msg { position: fixed; z-index: 6; left: 50%; top: calc(60px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); width: max-content; max-width: 92vw; padding: 6px 14px; text-align: center; background: rgba(10,10,12,.82); border: 1px solid var(--borde); border-radius: 16px; font-size: .9rem; pointer-events: none; opacity: 0; transition: opacity .2s; }
+    #msg { position: fixed; z-index: 6; left: 50%; top: calc(60px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); width: max-content; max-width: 92vw; padding: 6px 14px; text-align: center; color: #f1f2f4; background: rgba(10,10,12,.82); border: 1px solid var(--borde); border-radius: 16px; font-size: .9rem; pointer-events: none; opacity: 0; transition: opacity .2s; }
     #msg.ver { opacity: 1; }
     #msg.ver ~ .ayuda { opacity: 0; } /* mientras sale un aviso, la ayuda no se encima */
     /* Ayuda que se desvanece sola a los pocos segundos */
@@ -27,7 +37,8 @@
       background: rgba(10,10,12,.7); border-radius: 12px; pointer-events: none; animation: desvanece .8s 9s forwards; }
     @keyframes desvanece { to { opacity: 0; visibility: hidden; } }
 
-    #victoria { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; text-align: center; background: rgba(10,10,12,.82); }
+    #victoria { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; text-align: center; color: #f1f2f4; background: rgba(10,10,12,.82); }
+    #victoria[hidden] { display: none; }
     #victoria h2 { margin: 0; font-size: 1.6rem; }
     @media (prefers-reduced-motion: reduce) { #msg { transition: none; } }
   </style>
@@ -39,9 +50,14 @@
   <div id="msg" role="status" aria-live="polite"></div>
   <p class="ayuda">Toca un auto para sacarlo hacia donde apunta su flecha. Arrastra para mover la vista y pellizca (o usa la rueda) para acercar.</p>
 
+  <!-- Navegación estándar: «🎮 Juegos» vuelve al portal; «☰ Pausa» abre el menú de pausa (arriba a la izquierda, mismo ancho) -->
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-gris" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa"><span class="b-ico">☰</span> Pausa</button>
+  </nav>
+
   <!-- Capas flotantes -->
-  <div class="hud hud-izq">
-    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
+  <div class="hud hud-centro">
     <span class="chip"><small>Autos</small><b id="autos">0</b></span>
     <span class="chip"><small>Movs</small><b id="movs">0</b></span>
   </div>
@@ -61,7 +77,20 @@
     <button class="b3d txt b-verde" id="siguiente" type="button">Siguiente nivel ▶</button>
     <button class="b3d txt b-gris" id="repetir" type="button">Repetir nivel</button>
   </div>
+
   <script type="module" src="juego-estacionamiento.js"></script>
+  <!-- Menú de pausa estándar: no necesita cambios en el JS del juego (por turnos no hay nada que congelar) -->
+  <script type="module">
+    import { crearMenuPausa } from "../compartido/menu-pausa.js";
+    crearMenuPausa({
+      boton: document.getElementById("btn-menu"),
+      extras: () => [
+        { icono: "🔄", texto: "Reiniciar nivel", clase: "b-oro", alElegir: () => document.getElementById("reiniciar").click() },
+      ],
+      alSalir: () => { location.href = "../"; }, // cuando exista el mapa, aquí volverá al mapa
+    });
+  </script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
 </body>
 </html>
