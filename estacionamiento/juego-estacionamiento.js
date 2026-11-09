@@ -7,6 +7,8 @@
 
 import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
 import { TOTAL_NIVELES, configNivel, generarNivel } from "./niveles-estacionamiento.js";
+import { montarMapa } from "./mapa-estacionamiento.js";   // menú principal: México con agua, mundo y listas de niveles
+import { crearMenuPausa } from "../compartido/menu-pausa.js";
 
 let N = 25;                         // casillas por lado (cambia con cada nivel)
 const TW = 16, TH = 8;              // medio ancho / medio alto de una casilla (isométrico)
@@ -41,8 +43,10 @@ document.querySelector(".hud-centro").appendChild(chipMonedas);
 // ----- Boosts (paso 2a): «Quitar un auto» (30 🪙, o gratis si ya tienes usos) y «Paquete ×3» (50 🪙 = 3 usos). La bomba va aparte (2b). -----
 // «Quitar un auto» se paga AL USARLO: tocas el botón, tocas el auto y entonces se gasta un uso (o 30 monedas). Si te arrepientes, tocas el botón otra vez.
 const PRECIO_QUITAR = 30, PRECIO_PAQUETE = 50, USOS_PAQUETE = 3;
+const PRECIO_BOMBA = 100, LADO_BOMBA = 5; // la bomba se paga al soltarla (no se guarda en inventario) y borra una zona de 5×5 casillas
 cartera.quitar = Math.max(0, Math.floor(Number(cartera.quitar)) || 0); // usos de «quitar un auto» que tienes
 let modoQuitar = false;
+let modoBomba = false, zonaBomba = null, efectoBomba = null; // zonaBomba = { x, y } esquina de la zona de 5×5 elegida; efectoBomba = destello tras explotar
 
 function botonBoost(clase, icono, titulo) {
   const b = document.createElement("button");
@@ -55,10 +59,12 @@ function botonBoost(clase, icono, titulo) {
 const bQuitar = botonBoost("b-azul", "🚗", "Quitar un auto");
 const bPaquete = botonBoost("b-oro sin", "📦", "Paquete ×3: tres usos de «Quitar un auto»");
 bPaquete.info.textContent = PRECIO_PAQUETE + "🪙";
+const bBomba = botonBoost("b-rojo sin", "💣", "Bomba: borra los autos de una zona de 5×5");
+bBomba.info.textContent = PRECIO_BOMBA + "🪙";
 const zBoosts = document.createElement("div");
 zBoosts.style.cssText = "display:flex;gap:10px";
 zBoosts.setAttribute("role", "group"); zBoosts.setAttribute("aria-label", "Boosts");
-zBoosts.append(bQuitar.b, bPaquete.b);
+zBoosts.append(bQuitar.b, bPaquete.b, bBomba.b);
 { // los boosts van arriba del selector de nivel, abajo al centro
   const zN = $("niveles"), padre = zN.parentElement;
   padre.style.flexDirection = "column";
@@ -71,9 +77,16 @@ function pintarBoosts() {
   bQuitar.b.classList.toggle("sin", !tiene);
   bQuitar.b.classList.toggle("on", modoQuitar);
   bQuitar.b.setAttribute("aria-pressed", String(modoQuitar));
+  bBomba.b.classList.toggle("on", modoBomba);
+  bBomba.b.setAttribute("aria-pressed", String(modoBomba));
 }
 function salirModoQuitar() {
   modoQuitar = false;
+  $("lienzo").style.cursor = "";
+  pintarBoosts();
+}
+function salirModoBomba() {
+  modoBomba = false; zonaBomba = null;
   $("lienzo").style.cursor = "";
   pintarBoosts();
 }
@@ -81,10 +94,21 @@ bQuitar.b.addEventListener("click", () => {
   if (modoQuitar) { salirModoQuitar(); return; }
   if (ganado) return;
   if (cartera.quitar <= 0 && cartera.monedas < PRECIO_QUITAR) { aviso("Necesitas " + PRECIO_QUITAR + " monedas"); return; }
+  salirModoBomba();
   modoQuitar = true;
   $("lienzo").style.cursor = "crosshair";
   pintarBoosts();
   aviso("Toca el auto que quieres quitar");
+});
+bBomba.b.addEventListener("click", () => {
+  if (modoBomba) { salirModoBomba(); return; }
+  if (ganado) return;
+  if (cartera.monedas < PRECIO_BOMBA) { aviso("Necesitas " + PRECIO_BOMBA + " monedas"); return; }
+  salirModoQuitar();
+  modoBomba = true; zonaBomba = null;
+  $("lienzo").style.cursor = "crosshair";
+  pintarBoosts();
+  aviso("Toca donde quieres la bomba; toca otra vez dentro del cuadro para soltarla");
 });
 bPaquete.b.addEventListener("click", () => {
   if (cartera.monedas < PRECIO_PAQUETE) { aviso("Necesitas " + PRECIO_PAQUETE + " monedas"); return; }
@@ -117,6 +141,8 @@ function cargarNivel(n) {
   restantes = autos.length;
   movs = 0; ganado = false;
   salirModoQuitar();
+  salirModoBomba();
+  efectoBomba = null;
   $("victoria").hidden = true;
   hudNiveles();
   ajustarCamara();
@@ -196,6 +222,36 @@ function quitarAuto(c) {
   restantes--;
   guardarCartera(); pintarMonedas();
   salirModoQuitar();
+}
+
+// Saca un auto del tablero sin animación (lo usa la bomba)
+function retirarAuto(c) {
+  celdasDe(c).forEach(([x, y]) => { if (occ[y * N + x] === c.id) occ[y * N + x] = -1; });
+  c.estado = 2;
+  restantes--;
+}
+// Bomba: el primer toque coloca el cuadro de 5×5 (centrado en la casilla tocada, sin salirse del tablero); un toque dentro del cuadro la suelta
+function tocarBomba(p) {
+  if (ganado) return;
+  const [gx, gy] = suelo(p.x, p.y, 0);
+  const x = Math.floor(gx), y = Math.floor(gy);
+  if (x < 0 || y < 0 || x >= N || y >= N) return;
+  const z = zonaBomba;
+  if (z && x >= z.x && x < z.x + LADO_BOMBA && y >= z.y && y < z.y + LADO_BOMBA) { soltarBomba(); return; }
+  zonaBomba = { x: clamp(x - 2, 0, N - LADO_BOMBA), y: clamp(y - 2, 0, N - LADO_BOMBA) };
+}
+function soltarBomba() {
+  const z = zonaBomba;
+  const dentro = (c) => celdasDe(c).some(([x, y]) => x >= z.x && x < z.x + LADO_BOMBA && y >= z.y && y < z.y + LADO_BOMBA);
+  const blancos = autos.filter((c) => c.estado === 0 && dentro(c)); // los autos que ya van saliendo no cuentan
+  if (!blancos.length) { aviso("No hay autos en esa zona: mueve el cuadro"); return; } // no se cobra
+  if (cartera.monedas < PRECIO_BOMBA) { aviso("Necesitas " + PRECIO_BOMBA + " monedas"); salirModoBomba(); return; }
+  cartera.monedas -= PRECIO_BOMBA;
+  for (const c of blancos) retirarAuto(c);
+  efectoBomba = { x: z.x, y: z.y, t: 0.5 };
+  guardarCartera(); pintarMonedas();
+  aviso("💥 " + blancos.length + (blancos.length === 1 ? " auto eliminado" : " autos eliminados"));
+  salirModoBomba();
 }
 
 function tocarAuto(c) {
@@ -391,11 +447,23 @@ function dibujar() {
   const lista = autos.filter((c) => c.estado !== 2).map((c) => ({ c, p: poseDe(c) }));
   lista.sort((a, b) => a.p.cx + a.p.cy - (b.p.cx + b.p.cy));
   for (const it of lista) dibujarAuto(it.c);
+  if (modoBomba && zonaBomba) { // vista previa de la zona que borrará la bomba
+    ctx.lineWidth = 2;
+    poli(rect(zonaBomba.x, zonaBomba.y, zonaBomba.x + LADO_BOMBA, zonaBomba.y + LADO_BOMBA, 0.3), "rgba(255,70,50,.28)", "rgba(255,110,70,.95)");
+    ctx.lineWidth = 1;
+  }
+  if (efectoBomba) { // destello que crece y se desvanece
+    const f = efectoBomba.t / 0.5, g2 = (1 - f) * 1.2, e = efectoBomba;
+    ctx.globalAlpha = f;
+    poli(rect(e.x - g2, e.y - g2, e.x + LADO_BOMBA + g2, e.y + LADO_BOMBA + g2, 0.5), "rgba(255,170,40,.8)");
+    ctx.globalAlpha = 1;
+  }
 }
 
 // ----- Bucle -----
 function actualizar(dt) {
   T += dt;
+  if (efectoBomba) { efectoBomba.t -= dt; if (efectoBomba.t <= 0) efectoBomba = null; }
   for (const c of autos) {
     if (c.bump > 0) c.bump = Math.max(0, c.bump - dt);
     if (c.flash > 0) c.flash = Math.max(0, c.flash - dt);
@@ -455,20 +523,10 @@ function aviso(t) {
   tMsg = setTimeout(() => m.classList.remove("ver"), 1600);
 }
 
-// Selector provisional (◀ nivel ▶) hasta que exista el mapa. Solo se puede avanzar hasta el nivel desbloqueado.
+// Rótulo del nivel en juego. El cambio de nivel se hace desde el mapa (antes había un selector ◀ ▶ provisional).
 function hudNiveles() {
   const z = $("niveles");
   z.innerHTML = "";
-  const flecha = (txt, etiqueta, ok, destino) => {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "b3d chico b-gris";
-    b.textContent = txt;
-    b.setAttribute("aria-label", etiqueta);
-    b.disabled = !ok;
-    b.addEventListener("click", () => cargarNivel(destino));
-    return b;
-  };
   const info = document.createElement("span");
   info.className = "chip";
   const pe = document.createElement("small"); pe.textContent = "Nivel";
@@ -476,7 +534,7 @@ function hudNiveles() {
   const det = document.createElement("small"); det.style.cssText = "margin:0 0 0 8px";
   det.textContent = cfg.tam + "×" + cfg.tam + " · 🪙" + cfg.premio;
   info.append(pe, num, det);
-  z.append(flecha("◀", "Nivel anterior", nivel > 1, nivel - 1), info, flecha("▶", "Nivel siguiente", nivel < prog.max && nivel < TOTAL_NIVELES, nivel + 1));
+  z.append(info);
 }
 
 // ----- Controles: tocar, arrastrar, pellizcar, rueda -----
@@ -514,6 +572,7 @@ function soltar(e) {
   dedos.delete(e.pointerId);
   if (eraUno && g && !g.moved && e.type === "pointerup") {
     const p = pos(e);
+    if (modoBomba) { tocarBomba(p); return; }
     for (const z of [6, 0]) {
       const [gx, gy] = suelo(p.x, p.y, z);
       const x = Math.floor(gx), y = Math.floor(gy);
@@ -536,6 +595,8 @@ $("menos").addEventListener("click", () => zoom(1 / 1.3, cw / 2, ch / 2));
 $("centrar").addEventListener("click", ajustarCamara);
 $("reiniciar").addEventListener("click", () => cargarNivel(nivel));
 $("repetir").addEventListener("click", () => cargarNivel(nivel));
+// Al terminar el último nivel de un estado/país se abre el mapa principal para VER SUBIR el agua; si no, la lista de niveles de su etapa
+$("al-mapa").addEventListener("click", () => { $("victoria").hidden = true; abrirMapa(nivel % 100 === 0); });
 $("siguiente").addEventListener("click", () => cargarNivel(Math.min(TOTAL_NIVELES, nivel + 1)));
 addEventListener("resize", () => {
   const w0 = cw, h0 = ch;
@@ -549,15 +610,45 @@ addEventListener("resize", () => {
   }
 });
 
+// ----- Mapa (menú principal), botón ☰ y menú de pausa -----
+// Botón ☰ (estándar): en el mapa principal NO se muestra; en el resto del mapa dice «Menú principal» y vuelve al mapa principal;
+// dentro de una partida dice «Pausa» y abre el menú de pausa.
+const btnMenu = $("btn-menu");
+function botonMenu() {
+  const enMapa = mapa.abierto();
+  btnMenu.hidden = enMapa && mapa.esPrincipal();
+  btnMenu.innerHTML = '<span class="b-ico">☰</span> ' + (enMapa ? "Menú principal" : "Pausa");
+  btnMenu.title = enMapa ? "Volver al mapa principal" : "Pausa";
+}
+const mapa = montarMapa({
+  progreso: () => prog,
+  jugarNivel: (n) => { mapa.cerrar(); cargarNivel(n); botonMenu(); },
+  alCambiarVista: () => botonMenu(),
+});
+function abrirMapa(aguaSube) {
+  $("victoria").hidden = true;
+  mapa.abrir(nivel, !!aguaSube);
+  botonMenu();
+}
+const pausa = crearMenuPausa({
+  puedeAbrir: () => !mapa.abierto(), // en el mapa no hay nada que pausar
+  extras: () => [{ icono: "🔄", texto: "Reiniciar nivel", clase: "b-oro", alElegir: () => cargarNivel(nivel) }],
+  textoSalir: "Salir al mapa",
+  alSalir: () => abrirMapa(false),
+});
+btnMenu.addEventListener("click", () => { if (mapa.abierto()) mapa.principal(); else pausa.abrir(); });
+
 // ----- Inicio -----
 redim();
 cargarNivel(clamp(prog.max, 1, TOTAL_NIVELES));
+mapa.abrir(); // el juego empieza en el mapa (México de cerca)
+botonMenu();
 let ultimo = performance.now();
 function bucle(ahora) {
   const dt = Math.min(0.05, (ahora - ultimo) / 1000);
   ultimo = ahora;
   actualizar(dt);
-  dibujar();
+  if (!mapa.abierto()) dibujar(); // con el mapa encima no hace falta dibujar el tablero
   requestAnimationFrame(bucle);
 }
 requestAnimationFrame(bucle);
@@ -571,7 +662,8 @@ import("../compartido/progreso.js").then((m) => {
     alCambiar: (v) => {
       prog.max = clamp(Number(v.max) || 1, 1, TOTAL_NIVELES);
       prog.hecho = Math.max(0, Number(v.hecho) || 0);
-      hudNiveles(); // repinta los botones de nivel con lo que trajo la nube
+      hudNiveles(); // repinta el rótulo con lo que trajo la nube
+      mapa.refrescar(); // y el mapa, por si está abierto
     },
   });
 }).catch(() => {});

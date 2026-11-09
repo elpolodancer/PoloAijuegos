@@ -76,20 +76,11 @@
     <div id="vtexto"></div>
     <button class="b3d txt b-verde" id="siguiente" type="button">Siguiente nivel ▶</button>
     <button class="b3d txt b-gris" id="repetir" type="button">Repetir nivel</button>
+    <button class="b3d txt b-azul" id="al-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
   </div>
 
   <script type="module" src="juego-estacionamiento.js"></script>
-  <!-- Menú de pausa estándar: no necesita cambios en el JS del juego (por turnos no hay nada que congelar) -->
-  <script type="module">
-    import { crearMenuPausa } from "../compartido/menu-pausa.js";
-    crearMenuPausa({
-      boton: document.getElementById("btn-menu"),
-      extras: () => [
-        { icono: "🔄", texto: "Reiniciar nivel", clase: "b-oro", alElegir: () => document.getElementById("reiniciar").click() },
-      ],
-      alSalir: () => { location.href = "../"; }, // cuando exista el mapa, aquí volverá al mapa
-    });
-  </script>
+  <!-- El menú de pausa, el mapa y el botón ☰ los crea juego-estacionamiento.js -->
   <script type="module" src="../compartido/pantalla-completa.js"></script>
   <script type="module" src="../compartido/fondo-madera.js"></script>
 </body>
