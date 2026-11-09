@@ -1,44 +1,101 @@
 // Ruta: deslizante/juego-deslizante.js
 // Puzle deslizante (estilo «15 puzzle»): ordena las fichas numeradas de 1 en adelante, con el hueco al final.
-// Cada tamaño es una dificultad. La mezcla siempre tiene solución.
+// Menú de inicio (Jugar / Niveles) y niveles fijos que se desbloquean en orden (ver niveles-deslizante.js).
 import { encolarPuntos } from "../compartido/cola-puntos.js";
+import { NIVELES, POR_TAMANO, TAMANO_MAX, puntosDe } from "./niveles-deslizante.js";
 
 const ID = "deslizante";
-
-// ----- Ajustes -----
-const NIVELES = [
-  { n: 3, nombre: "Fácil 3×3",   puntos: 2 },   // «puntos» = lo que se envía al perfil al resolverlo
-  { n: 4, nombre: "Normal 4×4",  puntos: 5 },
-  { n: 5, nombre: "Difícil 5×5", puntos: 10 },
-  { n: 6, nombre: "Experto 6×6", puntos: 20 },
-  { n: 7, nombre: "Maestro 7×7", puntos: 35 },
-  { n: 8, nombre: "Genio 8×8",   puntos: 50 },
-];
-const GUARDA = ID + "_nivel";
-const COLOR_NIVEL = ["b-verde", "b-azul", "b-morado", "b-oro", "b-rojo", "b-negro"]; // un color por dificultad
-
 const $ = (id) => document.getElementById(id);
-let nivel = NIVELES[0], n = 3, t = [];            // t[pos] = número de la ficha (0 = hueco)
+
+// ----- Progreso (local primero; se sincroniza con la cuenta de Google si hay internet y sesión) -----
+// { hechos: [true|null por nivel], mejores: { "<número de nivel>": { mov, seg } } }
+const CLAVE = ID + "_progreso";
+const limpiar = (p) => (p && typeof p === "object" && (Array.isArray(p.hechos) || p.mejores))
+  ? { hechos: Array.isArray(p.hechos) ? p.hechos : [], mejores: p.mejores && typeof p.mejores === "object" ? p.mejores : {} }
+  : null; // formato viejo (récords sueltos por tamaño): se ignora
+let prog = { hechos: [], mejores: {} }, nube = null;
+try { prog = limpiar(JSON.parse(localStorage.getItem(CLAVE))) || prog; } catch (e) {}
+function guardarProg() {
+  try { localStorage.setItem(CLAVE, JSON.stringify(prog)); } catch (e) {}
+  if (nube) nube.guardado();
+}
+const hecho = (i) => !!prog.hechos[i];
+const desbloqueado = (i) => i === 0 || hecho(i - 1);
+
+// Datos de un nivel: tamaño y número dentro de su tamaño (1 a 10)
+function info(i) {
+  const n = NIVELES[i].n;
+  return { n, num: NIVELES.slice(0, i).filter((x) => x.n === n).length + 1 };
+}
+// Primer nivel sin pasar (el que toca jugar); si ya pasó todos los que hay, el último
+function siguientePendiente() {
+  const i = NIVELES.findIndex((_, k) => !hecho(k));
+  return i < 0 ? NIVELES.length - 1 : i;
+}
+
+// ----- Pantallas -----
+function mostrar(nombre) {
+  for (const p of ["inicio", "pantalla-niveles", "juego"]) $(p).hidden = p !== nombre;
+  $("btn-menu").hidden = nombre === "inicio"; // «Menú principal» solo fuera del menú principal
+  if (nombre !== "juego") clearInterval(reloj);
+  if (nombre === "inicio") pintarInicio();
+  if (nombre === "pantalla-niveles") pintarNiveles();
+}
+function pintarInicio() {
+  const pasados = prog.hechos.filter(Boolean).length;
+  $("resumen").textContent = pasados + " de " + NIVELES.length + " niveles pasados";
+  const i = siguientePendiente(), d = info(i);
+  $("btn-jugar").innerHTML = '<span class="b-ico">▶</span> ' + (pasados ? "Continuar" : "Jugar");
+  $("btn-jugar").title = "Nivel " + d.num + " de " + d.n + "×" + d.n;
+}
+function pintarNiveles() {
+  const cont = $("lista-niveles");
+  cont.innerHTML = "";
+  const tamanos = [...new Set(NIVELES.map((l) => l.n))];
+  for (const n of tamanos) {
+    const g = document.createElement("div");
+    g.className = "grupo";
+    const idx = NIVELES.map((l, i) => (l.n === n ? i : -1)).filter((i) => i >= 0);
+    const h = document.createElement("h3");
+    h.textContent = n + "×" + n + " · " + idx.filter(hecho).length + "/" + POR_TAMANO;
+    const r = document.createElement("div");
+    r.className = "rejilla-niveles";
+    idx.forEach((i, k) => {
+      const b = document.createElement("button");
+      const libre = desbloqueado(i);
+      b.className = "b3d txt " + (hecho(i) ? "b-verde" : libre ? "b-azul" : "b-gris");
+      b.textContent = libre ? String(k + 1) : "🔒";
+      b.disabled = !libre;
+      b.setAttribute("aria-label", "Nivel " + (k + 1) + " de " + n + "×" + n + (libre ? "" : " (bloqueado)"));
+      b.addEventListener("click", () => jugarNivel(i));
+      r.appendChild(b);
+    });
+    g.append(h, r);
+    cont.appendChild(g);
+  }
+  if (Math.max(...tamanos) < TAMANO_MAX) {
+    const p = document.createElement("p");
+    p.className = "proximamente";
+    p.textContent = "🚧 Más niveles pronto: " + (Math.max(...tamanos) + 1) + "×" + (Math.max(...tamanos) + 1) + " hasta " + TAMANO_MAX + "×" + TAMANO_MAX + ".";
+    cont.appendChild(p);
+  }
+}
+
+// ----- Juego -----
+let idx = 0, n = 3, t = [];                        // t[pos] = número de la ficha (0 = hueco)
 let movs = 0, inicio = 0, reloj = null, jugando = false;
 const fichas = new Map();                          // número → elemento
 
-// ----- Mezcla con solución garantizada (hueco al final, inversiones pares) -----
-function mezclar() {
-  const total = n * n;
-  let a;
-  do {
-    a = Array.from({ length: total - 1 }, (_, i) => i + 1);
-    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-    let inv = 0;
-    for (let i = 0; i < a.length; i++) for (let j = i + 1; j < a.length; j++) if (a[i] > a[j]) inv++;
-    if (inv % 2) [a[0], a[1]] = [a[1], a[0]];
-  } while (a.every((v, i) => v === i + 1));        // que no salga ya resuelto
-  a.push(0);
-  return a;
-}
 const resuelto = () => t.every((v, i) => (i === t.length - 1 ? v === 0 : v === i + 1));
+// ¿Tiene solución? (avisa en consola si algún nivel nuevo está mal armado)
+function esResoluble(m, a) {
+  let inv = 0;
+  const f = a.filter(Boolean);
+  for (let i = 0; i < f.length; i++) for (let j = i + 1; j < f.length; j++) if (f[i] > f[j]) inv++;
+  if (m % 2) return inv % 2 === 0;
+  return (inv + (m - Math.floor(a.indexOf(0) / m))) % 2 === 1;
+}
 
-// ----- Dibujo -----
 function color(num) {
   const r = Math.floor((num - 1) / n), c = (num - 1) % n;
   const h = 210 + ((r + c) / (2 * n - 2)) * 150;
@@ -70,9 +127,8 @@ function pintar() {
   $("movs").textContent = movs;
 }
 
-// ----- Movimiento -----
 function tocar(pos) {
-  if (pos < 0 || (jugando === "fin")) return;
+  if (pos < 0 || jugando === "fin") return;
   const h = t.indexOf(0);
   const fp = Math.floor(pos / n), cp = pos % n, fh = Math.floor(h / n), ch = h % n;
   if (fp !== fh && cp !== ch) return;               // solo misma fila o columna que el hueco
@@ -87,107 +143,109 @@ function tocar(pos) {
 }
 function mover(dx, dy) {                            // flechas: mueve la ficha que está al lado del hueco
   const h = t.indexOf(0), fh = Math.floor(h / n), ch = h % n;
-  const f = fh + dy, c = ch + dx;                   // casilla de la ficha que se desliza hacia el hueco
+  const f = fh + dy, c = ch + dx;
   if (f < 0 || f >= n || c < 0 || c >= n) return;
   tocar(f * n + c);
 }
 
-// ----- Tiempo y récords -----
 const fmt = (s) => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 const seg = () => Math.floor((Date.now() - inicio) / 1000);
 function mostrarTiempo() { $("tiempo").textContent = fmt(seg()); }
-// Mejores marcas por tamaño en una sola clave { "3": {mov, seg}, "4": … } para sincronizarlas con la cuenta de Google.
-// (Antes eran claves sueltas «deslizante_mejor_N»: se pasan solas a la nueva.)
-const CLAVE_MEJORES = ID + "_mejores";
-let mejores = {}, nube = null;
-try { mejores = JSON.parse(localStorage.getItem(CLAVE_MEJORES)) || {}; } catch (e) { mejores = {}; }
-for (const l of NIVELES) {
-  try { const m = JSON.parse(localStorage.getItem(ID + "_mejor_" + l.n)); if (m && m.mov && (!mejores[l.n] || m.mov < mejores[l.n].mov)) mejores[l.n] = m; } catch (e) {}
-}
-function guardarMejores() {
-  try { localStorage.setItem(CLAVE_MEJORES, JSON.stringify(mejores)); } catch (e) {}
-  if (nube) nube.guardado();
-}
-guardarMejores();
-const leerMejor = () => mejores[n] || null;
-function pintarMejor() { const m = leerMejor(); $("mejor").textContent = m ? m.mov + " mov." : "–"; }
+function pintarMejor() { const m = prog.mejores[idx + 1]; $("mejor").textContent = m ? m.mov + " mov." : "–"; }
 
-// ----- Victoria -----
 async function ganar() {
   clearInterval(reloj);
   const s = seg();
   jugando = "fin";
   mostrarTiempo();
-  const m = leerMejor();
+  const m = prog.mejores[idx + 1];
   const record = !m || movs < m.mov;
-  if (record) { mejores[n] = { mov: movs, seg: s }; guardarMejores(); pintarMejor(); }
+  const primera = !hecho(idx);
+  if (record) prog.mejores[idx + 1] = { mov: movs, seg: s };
+  prog.hechos[idx] = true;
+  guardarProg();
+  pintarMejor();
+
+  const d = info(idx), l = NIVELES[idx], hay = idx + 1 < NIVELES.length;
   const v = document.createElement("div");
   v.id = "victoria";
-  v.innerHTML = "<h2>🎉 ¡Resuelto!</h2><div>" + movs + " movimientos · " + fmt(s) + (record ? "<br>⭐ ¡Nuevo récord!" : "") + "</div>";
-  const b = document.createElement("button");
-  b.className = "b3d txt b-verde"; b.textContent = "Jugar otra vez";
-  b.addEventListener("click", empezar);
-  v.appendChild(b);
+  v.innerHTML = "<h2>🎉 ¡Resuelto!</h2><div>" + movs + " movimientos · " + fmt(s) + (l.optimo ? "<br>Mínimo posible: " + l.optimo : "") +
+    (record ? "<br>⭐ ¡Nuevo récord!" : "") + (hay ? "" : "<br>🚧 Más niveles pronto") + "</div>";
+  const caja = document.createElement("div");
+  caja.className = "botones";
+  const boton = (texto, clase, fn) => { const b = document.createElement("button"); b.className = "b3d txt " + clase; b.textContent = texto; b.addEventListener("click", fn); caja.appendChild(b); };
+  if (hay) boton("Siguiente nivel", "b-verde", () => jugarNivel(idx + 1));
+  boton("Repetir", "b-oro", empezar);
+  boton("Niveles", "b-azul", () => mostrar("pantalla-niveles"));
+  v.appendChild(caja);
   $("tablero").appendChild(v);
-  encolarPuntos(ID, nivel.puntos); // se anotan en el dispositivo y se envían al perfil cuando haya internet y sesión
+
+  if (!primera) return;                             // los puntos se dan solo la primera vez que se pasa el nivel
+  const pts = puntosDe(d.n);
+  encolarPuntos(ID, pts);                           // se anotan en el dispositivo y se envían al perfil cuando haya internet y sesión
   let pendientes = 1;
   try { pendientes = await (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
   $("msg").textContent = pendientes === 0
-    ? "+" + nivel.puntos + " puntos a tu perfil"
-    : "+" + nivel.puntos + " puntos anotados: se enviarán a tu perfil cuando tengas internet y hayas entrado con Google.";
+    ? "+" + pts + " puntos a tu perfil"
+    : "+" + pts + " puntos anotados: se enviarán a tu perfil cuando tengas internet y hayas entrado con Google.";
 }
 
-// ----- Partida -----
 function empezar() {
   clearInterval(reloj);
   const v = $("victoria"); if (v) v.remove();
-  n = nivel.n; t = mezclar(); movs = 0; jugando = false;
+  const l = NIVELES[idx], d = info(idx);
+  n = l.n; t = l.fichas.slice(); movs = 0; jugando = false;
+  if (!esResoluble(n, t)) console.warn("deslizante: el nivel " + (idx + 1) + " no tiene solución");
+  $("titulo").innerHTML = "Nivel " + d.num + " · " + n + "×" + n + (l.optimo ? "<small>Mínimo posible: " + l.optimo + " movimientos</small>" : "");
   $("tiempo").textContent = "0:00";
   $("msg").textContent = "Toca una ficha en la fila o columna del hueco para deslizarla.";
   construir(); pintar(); pintarMejor();
 }
-function elegir(i) {
-  nivel = NIVELES[i];
-  try { localStorage.setItem(GUARDA, String(i)); } catch (e) {}
-  document.querySelectorAll("#niveles .b3d").forEach((b, j) => b.classList.toggle("on", j === i));
+function jugarNivel(i) {
+  if (!NIVELES[i] || !desbloqueado(i)) return;
+  idx = i;
+  mostrar("juego");
   empezar();
 }
 
-NIVELES.forEach((l, i) => {
-  const b = document.createElement("button");
-  b.className = "b3d chico txt " + COLOR_NIVEL[i]; b.textContent = l.n + "×" + l.n;
-  b.title = l.nombre; b.setAttribute("aria-label", l.nombre);
-  b.addEventListener("click", () => elegir(i));
-  $("niveles").appendChild(b);
-});
-$("nuevo").addEventListener("click", empezar);
+// ----- Botones y teclado -----
+$("btn-jugar").addEventListener("click", () => jugarNivel(siguientePendiente()));
+$("btn-niveles").addEventListener("click", () => mostrar("pantalla-niveles"));
+$("btn-menu").addEventListener("click", () => mostrar("inicio"));
+$("reiniciar").addEventListener("click", empezar);
 addEventListener("keydown", (e) => {
+  if ($("juego").hidden) return;
   const d = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [1, 0], ArrowRight: [-1, 0] }[e.key];
   if (d) { e.preventDefault(); mover(d[0], d[1]); }
 });
 
-let guardado = 0;
-try { guardado = Number(localStorage.getItem(GUARDA)) || 0; } catch (e) {}
-elegir(NIVELES[guardado] ? guardado : 0);
+mostrar("inicio");
 
-// Sesión (opcional: si Firebase no carga, el juego igual funciona)
+// ----- Sesión y nube (opcionales: si Firebase no carga, el juego igual funciona) -----
 import("../compartido/jugador.js").then(({ alCambiarSesion }) =>
   alCambiarSesion((u) => ($("sesion").textContent = u ? (u.displayName || "Jugador") : "Sin sesión"))
 ).catch(() => {});
 
-// Mejores marcas en la cuenta: por tamaño se queda la de menos movimientos (y, si empatan, la de menos tiempo)
+// Niveles pasados: se unen (pasado en cualquier sitio = pasado). Récords: por nivel, menos movimientos (y si empatan, menos tiempo).
 import("../compartido/progreso.js").then((m) => {
   nube = m.conectar(ID, {
-    clave: CLAVE_MEJORES,
+    clave: CLAVE,
     fusionar: (a, b) => {
+      a = limpiar(a); b = limpiar(b);
       if (!a && !b) return null;
-      const r = { ...(b || {}) };
-      for (const k in a || {}) {
-        const x = a[k], y = r[k];
-        r[k] = !y || (x && (x.mov < y.mov || (x.mov === y.mov && x.seg < y.seg))) ? x : y;
+      const mej = { ...((b && b.mejores) || {}) };
+      for (const k in (a && a.mejores) || {}) {
+        const x = a.mejores[k], y = mej[k];
+        mej[k] = !y || (x && (x.mov < y.mov || (x.mov === y.mov && x.seg < y.seg))) ? x : y;
       }
-      return r;
+      return { hechos: m.unirHechos(a && a.hechos, b && b.hechos) || [], mejores: mej };
     },
-    alCambiar: (v) => { mejores = v || {}; pintarMejor(); },
+    alCambiar: (v) => {
+      prog = limpiar(v) || prog;
+      if (!$("inicio").hidden) pintarInicio();
+      if (!$("pantalla-niveles").hidden) pintarNiveles();
+      if (!$("juego").hidden) pintarMejor();
+    },
   });
+  nube.guardado(); // sube lo que ya hubiera en el dispositivo
 }).catch(() => {});

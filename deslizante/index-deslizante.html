@@ -10,20 +10,35 @@
   <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
     html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 30%, #23252b, #131417 70%); }
-    .b-negro { --c1: #8a8f9c; --c2: #3c404a; --c3: #15171a; }   /* 8×8: el nivel más difícil */
 
-    #juego { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-      padding: calc(56px + env(safe-area-inset-top, 0px)) 12px calc(56px + env(safe-area-inset-bottom, 0px)); } /* 56px abajo: el ⛶ no tapa el tablero */
-    .lado { display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(100%, 520px); }
-    .barra-botones { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; }
-    .niveles { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
-    .niveles .b3d.txt { padding: 0 9px; font-size: 13px; }
+    /* Pantallas (inicio, niveles y juego): solo una visible a la vez */
+    .pantalla { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+      padding: calc(104px + env(safe-area-inset-top, 0px)) 12px calc(56px + env(safe-area-inset-bottom, 0px)); } /* 104px arriba: botones de navegación; 56px abajo: el ⛶ */
+
+    /* Inicio */
+    #inicio h1 { margin: 0; font-size: clamp(1.8rem, 7vw, 2.6rem); text-align: center; text-shadow: 0 3px 0 rgba(0,0,0,.5); }
+    #inicio p { margin: 0 0 8px; color: var(--suave); text-align: center; }
+    #inicio .b3d { --t: 56px; min-width: 220px; font-size: 18px; }
+
+    /* Niveles */
+    #pantalla-niveles { justify-content: flex-start; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+    #pantalla-niveles h2 { margin: 0; font-size: 1.4rem; }
+    .grupo { flex: none; width: min(100%, 520px); }
+    .grupo h3 { margin: 8px 0 8px; font-size: 1rem; color: var(--suave); }
+    .rejilla-niveles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px 8px; }
+    .rejilla-niveles .b3d { width: 100%; --t: 46px; font-size: 16px; font-weight: 800; }
+    .proximamente { flex: none; width: min(100%, 520px); margin: 6px 0 0; text-align: center; color: var(--suave); font-size: .85rem; }
+
+    /* Juego */
+    .lado { display: flex; flex-direction: column; align-items: center; gap: 8px; width: min(100%, 520px); }
+    .titulo-nivel { font-weight: 800; font-size: 1rem; text-align: center; }
+    .titulo-nivel small { display: block; color: var(--suave); font-weight: 600; font-size: .75rem; }
     .datos { display: flex; justify-content: center; gap: 8px; width: 100%; }
     .datos div { flex: 1; max-width: 130px; padding: 4px 8px; text-align: center; color: var(--suave); font-size: .7rem; background: linear-gradient(180deg, #3a3d45, #262830); border: 2px solid #121316; border-radius: 12px; box-shadow: 0 3px 0 #121316, inset 0 2px 0 rgba(255,255,255,.15); }
     .datos b { display: block; color: var(--texto); font-size: 1.1rem; font-variant-numeric: tabular-nums; }
     #msg { margin: 0; min-height: 1.3em; text-align: center; font-size: .8rem; }
 
-    #tablero { --n: 3; position: relative; flex: none; width: min(100%, calc(100vh - 279px), 520px); width: min(100%, calc(100dvh - 279px), 520px);
+    #tablero { --n: 3; position: relative; flex: none; width: min(100%, max(220px, calc(100vh - 350px)), 520px); width: min(100%, max(220px, calc(100dvh - 350px)), 520px);
       aspect-ratio: 1 / 1; container-type: inline-size; background: #1a1b20; border: 2px solid var(--borde); border-radius: 16px; padding: 6px;
       box-shadow: 0 6px 0 #0c0d0f, 0 12px 20px rgba(0,0,0,.5); touch-action: none; user-select: none; }
     #fichas { position: relative; width: 100%; height: 100%; }
@@ -36,33 +51,52 @@
     #victoria { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
       background: rgba(10,10,12,.88); border-radius: 14px; text-align: center; padding: 12px; }
     #victoria h2 { margin: 0; font-size: 1.6rem; }
+    #victoria .botones { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
     @media (prefers-reduced-motion: reduce) { .ficha { transition: none; } }
 
     /* Celular horizontal: los controles pasan a la izquierda y el tablero ocupa toda la altura */
     @media (orientation: landscape) and (max-height: 560px) {
       #juego { flex-direction: row; gap: 18px; padding: 8px calc(56px + env(safe-area-inset-right, 0px)) 8px calc(12px + env(safe-area-inset-left, 0px)); }
-      .lado { width: 230px; padding-top: 44px; }
+      #juego .lado { width: 230px; padding-top: 100px; gap: 6px; }
       #tablero { width: min(calc(100vh - 24px), calc(100vw - 324px), 520px); width: min(calc(100dvh - 24px), calc(100vw - 324px), 520px); } /* deja libre la esquina del ⛶ */
+      #inicio, #pantalla-niveles { padding-top: calc(96px + env(safe-area-inset-top, 0px)); }
     }
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>
-  <div class="hud hud-izq"><a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a></div>
+  <!-- Navegación estándar (compartido/inmersivo.css): «Juegos» siempre; «Menú principal» solo fuera del menú de inicio -->
+  <nav class="nav-juego">
+    <a class="b3d txt b-gris" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Volver al menú principal" hidden><span class="b-ico">☰</span> Menú principal</button>
+  </nav>
   <div class="hud hud-der"><span class="chip" id="sesion"></span></div>
-  <main id="juego">
-    <div class="lado">
-      <div class="barra-botones">
-        <div class="niveles" id="niveles" role="group" aria-label="Tamaño del tablero"></div>
-        <button class="b3d chico b-oro" id="nuevo" type="button" title="Mezclar de nuevo" aria-label="Mezclar de nuevo"><span class="b-ico">🔀</span></button>
+
+  <main>
+    <section class="pantalla" id="inicio">
+      <h1>🔢 Puzle deslizante</h1>
+      <p id="resumen"></p>
+      <button class="b3d txt grande b-verde" id="btn-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
+      <button class="b3d txt grande b-azul" id="btn-niveles" type="button"><span class="b-ico">🗂️</span> Niveles</button>
+    </section>
+
+    <section class="pantalla" id="pantalla-niveles" hidden>
+      <h2>Niveles</h2>
+      <div id="lista-niveles" style="display:contents"></div>
+    </section>
+
+    <section class="pantalla" id="juego" hidden>
+      <div class="lado">
+        <div class="titulo-nivel" id="titulo"></div>
+        <div class="datos">
+          <div>Movimientos<b id="movs">0</b></div>
+          <div>Tiempo<b id="tiempo">0:00</b></div>
+          <div>Mejor<b id="mejor">–</b></div>
+        </div>
+        <button class="b3d chico b-oro" id="reiniciar" type="button" title="Reiniciar nivel" aria-label="Reiniciar nivel"><span class="b-ico">🔄</span></button>
+        <p id="msg"></p>
       </div>
-      <div class="datos">
-        <div>Movimientos<b id="movs">0</b></div>
-        <div>Tiempo<b id="tiempo">0:00</b></div>
-        <div>Mejor<b id="mejor">–</b></div>
-      </div>
-      <p id="msg">Toca una ficha en la fila o columna del hueco para deslizarla.</p>
-    </div>
-    <div id="tablero"><div id="fichas"></div></div>
+      <div id="tablero"><div id="fichas"></div></div>
+    </section>
   </main>
   <script type="module" src="juego-deslizante.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
