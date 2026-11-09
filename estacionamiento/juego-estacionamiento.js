@@ -91,11 +91,11 @@ function unirCartera(a, b) {
 // El emoji 🪙 (Unicode 13) no se ve en Windows/Android viejos: la moneda es un dibujo CSS (.moneda en index-estacionamiento.html), igual en todos.
 const MONEDA = '<span class="moneda" aria-hidden="true"></span>';
 const chipMonedas = document.createElement("span");
-chipMonedas.className = "chip chip-madera chip-monedas"; // madera como el fondo, al doble de tamaño, a la derecha del botón ☰ Pausa
+chipMonedas.className = "chip chip-info chip-monedas"; // dorado; va en #fila-info, debajo del botón ☰ Pausa (ver el HTML)
 chipMonedas.title = "Monedas";
 const pintarMonedas = () => { chipMonedas.innerHTML = MONEDA + monedas().toLocaleString("es-MX"); chipMonedas.setAttribute("aria-label", monedas() + " monedas"); };
 pintarMonedas();
-document.querySelector(".nav-juego").appendChild(chipMonedas);
+$("fila-info").prepend(chipMonedas); // primero de la fila: monedas · tamaño del tablero · movimientos
 
 // ----- Boosts (paso 2a): «Quitar un auto» (30 🪙, o gratis si ya tienes usos) y «Paquete ×3» (50 🪙 = 3 usos). La bomba va aparte (2b). -----
 // «Quitar un auto» se paga AL USARLO: tocas el botón, tocas el auto y entonces se gasta un uso (o 30 monedas). Si te arrepientes, tocas el botón otra vez.
@@ -556,8 +556,6 @@ function actualizar(dt) {
   }
   if (!ganado && restantes <= 0) victoria();
   if (movs !== ultMovs) { ultMovs = movs; $("movs").textContent = movs; }
-  const txtAutos = restantes + " / " + autos.length;
-  if (txtAutos !== ultAutos) { ultAutos = txtAutos; $("autos").textContent = txtAutos; }
 }
 
 function victoria() {
@@ -658,9 +656,6 @@ cv.addEventListener("wheel", (e) => {
   zoom(e.deltaY < 0 ? 1.15 : 1 / 1.15, p.x, p.y);
 }, { passive: false });
 
-$("mas").addEventListener("click", () => zoom(1.3, cw / 2, ch / 2));
-$("menos").addEventListener("click", () => zoom(1 / 1.3, cw / 2, ch / 2));
-$("centrar").addEventListener("click", ajustarCamara);
 $("reiniciar").addEventListener("click", () => cargarNivel(nivel));
 $("repetir").addEventListener("click", () => cargarNivel(nivel));
 // Al terminar el último nivel de un estado/país se abre el mapa principal para VER SUBIR el agua; si no, la lista de niveles de su etapa
