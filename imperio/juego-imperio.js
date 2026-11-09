@@ -3,12 +3,16 @@
 // guerreros exploran y atacan; el personaje principal pica, fabrica tablones y construye cajones.
 import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
 const VEL = .23; // casillas por segundo por cada punto de velocidad (humano = 10 → 2.3 casillas/s)
-const N = 44, TW = 32, TH = 16, $ = (id) => document.getElementById(id);
+const N_ORIGINAL = 44, AREA_X = 5; // las partidas viejas son de 44×44; el mapa nuevo tiene 5 veces esa área (ponle 25 para un lado 5 veces mayor)
+const N_NUEVO = Math.round(N_ORIGINAL * Math.sqrt(AREA_X)); // 98×98
+let N = N_NUEVO; // lado del mapa de la partida en curso (al cargar una partida vieja vuelve a 44)
+const TW = 32, TH = 16, $ = (id) => document.getElementById(id);
 const RES = {
   arbol: { nom: "Madera", v: 1, n: 6, c: "#2e7d32" }, roca: { nom: "Piedra", v: 1, n: 8, c: "#9aa0a6" },
   carbon: { nom: "Carbón", v: 2, n: 8, c: "#2b2b2b" }, cobre: { nom: "Cobre", v: 3, n: 8, c: "#d2793a" },
   hierro: { nom: "Hierro", v: 4, n: 8, c: "#c9d3e6" }, oro: { nom: "Oro", v: 8, n: 8, c: "#ffd23f" },
-  diamante: { nom: "Diamante", v: 20, n: 6, c: "#4de1ff" },
+  diamante: { nom: "Diamante", v: 20, n: 6, c: "#4de1ff" }, plata: { nom: "Plata", v: 5, n: 8, c: "#cfd8e3" },
+  mina: { nom: "Mina", v: 0, n: 500, c: "#6b7080" }, // mina: 500 de material repartido (ver MINA_REPARTO)
 };
 const UN = {
   h: { nom: "Personaje", hp: 100, dmg: 30, vel: 10, ico: "🧑", c: "#ff6b9d" }, // pico/pala infinito: no se guarda en el inventario
@@ -25,7 +29,34 @@ const ANI = { // vel en puntos (humano = 10); ag = a qué distancia notan a un s
   gallina: { nom: "Gallina", ico: "🐔", hp: 50, dmg: 0, ag: 6, vel: 9, con: "huye", cuero: 2, carne: 2 },
 };
 const nuevoAnimal = (k, x, y) => ({ k, x, y, hp: ANI[k].hp, mh: ANI[k].hp, cd: 0, dest: null, esp: 0, obj: null });
-const ITEM = { tronco: "Tronco", tablon: "Tablón", roca: "Piedra", carbon: "Carbón", cobre: "Cobre", hierro: "Hierro", oro: "Oro", diamante: "Diamante" };
+// ----- Minas -----
+// Cada mina guarda 500 de material: 10 % oro, 20 % plata, 30 % cobre y 40 % carbón. Al picarla sale un material al azar
+// en proporción a lo que le queda, así que al agotarla siempre entregó exactamente 50 / 100 / 150 / 200.
+const MINA_TOTAL = 500, MINA_REPARTO = { oro: .1, plata: .2, cobre: .3, carbon: .4 }, MATS_MINA = ["oro", "plata", "cobre", "carbon"];
+// Cuántas minas hacen falta: el oro manda (cada castillo pide 500 de oro y cada mina solo da 50 → 10 minas por castillo).
+// Se piensa en 5 castillos (el tuyo + 4 enemigos) y se deja 50 % de margen por minas lejanas, enemigos que las vacían, etc.
+const CASTILLOS = 5, ORO_CASTILLO = 500, MARGEN_MINAS = 1.5;
+const NUM_MINAS = Math.ceil(CASTILLOS * ORO_CASTILLO / (MINA_TOTAL * MINA_REPARTO.oro) * MARGEN_MINAS); // 75
+const SEPARACION_MINAS = 6; // casillas mínimas entre una mina y otra (si no caben, baja a 5 y luego a 4)
+const SIN_MOBS = 15;        // radio (casillas) alrededor de donde aparece el jugador sin animales hostiles
+// Sitios de las bases: la tuya (arriba a la izquierda) y hasta 4 enemigas. Ahí no hay agua y siempre hay llanura.
+const basesMapa = () => [[9, 9], [N - 10, N - 10], [N - 10, 9], [9, N - 10], [N >> 1, N >> 1]];
+const nuevaMina = () => { const m = { t: "mina", n: MINA_TOTAL }; let resto = MINA_TOTAL; for (const k of MATS_MINA.slice(0, -1)) { m[k] = Math.round(MINA_TOTAL * MINA_REPARTO[k]); resto -= m[k]; } m[MATS_MINA[MATS_MINA.length - 1]] = resto; return m; };
+function materialMina(r) { // material al azar según lo que le queda a la mina
+  let x = Math.random() * MATS_MINA.reduce((a, m) => a + (r[m] || 0), 0);
+  for (const m of MATS_MINA) if (r[m] > 0 && (x -= r[m]) < 0) return m;
+  return MATS_MINA.find((m) => r[m] > 0);
+}
+function sacar(u, r) { // qué material saca la unidad en este golpe (null = primero debe ir a dejar lo que lleva)
+  if (r.t != "mina") return r.t;
+  if (u.carry.n) return MATS_MINA.includes(u.carry.t) && r[u.carry.t] > 0 ? u.carry.t : null; // cada viaje lleva un solo material
+  return materialMina(r);
+}
+const mismoRecurso = (carga, r) => (r.t == "mina" ? MATS_MINA.includes(carga) : carga == r.t);
+function gastar(i, r, it, k = 1) { if (r.t == "mina") r[it] -= k; r.n -= k; if (r.n <= 0) { res[i] = null; bloq[i] = 0; } } // la mina o el recurso desaparece al agotarse
+// Sin hostiles cerca de donde aparece el jugador (por si un lobo del borde de la manada quedó dentro del radio)
+function quitarHostilesCerca(h) { if (h) anim = anim.filter((a) => !(ANI[a.k].dmg > 0 && Math.hypot(a.x - h.x, a.y - h.y) < SIN_MOBS)); }
+const ITEM = { tronco: "Tronco", tablon: "Tablón", roca: "Piedra", carbon: "Carbón", cobre: "Cobre", hierro: "Hierro", oro: "Oro", diamante: "Diamante", plata: "Plata" };
 const MADERA = ["tronco", "tablon"], STACK = 20, RANURAS = 10; // cada ranura guarda un solo material, hasta 20 (el personaje tiene 10 ranuras; el baúl, 20)
 const COSTO_FAB = { poste: 2, baul: 4, cajonM: 4, cajonN: 4 }; // tablones que cuesta cada cosa que fabrica el personaje
 const ES_CONT = ["baul", "cajonM", "cajonN"]; // las que guardan objetos
@@ -44,33 +75,47 @@ let W, H, cam, anim, stock, bio, res, bloq, vis, expl, us, eds, enem, fx, dinero
 let zona = new Uint8Array(N * N), grupos = [], nPostes = 0, grSel = null, moverGrupo = null; // zona del imperio, grupos de tropas y estado de los paneles
 
 function nuevo() {
+  N = N_NUEVO; // partida nueva: mapa grande (aunque antes se haya abierto una vieja de 44×44)
   res = new Array(N * N).fill(null); bloq = new Uint8Array(N * N); expl = new Uint8Array(N * N); vis = new Uint8Array(N * N);
   us = []; eds = []; anim = []; stock = { carne: 0, piel: 0, cuero: 0, fibra: 0 }; enem = []; fx = []; dinero = 250; oleada = 0; tReloj = 0; tOleada = 70; sel = null; colocar = null; fin = false; muertes = 0; pend = 0;
   grupos = []; grSel = null; moverGrupo = null; nPostes = 0; zona = new Uint8Array(N * N);
   generarMapa();
-  ponerEdificio("centro", 8, 8, true); ponerRefugio(); sel = crearUnidad("h");
+  ponerEdificio("centro", 8, 8, true); ponerRefugio(); sel = crearUnidad("h"); quitarHostilesCerca(sel);
   cam = { x: W / 2 - 0 * TW, y: H / 3, z: 1 };
   cam.x = W / 2; cam.y = H / 3 - 17 * TH;
 }
 // Biomas: 0 llanura, 1 bosque, 2 rocoso, 3 agua, 4 playa
 function generarMapa() {
   bio = new Uint8Array(N * N);
-  const sem = [{ x: 9, y: 9, t: 0 }]; // zonas de tierra: semillas aleatorias (la más cercana manda)
-  [0, 1, 2, 0, 1, 2, 0, 1, 2, 1, 2].forEach((t) => sem.push({ x: Math.random() * N, y: Math.random() * N, t }));
+  const BASES = basesMapa(), esc = (N * N) / (N_ORIGINAL * N_ORIGINAL); // esc = cuántas veces más grande es el área que la del mapa original
+  const cercaDeBase = (x, y, r) => BASES.some(([bx, by]) => Math.hypot(x - bx, y - by) < r);
+  const sem = [{ x: 9, y: 9, t: 0 }]; // zonas de tierra: semillas aleatorias (la más cercana manda), más semillas mientras más grande el mapa
+  const TIPOS = [0, 1, 2, 0, 1, 2, 0, 1, 2, 1, 2];
+  for (let k = 0, n = Math.round(11 * esc); k < n; k++) sem.push({ x: Math.random() * N, y: Math.random() * N, t: TIPOS[k % TIPOS.length] });
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     let m = 1e9, t = 0; for (const q of sem) { const d = Math.hypot(q.x - x, q.y - y) + Math.random() * 1.5; if (d < m) { m = d; t = q.t; } }
-    bio[y * N + x] = Math.hypot(x - 9, y - 9) < 6 ? 0 : t; // alrededor de tu base siempre hay llanura
+    bio[y * N + x] = cercaDeBase(x, y, 6) ? 0 : t; // alrededor de cada base siempre hay llanura
   }
-  const protegido = (x, y) => Math.hypot(x - 9, y - 9) < 7 || Math.hypot(x - (N - 5), y - (N - 5)) < 8;
-  const agua = (x, y) => { if (x >= 0 && y >= 0 && x < N && y < N && !protegido(x, y)) bio[y * N + x] = 3; };
+  const agua = (x, y) => { if (x >= 0 && y >= 0 && x < N && y < N && !cercaDeBase(x, y, 8)) bio[y * N + x] = 3; };
   const borde = (Math.random() * 4) | 0, a = Math.random() * 6, b = Math.random() * 6; // el mar siempre toca un borde
   for (let i = 0; i < N; i++) {
     const prof = Math.round(4 + 2 * Math.sin(i * .22 + a) + 1.5 * Math.sin(i * .5 + b));
     for (let k = 0; k < prof; k++) borde == 0 ? agua(i, k) : borde == 1 ? agua(i, N - 1 - k) : borde == 2 ? agua(k, i) : agua(N - 1 - k, i);
   }
-  for (let l = Math.random() < .6 ? 2 : 1; l > 0; l--) { // lagos tierra adentro
-    const lx = 10 + Math.random() * 24, ly = 10 + Math.random() * 24, r = 2.5 + Math.random() * 2;
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (Math.hypot(x - lx, y - ly) < r + Math.random() * .8) agua(x, y);
+  for (let l = Math.round((Math.random() < .6 ? 2 : 1) * esc); l > 0; l--) { // lagos tierra adentro (más mientras más grande el mapa)
+    const lx = 10 + Math.random() * (N - 20), ly = 10 + Math.random() * (N - 20), r = 2.5 + Math.random() * 2;
+    for (let y = Math.max(0, (ly - r - 2) | 0); y < Math.min(N, ly + r + 2); y++) for (let x = Math.max(0, (lx - r - 2) | 0); x < Math.min(N, lx + r + 2); x++) if (Math.hypot(x - lx, y - ly) < r + Math.random() * .8) agua(x, y);
+  }
+  // Tierra firme: lo que se puede recorrer a pie desde tu base sin cruzar agua (los árboles se pueden talar, así que no cuentan)
+  const alcance = () => { const v = new Uint8Array(N * N), q = [9 * N + 9]; v[9 * N + 9] = 1; for (let i = 0; i < q.length; i++) { const c = q[i]; for (const [dx, dy] of D4) { const a = (c % N) + dx, b = ((c / N) | 0) + dy, j = b * N + a; if (a >= 0 && b >= 0 && a < N && b < N && !v[j] && bio[j] != 3) { v[j] = 1; q.push(j); } } } return v; };
+  let alc = alcance();
+  for (const [bx, by] of BASES.slice(1)) if (!alc[by * N + bx]) { // una base enemiga quedó en una isla: se le tiende un puente de tierra hasta tu base
+    let x = bx, y = by;
+    while (x != 9 || y != 9) {
+      if (x != 9 && (y == 9 || Math.random() < .5)) x += x > 9 ? -1 : 1; else y += y > 9 ? -1 : 1;
+      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1]]) { const a = x + dx, b = y + dy; if (a >= 0 && b >= 0 && a < N && b < N && bio[b * N + a] == 3) bio[b * N + a] = 0; }
+    }
+    alc = alcance();
   }
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     const i = y * N + x; if (bio[i] == 3) { bloq[i] = 1; continue; }
@@ -84,12 +129,32 @@ function generarMapa() {
     }
   };
   grupo(14, 10, "arbol", 6, [0, 1, 2]); grupo(10, 14, "roca", 5, [0, 1, 2]); // algo para empezar cerca de la base
-  const roc = []; bio.forEach((v, i) => v == 2 && roc.push(i));
-  if (roc.length) for (let k = 0; k < 24; k++) { // minerales en grupos, solo en zonas rocosas: más raros mientras más lejos
-    const i = roc[(Math.random() * roc.length) | 0], x = i % N, y = (i / N) | 0, d = Math.hypot(x - 9, y - 9);
-    const pool = d < 14 ? ["carbon", "carbon", "cobre"] : d < 26 ? ["carbon", "cobre", "hierro", "hierro"] : ["hierro", "oro", "oro", "diamante"];
-    grupo(x, y, pool[(Math.random() * pool.length) | 0], 5, [2]);
+
+  // ----- Minas: NUM_MINAS en todo el mapa, separadas entre sí (nada de racimos) -----
+  const minas = [];
+  const aptaMina = (x, y) => { const i = y * N + x; return alc[i] && x >= 2 && y >= 2 && x < N - 2 && y < N - 2 && !res[i] && !bloq[i] && (bio[i] == 0 || bio[i] == 1 || bio[i] == 2) && !cercaDeBase(x, y, 5); };
+  const lejos = (x, y, d) => minas.every(([a, b]) => Math.hypot(a - x, b - y) >= d);
+  const candidatas = (f) => { // casillas que cumplen f, en orden aleatorio
+    const l = []; for (let i = 0; i < N * N; i++) if (f(i % N, (i / N) | 0)) l.push(i);
+    for (let k = l.length - 1; k > 0; k--) { const j = (Math.random() * (k + 1)) | 0; [l[k], l[j]] = [l[j], l[k]]; }
+    return l;
+  };
+  const ponerMina = (x, y) => { res[y * N + x] = nuevaMina(); bloq[y * N + x] = 1; minas.push([x, y]); };
+  for (const [bx, by] of BASES) { // 2 minas a 9–18 casillas de cada base, para que nadie empiece sin minerales cerca
+    let n = 0;
+    for (const i of candidatas((x, y) => aptaMina(x, y) && Math.hypot(x - bx, y - by) >= 9 && Math.hypot(x - bx, y - by) <= 18)) {
+      if (n >= 2) break; const x = i % N, y = (i / N) | 0;
+      if (lejos(x, y, SEPARACION_MINAS)) { ponerMina(x, y); n++; }
+    }
   }
+  for (const [d, zona] of [[SEPARACION_MINAS, [2]], [SEPARACION_MINAS, [0, 1, 2]], [SEPARACION_MINAS - 1, [0, 1, 2]], [SEPARACION_MINAS - 2, [0, 1, 2]]]) { // primero zonas rocosas; si no alcanzan, cualquier tierra
+    if (minas.length >= NUM_MINAS) break;
+    for (const i of candidatas((x, y) => aptaMina(x, y) && zona.includes(bio[y * N + x]))) {
+      if (minas.length >= NUM_MINAS) break; const x = i % N, y = (i / N) | 0;
+      if (lejos(x, y, d)) ponerMina(x, y);
+    }
+  }
+
   for (let i = 0; i < N * N; i++) { // el resto de cada zona
     if (res[i] || bloq[i] || Math.hypot(i % N - 9, ((i / N) | 0) - 9) < 4) continue;
     const r = Math.random(), t = bio[i] == 1 ? (r < .42 ? "arbol" : null) : bio[i] == 2 ? (r < .2 ? "roca" : r < .23 ? "arbol" : null) : bio[i] == 0 ? (r < .015 ? "arbol" : null) : null;
@@ -104,14 +169,15 @@ function generarMapa() {
       anim.push({ ...nuevoAnimal("lobo", px, py), g });
     }
   };
-  // animales por zona: [animal, probabilidad por casilla]
+  // animales por zona: [animal, probabilidad por casilla]. Los hostiles (oso, lobo, guepardo) no aparecen a menos de SIN_MOBS casillas de donde empieza el jugador; los demás, a menos de 12.
   const SP = [[["conejo", .012], ["gallina", .008], ["guepardo", .004]], [["conejo", .008], ["lobo", .003], ["oso", .005]], [["lagartija", .01], ["lobo", .0012], ["oso", .003]], null, [["lagartija", .01]]];
   for (let i = 0; i < N * N; i++) {
-    const x = i % N, y = (i / N) | 0; if (bloq[i] || !SP[bio[i]] || Math.hypot(x - 9, y - 9) < 12) continue;
-    for (const [k, p] of SP[bio[i]]) if (Math.random() < p) { k == "lobo" ? manada(x, y) : anim.push(nuevoAnimal(k, x + .5, y + .5)); break; }
+    const x = i % N, y = (i / N) | 0; if (bloq[i] || !SP[bio[i]]) continue;
+    const d = Math.hypot(x - 9.5, y - 9.5);
+    for (const [k, p] of SP[bio[i]]) { if (d < (ANI[k].dmg > 0 ? SIN_MOBS : 12)) continue; if (Math.random() < p) { k == "lobo" ? manada(x, y) : anim.push(nuevoAnimal(k, x + .5, y + .5)); break; } }
   }
   if (!anim.some((a) => a.k == "lobo")) { // siempre hay al menos una manada
-    const c = []; bio.forEach((v, i) => (v == 1 || v == 2) && !bloq[i] && Math.hypot(i % N - 9, ((i / N) | 0) - 9) >= 12 && c.push(i));
+    const c = []; bio.forEach((v, i) => (v == 1 || v == 2) && !bloq[i] && Math.hypot(i % N - 9.5, ((i / N) | 0) - 9.5) >= SIN_MOBS + 3 && c.push(i));
     if (c.length) { const i = c[(Math.random() * c.length) | 0]; manada(i % N, (i / N) | 0); }
   }
 }
@@ -142,7 +208,7 @@ function crearUnidad(k) { // el personaje aparece junto a la base; las tropas, e
 }
 // ----- Ruta (BFS por casillas) -----
 function ruta(u, tx, ty, cerca) {
-  const s = (u.y | 0) * N + (u.x | 0), prev = new Int16Array(N * N).fill(-2), q = [s]; prev[s] = -1; let f = -1;
+  const s = (u.y | 0) * N + (u.x | 0), prev = new Int32Array(N * N).fill(-2), q = [s]; prev[s] = -1; let f = -1;
   for (let i = 0; i < q.length; i++) {
     const c = q[i], x = c % N, y = (c / N) | 0;
     if (cerca ? Math.max(Math.abs(x - tx), Math.abs(y - ty)) <= cerca : x == tx && y == ty) { f = c; break; }
@@ -206,9 +272,9 @@ function actualizar(u, dt) {
       if (distRect(u, rx, ry, 1) < 1.6) { o.f = "cav"; o.t0 = 0; } else if (!paso(u, dt)) { u.p = ruta(u, rx, ry, 1); if (!u.p.length) { u.o = null; u.rt2 = 5; } }
     } else if (o.f == "cav") {
       if (!r) { o.f = u.carry.n ? "vol" : "ir"; o.i = -1; return; }
-      if (u.carry.n && u.carry.t != r.t) { o.f = "vol"; return; } // primero deja lo que lleva
+      if (u.carry.n && !mismoRecurso(u.carry.t, r)) { o.f = "vol"; return; } // primero deja lo que lleva
       o.t0 += dt;
-      if (o.t0 >= 1) { o.t0 = 0; u.carry.t = r.t; u.carry.n++; r.n--; if (r.n <= 0) { res[o.i] = null; bloq[o.i] = 0; } if (u.carry.n >= 5) o.f = "vol"; }
+      if (o.t0 >= 1) { o.t0 = 0; const it = sacar(u, r); if (!it) { o.f = "vol"; return; } u.carry.t = it; u.carry.n++; gastar(o.i, r, it); if (u.carry.n >= 5) o.f = "vol"; }
     } else {
       if (!u.carry.n) { o.f = "ir"; o.i = -1; return; }
       const item = itemDe(u.carry.t), c = cofreDestino(u, item);
@@ -227,8 +293,8 @@ function actualizar(u, dt) {
       if (!r) { o.f = u.carry.n ? "vol" : "ir"; return; }
       o.t0 += dt;
       if (o.t0 >= 1) {
-        o.t0 = 0; if (u.carry.t != o.tipo) u.carry = { t: o.tipo, n: 0 };
-        u.carry.n++; r.n--; if (r.n <= 0) { res[i] = null; bloq[i] = 0; }
+        o.t0 = 0; const it = sacar(u, r); if (!it) { o.f = "vol"; return; } if (u.carry.t != it) u.carry = { t: it, n: 0 };
+        u.carry.n++; gastar(i, r, it);
         if (u.carry.n >= 5) o.f = "vol";
       }
     } else {
@@ -291,7 +357,7 @@ function enviarPuntos() {
 function puntos(n) { pend += n; if (pend >= 10 || (fin && pend > 0)) enviarPuntos(); }
 // ----- Zona del imperio (postes), grupos de tropas y tareas -----
 const MAX_GRUPO = 10, RADIO_ZONA = 6; // tropas por grupo; radio (en casillas) que marca cada poste de imperio
-const CAT = { madera: ["arbol"], mineral: ["roca", "carbon", "cobre", "hierro", "oro", "diamante"] };
+const CAT = { madera: ["arbol"], mineral: ["roca", "mina", "carbon", "cobre", "plata", "hierro", "oro", "diamante"] };
 const itemDe = (t) => (t == "arbol" ? "tronco" : t);
 const aceptaCont = (b, t) => b.k == "baul" || (b.k == "cajonM") == MADERA.includes(t);
 const zonaOk = (i, k) => (k == "poste" ? !nPostes || zona[i] : k in COSTO_FAB ? zona[i] : true); // poste: el primero va libre, los demás dentro de la zona; cofres: siempre dentro de la zona
@@ -361,6 +427,12 @@ function golpeRes(u, i) {
   const r = res[i]; if (!r) return false;
   r.g = (r.g || 0) + 1;
   if (r.g < 10) return true;
+  if (r.t == "mina") { // 10 golpes = hasta 4 unidades de un material (al azar según lo que le queda); la mina sigue hasta agotarse
+    const m = materialMina(r), k = Math.min(4, r[m]);
+    if (espacio(u.inv, m) < k) { r.g = 9; aviso("Inventario lleno"); return false; }
+    anadir(u.inv, m, k); gastar(i, r, m, k); r.g = 0; aviso("+" + k + " " + ITEM[m] + (res[i] ? " · quedan " + r.n + " en la mina" : " · mina agotada"));
+    return !!res[i];
+  }
   const it = r.t == "arbol" ? "tronco" : r.t;
   if (espacio(u.inv, it) < 4) { r.g = 9; aviso("Inventario lleno"); return false; }
   anadir(u.inv, it, 4); res[i] = null; bloq[i] = 0; aviso("+4 " + ITEM[it]); return false;
@@ -459,6 +531,13 @@ function dibujar() {
 }
 function dibRes(x, y, r) {
   const z = cam.z, c = P(x + .5, y + .5), d = RES[r.t]; if (r.g) barra(c[0], c[1] - 34 * z, 1 - r.g / 10, "#ffb13b");
+  if (r.t == "mina") { // roca grande con vetas de los 4 materiales; la barra celeste muestra lo que le queda
+    cx.fillStyle = "#555a69"; cx.beginPath(); cx.ellipse(c[0], c[1] - 6 * z, 15 * z, 10 * z, 0, 0, 7); cx.fill();
+    cx.fillStyle = "#6b7080"; cx.beginPath(); cx.ellipse(c[0], c[1] - 8 * z, 12 * z, 8 * z, 0, 0, 7); cx.fill();
+    [["oro", -6, -10], ["plata", 3, -13], ["cobre", 7, -7], ["carbon", -2, -5]].forEach(([m, a, b]) => { cx.fillStyle = RES[m].c; cx.beginPath(); cx.arc(c[0] + a * z, c[1] + b * z, 3 * z, 0, 7); cx.fill(); });
+    if (r.n < MINA_TOTAL) barra(c[0], c[1] - 26 * z, r.n / MINA_TOTAL, "#4de1ff");
+    return;
+  }
   if (r.t == "arbol") { cx.fillStyle = "#5d4037"; cx.fillRect(c[0] - 2 * z, c[1] - 12 * z, 4 * z, 12 * z); cx.fillStyle = d.c; cx.beginPath(); cx.arc(c[0], c[1] - 18 * z, 10 * z, 0, 7); cx.fill(); return; }
   cx.fillStyle = r.t == "roca" ? d.c : "#7b8294"; cx.beginPath(); cx.ellipse(c[0], c[1] - 5 * z, 12 * z, 8 * z, 0, 0, 7); cx.fill();
   if (r.t != "roca") { cx.fillStyle = d.c; [[-5, -7], [3, -9], [5, -4], [-2, -3]].forEach(([a, b]) => { cx.beginPath(); cx.arc(c[0] + a * z, c[1] + b * z, 2.6 * z, 0, 7); cx.fill(); }); }
@@ -554,7 +633,7 @@ addEventListener("keydown", (e) => {
 });
 addEventListener("keyup", (e) => { if (!MOV[e.code]) return; teclas.delete(e.code); if (jugando && !escribiendo(e)) e.preventDefault(); });
 addEventListener("blur", () => teclas.clear());
-function zoom(f) { const nz = Math.min(2, Math.max(.5, cam.z * f)), k = nz / cam.z, mx = W / 2, my = H / 2; cam.x = mx - (mx - cam.x) * k; cam.y = my - (my - cam.y) * k; cam.z = nz; }
+function zoom(f) { const nz = Math.min(2, Math.max(.35, cam.z * f)), k = nz / cam.z, mx = W / 2, my = H / 2; cam.x = mx - (mx - cam.x) * k; cam.y = my - (my - cam.y) * k; cam.z = nz; }
 function toque(w, raton) {
   if (fin) return; const tx = Math.floor(w.x), ty = Math.floor(w.y), i = ty * N + tx;
   if (moverGrupo != null) { // nuevo punto de reunión del grupo
@@ -740,16 +819,20 @@ const escribir = (l) => { try { localStorage.setItem(CLAVE, JSON.stringify(l)); 
 // Sube a la cuenta (a los 3 s). Se llama al crear, borrar y salir al menú; el autoguardado cada 5 s solo guarda en el dispositivo,
 // y progreso.js también sincroniza solo al ocultar la página, al volver la conexión y al iniciar sesión.
 const subir = () => { if (nube) nube.guardado(); };
+// Mapas grandes: bio y expl se guardan como pares «valor:repeticiones» separados por «;» (el guardado cabe en la nube)
+const comprimir = (a) => { const r = []; for (let i = 0; i < a.length;) { let j = i; while (j < a.length && a[j] === a[i]) j++; r.push(a[i] + ":" + (j - i)); i = j; } return r.join(";"); };
+const descomprimir = (t, n) => { const a = new Uint8Array(n); let p = 0; if (t) for (const e of t.split(";")) { const [v, c] = e.split(":"); a.fill(+v, p, p + +c); p += +c; } return a; };
 function estado() {
-  return { dinero, oleada, tReloj, tOleada, muertes, cam, expl: Array.from(expl).join(""), bio: Array.from(bio).join(""),
-    res: res.map((r, i) => r && [i, r.t, r.n, r.g || 0]).filter(Boolean),
+  return { n: N, dinero, oleada, tReloj, tOleada, muertes, cam, expl: comprimir(expl), bio: comprimir(bio),
+    res: res.map((r, i) => r && (r.t == "mina" ? [i, r.t, r.n, r.g || 0, r.oro, r.plata, r.cobre, r.carbon] : [i, r.t, r.n, r.g || 0])).filter(Boolean),
     us: us.map((u) => [u.k, u.x, u.y, u.hp, u.carry.t, u.carry.n, u.o && u.o.t == "rec" ? [u.o.i, u.o.tipo] : 0, u.inv || 0, u.gr == null ? -1 : u.gr, u.reu ? 1 : 0]),
     anim: anim.map((a) => [a.k, a.x, a.y, a.hp, a.g || 0]), stock, eds: eds.map((b) => [b.k, b.x, b.y, b.hp, b.prog, b.inv || 0]), enem: enem.map((e) => [e.x, e.y, e.hp, e.mh]), grupos: grupos.map((g) => [g.x, g.y, g.tarea || 0]) };
 }
 function cargar(s) {
-  res = new Array(N * N).fill(null); bloq = new Uint8Array(N * N); vis = new Uint8Array(N * N); expl = Uint8Array.from(s.expl.split(""), Number);
-  bio = s.bio ? Uint8Array.from(s.bio.split(""), Number) : new Uint8Array(N * N); bio.forEach((v, i) => v == 3 && (bloq[i] = 1)); // partidas viejas: todo llanura
-  s.res.forEach(([i, t, n, g]) => { res[i] = { t, n, g: g || 0 }; bloq[i] = 1; });
+  N = s.n || N_ORIGINAL; // las partidas viejas no traen «n» y son de 44×44
+  res = new Array(N * N).fill(null); bloq = new Uint8Array(N * N); vis = new Uint8Array(N * N); expl = s.n ? descomprimir(s.expl, N * N) : Uint8Array.from(s.expl.split(""), Number);
+  bio = s.bio ? (s.n ? descomprimir(s.bio, N * N) : Uint8Array.from(s.bio.split(""), Number)) : new Uint8Array(N * N); bio.forEach((v, i) => v == 3 && (bloq[i] = 1)); // partidas viejas: todo llanura
+  s.res.forEach(([i, t, n, g, o, pl, co, ca]) => { res[i] = { t, n, g: g || 0 }; if (t == "mina") Object.assign(res[i], { oro: o, plata: pl, cobre: co, carbon: ca }); bloq[i] = 1; });
   eds = []; s.eds.forEach(([k, x, y, hp, prog, inv]) => { const b = ponerEdificio(k, x, y, true); b.hp = hp; b.prog = prog; if (inv) b.inv = inv; }); ponerRefugio(); // partidas viejas: se agrega el refugio si falta
   us = s.us.map(([k, x, y, hp, ct, cn, o, inv, gr, reu]) => ({ k, x, y, hp, gr: k == "h" || gr == null || gr < 0 ? null : gr, reu: reu === undefined ? true : !!reu, mh: UN[k].hp, p: [], cd: 0, inv: inv || (k == "h" ? [] : null), carry: { t: ct, n: cn }, o: o ? { t: "rec", i: o[0], tipo: o[1], f: cn >= 5 ? "vol" : "ir" } : null }));
   enem = s.enem.map(([x, y, hp, mh]) => ({ k: "e", x, y, hp, mh, cd: 0 }));

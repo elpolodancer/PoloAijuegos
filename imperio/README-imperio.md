@@ -40,13 +40,19 @@ Al final de la partida el jugador tendrá construido algo bastante grande: un im
 - 🔜 **Tropas de exploración**: grupos que salen a pelear con animales para conseguir carne, piel y otros recursos (los guerreros ya pueden cazar; falta la parte de explorar en grupo con misiones).
 - ✅ **Grupos**: hasta 10 tropas por grupo, con tarea de juntar madera o minerales. 🔜 Formar grupos mixtos a gusto (por ejemplo 10 guerreros, 1 constructor y 8 recolectores).
 
+## El mapa
+
+- ✅ **98 × 98 casillas** (5 veces el área del mapa anterior, que era de 44 × 44). Se cambia en `AREA_X` al inicio de `juego-imperio.js`. Las partidas viejas se abren con su tamaño de 44 × 44.
+- ✅ Tu base está arriba a la izquierda. Quedan reservados 4 sitios para bases enemigas (esquinas y centro): ahí no hay agua y siempre hay llanura, y se les tiende un puente de tierra si el mar las dejara en una isla.
+- ✅ **Sin animales hostiles (oso, lobo, guepardo) a menos de 15 casillas de donde apareces.** Los animales que huyen (conejo, lagartija, gallina) sí pueden estar más cerca.
+
 ## Recursos y minas
 
-- ✅ Árboles y rocas por el mapa; minerales (carbón, cobre, hierro, oro, diamante) en zonas rocosas, más raros mientras más lejos de la base.
-- 🔜 **Minas** con recursos **limitados** (se acaban después de extraerlos), así que habrá varias. Se explotan en dos pasos:
-  1. Llevar un **constructor** al punto de mina para que construya la mina.
-  2. Enviar **recolectores** a sacar el material poco a poco.
-- 🔜 **Plata y fibra** todavía no se pueden conseguir (la barra de recursos ya las muestra, en 0).
+- ✅ Árboles y rocas por el mapa.
+- ✅ **75 minas** repartidas por todo el mapa, separadas por al menos 6 casillas (nada de racimos) y siempre alcanzables a pie. Cada base tiene al menos 2 minas a 9–18 casillas.
+- ✅ **Cada mina guarda 500 de material: 10 % oro (50), 20 % plata (100), 30 % cobre (150) y 40 % carbón (200).** Al picarla sale un material al azar en proporción a lo que le queda, y al agotarla desaparece. Cada viaje de un recolector lleva un solo material.
+- ✅ **Por qué 75:** cada castillo pide 500 de oro y cada mina solo da 50, o sea 10 minas por castillo. Para 5 castillos (el tuyo y 4 enemigos) son 50 minas, más 50 % de margen = 75. Esas 75 dan 3750 de oro, 7500 de plata, 11 250 de cobre y 15 000 de carbón. Si cambias `CASTILLOS`, `MINA_TOTAL` o `MINA_REPARTO`, el número de minas se recalcula solo.
+- ✅ **Plata** sale de las minas. 🔜 **Fibra** todavía no se puede conseguir (la barra de recursos la muestra en 0).
 - 🔜 **Replantar árboles** con semillas: tardan **5 minutos** en dar frutos.
 
 ## Edificios
