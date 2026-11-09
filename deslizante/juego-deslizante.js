@@ -70,9 +70,19 @@ function mostrar(nombre) {
   for (const p of ["inicio", "pantalla-niveles", "pantalla-libre", "juego"]) $(p).hidden = p !== nombre;
   $("btn-menu").hidden = nombre === "inicio"; // «Menú principal» solo fuera del menú principal
   if (nombre !== "juego") clearInterval(reloj);
+  pintarNavNivel();
   if (nombre === "inicio") pintarInicio();
   if (nombre === "pantalla-niveles") pintarNiveles();
   if (nombre === "pantalla-libre") pintarLibre();
+}
+// Botones «◀ anterior» y «▶ siguiente» (arriba a la derecha): solo en un nivel fijo, y cada uno solo si ese nivel existe y está abierto
+function pintarNavNivel() {
+  const enNivel = !$("juego").hidden && modo === "nivel";
+  const hayAnt = enNivel && idx > 0 && desbloqueado(idx - 1);
+  const haySig = enNivel && idx + 1 < NIVELES.length && desbloqueado(idx + 1);
+  $("btn-anterior").hidden = !hayAnt;
+  $("btn-siguiente").hidden = !haySig;
+  $("nav-nivel").hidden = !(hayAnt || haySig);
 }
 function pintarInicio() {
   const pasados = prog.hechos.filter(Boolean).length;
@@ -239,6 +249,7 @@ async function ganar() {
   else { prog.mejores[idx + 1] = nueva; prog.hechos[idx] = true; }
   guardarProg();
   pintarMejor();
+  pintarNavNivel();                                 // si este nivel abrió el siguiente, aparece ▶
 
   const l = libre ? {} : NIVELES[idx], hay = !libre && idx + 1 < NIVELES.length;
   const v = document.createElement("div");
@@ -285,6 +296,7 @@ function empezar() {
   $("tiempo").textContent = fmtMs(0);
   $("msg").textContent = "Toca una ficha en la fila o columna del hueco para deslizarla.";
   construir(); pintar(); pintarMejor();
+  pintarNavNivel();
 }
 function jugarNivel(i) {
   if (!NIVELES[i] || !desbloqueado(i)) return;
@@ -304,6 +316,8 @@ $("btn-jugar").addEventListener("click", () => jugarNivel(siguientePendiente()))
 $("btn-niveles").addEventListener("click", () => mostrar("pantalla-niveles"));
 $("btn-libre").addEventListener("click", () => mostrar("pantalla-libre"));
 $("btn-menu").addEventListener("click", () => mostrar("inicio"));
+$("btn-anterior").addEventListener("click", () => jugarNivel(idx - 1));
+$("btn-siguiente").addEventListener("click", () => jugarNivel(idx + 1));
 $("reiniciar").addEventListener("click", empezar);
 addEventListener("keydown", (e) => {
   if ($("juego").hidden) return;
@@ -342,7 +356,7 @@ import("../compartido/progreso.js").then((m) => {
       if (!$("inicio").hidden) pintarInicio();
       if (!$("pantalla-niveles").hidden) pintarNiveles();
       if (!$("pantalla-libre").hidden) pintarLibre();
-      if (!$("juego").hidden) pintarMejor();
+      if (!$("juego").hidden) { pintarMejor(); pintarNavNivel(); }
     },
   });
   nube.guardado(); // sube lo que ya hubiera en el dispositivo

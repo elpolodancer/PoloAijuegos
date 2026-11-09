@@ -38,6 +38,9 @@
     .proximamente { flex: none; width: min(100%, 520px); margin: 6px 0 0; text-align: center; color: var(--suave); font-size: .85rem; }
 
     /* Juego */
+    /* Anterior / siguiente: arriba a la derecha, justo debajo de la sesión (cabe en los 104px de margen superior de la pantalla) */
+    .nav-nivel { position: fixed; z-index: 6; display: flex; gap: 8px; top: calc(max(8px, env(safe-area-inset-top)) + 42px); right: max(8px, env(safe-area-inset-right)); }
+    .nav-nivel[hidden] { display: none; }
     .lado { display: flex; flex-direction: column; align-items: center; gap: 8px; width: min(100%, 520px); }
     .titulo-nivel { font-weight: 800; font-size: 1rem; text-align: center; }
     .titulo-nivel small { display: block; color: var(--suave); font-weight: 600; font-size: .75rem; }
@@ -79,14 +82,19 @@
     <button class="b3d txt b-gris" id="btn-menu" type="button" title="Volver al menú principal" hidden><span class="b-ico">☰</span> Menú principal</button>
   </nav>
   <div class="hud hud-der"><span class="chip" id="sesion"></span></div>
+  <!-- Nivel anterior / siguiente: solo dentro de un nivel (no en modo libre); cada botón aparece solo si ese nivel existe y está abierto -->
+  <div class="nav-nivel" id="nav-nivel" hidden>
+    <button class="b3d chico b-azul" id="btn-anterior" type="button" title="Nivel anterior" aria-label="Nivel anterior" hidden><span class="b-ico">◀</span></button>
+    <button class="b3d chico b-verde" id="btn-siguiente" type="button" title="Siguiente nivel" aria-label="Siguiente nivel" hidden><span class="b-ico">▶</span></button>
+  </div>
 
   <main>
     <section class="pantalla" id="inicio">
       <h1>🔢 Puzle deslizante</h1>
       <p id="resumen"></p>
+      <button class="b3d txt grande b-morado" id="btn-libre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
       <button class="b3d txt grande b-verde" id="btn-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
       <button class="b3d txt grande b-azul" id="btn-niveles" type="button"><span class="b-ico">🗂️</span> Niveles</button>
-      <button class="b3d txt grande b-morado" id="btn-libre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
     </section>
 
     <section class="pantalla" id="pantalla-niveles" hidden>

@@ -11,12 +11,13 @@ Ruta: `deslizante/README-deslizante.md` · Aquí se anotan las especificaciones 
 | `verificar-niveles-deslizante.mjs` | Herramienta de desarrollo (no va en `sw.js`): `node deslizante/verificar-niveles-deslizante.mjs` revisa que todos los niveles sean válidos y tengan solución |
 
 ## Pantallas
-- **Menú de inicio**: botones **Jugar**, **Niveles** y **Modo libre**.
+- **Menú de inicio**: botones, en este orden, **Modo libre**, **Jugar / Continuar** y **Niveles**.
   - *Jugar* abre el primer nivel sin pasar (dice «Continuar» si ya se pasó alguno). Si ya se pasaron todos los que existen, abre el último.
   - *Niveles* muestra los niveles agrupados por tamaño.
 - **Modo libre**: lista los tamaños del 3×3 al 30×30; se elige uno y salen tableros al azar sin fin.
 - **Niveles**: pasado = verde, disponible = azul, bloqueado = gris con 🔒.
 - **Juego**: tablero, movimientos, tiempo, mejor marca del nivel y botón 🔄 para reiniciarlo.
+  - Dentro de un nivel (no en modo libre), arriba a la derecha bajo el nombre de sesión: **◀** lleva al nivel anterior (si existe) y **▶** al siguiente (solo si ya está desbloqueado, por ejemplo después de pasar el nivel actual o si ya se había pasado). Cada uno se oculta cuando no aplica. Cambiar de nivel así reinicia el cronómetro.
 
 ## Navegación (estándar de `compartido/inmersivo.css`)
 - Arriba a la izquierda, **🎮 Juegos** (vuelve al portal), siempre visible.
