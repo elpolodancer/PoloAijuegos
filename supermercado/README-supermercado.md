@@ -5,6 +5,7 @@ Tiene dos modos: **Modo infinito** (sin fin) y **Modo niveles** (50 retos).
 
 > Ruta: `supermercado/README.md`
 > Archivos actuales: `index-supermercado.html`, `juego-supermercado.js`
+> Partidas: 10 ranuras en `localStorage` (`supermercado_partidas_v1`)
 > Marcas: ❓ = por decidir · 🔜 = por programar
 
 ---
@@ -174,6 +175,8 @@ Cuestan **$2000** cada una. En lugar de entregar producto continuamente, entrega
 
 ## 6. Modo niveles
 
+> El menú de inicio ya tiene el botón «🗺️ Niveles», apagado hasta que exista esta zona.
+
 - **50 niveles** con misiones distintas.
 - Misiones típicas: llegar a cierto número de productos, juntar cierta cantidad de dinero.
 - 🔜 Por definir: lista de misiones, recompensas, condiciones de inicio de cada nivel, si hay límite de tiempo y si se desbloquean en orden.
@@ -197,7 +200,7 @@ Cuestan **$2000** cada una. En lugar de entregar producto continuamente, entrega
 3. Cuáles son los 60 productos finales (30 cultivos + 5 de paquete + 5 de granja = 40; faltan 20 más).
 4. Precios de venta de cada producto y precios de empleados.
 5. Detalle de los 50 niveles.
-6. Guardado de partida (local + nube con `compartido/progreso.js`, como los otros juegos).
+6. Sincronizar las partidas guardadas con la cuenta (`compartido/progreso.js`): el guardado local de 10 ranuras ya existe; falta `conectar()` con `fusionar` por ranura (gana la de `t` más reciente).
 
 ---
 
@@ -205,6 +208,8 @@ Cuestan **$2000** cada una. En lugar de entregar producto continuamente, entrega
 
 - [x] Prototipo base (jardines, estantería, clientes, caja, mejoras, admin)
 - [x] Vista isométrica y carreteras
+- [x] Menú de inicio (Nueva partida / Continuar / Niveles) y 10 partidas guardadas en el aparato
+- [ ] Pantalla de Niveles (el botón está apagado)
 - [ ] Modo infinito con las reglas de este documento
 - [x] Granja: terreno, 5 corrales, animales, huevo/leche, cargas de pollo/res/tocino, empleados y mejoras
 - [x] Botón ⏩ de velocidad (x1 a x8)

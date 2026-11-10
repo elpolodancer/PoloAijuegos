@@ -4,6 +4,7 @@
 // las recoges y las colocas en las estanterías. Los clientes toman sus productos, van a la caja y pagan.
 // Recoger, colocar y comprar lo básico es automático por cercanía. En la zona de mejoras 🛠️ compras
 // un empleado de caja, más estanterías y ampliar el edificio a la izquierda o a la derecha (la cámara te sigue).
+// Menú de inicio (Nueva partida / Continuar / Niveles) y 10 partidas guardadas en el aparato: ver «Partidas guardadas» más abajo.
 
 import { crearMenuPausa } from "../compartido/menu-pausa.js";   // menú ☰ Pausa estándar (no usa Firebase: funciona sin internet)
 
@@ -249,7 +250,6 @@ const elCarga = document.getElementById("carga");
 const elEstante = document.getElementById("estante");
 const elClientes = document.getElementById("clientes");
 const ovl = document.getElementById("ovl");
-const ovlBtn = document.getElementById("ovlBtn");
 const panel = document.getElementById("mejoras");
 const btnCarga = document.getElementById("mejCarga");
 const btnEmpleado = document.getElementById("mejEmpleado");
@@ -1370,30 +1370,272 @@ window.addEventListener("keydown", (ev) => {
 window.addEventListener("keyup", (ev) => { teclas[ev.key.toLowerCase()] = false; });
 window.addEventListener("blur", () => { for (const k in teclas) teclas[k] = false; });
 
-ovlBtn.addEventListener("click", () => {
-  estado = "jugando";
+// ---------- Partidas guardadas (10 ranuras, en el dispositivo) ----------
+// Todas viven en UNA clave de localStorage: { v: 1, ranuras: [ null | partida, … 10 ] }. Cada partida trae «t» (Date.now() al guardar):
+// así, cuando se sincronice con la cuenta (compartido/progreso.js → unirRecientes por ranura), gana la más reciente de cada una.
+// Se guarda: sola cada AUTOGUARDADO_MS, al abrir ☰ Pausa, con «💾 Guardar», al salir al menú y al cerrar o esconder la página.
+// NO se guarda lo pasajero: clientes, filas de las cajas, textos flotantes ni los autos de la calle.
+const CLAVE_PARTIDAS = "supermercado_partidas_v1";
+const RANURAS = 10;
+const AUTOGUARDADO_MS = 10000;
+let ranuraActual = -1;          // ranura (0 a 9) de la partida en curso; -1 = ninguna (menú de inicio)
+let ultimoGuardado = 0;
+
+const ranurasVacias = () => Array.from({ length: RANURAS }, () => null);
+const partidaValida = (d) => (d && typeof d === "object" && d.v === 1 && Number.isFinite(d.t) ? d : null);
+function leerPartidas() {
+  try {
+    const o = JSON.parse(localStorage.getItem(CLAVE_PARTIDAS));
+    const l = o && Array.isArray(o.ranuras) ? o.ranuras : [];
+    return Array.from({ length: RANURAS }, (_, i) => partidaValida(l[i]));
+  } catch (e) { return ranurasVacias(); }
+}
+function escribirPartidas(l) {
+  try { localStorage.setItem(CLAVE_PARTIDAS, JSON.stringify({ v: 1, ranuras: l })); return true; } catch (e) { return false; }
+}
+
+const num = (v, def, a = -Infinity, b = Infinity) => { v = Number(v); return Number.isFinite(v) ? Math.max(a, Math.min(b, v)) : def; };
+const dec = (n) => Math.round(n * 100) / 100;
+const idValido = (id) => typeof id === "string" && Object.prototype.hasOwnProperty.call(PRODUCTOS, id);
+
+function serializar() {
+  return {
+    v: 1, t: Date.now(), dinero: dec(dinero),
+    jugador: { x: dec(jugador.x), y: dec(jugador.y), cara: jugador.cara },
+    carga: carga.slice(), extra: extra.slice(),
+    nivelCarga, nivelCajero, nivelRepartidor,
+    edificio: ampliaciones.map((a) => a.lado),   // se rehacen con ampliar(lado), en el mismo orden
+    patio: patios.map((a) => a.lado),
+    granja,
+    estantes: estantes.map((e) => ({ slot: e.slot, producto: e.producto, items: e.items.slice() })),
+    jardines: jardines.map((g) => ({ p: g.producto, c: g.comprado, e: !!g.emp, r: dec(g.reloj), q: g.parcelas.map((q) => ({ t: dec(q.t), id: q.id })) })),
+    corrales: corrales.map((c) => ({ p: c.producto, c: c.comprado, e: !!c.emp, r: dec(c.reloj), s: c.stock, v: c.nivelVel, n: c.nivelCant, m: c.nivelTiempo, q: c.parcelas.map((q) => ({ t: dec(q.t), id: q.id })) })),
+    cajas: cajas.map((k) => ({ x: k.x, y: k.y, w: k.w, h: k.h, dir: k.dir, emp: !!k.emp })),
+    puertas: puertas.map((p) => p.x),
+  };
+}
+
+// Vuelve TODO al estado de una partida nueva (sin recargar la página: así no se sale de la pantalla completa)
+function restablecer() {
+  if (colocando) terminarColocacion(false);
+  if (pregunta) cerrarPregunta();
+  cerrarTirar();
+  dinero = DINERO_INICIAL;
+  jugador.x = 180; jugador.y = 440; jugador.cara = 1;
+  objetivo = null; tocando = false; ptr = null; atorado = 0;
+  carga = []; estantes = []; extra = [];
+  cajas.splice(1).forEach((k) => { if (k.boton) k.boton.remove(); });
+  cajas[0] = { x: CAJA.x, y: CAJA.y, w: CAJA.w, h: CAJA.h, dir: 1, emp: false, cola: [], orig: true };
+  puertas.length = 0; puertas.push({ x: PUERTA.x });
+  colocando = null; rechazado = null; avisado = null; rechazadoBote = false;
+  edificio = 0; ampliaciones = []; xMin = 0; xMax = MUNDO.w;
+  patios = []; nivelPatio = 0; pMin = 0; pMax = MUNDO.w;
+  nivelCajero = 0; nivelRepartidor = 0; nivelCarga = 0;
+  granja = false; yMin = 0;
+  clientes = []; espera = 2; traspasoT = 0; textos = []; enMejoras = false;
+  for (const g of jardines) Object.assign(g, nuevoJardin(g.producto, { w: 140, h: 80, cols: 3, filas: 2 }, COSTO_JARDIN_DE[g.producto]));
+  corrales.forEach((c, i) => Object.assign(c, nuevoCorral(c.producto, i)));
+  recalcMundo(); colocarMejoras(); colocarJardines();
+  centrarCamara();
+}
+
+// Pone en el juego lo guardado en «d». Lanza un error si los datos no sirven (quien llama vuelve a una partida nueva)
+function aplicar(d) {
+  dinero = num(d.dinero, DINERO_INICIAL, 0);
+  carga = (Array.isArray(d.carga) ? d.carga : []).filter(idValido).slice(0, 40);
+  extra = (Array.isArray(d.extra) ? d.extra : []).filter(idValido).slice(0, EXTRA_ZANAHORIA_CAP);
+  nivelCarga = Math.floor(num(d.nivelCarga, 0, 0, COSTOS_CARGA.length));
+  nivelCajero = Math.floor(num(d.nivelCajero, 0, 0, NIVELES_EMP));
+  nivelRepartidor = Math.floor(num(d.nivelRepartidor, 0, 0, NIVELES_EMP));
+  // edificio y patio: se rehacen con las mismas funciones que al comprarlos
+  (Array.isArray(d.edificio) ? d.edificio : []).slice(0, COSTOS_EDIFICIO.length).forEach((l) => ampliar(l < 0 ? -1 : 1));
+  (Array.isArray(d.patio) ? d.patio : []).slice(0, COSTOS_PATIO.length).forEach((l) => ampliarPatio(l < 0 ? -1 : 1));
+  if (d.granja) abrirGranja();
+  for (const e of Array.isArray(d.estantes) ? d.estantes : []) {   // después del edificio: la posición de cada una depende de sus ampliaciones
+    const slot = Math.floor(num(e && e.slot, -1));
+    if (slot < 0 || slot >= MAX_ESTANTES || estantes.some((q) => q.slot === slot) || ampDe(slot) > edificio) continue;
+    nuevoEstante(slot, idValido(e.producto) ? e.producto : IDS[0]);
+    estantes[estantes.length - 1].items = (Array.isArray(e.items) ? e.items : []).filter(idValido).slice(0, ESTANTE_CAP);
+  }
+  const parcelas = (dest, lista) => dest.forEach((q, i) => {
+    const s = lista && lista[i];
+    if (s && (s.id === null || idValido(s.id))) { q.t = num(s.t, -1); q.id = s.id; }
+  });
+  for (const s of Array.isArray(d.jardines) ? d.jardines : []) {
+    const g = s && jardinDe(s.p);
+    if (!g || !s.c) continue;
+    g.comprado = true; g.reloj = num(s.r, CRECE_SEG);
+    parcelas(g.parcelas, s.q);
+    if (s.e) g.emp = nuevoEmpleadoJardin(g);
+  }
+  for (const s of Array.isArray(d.corrales) ? d.corrales : []) {
+    const c = s && corralDe(s.p);
+    if (!c || !s.c || !granja) continue;
+    c.nivelVel = Math.floor(num(s.v, 0, 0, COSTOS_VEL.length));
+    c.nivelCant = Math.floor(num(s.n, 0, 0, COSTOS_CANT.length));
+    c.nivelTiempo = Math.floor(num(s.m, 0, 0, COSTOS_TIEMPO.length));
+    activarCorral(c);                       // crea los animales; luego se pone lo guardado
+    c.reloj = num(s.r, c.reloj);
+    if (c.tipo === "carga") c.stock = Math.floor(num(s.s, 0, 0, cantidadCarga(c) * STOCK_MAX_CARGAS));
+    else parcelas(c.parcelas, s.q);
+    if (s.e) c.emp = nuevoEmpleadoJardin(c);
+  }
+  const ks = Array.isArray(d.cajas) ? d.cajas : [];
+  if (ks[0]) cajas[0].emp = !!ks[0].emp;
+  for (const s of ks.slice(1, 1 + MAX_CAJAS_EXTRA)) {
+    if (!s) continue;
+    const k = { x: num(s.x, 0), y: num(s.y, 0), w: CAJA.w, h: CAJA.h, dir: s.dir < 0 ? -1 : 1, emp: !!s.emp, cola: [] };
+    k.boton = crearBotonEmpCaja(k);          // el índice del botón es el que tendrá la caja al entrar en «cajas»
+    cajas.push(k);
+  }
+  for (const x of (Array.isArray(d.puertas) ? d.puertas : []).slice(1, 1 + MAX_PUERTAS_EXTRA)) puertas.push({ x: num(x, PUERTA.x) });
+  const j = d.jugador || {};
+  jugador.x = Math.max(wMin + RADIO, Math.min(wMax - RADIO, num(j.x, 180)));
+  jugador.y = Math.max(yMin + RADIO, Math.min(MUNDO.h - RADIO, num(j.y, 440)));
+  jugador.cara = j.cara < 0 ? -1 : 1;
+  // si quedó dentro de un mueble, se le saca al pasillo central
+  if (choca(jugador.x, jugador.y)) { jugador.x = PASILLO_X; jugador.y = CORREDOR_Y; }
+  centrarCamara();
+}
+
+// Guarda la partida en curso (solo toca su ranura: si hay otra pestaña con otra partida, no la pisa)
+function guardarActual() {
+  if (estado !== "jugando" || ranuraActual < 0) return false;
+  const l = leerPartidas();
+  l[ranuraActual] = serializar();
+  ultimoGuardado = performance.now();
+  return escribirPartidas(l);
+}
+
+// Abre una ranura: datos = partida guardada, o null para empezar una nueva (reemplaza lo que hubiera en esa ranura)
+function iniciarPartida(i, datos) {
+  restablecer();
+  let aviso = "";
+  if (datos) {
+    try { aplicar(datos); } catch (e) { console.warn("partida dañada:", e); restablecer(); datos = null; aviso = "La partida estaba dañada: empiezas una nueva"; }
+  }
+  ranuraActual = i;
+  estado = "jugando"; pausado = false;
+  fijarVelocidad(1);
   ovl.classList.add("oculto");
-  btnMenu.hidden = false;       // ☰ Pausa solo se ve dentro de la partida (en la pantalla de inicio no se muestra)
+  btnMenu.hidden = false;       // ☰ Pausa solo se ve dentro de la partida
+  if (!datos && lee("super_adm_auto")) desbloquearTodo();   // admin: «empezar con todo desbloqueado»
+  if (aviso) textos.push({ x: jugador.x, y: jugador.y, vida: 3, txt: aviso, col: "#ff9a8a" });
+  if (!guardarActual()) textos.push({ x: jugador.x, y: jugador.y, vida: 3, txt: "⚠️ No se pudo guardar en este aparato", col: "#ff9a8a" });
   tono(440, 0.12);
+}
+
+// ----- Menú de inicio: Nueva partida / Continuar / Niveles -----
+const menuInicio = document.getElementById("menuInicio"), menuPartidas = document.getElementById("menuPartidas");
+const btnNueva = document.getElementById("btnNueva"), btnContinuar = document.getElementById("btnContinuar");
+const menuNota = document.getElementById("menuNota"), listaPartidas = document.getElementById("listaPartidas");
+const partTitulo = document.getElementById("partTitulo"), partAyuda = document.getElementById("partAyuda");
+
+function mostrarMenu() {
+  ovl.classList.remove("oculto");
+  menuPartidas.hidden = true; menuInicio.hidden = false;
+  const n = leerPartidas().filter(Boolean).length;
+  btnContinuar.disabled = n === 0;
+  menuNota.textContent = n === 0 ? "Aún no tienes partidas guardadas." : "Partidas guardadas: " + n + " de " + RANURAS + ".";
+}
+function hace(t) {
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 60) return "hace un momento";
+  if (s < 3600) return "hace " + Math.floor(s / 60) + " min";
+  if (s < 86400) return "hace " + Math.floor(s / 3600) + " h";
+  const d = Math.floor(s / 86400);
+  return "hace " + d + (d === 1 ? " día" : " días");
+}
+function resumenPartida(d) {
+  const nj = (d.jardines || []).filter((g) => g && g.c).length;
+  return "$" + Math.floor(num(d.dinero, 0)).toLocaleString("es-MX") + " · " + nj + (nj === 1 ? " jardín" : " jardines") + (d.granja ? " · 🐄 granja" : "") + " · " + hace(d.t);
+}
+function elemento(tag, clase, texto) {
+  const e = document.createElement(tag);
+  if (clase) e.className = clase;
+  if (texto !== undefined) e.textContent = texto;
+  return e;
+}
+// Botón de la fila: el primer toque lo «arma» (cambia su texto) y el segundo, antes de 3 s, ejecuta la acción. Así no hace falta confirm().
+function botonFila(icono, texto, clase, textoSeguro, accion) {
+  const b = elemento("button", "b3d chico txt " + clase);
+  b.type = "button";
+  const i = elemento("span", "b-ico", icono), t = elemento("span", "", texto);
+  b.append(i, t);
+  if (!textoSeguro) { b.addEventListener("click", accion); return b; }
+  let reloj = 0;
+  b.addEventListener("click", () => {
+    if (reloj) { clearTimeout(reloj); reloj = 0; accion(); return; }
+    i.textContent = "❗"; t.textContent = textoSeguro;
+    reloj = setTimeout(() => { reloj = 0; i.textContent = icono; t.textContent = texto; }, 3000);
+  });
+  return b;
+}
+// modo «continuar»: las partidas guardadas, la más reciente primero (▶ la abre, 🗑️ la borra)
+// modo «reemplazar»: las 10 llenas; se elige cuál se sustituye por una partida nueva
+function mostrarLista(modo) {
+  const l = leerPartidas();
+  menuInicio.hidden = true; menuPartidas.hidden = false;
+  listaPartidas.replaceChildren();
+  const reemplazar = modo === "reemplazar";
+  partTitulo.textContent = reemplazar ? "🆕 Nueva partida" : "▶️ Continuar";
+  partAyuda.textContent = reemplazar ? "Las 10 ranuras están llenas: elige una para reemplazarla." : "Elige la partida que quieres seguir.";
+  const orden = l.map((d, i) => ({ d, i })).filter((x) => x.d).sort((a, b) => b.d.t - a.d.t);
+  if (!orden.length) { mostrarMenu(); return; }
+  orden.forEach(({ d, i }, k) => {
+    const fila = elemento("div", "fila-part" + (k === 0 && !reemplazar ? " ultima" : ""));
+    const info = elemento("div", "fp-info");
+    info.append(elemento("b", "", "Partida " + (i + 1) + (k === 0 && !reemplazar ? " · última" : "")), elemento("small", "", resumenPartida(d)));
+    fila.appendChild(info);
+    if (reemplazar) fila.appendChild(botonFila("🔄", "Reemplazar", "b-oro", "¿Seguro?", () => iniciarPartida(i, null)));
+    else {
+      fila.appendChild(botonFila("▶", "Jugar", "b-verde", "", () => iniciarPartida(i, d)));
+      fila.appendChild(botonFila("🗑️", "", "b-rojo", "¿Borrar?", () => {
+        const m = leerPartidas(); m[i] = null; escribirPartidas(m);
+        mostrarLista("continuar");
+      }));
+    }
+    listaPartidas.appendChild(fila);
+  });
+}
+btnNueva.addEventListener("click", () => {
+  const libre = leerPartidas().findIndex((d) => !d);
+  if (libre >= 0) iniciarPartida(libre, null);
+  else mostrarLista("reemplazar");
 });
+btnContinuar.addEventListener("click", () => mostrarLista("continuar"));
+document.getElementById("partVolver").addEventListener("click", mostrarMenu);
+window.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && estado === "inicio" && !menuPartidas.hidden) { ev.preventDefault(); mostrarMenu(); } });
+
+// Guardar al cerrar, cambiar de pestaña o mandar la app al fondo (en celulares «pagehide» y «hidden» son lo único fiable)
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") guardarActual(); });
+window.addEventListener("pagehide", guardarActual);
 
 // ----- ☰ Pausa (estándar: compartido/menu-pausa.js) -----
-// «Salir» vuelve a la pantalla de inicio SIN borrar la partida: con «Jugar» sigues donde ibas (el juego aún no se guarda al cerrar la página).
+// «Salir» guarda la partida y vuelve al menú de inicio; ahí «Continuar» la abre otra vez.
 const pausa = crearMenuPausa({
   boton: btnMenu,
   puedeAbrir: () => estado === "jugando" && info.classList.contains("oculto"),
-  alAbrir: () => { pausado = true; tocando = false; objetivo = null; velPanel.classList.add("oculto"); },
+  alAbrir: () => { pausado = true; tocando = false; objetivo = null; velPanel.classList.add("oculto"); guardarActual(); },
   alContinuar: () => { pausado = false; },
-  extras: () => [{ icono: "ℹ️", texto: "Info", clase: "b-azul", alElegir: () => info.classList.remove("oculto") }],   // el juego sigue en pausa mientras lees
-  ayudaSalir: "Vuelves al inicio; con «Jugar» sigues donde ibas.",
+  extras: () => [
+    { icono: "💾", texto: "Guardar partida", clase: "b-oro", ayuda: "Se guarda sola cada 10 segundos y al salir.", alElegir: () => {
+      const ok = guardarActual();
+      textos.push({ x: jugador.x, y: jugador.y, vida: 1.6, txt: ok ? "💾 Partida guardada" : "⚠️ No se pudo guardar", col: ok ? "#9dffb0" : "#ff9a8a" });
+      pausado = false;
+    } },
+    { icono: "ℹ️", texto: "Info", clase: "b-azul", alElegir: () => info.classList.remove("oculto") },   // el juego sigue en pausa mientras lees
+  ],
+  ayudaSalir: "Se guarda la partida y vuelves al inicio.",
   alSalir: () => {
+    guardarActual();
     pausado = false;
     if (colocando) terminarColocacion(false);
     if (pregunta) cerrarPregunta();
     cerrarTirar();
-    estado = "inicio";
-    ovl.classList.remove("oculto");
+    estado = "inicio"; ranuraActual = -1;
     btnMenu.hidden = true;
+    mostrarMenu();
   },
 });
 
@@ -2073,6 +2315,7 @@ function bucle(ahora) {
   const dt = Math.min(0.05, (ahora - ultimo) / 1000 || 0);
   ultimo = ahora;
   if (estado === "jugando" && !pausado) for (let i = 0; i < velocidad; i++) actualizar(dt);
+  if (estado === "jugando" && ahora - ultimoGuardado >= AUTOGUARDADO_MS) guardarActual();
   actualizarCamara(dt);
   if (!pausado) actualizarAutos(dt * velocidad);
   actualizarHud();
@@ -2115,10 +2358,22 @@ if (verAdmin) {
   auto.addEventListener("change", () => { guarda("super_adm_auto", auto.checked); if (auto.checked) desbloquearTodo(); });
   $("admMas").addEventListener("click", () => { dinero += DINERO_RAPIDO; });
   $("admTodo").addEventListener("click", desbloquearTodo);
-  $("admReiniciar").addEventListener("click", () => location.reload());
+  // «Reiniciar partida»: empieza de cero en la misma ranura (dos toques seguidos, para no borrar por accidente)
+  let armado = 0;
+  const bReiniciar = $("admReiniciar"), tReiniciar = bReiniciar.querySelector("span");
+  bReiniciar.addEventListener("click", () => {
+    if (!armado) {
+      armado = setTimeout(() => { armado = 0; tReiniciar.textContent = "🔄 Reiniciar partida"; }, 3000);
+      tReiniciar.textContent = "⚠️ ¿Seguro? Toca otra vez";
+      return;
+    }
+    clearTimeout(armado); armado = 0; tReiniciar.textContent = "🔄 Reiniciar partida";
+    if (estado === "jugando") { $("adm").classList.add("oculto"); iniciarPartida(ranuraActual, null); }
+  });
   if (auto.checked) desbloquearTodo();
 }
 
+mostrarMenu();
 ajustar();
 centrarCamara();
 requestAnimationFrame((t) => { ultimo = t; bucle(t); });

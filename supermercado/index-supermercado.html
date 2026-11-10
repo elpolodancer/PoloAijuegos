@@ -136,6 +136,26 @@
     .ovl p { margin: 0; max-width: 34ch; line-height: 1.4; font-size: 14px; }
     .ovl .jugar { position: sticky; bottom: 0; margin-top: auto; padding: 10px 0 16px; width: 100%; display: flex; justify-content: center; background: linear-gradient(180deg, #101114 0, #101114 100%); }
     .ovl .jugar .b3d { --t: 48px; font-size: 18px; }
+
+    /* Menú de inicio: Nueva partida / Continuar / Niveles, y lista de las 10 partidas guardadas */
+    .menu-ini, .menu-part { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; flex: 1 1 auto; }
+    .menu-ini { justify-content: center; padding-bottom: 24px; }
+    .menu-botones { width: 100%; max-width: 270px; display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+    .menu-botones .b3d.txt { --t: 54px; width: 100%; font-size: 18px; margin-bottom: 5px; }
+    .menu-botones .b3d .b-ico { margin-right: 8px; }
+    .menu-nota { display: block; min-height: 1.3em; color: #b0b4bd; font-size: 12px; line-height: 1.3; }
+    .menu-part h2 { font-size: 24px; }
+    .lista-partidas { width: 100%; display: flex; flex-direction: column; gap: 8px; text-align: left; }
+    .fila-part { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: linear-gradient(180deg, #3a3d45, #22242a); border: 2px solid #121316; border-radius: 14px;
+      box-shadow: 0 3px 0 #0c0d0f, inset 0 2px 0 rgba(255,255,255,.12); }
+    .fila-part.ultima { border-color: #ffb020; }
+    .fila-part.vacia { opacity: .6; }
+    .fp-info { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .fp-info b { font-size: 15px; }
+    .fp-info small { color: #b0b4bd; font-size: 12px; line-height: 1.25; }
+    .fila-part .b3d { margin-bottom: 5px; }
+    .fila-part .b3d.txt { padding: 0 10px; font-size: 13px; }
+    .fila-part .b3d .b-ico { margin-right: 4px; }
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>
@@ -222,12 +242,24 @@
         </div>
       </div>
 
-      <!-- Pantalla de inicio: corta. Las instrucciones están en ☰ Pausa → ℹ️ Info -->
+      <!-- Menú de inicio: Nueva partida / Continuar / Niveles (todavía sin niveles). Las instrucciones están en ☰ Pausa → ℹ️ Info -->
       <div class="ovl" id="ovl">
-        <h2>🛒 Supermercado</h2>
-        <p>Toca o arrastra para moverte (o usa las flechas / WASD).</p>
-        <p>Cuando quieras ver cómo se juega, abre ☰ Pausa y toca ℹ️ Info.</p>
-        <div class="jugar"><button class="b3d txt b-verde" id="ovlBtn" type="button"><span class="b-ico">▶️</span> Jugar</button></div>
+        <div class="menu-ini" id="menuInicio">
+          <h2>🛒 Supermercado</h2>
+          <p>Cultiva, cría animales, llena estanterías y atiende clientes. Tu partida se guarda sola.</p>
+          <div class="menu-botones">
+            <button class="b3d txt b-verde" id="btnNueva" type="button"><span class="b-ico">🆕</span> Nueva partida</button>
+            <button class="b3d txt b-azul" id="btnContinuar" type="button"><span class="b-ico">▶️</span> Continuar</button>
+            <button class="b3d txt b-gris" id="btnNiveles" type="button" disabled title="Próximamente"><span class="b-ico">🗺️</span> Niveles · pronto</button>
+            <small class="menu-nota" id="menuNota"></small>
+          </div>
+        </div>
+        <div class="menu-part" id="menuPartidas" hidden>
+          <h2 id="partTitulo">Partidas</h2>
+          <p id="partAyuda"></p>
+          <div class="lista-partidas" id="listaPartidas"></div>
+          <div class="jugar"><button class="b3d txt b-azul" id="partVolver" type="button"><span class="b-ico">⬅️</span> Volver</button></div>
+        </div>
       </div>
 
       <div class="ovl oculto" id="info">
@@ -238,12 +270,13 @@
         <p>Las cajas y las entradas nuevas las colocas donde quieras: camina hasta el sitio y toca «Colocar aquí». Cada jardín que desbloquees permite un cliente más a la vez. Al pararte sobre un jardín te preguntará si quieres comprarlo.</p>
         <p>🐄 En la computadora también puedes comprar la granja ($1000): un terreno al norte del patio con gallinas, vacas, pollos, reses y cerdos que dan huevo, leche, pollo, res y tocino.</p>
         <p>⏩ El botón de arriba a la derecha acelera el tiempo de x1 a x8. ☰ Pausa detiene el juego.</p>
+        <p>💾 Puedes tener hasta 10 partidas. Cada una se guarda sola cada 10 segundos, al abrir ☰ Pausa, al salir y al cerrar la página. En «Continuar» eliges cuál abrir (o la borras); si las 10 están llenas, «Nueva partida» te deja reemplazar una.</p>
         <div class="jugar"><button class="b3d txt b-azul" id="infoVolver" type="button"><span class="b-ico">⬅️</span> Volver</button></div>
       </div>
     </div>
   </div>
 
-  <script type="module" src="juego-supermercado.js?v=13"></script>
+  <script type="module" src="juego-supermercado.js?v=14"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
   <script type="module" src="../compartido/fondo-madera.js"></script>
 </body>
