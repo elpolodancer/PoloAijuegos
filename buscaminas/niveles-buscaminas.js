@@ -1,7 +1,7 @@
 // Ruta: buscaminas/niveles-buscaminas.js
 // Tamaño y minas de cada nivel. No usa document ni Firebase: son solo cuentas.
 //
-//  • NIVELES DEL MAPA (compartido/mapa-niveles.js): 32 estados × 100 niveles = 3200 (y, al terminarlos, el mundo: 194 países × 100).
+//  • NIVELES DEL MAPA (compartido/mapa-niveles.js): 32 estados × 100 niveles = 3200 y, al terminarlos, el mundo: 194 países × 100 = 19 400.
 //      configMapa(n) → { cols, filas, minas, puntos }
 //  • MODO INFINITO: 10 tamaños × 3 dificultades, a elegir libremente.
 //      configLibre(n, dificultad) → { cols, filas, minas }
@@ -16,41 +16,70 @@ export const NIVELES_MEXICO = ESTADOS * POR_ETAPA; // 3200
 
 // ----- Límites que caben en una pantalla de celular (casilla mínima de 14 px) -----
 const COLS_MAX = 16, FILAS_MAX = 22;
-const FORMA = 0.72;                 // columnas / filas (tableros más altos que anchos, como en vertical)
 const MINAS_MIN = 5;
 
 const acotar = (v, a, b) => Math.max(a, Math.min(b, v));
 
-function armar(areaDeseada, densidad) {
-  const filas = acotar(Math.round(Math.sqrt(areaDeseada / FORMA)), 8, FILAS_MAX);
-  const cols = acotar(Math.round(areaDeseada / filas), 6, COLS_MAX);
-  const total = cols * filas;
-  const minas = acotar(Math.round(total * densidad), MINAS_MIN, total - 9); // siempre cabe el primer toque (casilla + 8 vecinas)
-  return { cols, filas, minas };
+// ===== Niveles del mapa =====
+// Cada etapa (estado o país) tiene 100 niveles y TODOS son distintos entre sí (tamaño y/o minas), de más fácil a más difícil.
+//   • Estados (32 × 100 = 3200): cada estado empieza y termina más grande y con más minas que el anterior (diente de sierra:
+//     al cambiar de estado vuelve a «respirar» un poco).
+//        estado 1 (Quintana Roo):     de 6×8 con 5 minas (nivel 1) a ~10×14 con ~21 minas (nivel 100)
+//        estado 32 (Baja California): de ~12×17 con ~39 minas a 16×22 con 84 minas (nivel 3200)
+//   • Países (194 × 100 = 19 400, del nivel 3201 en adelante): empiezan donde terminó México y cada país arranca un poco más
+//     alto que el anterior; los últimos llegan a 16×22 con ~27 % de minas.
+// Cómo se reparte: de cada etapa se calcula una «ruta» (área y densidad de minas que van subiendo del nivel 1 al 100). Para cada
+// nivel se elige, entre los tableros posibles (6–16 columnas × 8–22 filas) que están cerca de esa ruta, uno por escalón de
+// dificultad, de fácil a difícil, sin repetir. Es una cuenta fija: el nivel n siempre da lo mismo.
+const TOTAL_ESTADOS = ESTADOS * POR_ETAPA;     // 3200
+const PAISES = 194;
+const ETAPAS_TOTAL = ESTADOS + PAISES;         // 226
+const cacheEtapas = new Map();
+
+function parametros(etapa) {
+  if (etapa < ESTADOS) {
+    const fe = etapa / (ESTADOS - 1);
+    return { a0: 48 + (200 - 48) * fe, a1: 140 + (352 - 140) * fe, d0: 0.10 + 0.09 * fe, d1: 0.15 + 0.09 * fe };
+  }
+  const fp = (etapa - ESTADOS) / (PAISES - 1);   // 0..1 a lo largo de los países
+  return { a0: 200 + 100 * fp, a1: 352, d0: 0.19 + 0.04 * fp, d1: 0.24 + 0.03 * fp };
 }
 
-// ===== Niveles del mapa =====
-// Dentro de cada estado el tablero va creciendo del nivel 1 al 100 y, además, cada estado empieza y termina más grande y con
-// más minas que el anterior (diente de sierra: al cambiar de estado vuelve a «respirar» un poco).
-//   estado 1 (Quintana Roo):   de 6×8 con 5 minas (nivel 1) a ~10×14 con ~21 minas (nivel 100)
-//   estado 32 (Baja California): de ~12×17 con ~39 minas a 16×22 con 84 minas (nivel 3200: 24 % de minas)
-// Del nivel 3201 en adelante (el mundo) se repite el ritmo del último estado y la densidad sube un poco por país (hasta 27 %).
+function construirEtapa(etapa) {
+  const { a0, a1, d0, d1 } = parametros(etapa);
+  const ra = Math.max(a1 - a0, 20), rd = Math.max(d1 - d0, 0.02);
+  // Todos los tableros posibles (forma alta, como en vertical) con un poco de margen alrededor de la ruta
+  const cand = [];
+  for (let cols = 6; cols <= COLS_MAX; cols++) for (let filas = 8; filas <= FILAS_MAX; filas++) {
+    const area = cols * filas, forma = cols / filas;
+    if (forma < 0.6 || forma > 0.85 || area < a0 - 12 || area > a1 + 12) continue;
+    const mMin = Math.max(MINAS_MIN, Math.floor(area * (d0 - 0.02))), mMax = Math.min(area - 9, Math.ceil(area * (d1 + 0.02)));
+    for (let minas = mMin; minas <= mMax; minas++) cand.push({ cols, filas, minas, area, dens: minas / area });
+  }
+  // Nivel por nivel (de 1 a 100) se toma el tablero que aún no se usó y más cerca del punto de la ruta; así cada nivel es distinto
+  const usado = new Uint8Array(cand.length), res = [];
+  for (let k = 0; k < POR_ETAPA; k++) {
+    const f = k / (POR_ETAPA - 1), A = a0 + (a1 - a0) * f, D = d0 + (d1 - d0) * f;
+    let mejor = -1, mejorD = Infinity;
+    for (let i = 0; i < cand.length; i++) {
+      if (usado[i]) continue;
+      const c = cand[i], dist = ((c.area - A) / ra) ** 2 + ((c.dens - D) / rd) ** 2;
+      if (dist < mejorD) { mejorD = dist; mejor = i; }
+    }
+    usado[mejor] = 1;
+    res.push({ cols: cand[mejor].cols, filas: cand[mejor].filas, minas: cand[mejor].minas });
+  }
+  // Se ordenan por minas (y, a igual de minas, por tamaño): así nunca baja la cantidad de minas de un nivel al siguiente
+  res.sort((x, y) => x.minas - y.minas || x.cols * x.filas - y.cols * y.filas);
+  return res;
+}
+
 export function configMapa(n) {
-  n = Math.max(1, Math.floor(Number(n)) || 1);
-  const i = n - 1;
-  const etapa = Math.floor(i / POR_ETAPA);
-  const e = Math.min(ESTADOS - 1, etapa);
-  const k = i % POR_ETAPA;                      // 0..99
-  const fe = e / (ESTADOS - 1), fk = k / (POR_ETAPA - 1);
-
-  const base = 48 + (200 - 48) * fe;            // área (casillas) con la que EMPIEZA el estado
-  const tope = 140 + (352 - 140) * fe;          // área con la que TERMINA
-  const area = base + (tope - base) * fk;
-
-  let densidad = 0.10 + 0.09 * fe + 0.05 * fk;  // 10 %..15 % en el primer estado, 19 %..24 % en el último
-  if (etapa >= ESTADOS) densidad += Math.min(0.03, (etapa - ESTADOS) * 0.00016);
-
-  const t = armar(area, densidad);
+  n = acotar(Math.floor(Number(n)) || 1, 1, ETAPAS_TOTAL * POR_ETAPA);
+  const etapa = Math.floor((n - 1) / POR_ETAPA), k = (n - 1) % POR_ETAPA;
+  let lista = cacheEtapas.get(etapa);
+  if (!lista) { lista = construirEtapa(etapa); cacheEtapas.set(etapa, lista); }
+  const t = lista[k];
   return { ...t, puntos: t.minas };             // puntos = minas (solo la primera vez que se pasa el nivel)
 }
 
