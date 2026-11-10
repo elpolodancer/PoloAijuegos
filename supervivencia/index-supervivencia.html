@@ -12,7 +12,7 @@
   <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
   <style>
     /* El fondo (madera clara u oscura) lo pone compartido/fondo-madera.js: el juego no pone fondo propio en html/body.
-       Aquí el lienzo ocupa TODA la ventana (el mapa de 50×50 es grande) y es transparente: fuera del mapa se ve la madera. */
+       Aquí el lienzo ocupa TODA la ventana (el mapa de 35×35 es grande) y es transparente: fuera del mapa se ve la madera. */
     .inmersivo .escena { display: block; }
     .inmersivo canvas.lienzo.mundo { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; margin: 0; border: 0; border-radius: 0; background: transparent; touch-action: none; }
     .nav-juego .b-ico { margin-right: 6px; }
@@ -30,10 +30,29 @@
     .chip-herr { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     @media (max-height: 420px) { .b-ico.muestra { width: 18px; height: 18px; } }
 
-    .ayuda-mapa { position: fixed; z-index: 4; left: 50%; top: calc(max(8px, env(safe-area-inset-top)) + 4px); transform: translateX(-50%); padding: 6px 12px; max-width: min(60vw, 420px);
+    /* Recursos que llevas, a la derecha de «🎮 Juegos / ☰ Pausa» (esa esquina es de los botones fijos del estándar) */
+    .hud-info { top: max(8px, env(safe-area-inset-top)); left: calc(max(8px, env(safe-area-inset-left)) + 122px); right: max(8px, env(safe-area-inset-right)); flex-wrap: wrap; gap: 6px; }
+    .hud-info .chip { padding: 0 10px; font-size: 14px; }
+    .hud-info .chip small { margin-right: 5px; font-size: 12px; }
+    .hud-info .chip[hidden] { display: none; }
+    @media (max-width: 400px) { .hud-info { gap: 4px; } .hud-info .chip { padding: 0 8px; font-size: 13px; } }
+
+    /* Panel «Fabricar» */
+    .recetas { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 10px; text-align: left; }
+    .receta { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: linear-gradient(180deg, #3a3d45, #22242a); border: 2px solid #121316; border-radius: 14px; box-shadow: 0 3px 0 #0c0d0f, inset 0 2px 0 rgba(255,255,255,.12); }
+    .rc-ic { flex: none; font-size: 30px; }
+    .rc-info { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .rc-info b { font-size: 16px; }
+    .rc-info small { color: #b0b4bd; font-size: 12px; line-height: 1.3; }
+    .rc-info small .ok { color: #9dffb0; font-weight: 700; }
+    .rc-info small .falta { color: #ffb4a8; font-weight: 700; }
+    .receta .b3d { margin-bottom: 5px; }
+    .receta .b3d.txt { padding: 0 12px; font-size: 14px; }
+
+    .ayuda-mapa { position: fixed; z-index: 4; left: 50%; top: calc(max(8px, env(safe-area-inset-top)) + 46px); transform: translateX(-50%); padding: 6px 12px; max-width: min(60vw, 420px);
       font-size: 12px; line-height: 1.3; text-align: center; color: #fff; background: #15171acc; border: 2px solid #3b3e46; border-radius: 12px; pointer-events: none; transition: opacity .6s; }
     .ayuda-mapa.fuera { opacity: 0; }
-    @media (max-width: 520px) { .ayuda-mapa { top: calc(max(8px, env(safe-area-inset-top)) + 96px); max-width: 80vw; } }
+    @media (max-width: 600px) { .ayuda-mapa { top: calc(max(8px, env(safe-area-inset-top)) + 96px); max-width: 80vw; } }
 
     .ovl { position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: max(20px, env(safe-area-inset-top)) 20px 0; text-align: center; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; color: #fff; background: #101114f2; }
     .ovl[hidden] { display: none; }
@@ -51,12 +70,21 @@
   </nav>
 
   <div class="escena">
-    <canvas id="lienzo" class="lienzo mundo" aria-label="Mapa de 50 por 50 casillas en vista isométrica"></canvas>
+    <canvas id="lienzo" class="lienzo mundo" aria-label="Mapa de 35 por 35 casillas en vista isométrica"></canvas>
   </div>
 
-  <div class="ayuda-mapa" id="ayudaMapa">Toca el suelo (o usa las flechas / WASD) para mover al personaje. Abajo eliges qué construir.</div>
+  <div class="hud hud-info" aria-label="Recursos">
+    <span class="chip" title="Madera"><small>Madera</small><b id="inv-madera">0</b></span>
+    <span class="chip" title="Piedra"><small>Piedra</small><b id="inv-piedra">0</b></span>
+    <span class="chip" title="Fibra"><small>Fibra</small><b id="inv-fibra">0</b></span>
+    <span class="chip" title="Bayas"><small>Bayas</small><b id="inv-bayas">0</b></span>
+    <span class="chip" id="chipHacha" title="Tienes el hacha" hidden>🪓 Hacha</span>
+    <span class="chip" id="chipPico" title="Tienes el pico" hidden>⛏️ Pico</span>
+  </div>
 
-  <!-- Herramientas: mover, tres tipos de piso, quitar piso y plantar/talar árboles -->
+  <div class="ayuda-mapa" id="ayudaMapa">Toca el suelo (o usa las flechas / WASD) para caminar. Toca un recurso para recogerlo o golpearlo. Fabrica herramientas en 🛠️.</div>
+
+  <!-- Herramientas: mover, tres tipos de piso, quitar piso, plantar árboles y fabricar -->
   <div class="hud hud-barra">
     <span class="chip chip-herr" id="chipHerr">✋ Mover</span>
     <div class="herramientas" id="herramientas" role="group" aria-label="Herramientas">
@@ -65,22 +93,32 @@
       <button class="b3d chico b-gris" type="button" data-h="piedra" title="Piso de piedra" aria-label="Piso de piedra"><span class="b-ico muestra m-piedra"></span></button>
       <button class="b3d chico b-azul" type="button" data-h="baldosa" title="Piso de baldosas" aria-label="Piso de baldosas"><span class="b-ico muestra m-baldosa"></span></button>
       <button class="b3d chico b-rojo" type="button" data-h="quitar" title="Quitar piso" aria-label="Quitar piso"><span class="b-ico">🧽</span></button>
-      <button class="b3d chico b-verde" type="button" data-h="arbol" title="Plantar o talar árbol" aria-label="Plantar o talar árbol"><span class="b-ico">🌳</span></button>
+      <button class="b3d chico b-verde" type="button" data-h="arbol" title="Plantar árbol" aria-label="Plantar árbol"><span class="b-ico">🌳</span></button>
+      <button class="b3d chico b-morado" type="button" id="btnFab" title="Fabricar herramientas" aria-label="Fabricar herramientas"><span class="b-ico">🛠️</span></button>
     </div>
   </div>
 
   <!-- ℹ️ Info (se abre desde ☰ Pausa) -->
   <div class="ovl" id="info" hidden>
     <h2>ℹ️ Supervivencia</h2>
-    <p>Un mundo de 50×50 casillas en vista isométrica. Tu personaje empieza en el centro.</p>
-    <p>✋ <b>Mover:</b> toca o mantén el dedo sobre el suelo y el personaje camina rodeando los árboles. En computadora también sirven las flechas o WASD.</p>
-    <p>🟫 ⬜ 🟦 <b>Piso:</b> elige un tipo y toca o arrastra por el mapa para colocarlo. 🧽 lo quita.</p>
-    <p>🌳 <b>Árbol:</b> toca una casilla vacía para plantar uno; si ya hay un árbol, lo tala. Arrastrando se hace igual en varias casillas.</p>
-    <p>🔍 Con dos dedos (o la rueda del ratón) acercas y alejas. Tu mundo se guarda solo en este aparato.</p>
+    <p>Un mundo de 35×35 casillas en vista isométrica. Tu personaje empieza en el centro.</p>
+    <p>✋ <b>Mover:</b> toca o mantén el dedo sobre el suelo y el personaje camina rodeando los obstáculos. En computadora también sirven las flechas o WASD.</p>
+    <p><b>Recursos:</b> toca uno y el personaje va hasta él. Las <b>piedras</b> y la <b>fibra</b> sueltas se recogen de un toque. El <b>arbusto de bayas</b> se talla a mano con 5 golpes. Los <b>árboles</b> aguantan 10 golpes y solo se talan con el <b>hacha</b>. Los <b>vultos de piedra</b> aguantan 8 golpes y solo se rompen con el <b>pico</b>. En computadora, Espacio o E golpea lo que tengas más cerca.</p>
+    <p>🛠️ <b>Fabricar:</b> con piedras y fibra haces el hacha y el pico. Empieza juntando las que hay cerca de ti.</p>
+    <p>🟫 ⬜ 🟦 <b>Piso:</b> elige un tipo y toca o arrastra por el mapa para colocarlo (no se puede sobre un recurso). 🧽 lo quita. 🌳 planta un árbol en una casilla vacía; para quitarlo hay que talarlo.</p>
+    <p>🔍 Con dos dedos (o la rueda del ratón) acercas y alejas. Tu mundo y tus cosas se guardan solos en este aparato.</p>
     <div class="jugar"><button class="b3d txt b-azul" id="infoVolver" type="button"><span class="b-ico">⬅️</span> Volver</button></div>
   </div>
 
-  <script type="module" src="juego-supervivencia.js?v=1"></script>
+  <!-- 🛠️ Fabricar (lo rellena el juego) -->
+  <div class="ovl" id="fab" hidden>
+    <h2>🛠️ Fabricar</h2>
+    <p>Junta piedras y fibra del suelo para hacer tus herramientas.</p>
+    <div class="recetas" id="recetas"></div>
+    <div class="jugar"><button class="b3d txt b-azul" id="fabVolver" type="button"><span class="b-ico">⬅️</span> Volver</button></div>
+  </div>
+
+  <script type="module" src="juego-supervivencia.js?v=2"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
   <script type="module" src="../compartido/fondo-madera.js"></script>
 </body>
