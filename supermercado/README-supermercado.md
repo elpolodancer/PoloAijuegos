@@ -42,6 +42,7 @@ Tiene dos modos: **Modo infinito** (sin fin) y **Modo niveles** (50 retos).
 | Mejorar zona para +2 estanterías | 250 por zona | ❓ ¿sube? |
 
 ✅ Confirmado: **cada ampliación comprada sube en 250 el precio de la siguiente** (500 → 750 → 1000…).
+✅ **Accesos al patio (gratis):** en la computadora, pestaña 🛠️, aparece un botón «🚪 Acceso patio ◀n/▶n» por cada ampliación del edificio. Al pulsarlo se abre un hueco de 30 px en el muro de arriba, en el espacio entre las dos estanterías de esa ampliación (centro `x0+150`); el jugador y los empleados pasan por él al patio. Se guarda con la partida.
 ❓ Falta decidir si cada tipo (mercado, terreno, granja) lleva su propio contador o es uno global.
 
 ### 2.3 Estanterías

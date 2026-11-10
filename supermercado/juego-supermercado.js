@@ -300,6 +300,8 @@ let rechazado = null;    // jardín al que dijiste «Ahora no»: no se vuelve a 
 let avisado = null;      // jardín del que ya se dijo por qué todavía no puedes comprarlo (una vez por visita)
 let edificio = 0;        // cuántas ampliaciones tiene el edificio (0 a COSTOS_EDIFICIO.length)
 let ampliaciones = [];   // cada una: { lado: -1 (izquierda) o 1 (derecha), x0: dónde empieza en el mapa }
+let accesos = [];        // accesos GRATIS al patio: índices de «ampliaciones» que tienen una abertura en el muro de arriba (entre sus dos estanterías)
+const ACCESO_W = 30;     // ancho de cada acceso = el hueco entre las dos estanterías de una ampliación (el personaje mide 24)
 let xMin = 0, xMax = MUNDO.w;   // límites del EDIFICIO en x: crecen al ampliar el edificio
 let patios = [];         // ampliaciones del PATIO (zona de pasto con los jardines), aparte del edificio: { lado, x0 }
 let nivelCajero = 0;     // nivel de los empleados de caja (0 a NIVELES_EMP)
@@ -402,10 +404,21 @@ const empVel = () => EMP_VEL + EMP_VEL_PASO * nivelRepartidor;
 const empCarga = () => EMP_CARGA + Math.floor(nivelRepartidor / EMP_CARGA_CADA);
 const empTraspaso = () => Math.max(EMP_TRASPASO_MIN, TRASPASO_SEG * 2 * Math.pow(EMP_TRASPASO_R, nivelRepartidor));
 const cerca = (r, alcance) => distRect(jugador.x, jugador.y, r) <= alcance;
-// La pared de arriba del edificio solo se cruza por la abertura del pasillo
+// Aberturas del muro de arriba: la del pasillo central y un acceso gratis por cada ampliación que lo tenga (en el hueco entre sus estanterías)
+function aberturas() {
+  const l = [{ a: ABERTURA.a, b: ABERTURA.b, c: PASILLO_X }];
+  for (const i of accesos) {
+    const a = ampliaciones[i];
+    if (a) { const c = a.x0 + 150; l.push({ a: c - ACCESO_W / 2, b: c + ACCESO_W / 2, c }); }
+  }
+  return l;
+}
+// Centro de la abertura más cercana a esa x
+const aberturaCerca = (x) => aberturas().reduce((m, o) => (Math.abs(o.c - x) < Math.abs(m - x) ? o.c : m), PASILLO_X);
+// La pared de arriba del edificio solo se cruza por las aberturas
 function chocaPared(x, y) {
   if (distRect(x, y, { x: xMin, y: TOP, w: xMax - xMin, h: 14 }) >= RADIO) return false;
-  return !(x - RADIO >= ABERTURA.a && x + RADIO <= ABERTURA.b);
+  return !aberturas().some((o) => x - RADIO >= o.a && x + RADIO <= o.b);
 }
 // Bajo la línea del edificio, lo que queda fuera de sus muros (cuando el patio es más ancho) no se puede pisar
 function fueraEdificio(x, y) {
@@ -467,17 +480,18 @@ function siguienteSlot() {
 function metaEfectiva() {
   const pared = TOP + 7;
   if ((jugador.y > pared) === (objetivo.y > pared)) return objetivo;
-  if (Math.abs(jugador.x - PASILLO_X) > 3) {
+  const ax = aberturaCerca(jugador.x);   // abertura más cercana: el pasillo central o un acceso gratis de una ampliación
+  if (Math.abs(jugador.x - ax) > 3) {
     // desde dentro, primero baja al pasillo libre (así no choca con las estanterías de las ampliaciones)
     if (jugador.y > pared && jugador.y < CORREDOR_Y - 3) return { x: jugador.x, y: CORREDOR_Y, paso: true };
     // debajo de la fila de abajo de las ampliaciones: primero sube por el hueco entre estanterías
-    if (jugador.y > CORREDOR_Y + 26 && (jugador.x < 0 || jugador.x > MUNDO.w)) {
+    if (jugador.y > CORREDOR_Y + 26 && (jugador.x < 0 || jugador.x > MUNDO.w || ax < 0 || ax > MUNDO.w)) {
       const gx = hueco(jugador.x);
       return Math.abs(jugador.x - gx) > 3 ? { x: gx, y: jugador.y, paso: true } : { x: gx, y: CORREDOR_Y, paso: true };
     }
-    return { x: PASILLO_X, y: jugador.y, paso: true };
+    return { x: ax, y: jugador.y, paso: true };
   }
-  return { x: PASILLO_X, y: objetivo.y, paso: true };
+  return { x: ax, y: objetivo.y, paso: true };
 }
 
 function mover(dt) {
@@ -880,13 +894,14 @@ function irEmpleado(w, d, dt) {
   const pared = TOP + 7;
   const dentroW = w.y > pared, dentroD = d.y > pared;
   if (dentroW !== dentroD) {
-    if (Math.abs(w.x - PASILLO_X) > 3) {
-      // desde una ampliación va primero por el corredor; en el pasto y en el edificio inicial camina directo al pasillo
-      if (dentroW) irTienda(w, { x: PASILLO_X, y: CORREDOR_Y }, dt);
-      else ir(w, { x: PASILLO_X, y: w.y }, dt);
+    const ax = aberturaCerca(w.x);   // abertura más cercana (pasillo central o acceso gratis de una ampliación)
+    if (Math.abs(w.x - ax) > 3) {
+      // por dentro va primero por el corredor; en el pasto camina directo a la abertura
+      if (dentroW) irTienda(w, { x: ax, y: CORREDOR_Y }, dt);
+      else ir(w, { x: ax, y: w.y }, dt);
       return false;
     }
-    ir(w, { x: PASILLO_X, y: d.y }, dt);
+    ir(w, { x: ax, y: d.y }, dt);
     return false;
   }
   if (!dentroW) return ir(w, d, dt);   // afuera, en el pasto: directo
@@ -1044,6 +1059,7 @@ function recalcMundo() {
 // Admin: deja todo comprado (edificio con una ampliación a cada lado, estanterías, jardines, empleados y carga)
 function desbloquearTodo() {
   while (edificio < COSTOS_EDIFICIO.length) ampliar(edificio % 2 === 0 ? -1 : 1);   // edificio: una ampliación a cada lado
+  ampliaciones.forEach((_, i) => { if (!accesos.includes(i)) accesos.push(i); });   // y un acceso al patio en cada ampliación
   while (nivelPatio < COSTOS_PATIO.length) ampliarPatio(nivelPatio % 2 === 0 ? 1 : -1);   // patio: igual, por separado
   for (let sl = 0; sl < MAX_ESTANTES; sl++) {
     if (!estantes.some((e) => e.slot === sl)) nuevoEstante(sl, sl < TODOS.length ? TODOS[sl] : IDS[0]);
@@ -1157,6 +1173,12 @@ function comprarMejora(tipo) {
     const lado = tipo === "edificio-izq" ? -1 : 1;
     ampliar(lado);
     textos.push({ x: jugador.x, y: jugador.y, vida: 1.6, txt: lado < 0 ? "◀ ¡Edificio ampliado!" : "¡Edificio ampliado! ▶", col: "#ffd24d" });
+  } else if (tipo.startsWith("acceso:")) {   // acceso GRATIS al patio en una ampliación (no cuesta nada)
+    const i = Number(tipo.slice(7));
+    if (!ampliaciones[i] || accesos.includes(i)) return;
+    accesos.push(i);
+    tono(660, 0.08);
+    textos.push({ x: jugador.x, y: jugador.y, vida: 1.6, txt: "🚪 ¡Acceso al patio abierto!", col: "#9dffb0" });
   } else if (tipo === "patio-izq" || tipo === "patio-der") {
     if (nivelPatio >= COSTOS_PATIO.length) return;
     const costo = COSTOS_PATIO[nivelPatio];
@@ -1269,6 +1291,17 @@ function pintarGranja() {
   });
 }
 
+// Accesos gratis al patio: un botón por cada ampliación del edificio (en 🛠️, junto a «Edificio»)
+const btnsAcceso = new Map();   // índice de ampliación → botón
+function pintarAccesos() {
+  ampliaciones.forEach((a, i) => {
+    let b = btnsAcceso.get(i);
+    if (!b) { b = botonPanel("acceso:" + i, rejOtras); btnsAcceso.set(i, b); }
+    const hecho = accesos.includes(i), n = 1 + ampliaciones.slice(0, i).filter((q) => q.lado === a.lado).length;
+    pintarBoton(b, "🚪 Acceso patio " + (a.lado < 0 ? "◀" : "▶") + n, hecho ? "✓" : "Gratis", !hecho);
+    b.title = "Abre un acceso al patio en el muro de arriba, entre las estanterías de la ampliación " + (a.lado < 0 ? "izquierda " : "derecha ") + n + " (gratis)";
+  });
+}
 // Pestaña 🗄️: un botón por cada estantería comprada para subirla de nivel (cada nivel = 5 espacios más)
 const btnsNivelEst = new Map();   // slot → botón
 function pintarNivelesEstante() {
@@ -1356,6 +1389,7 @@ function actualizarPanel() {
     pintarBoton(btnPatIzq, "🌱 Patio ◀ +6 jardines", "$" + c, alcanza(c));
     pintarBoton(btnPatDer, "🌱 Patio ▶ +6 jardines", "$" + c, alcanza(c));
   }
+  pintarAccesos();
   pintarNivelesEstante();
   // pestañas: solo se ve la sección de la pestaña abierta, y las que no tienen botones visibles (por ejemplo, frutas antes de comprar la primera) no se muestran
   btnsPestana.forEach((b, i) => b.setAttribute("aria-selected", String(i === pestana)));
@@ -1471,6 +1505,7 @@ function serializar() {
     nivelCarga, nivelVelJug, nivelCajero, nivelRepartidor,
     edificio: ampliaciones.map((a) => a.lado),   // se rehacen con ampliar(lado), en el mismo orden
     patio: patios.map((a) => a.lado),
+    accesos: accesos.slice(),
     granja,
     estantes: estantes.map((e) => ({ slot: e.slot, producto: e.producto, n: e.nivel || 0, items: e.items.slice() })),
     jardines: jardines.map((g) => ({ p: g.producto, c: g.comprado, e: !!g.emp, r: dec(g.reloj), q: g.parcelas.map((q) => ({ t: dec(q.t), id: q.id })) })),
@@ -1494,6 +1529,7 @@ function restablecer() {
   puertas.length = 0; puertas.push({ x: PUERTA.x });
   colocando = null; rechazado = null; avisado = null; rechazadoBote = false;
   edificio = 0; ampliaciones = []; xMin = 0; xMax = MUNDO.w;
+  accesos = []; btnsAcceso.forEach((b) => b.remove()); btnsAcceso.clear();
   patios = []; nivelPatio = 0; pMin = 0; pMax = MUNDO.w;
   nivelCajero = 0; nivelRepartidor = 0; nivelCarga = 0; nivelVelJug = 0;
   granja = false; yMin = 0;
@@ -1515,6 +1551,7 @@ function aplicar(d) {
   nivelRepartidor = Math.floor(num(d.nivelRepartidor, 0, 0, NIVELES_EMP));
   // edificio y patio: se rehacen con las mismas funciones que al comprarlos
   (Array.isArray(d.edificio) ? d.edificio : []).slice(0, COSTOS_EDIFICIO.length).forEach((l) => ampliar(l < 0 ? -1 : 1));
+  accesos = [...new Set((Array.isArray(d.accesos) ? d.accesos : []).map(Number).filter((i) => Number.isInteger(i) && i >= 0 && i < ampliaciones.length))];
   (Array.isArray(d.patio) ? d.patio : []).slice(0, COSTOS_PATIO.length).forEach((l) => ampliarPatio(l < 0 ? -1 : 1));
   if (d.granja) abrirGranja();
   for (const e of Array.isArray(d.estantes) ? d.estantes : []) {   // después del edificio: la posición de cada una depende de sus ampliaciones
@@ -1987,6 +2024,9 @@ function dibujarSuelo() {
       if (x1 > x0) ctx.fillRect(x0, f * t, x1 - x0, Math.min(t, MUNDO.h - f * t));
     }
   }
+  // umbral de cada acceso al patio (el piso sigue por la abertura del muro)
+  ctx.fillStyle = "#d8c7a0";
+  for (const o of aberturas()) ctx.fillRect(o.a, TOP, o.b - o.a, 14);
   // tapete de cada entrada
   for (const p of puertas) { ctx.fillStyle = "#8f6ad0"; caja(p.x - 30, MUNDO.h - 14, 60, 14, 4); ctx.fill(); }
 }
@@ -2222,8 +2262,11 @@ function armarObjetos() {
   const gente = (x, y, f) => add(x - 6, y - 6, x + 6, y + 6, f);
 
   // paredes: arriba y a la izquierda altas; derecha y abajo, bordillos bajos para que se vea el interior
-  add(xMin, TOP, ABERTURA.a, TOP + 14, () => bloque(xMin, TOP, ABERTURA.a - xMin, 14, ALTO_PARED, PAL.pared));
-  add(ABERTURA.b, TOP, xMax, TOP + 14, () => bloque(ABERTURA.b, TOP, xMax - ABERTURA.b, 14, ALTO_PARED, PAL.pared));
+  // muro de arriba: tramos entre las aberturas (pasillo central y accesos gratis de las ampliaciones)
+  let desde = xMin;
+  const tramoArriba = (a, b) => { if (b > a) add(a, TOP, b, TOP + 14, () => bloque(a, TOP, b - a, 14, ALTO_PARED, PAL.pared)); };
+  for (const o of aberturas().sort((p, q) => p.a - q.a)) { tramoArriba(desde, o.a); desde = Math.max(desde, o.b); }
+  tramoArriba(desde, xMax);
   add(xMin, TOP + 14, xMin + 4, MUNDO.h, () => bloque(xMin, TOP + 14, 4, MUNDO.h - TOP - 14, ALTO_PARED, PAL.pared));
   add(xMax - 4, TOP + 14, xMax, MUNDO.h, () => bloque(xMax - 4, TOP + 14, 4, MUNDO.h - TOP - 14, 8, PAL.bordillo));
   // bordillo de abajo, con un hueco por cada entrada
