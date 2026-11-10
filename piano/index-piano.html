@@ -5,30 +5,45 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Piano</title>
-  <meta name="theme-color" content="#101114" />
+  <meta name="theme-color" content="#d9a866" />
+  <!-- Evita el parpadeo de la madera clara cuando el jugador eligió la oscura -->
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
   <link rel="stylesheet" href="../compartido/estilos.css" />
   <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 30%, #23252b, #101114 70%); }
-    /* Juego vertical (lienzo 320×520): franja libre arriba y abajo (⛶ abajo a la derecha) */
-    .inmersivo .escena { padding: calc(54px + env(safe-area-inset-top)) 0 calc(54px + env(safe-area-inset-bottom)); }
+    /* El fondo (madera clara u oscura) lo pone compartido/fondo-madera.js: el juego no define fondo en html ni body.
+       El lienzo es transparente para que se vea la madera. */
+    .inmersivo .lienzo { background: transparent; }
+
+    /* Juego vertical (lienzo 320×520). Se respetan las zonas reservadas: arriba-izquierda (🎮 Juegos + ☰, ≈92 px de alto)
+       y abajo (🌙 / ⛶, ≈60 px) */
+    .inmersivo .escena { padding: calc(98px + env(safe-area-inset-top)) 0 calc(64px + env(safe-area-inset-bottom)); }
     .inmersivo .marco {
       aspect-ratio: 320 / 520;
-      width: min(100vw, calc((100vh - 108px) * 320 / 520));
-      width: min(100vw, calc((100dvh - 108px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 320 / 520));
+      width: min(100vw, calc((100vh - 162px) * 320 / 520));
+      width: min(100vw, calc((100dvh - 162px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 320 / 520));
     }
-    .b-negro { --c1: #8a8f9c; --c2: #3c404a; --c3: #15171a; }
+    /* Celular acostado: el lienzo vertical es angosto y queda en el centro, lejos de las esquinas reservadas, así que se usa todo el alto */
+    @media (orientation: landscape) and (max-height: 600px) {
+      .inmersivo .escena { padding: calc(8px + env(safe-area-inset-top)) 0 calc(8px + env(safe-area-inset-bottom)); }
+      .inmersivo .marco {
+        width: min(100vw, calc((100vh - 16px) * 320 / 520));
+        width: min(100vw, calc((100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 320 / 520));
+      }
+    }
 
-    /* Capa de menú / fin de partida dentro del marco */
+    /* Capa de menú / fin de partida dentro del marco (sin velo: se ve la madera) */
     #capa { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 12px; padding: 14px; overflow: auto; pointer-events: none; text-align: center; }
     #capa > * { pointer-events: auto; }
-    body:not(.jugando) #capa { background: rgba(16,17,20,.86); }
-    body:not(.jugando) #lienzo:not([hidden]) ~ #capa { background: rgba(16,17,20,.6); } /* fin de partida: se sigue viendo la tecla del error */
-    #estado { margin: 0; color: var(--suave); font-size: .9rem; line-height: 1.35; }
+    /* Textos del menú y del fin de partida: panel oscuro estándar (se lee sobre la madera clara u oscura y sobre las teclas) */
+    #estado { margin: 0; padding: 10px 14px; color: #f1f2f4; font-size: .9rem; line-height: 1.35;
+      background: linear-gradient(180deg, #3a3d45, #22242a); border: 2px solid #121316; border-radius: 16px;
+      box-shadow: 0 4px 0 #0c0d0f, 0 8px 14px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.15); }
     /* Mientras se juega, el texto pasa a una píldora arriba a la derecha */
     body.jugando #estado { position: fixed; z-index: 5; top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); max-width: calc(100vw - 150px); padding: 7px 12px; font-size: .78rem; color: #fff4c2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
       background: linear-gradient(180deg, #4a4f57, #2b2f35); border: 2px solid #15171a; border-radius: 999px; box-shadow: 0 3px 0 #15171a; }
     #estado:empty { display: none; }
+    body.jugando .hud-der { display: none; } /* «Guardar puntos» no estorba durante la partida */
 
     #menu:not([hidden]) { display: flex; flex-direction: column; gap: 12px; align-items: center; width: 100%; }
     #rejilla { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; width: 100%; }
@@ -43,8 +58,15 @@
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>
-  <div class="hud hud-izq">
-    <a class="b3d chico b-gris" href="../" aria-label="Volver a Juegos" title="Juegos"><span class="b-ico">🏠</span></a>
+  <!-- Navegación estándar (arriba a la izquierda): 🎮 Juegos siempre; ☰ Pausa solo durante la partida
+       (el menú de canciones ES el menú principal del juego, así que ahí no se muestra) -->
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> Pausa</button>
+  </nav>
+
+  <!-- Arriba a la derecha: iniciar sesión (solo fuera de la partida) -->
+  <div class="hud hud-der">
     <button id="entrar" class="b3d chico txt b-oro" type="button" hidden title="Entrar con Google para guardar puntos"><span class="b-ico">🔑</span> Guardar puntos</button>
   </div>
 
@@ -66,6 +88,7 @@
   </div>
 
   <script type="module" src="juego-piano.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>
