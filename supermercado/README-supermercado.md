@@ -45,6 +45,7 @@ Tiene dos modos: **Modo infinito** (sin fin) y **Modo niveles** (50 retos).
 ❓ Falta decidir si cada tipo (mercado, terreno, granja) lleva su propio contador o es uno global.
 
 ### 2.3 Estanterías
+- ✅ Cada estantería se puede subir hasta el **nivel 5** (cada nivel +5 espacios: 5 → 30). Costos en `COSTOS_NIVEL_ESTANTE` (provisionales, iguales para todas).
 - **Una estantería por producto** (cada producto tiene su propia estantería).
 - Al ampliar el mercado se agrega una zona nueva; en cada zona caben **6 estanterías**.
 - Cada zona se puede mejorar (**$250 por zona**) para colocar **2 estanterías más** (8 en total).
@@ -210,6 +211,7 @@ Cuestan **$2000** cada una. En lugar de entregar producto continuamente, entrega
 - [x] Vista isométrica y carreteras
 - [x] Menú de inicio (Nueva partida / Continuar / Niveles) y 10 partidas guardadas en el aparato
 - [ ] Pantalla de Niveles (el botón está apagado)
+- [x] Computadora de mejoras en 4 pestañas: personales (carga y velocidad), empleados, estanterías (5 niveles de +5 espacios) y lo demás
 - [ ] Modo infinito con las reglas de este documento
 - [x] Granja: terreno, 5 corrales, animales, huevo/leche, cargas de pollo/res/tocino, empleados y mejoras
 - [x] Botón ⏩ de velocidad (x1 a x8)

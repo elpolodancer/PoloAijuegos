@@ -156,6 +156,24 @@
     .fila-part .b3d { margin-bottom: 5px; }
     .fila-part .b3d.txt { padding: 0 10px; font-size: 13px; }
     .fila-part .b3d .b-ico { margin-right: 4px; }
+
+    /* Pestañas de la computadora: 4 cuadritos en fila (la mitad de grandes que los botones de mejora) */
+    .pestanas { display: flex; align-items: center; gap: 8px; padding: 0 4px 7px; }
+    .pest { --ac: #8b93a0; position: relative; flex: none; width: 34px; height: 34px; padding: 4px 0 0; overflow: hidden; font-size: 17px; line-height: 1; cursor: pointer;
+      border: 2px solid #0b0c0e; border-radius: 9px;
+      background: linear-gradient(180deg, #f3f5fa, #c9d1e0);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--ac) 30%, #fff) 0, #f3f5fa 46%, #c9d1e0 100%);
+      box-shadow: 0 3px 0 #0b0c0e, inset 0 2px 0 rgba(255,255,255,.9); transition: transform .07s, box-shadow .07s; }
+    .pest::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--ac); }
+    .pest[aria-selected="true"] { transform: translateY(2px); box-shadow: 0 1px 0 #0b0c0e, 0 0 0 2px #fff, 0 0 8px rgba(255,255,255,.6), inset 0 2px 0 rgba(255,255,255,.7); }
+    .pest:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+    .pest[data-p="0"] { --ac: #ffb020; } .pest[data-p="1"] { --ac: #2f9bff; } .pest[data-p="2"] { --ac: #d9a066; } .pest[data-p="3"] { --ac: #a14df0; }
+    .pest-nombre { flex: 1 1 0; min-width: 0; font-size: 12px; font-weight: 800; line-height: 1.15; color: #2b3342; }
+    #secPers { --ac: #ffb020; } #secEst { --ac: #d9a066; }
+    /* Botón de empleado: el trabajador (grande) y, pegado, el producto que lleva (más chico) */
+    .mejoras .mej .ic.dos { display: flex; align-items: flex-end; justify-content: center; }
+    .mejoras .mej .ic.dos .tra { font-size: 21px; }
+    .mejoras .mej .ic.dos .prod { margin-left: -4px; font-size: 15px; }
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>
@@ -187,17 +205,33 @@
       <div class="mejoras oculto" id="mejoras">
         <div class="monitor">
         <div class="mon-barra"><span>💻 Mejoras</span><i class="mon-led"></i></div>
+        <div class="pestanas" role="tablist" aria-label="Secciones de la computadora">
+          <button class="pest" type="button" role="tab" data-p="0" aria-label="Mejoras personales" title="Mejoras personales">🏃</button>
+          <button class="pest" type="button" role="tab" data-p="1" aria-label="Empleados" title="Empleados">👷</button>
+          <button class="pest" type="button" role="tab" data-p="2" aria-label="Estanterías" title="Estanterías">🗄️</button>
+          <button class="pest" type="button" role="tab" data-p="3" aria-label="Más mejoras" title="Más mejoras">🛠️</button>
+          <span class="pest-nombre" id="pestNombre"></span>
+        </div>
         <div class="mon-pantalla">
-          <div class="sec" id="secEmp"><h4>👷 Empleados</h4>
+          <!-- pestaña 1: mejoras personales -->
+          <div class="sec" id="secPers" data-tab="0"><h4>🏃 Mejoras personales</h4>
+            <div class="rej" id="rejPers">
+              <button class="mej" id="mejCarga" type="button"><span></span><b></b></button>
+              <button class="mej" id="mejVelocidad" type="button"><span></span><b></b></button>
+            </div></div>
+          <!-- pestaña 2: empleados (cajeros y los de cada verdura/fruta) -->
+          <div class="sec" id="secEmp" data-tab="1"><h4>👷 Cajeros y niveles</h4>
             <div class="rej" id="rejEmp"><button class="mej" id="mejEmpleado" type="button"><span></span><b></b></button></div></div>
-          <div class="sec" id="secVer" hidden><h4>🥦 Verduras</h4><div class="rej" id="rejVer"></div></div>
-          <div class="sec" id="secFru" hidden><h4>🍎 Frutas</h4><div class="rej" id="rejFru"></div></div>
-          <div class="sec" id="secGranja"><h4 id="titGranja"></h4><div class="rej" id="rejGranja"></div></div>
-          <div class="sec" id="secOtras"><h4>🛠️ Otras mejoras</h4>
+          <div class="sec" id="secVer" data-tab="1" hidden><h4>🥦 Verduras</h4><div class="rej" id="rejVer"></div></div>
+          <div class="sec" id="secFru" data-tab="1" hidden><h4>🍎 Frutas</h4><div class="rej" id="rejFru"></div></div>
+          <!-- pestaña 3: estanterías (comprar una nueva y subir de nivel cada una) -->
+          <div class="sec" id="secEst" data-tab="2"><h4>🗄️ Estanterías</h4>
+            <div class="rej" id="rejEst"><button class="mej" id="mejEstante" type="button"><span></span><b></b></button></div></div>
+          <!-- pestaña 4: lo demás -->
+          <div class="sec" id="secGranja" data-tab="3"><h4 id="titGranja"></h4><div class="rej" id="rejGranja"></div></div>
+          <div class="sec" id="secOtras" data-tab="3"><h4>🛠️ Edificio, patio, cajas y entradas</h4>
             <div class="mon-aviso" id="titPatio" hidden></div>
             <div class="rej" id="rejOtras">
-              <button class="mej" id="mejCarga" type="button"><span></span><b></b></button>
-              <button class="mej" id="mejEstante" type="button"><span></span><b></b></button>
               <button class="mej" id="mejEdIzq" type="button"><span></span><b></b></button>
               <button class="mej" id="mejEdDer" type="button"><span></span><b></b></button>
               <button class="mej" id="mejPatIzq" type="button"><span></span><b></b></button>
@@ -265,7 +299,7 @@
       <div class="ovl oculto" id="info">
         <h2>ℹ️ Info</h2>
         <p>Tu tienda está vacía. Camina hasta la estantería y el jardín para comprarlos. Lo que crece en el jardín lo recoges solo al acercarte (al empezar llevas hasta 3; cada mejora 🧤 te deja llevar una más). Cada jardín comprado puede tener su empleado 🧑‍🌾, que lleva lo maduro a la estantería por ti, y hay 31 productos de jardín en total (verduras 🌿🌽🥦🥬🧄🌵 y frutas 🍎🍌🍇🍑🍍…), cada uno con su jardín, su estantería (caben 5) y su empleado. Los clientes toman sus productos y van a la caja: cobra parándote junto a ella o contrata a un empleado en la computadora de mejoras 💻. Las estanterías de jitomates y de zanahorias son fijas; en las estanterías extra, toca el botón ↻ para elegir qué producto llevan.</p>
-        <p>💻 La computadora de mejoras está pegada al muro de la izquierda, abajo: párate en su alfombra y se abre. 🗑️ El bote de basura está junto a la entrada: si llevas algo que no quieres, acércate y te pregunta si lo tiras. Arriba están los empleados (con sus 50 niveles de cajeros y de empleados que llevan producto), luego las verduras, las frutas, la granja y, al final, las demás mejoras: 🧤 llevar más, 🗄️ estanterías, 🏗️ edificio, 🌱 patio, 🧾 cajas y 🚪 entradas.</p>
+        <p>💻 La computadora de mejoras está pegada al muro de la izquierda, abajo: párate en su alfombra y se abre. 🗑️ El bote de basura está junto a la entrada: si llevas algo que no quieres, acércate y te pregunta si lo tiras. La computadora tiene 4 pestañas (los cuadritos de arriba): 🏃 mejoras personales (llevar más cosas y caminar más rápido), 👷 empleados (los cajeros con sus 50 niveles y un empleado por cada verdura o fruta, con el dibujo del trabajador y de su producto), 🗄️ estanterías (compra una nueva y sube de nivel cada una hasta 5 veces: cada nivel le da 5 espacios más) y 🛠️ lo demás (granja, edificio 🏗️, patio 🌱, cajas 🧾 y entradas 🚪).</p>
         <p>Puedes ampliar por separado el edificio (+4 estanterías) y el patio (+6 jardines), cada uno hacia la izquierda o la derecha. Si el patio se llena, ampliarlo es lo que te deja seguir. La pantalla no cambia de tamaño: la cámara te sigue.</p>
         <p>Las cajas y las entradas nuevas las colocas donde quieras: camina hasta el sitio y toca «Colocar aquí». Cada jardín que desbloquees permite un cliente más a la vez. Al pararte sobre un jardín te preguntará si quieres comprarlo.</p>
         <p>🐄 En la computadora también puedes comprar la granja ($1000): un terreno al norte del patio con gallinas, vacas, pollos, reses y cerdos que dan huevo, leche, pollo, res y tocino.</p>
@@ -276,7 +310,7 @@
     </div>
   </div>
 
-  <script type="module" src="juego-supermercado.js?v=14"></script>
+  <script type="module" src="juego-supermercado.js?v=15"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
   <script type="module" src="../compartido/fondo-madera.js"></script>
 </body>

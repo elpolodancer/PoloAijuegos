@@ -14,7 +14,12 @@ const DINERO_INICIAL = 15;          // alcanza justo para comprar la primera est
 const VELOCIDAD = 150;              // px/s del personaje
 const CARGA_INICIAL = 3;            // productos que puedes cargar a la vez al empezar (cada mejora 🧤 suma 1)
 const COSTOS_CARGA = [20, 30, 50, 60, 80, 100]; // lo que cuesta cada mejora de carga, en orden
-const ESTANTE_CAP = 5;              // productos que caben en cada estantería
+const ESTANTE_CAP = 5;              // productos que caben en cada estantería (al nivel 0)
+const NIVELES_ESTANTE = 5;          // cuántas veces se puede subir de nivel cada estantería
+const ESTANTE_CAP_NIVEL = 5;        // espacios que suma cada nivel (nivel 5 = 5 + 5×5 = 30)
+const COSTOS_NIVEL_ESTANTE = [25, 60, 140, 300, 650];   // lo que cuesta cada nivel de una estantería, en orden (el mismo para todas)
+const COSTOS_VEL_JUG = [30, 90, 250, 600];              // mejora «caminar más rápido»: 4 niveles
+const VEL_JUG_PASO = 0.1;           // cada nivel suma +10 % a la velocidad (nivel 4 = +40 %)
 const EXT_H = 26;                   // cuánto crece hacia abajo la estantería de jitomates para los espacios extra de zanahoria
 const EXTRA_ZANAHORIA_CAP = 2;      // espacios extra para zanahorias en la estantería de jitomates, hasta que compres la de zanahorias
 const CRECE_SEG = 4;                // cada cuántos segundos sale una verdura nueva en el jardín
@@ -262,7 +267,12 @@ const avisoPatio = document.getElementById("titPatio");
 // Secciones de la computadora de mejoras, de arriba abajo: empleados, verduras, frutas, granja y lo demás
 const rejEmp = document.getElementById("rejEmp"), rejVer = document.getElementById("rejVer"), rejFru = document.getElementById("rejFru");
 const rejGranja = document.getElementById("rejGranja"), rejOtras = document.getElementById("rejOtras");
-const secciones = ["secEmp", "secVer", "secFru", "secGranja", "secOtras"].map((id) => document.getElementById(id));
+const secciones = ["secPers", "secEmp", "secVer", "secFru", "secEst", "secGranja", "secOtras"].map((id) => document.getElementById(id));
+const rejEst = document.getElementById("rejEst"), btnVelJug = document.getElementById("mejVelocidad");
+const btnsPestana = [...document.querySelectorAll(".pest")], pestNombre = document.getElementById("pestNombre");
+const PESTANAS = ["🏃 Mejoras personales", "👷 Empleados", "🗄️ Estanterías", "🛠️ Más mejoras"];
+btnsPestana.forEach((b, i) => b.addEventListener("click", () => { pestana = i; }));
+const mayus = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 const FRUTAS = new Set(["manzana", "platano", "mango", "granada", "sandia", "melocoton", "uvas", "fresa", "cana", "arroz", "champinon", "naranja", "limon", "pina", "aguacate"]);
 const info = document.getElementById("info"), infoVolver = document.getElementById("infoVolver");
 const btnMenu = document.getElementById("btnMenu");
@@ -304,7 +314,10 @@ let yMin = 0;            // borde de arriba del mundo: baja a -GRANJA_ALTO al co
 let ptr = null;          // último punto tocado (para seguir el dedo mientras la cámara se mueve)
 let dpr = 1;
 let nivelCarga = 0;      // mejoras de carga compradas (0 a COSTOS_CARGA.length)
+let nivelVelJug = 0;     // mejoras de velocidad al caminar compradas (0 a COSTOS_VEL_JUG.length)
+let pestana = 0;         // pestaña abierta de la computadora: 0 personales · 1 empleados · 2 estanterías · 3 lo demás
 const cargaMax = () => CARGA_INICIAL + nivelCarga;
+const velJugador = () => VELOCIDAD * (1 + VEL_JUG_PASO * nivelVelJug);
 // Admin (para probar): dinero infinito y producción instantánea
 const admin = { dinero: false, rapido: false };
 const alcanza = (c) => admin.dinero || dinero >= c;          // ¿alcanza el dinero? (con «dinero infinito» siempre)
@@ -435,13 +448,13 @@ function extraEstante() {
   const r = rectFull(s);   // es el mismo mueble: la parte de abajo de la estantería de jitomates
   return { x: r.x, y: r.y, w: r.w, h: r.h, producto: "zanahoria", items: extra, cap: EXTRA_ZANAHORIA_CAP, extra: true };
 }
-const capDe = (e) => e.cap || ESTANTE_CAP;
+const capDe = (e) => e.cap || ESTANTE_CAP + ESTANTE_CAP_NIVEL * (e.nivel || 0);
 // Zanahorias que aún puedes tomar del jardín con los espacios extra (descuenta las que ya llevas)
 const espaciosZanahoria = () => EXTRA_ZANAHORIA_CAP - extra.length - carga.filter((id) => id === "zanahoria").length;
 
 function nuevoEstante(slot, producto) {
   // las estanterías de cada producto son fijas: su producto no se puede cambiar (así nunca falta alguno y los clientes no se van)
-  estantes.push({ slot, ...rectEstante(slot), producto, items: [], fija: slot < TODOS.length });
+  estantes.push({ slot, ...rectEstante(slot), producto, items: [], nivel: 0, fija: slot < TODOS.length });
 }
 
 function siguienteSlot() {
@@ -476,7 +489,7 @@ function mover(dt) {
   if (teclas.arrowup || teclas.w) uy -= 1;
   if (teclas.arrowdown || teclas.s) uy += 1;
   if (ux || uy) { dx = ux + 2 * uy; dy = 2 * uy - ux; }   // pantalla → mapa (se normaliza más abajo)
-  let paso = VELOCIDAD * dt;
+  let paso = velJugador() * dt;
   if (dx || dy) {
     objetivo = null;
     const l = Math.hypot(dx, dy);
@@ -496,7 +509,7 @@ function mover(dt) {
   if (!choca(nx, jugador.y)) { if (nx !== jugador.x) movio = true; jugador.x = nx; }
   if (!choca(jugador.x, ny)) { if (ny !== jugador.y) movio = true; jugador.y = ny; }
   // si tocas un lugar al que no se puede llegar (calle, muro), deja de empujar contra la pared
-  if (objetivo && !movio) { atorado += paso / VELOCIDAD; if (atorado > 0.4) { objetivo = null; atorado = 0; } } else atorado = 0;
+  if (objetivo && !movio) { atorado += paso / velJugador(); if (atorado > 0.4) { objetivo = null; atorado = 0; } } else atorado = 0;
 }
 
 function cobrarCompra(costo, x, y) {
@@ -1048,6 +1061,8 @@ function desbloquearTodo() {
   }
   cajas[0].emp = true;
   nivelCarga = COSTOS_CARGA.length;
+  nivelVelJug = COSTOS_VEL_JUG.length;
+  estantes.forEach((q) => { q.nivel = NIVELES_ESTANTE; });
 }
 
 function comprarMejora(tipo) {
@@ -1057,6 +1072,16 @@ function comprarMejora(tipo) {
     if (nivelCarga >= COSTOS_CARGA.length || !alcanza(COSTOS_CARGA[nivelCarga])) return;
     cobrarCompra(COSTOS_CARGA[nivelCarga], x, y);
     nivelCarga++;
+  } else if (tipo === "velocidad") {
+    if (nivelVelJug >= COSTOS_VEL_JUG.length || !alcanza(COSTOS_VEL_JUG[nivelVelJug])) return;
+    cobrarCompra(COSTOS_VEL_JUG[nivelVelJug], x, y);
+    nivelVelJug++;
+  } else if (tipo.startsWith("nivel-estante:")) {
+    const e = estantes.find((q) => q.slot === Number(tipo.slice(14)));
+    const n = e ? e.nivel || 0 : 0;
+    if (!e || n >= NIVELES_ESTANTE || !alcanza(COSTOS_NIVEL_ESTANTE[n])) return;
+    cobrarCompra(COSTOS_NIVEL_ESTANTE[n], x, y);
+    e.nivel = n + 1;
   } else if (tipo === "empleado") {
     if (cajas[0].emp || !alcanza(COSTO_EMPLEADO)) return;
     cobrarCompra(COSTO_EMPLEADO, x, y);
@@ -1182,6 +1207,7 @@ function botonGranja(tipo) {
 const btnGranja = botonGranja("granja");
 const btnsCorral = corrales.map((c) => ({ emp: botonGranja("emp:" + c.producto), vel: botonGranja("corral:vel:" + c.producto), cant: botonGranja("corral:cant:" + c.producto), tiempo: botonGranja("corral:tiempo:" + c.producto) }));
 btnCarga.addEventListener("click", () => comprarMejora("carga"));
+btnVelJug.addEventListener("click", () => comprarMejora("velocidad"));
 btnEmpleado.addEventListener("click", () => comprarMejora("empleado"));
 btnEstante.addEventListener("click", () => comprarMejora("estante"));
 btnEdIzq.addEventListener("click", () => comprarMejora("edificio-izq"));
@@ -1190,18 +1216,30 @@ btnPatIzq.addEventListener("click", () => comprarMejora("patio-izq"));
 btnPatDer.addEventListener("click", () => comprarMejora("patio-der"));
 
 // Cada botón es un cuadrito: el primer «palabra» del texto es el icono grande, el resto el rótulo corto y abajo el precio (✓ = ya lo tienes)
-function pintarBoton(b, texto, precio, activo) {
+function pintarBoton(b, texto, precio, activo, dos) {
   let ic = b.querySelector("i");
   if (!ic) { ic = document.createElement("i"); ic.className = "ic"; b.prepend(ic); }
-  const i = texto.indexOf(" ");
-  ic.textContent = i > 0 ? texto.slice(0, i) : "";
-  b.querySelector("span").textContent = i > 0 ? texto.slice(i + 1) : texto;
+  const rotulo = b.querySelector(":scope > span");
+  if (dos) {   // botón de empleado: el trabajador y su producto, cada uno en su emoji (el texto es solo el rótulo)
+    const clave = dos.join("|");
+    if (ic.dataset.dos !== clave) {
+      ic.dataset.dos = clave; ic.classList.add("dos");
+      const t = document.createElement("span"), p = document.createElement("span");
+      t.className = "tra"; t.textContent = dos[0]; p.className = "prod"; p.textContent = dos[1];
+      ic.replaceChildren(t, p);
+    }
+    rotulo.textContent = texto;
+  } else {
+    if (ic.dataset.dos) { delete ic.dataset.dos; ic.classList.remove("dos"); }
+    const i = texto.indexOf(" ");
+    ic.textContent = i > 0 ? texto.slice(0, i) : "";
+    rotulo.textContent = i > 0 ? texto.slice(i + 1) : texto;
+  }
   b.querySelector("b").textContent = precio;
   b.classList.toggle("hecho", precio === "✓");
   b.title = texto;
   b.disabled = !activo;
 }
-
 function pintarGranja() {
   titGranja.textContent = granja ? "🐄 Granja (camina al norte, pasando el patio)" : "🐄 Granja: terreno al norte del patio";
   btnGranja.hidden = granja;
@@ -1211,10 +1249,10 @@ function pintarGranja() {
     const ver = granja && c.comprado;
     b.emp.hidden = b.vel.hidden = b.cant.hidden = b.tiempo.hidden = !ver;
     if (!ver) return;
-    const iem = "🧑‍🌾" + ic;
-    if (c.emp) pintarBoton(b.emp, iem + " Empleado de " + c.nombre, "✓", false);
-    else if (!destinosDe(c.producto).length) pintarBoton(b.emp, iem + " Falta su estantería", "", false);
-    else pintarBoton(b.emp, iem + " Empleado de " + c.nombre, "$" + c.costoEmp, alcanza(c.costoEmp));
+    const dos = ["🧑‍🌾", ic], rot = "Empleado de " + c.nombre;
+    if (c.emp) pintarBoton(b.emp, rot, "✓", false, dos);
+    else if (!destinosDe(c.producto).length) pintarBoton(b.emp, "Falta su estantería", "", false, dos);
+    else pintarBoton(b.emp, rot, "$" + c.costoEmp, alcanza(c.costoEmp), dos);
     if (c.tipo === "continuo") {
       b.cant.hidden = b.tiempo.hidden = true;
       const n = c.nivelVel, ahora = periodoCont(c);
@@ -1231,12 +1269,35 @@ function pintarGranja() {
   });
 }
 
+// Pestaña 🗄️: un botón por cada estantería comprada para subirla de nivel (cada nivel = 5 espacios más)
+const btnsNivelEst = new Map();   // slot → botón
+function pintarNivelesEstante() {
+  const slots = new Set(estantes.map((e) => e.slot));
+  let nuevo = false;
+  for (const e of estantes) {
+    if (btnsNivelEst.has(e.slot)) continue;
+    const b = botonPanel("nivel-estante:" + e.slot, rejEst);
+    btnsNivelEst.set(e.slot, b); nuevo = true;
+  }
+  if (nuevo) rejEst.append(btnEstante, ...[...btnsNivelEst.entries()].sort((a, c) => a[0] - c[0]).map((x) => x[1]));   // en orden de estantería
+  for (const [slot, b] of btnsNivelEst) {
+    const e = estantes.find((q) => q.slot === slot);
+    b.hidden = !slots.has(slot);
+    if (!e) continue;
+    const n = e.nivel || 0, ic = PRODUCTOS[e.producto].icono;
+    if (n >= NIVELES_ESTANTE) pintarBoton(b, ic + " Nivel " + n + "/" + NIVELES_ESTANTE + " · " + capDe(e) + " sitios", "✓", false);
+    else pintarBoton(b, ic + " Nivel " + n + "/" + NIVELES_ESTANTE + " · " + capDe(e) + " → " + (capDe(e) + ESTANTE_CAP_NIVEL), "$" + COSTOS_NIVEL_ESTANTE[n], alcanza(COSTOS_NIVEL_ESTANTE[n]));
+  }
+}
+
 function actualizarPanel() {
   enMejoras = estado === "jugando" && distRect(jugador.x, jugador.y, MEJORAS_ZONA) <= 4;
   panel.classList.toggle("oculto", !enMejoras || !!colocando);
   if (!enMejoras) return;
   if (nivelCarga >= COSTOS_CARGA.length) pintarBoton(btnCarga, "🧤 Carga al máximo: " + cargaMax(), "", false);
   else pintarBoton(btnCarga, "🧤 Llevar más " + cargaMax() + " → " + (cargaMax() + 1), "$" + COSTOS_CARGA[nivelCarga], alcanza(COSTOS_CARGA[nivelCarga]));
+  if (nivelVelJug >= COSTOS_VEL_JUG.length) pintarBoton(btnVelJug, "👟 Velocidad al máximo: " + (1 + VEL_JUG_PASO * nivelVelJug).toFixed(1) + "x", "", false);
+  else pintarBoton(btnVelJug, "👟 Velocidad " + (1 + VEL_JUG_PASO * nivelVelJug).toFixed(1) + "x → " + (1 + VEL_JUG_PASO * (nivelVelJug + 1)).toFixed(1) + "x", "$" + COSTOS_VEL_JUG[nivelVelJug], alcanza(COSTOS_VEL_JUG[nivelVelJug]));
   pintarBoton(btnEmpleado, "👷 Cajero 1", cajas[0].emp ? "✓" : "$" + COSTO_EMPLEADO, !cajas[0].emp && alcanza(COSTO_EMPLEADO));
   cajas.forEach((k, i) => {
     if (!k.boton) return;
@@ -1270,10 +1331,11 @@ function actualizarPanel() {
     const b = btnsEmp[i], ic = PRODUCTOS[g.producto].icono;
     b.hidden = !g.comprado;
     if (!g.comprado) return;
-    const iem = "🧑‍🌾" + ic;
-    if (g.emp) pintarBoton(b, iem + " Empleado", "✓", false);
-    else if (!destinosDe(g.producto).length) pintarBoton(b, iem + " Falta su estantería", "", false);
-    else pintarBoton(b, iem + " Empleado", "$" + g.costoEmp, alcanza(g.costoEmp));
+    const dos = ["🧑‍🌾", ic], nom = mayus(PRODUCTOS[g.producto].nombre);
+    if (g.emp) pintarBoton(b, nom, "✓", false, dos);
+    else if (!destinosDe(g.producto).length) pintarBoton(b, "Falta estantería", "", false, dos);
+    else pintarBoton(b, nom, "$" + g.costoEmp, alcanza(g.costoEmp), dos);
+    b.title = "Empleado de " + PRODUCTOS[g.producto].nombre;
   });
   pintarGranja();
   // edificio y patio se mejoran por separado: cada uno con su lado a elegir
@@ -1294,8 +1356,11 @@ function actualizarPanel() {
     pintarBoton(btnPatIzq, "🌱 Patio ◀ +6 jardines", "$" + c, alcanza(c));
     pintarBoton(btnPatDer, "🌱 Patio ▶ +6 jardines", "$" + c, alcanza(c));
   }
-  // las secciones sin botones visibles (por ejemplo, frutas antes de comprar la primera) no se muestran
-  for (const sec of secciones) sec.hidden = !sec.querySelector(".mej:not([hidden])");
+  pintarNivelesEstante();
+  // pestañas: solo se ve la sección de la pestaña abierta, y las que no tienen botones visibles (por ejemplo, frutas antes de comprar la primera) no se muestran
+  btnsPestana.forEach((b, i) => b.setAttribute("aria-selected", String(i === pestana)));
+  pestNombre.textContent = PESTANAS[pestana];
+  for (const sec of secciones) sec.hidden = sec.dataset.tab !== String(pestana) || !sec.querySelector(".mej:not([hidden])");
 }
 
 function actualizar(dt) {
@@ -1331,7 +1396,7 @@ function actualizarHud() {
   elCarga.textContent = carga.length + "/" + cargaMax();
   const xe = extraEstante();
   elEstante.textContent = estantes.length
-    ? estantes.reduce((s, e) => s + e.items.length, 0) + (xe ? extra.length : 0) + "/" + (estantes.length * ESTANTE_CAP + (xe ? EXTRA_ZANAHORIA_CAP : 0))
+    ? estantes.reduce((s, e) => s + e.items.length, 0) + (xe ? extra.length : 0) + "/" + (estantes.reduce((t, e) => t + capDe(e), 0) + (xe ? EXTRA_ZANAHORIA_CAP : 0))
     : "—";
   elClientes.textContent = clientes.length + "/" + maxClientes();
   actualizarPanel();
@@ -1403,11 +1468,11 @@ function serializar() {
     v: 1, t: Date.now(), dinero: dec(dinero),
     jugador: { x: dec(jugador.x), y: dec(jugador.y), cara: jugador.cara },
     carga: carga.slice(), extra: extra.slice(),
-    nivelCarga, nivelCajero, nivelRepartidor,
+    nivelCarga, nivelVelJug, nivelCajero, nivelRepartidor,
     edificio: ampliaciones.map((a) => a.lado),   // se rehacen con ampliar(lado), en el mismo orden
     patio: patios.map((a) => a.lado),
     granja,
-    estantes: estantes.map((e) => ({ slot: e.slot, producto: e.producto, items: e.items.slice() })),
+    estantes: estantes.map((e) => ({ slot: e.slot, producto: e.producto, n: e.nivel || 0, items: e.items.slice() })),
     jardines: jardines.map((g) => ({ p: g.producto, c: g.comprado, e: !!g.emp, r: dec(g.reloj), q: g.parcelas.map((q) => ({ t: dec(q.t), id: q.id })) })),
     corrales: corrales.map((c) => ({ p: c.producto, c: c.comprado, e: !!c.emp, r: dec(c.reloj), s: c.stock, v: c.nivelVel, n: c.nivelCant, m: c.nivelTiempo, q: c.parcelas.map((q) => ({ t: dec(q.t), id: q.id })) })),
     cajas: cajas.map((k) => ({ x: k.x, y: k.y, w: k.w, h: k.h, dir: k.dir, emp: !!k.emp })),
@@ -1430,7 +1495,7 @@ function restablecer() {
   colocando = null; rechazado = null; avisado = null; rechazadoBote = false;
   edificio = 0; ampliaciones = []; xMin = 0; xMax = MUNDO.w;
   patios = []; nivelPatio = 0; pMin = 0; pMax = MUNDO.w;
-  nivelCajero = 0; nivelRepartidor = 0; nivelCarga = 0;
+  nivelCajero = 0; nivelRepartidor = 0; nivelCarga = 0; nivelVelJug = 0;
   granja = false; yMin = 0;
   clientes = []; espera = 2; traspasoT = 0; textos = []; enMejoras = false;
   for (const g of jardines) Object.assign(g, nuevoJardin(g.producto, { w: 140, h: 80, cols: 3, filas: 2 }, COSTO_JARDIN_DE[g.producto]));
@@ -1445,6 +1510,7 @@ function aplicar(d) {
   carga = (Array.isArray(d.carga) ? d.carga : []).filter(idValido).slice(0, 40);
   extra = (Array.isArray(d.extra) ? d.extra : []).filter(idValido).slice(0, EXTRA_ZANAHORIA_CAP);
   nivelCarga = Math.floor(num(d.nivelCarga, 0, 0, COSTOS_CARGA.length));
+  nivelVelJug = Math.floor(num(d.nivelVelJug, 0, 0, COSTOS_VEL_JUG.length));
   nivelCajero = Math.floor(num(d.nivelCajero, 0, 0, NIVELES_EMP));
   nivelRepartidor = Math.floor(num(d.nivelRepartidor, 0, 0, NIVELES_EMP));
   // edificio y patio: se rehacen con las mismas funciones que al comprarlos
@@ -1455,7 +1521,9 @@ function aplicar(d) {
     const slot = Math.floor(num(e && e.slot, -1));
     if (slot < 0 || slot >= MAX_ESTANTES || estantes.some((q) => q.slot === slot) || ampDe(slot) > edificio) continue;
     nuevoEstante(slot, idValido(e.producto) ? e.producto : IDS[0]);
-    estantes[estantes.length - 1].items = (Array.isArray(e.items) ? e.items : []).filter(idValido).slice(0, ESTANTE_CAP);
+    const q = estantes[estantes.length - 1];
+    q.nivel = Math.floor(num(e.n, 0, 0, NIVELES_ESTANTE));   // antes de las piezas: de él depende cuántas caben
+    q.items = (Array.isArray(e.items) ? e.items : []).filter(idValido).slice(0, capDe(q));
   }
   const parcelas = (dest, lista) => dest.forEach((q, i) => {
     const s = lista && lista[i];
@@ -2026,10 +2094,15 @@ function dibujarEstanteIso(e) {
     emoji(PRODUCTOS[e.producto].icono, ic.x, ic.y - 3, 14);
     etiqueta("↻", ic.x, ic.y + 10, "#6a4a1a", 11);
   }
+  // 5 huecos fijos; con cada nivel de la estantería cada hueco guarda una pieza más (se ven apiladas, y el número dice cuántas hay)
+  const por = 1 + (e.nivel || 0);
   for (let i = 0; i < ESTANTE_CAP; i++) {
     const s = P(x + 24 + (i + 0.5) * ancho, y + h / 2, H + 8);
-    if (e.items[i]) emoji(PRODUCTOS[e.items[i]].icono, s.x, s.y, 16);
-    else { ctx.globalAlpha = 0.22; emoji(PRODUCTOS[e.producto].icono, s.x, s.y, 14); ctx.globalAlpha = 1; }
+    const n = Math.max(0, Math.min(por, e.items.length - i * por));
+    if (n > 0) {
+      for (let k = 0; k < Math.min(n, 3); k++) { const q = P(x + 24 + (i + 0.5) * ancho, y + h / 2, H + 8 + k * 3); emoji(PRODUCTOS[e.items[i * por]].icono, q.x, q.y, 16); }
+      if (por > 1) etiqueta(String(n), s.x + 7, s.y + 8, "#fff", 8);
+    } else { ctx.globalAlpha = 0.22; emoji(PRODUCTOS[e.producto].icono, s.x, s.y, 14); ctx.globalAlpha = 1; }
   }
   if (conExtra) {   // parte del frente: panel de 🥕 y 2 espacios para zanahorias
     const ty = y + h;
