@@ -45,13 +45,13 @@ const COSTO_JARDIN_BROCOLI = 60;
 const COSTO_JARDIN_BERENJENA = 80;
 // Lo que cuesta el jardín de cada producto (el orden de compra es el de PRODUCTOS)
 const COSTO_JARDIN_DE = {
-  tomate: COSTO_JARDIN, zanahoria: COSTO_JARDIN_ZANAHORIA, maiz: COSTO_JARDIN_MAIZ, brocoli: COSTO_JARDIN_BROCOLI, berenjena: COSTO_JARDIN_BERENJENA,
-  pepino: 100, chile: 125, papa: 150, cebolla: 180, fresa: 210, limon: 250, sandia: 300, aguacate: 350, mango: 420, pina: 500,
+  tomate: COSTO_JARDIN, zanahoria: COSTO_JARDIN_ZANAHORIA, cilantro: 28, maiz: COSTO_JARDIN_MAIZ, brocoli: COSTO_JARDIN_BROCOLI, calabacita: 70, berenjena: COSTO_JARDIN_BERENJENA,
+  pepino: 100, chayote: 112, chile: 125, papa: 150, cebolla: 180, lechuga: 195, fresa: 210, ajo: 230, limon: 250, betabel: 275, sandia: 300, nopal: 325, aguacate: 350, mango: 420, pina: 500,
 };
 // empleado que lleva del jardín a la estantería (uno por jardín)
 const COSTO_EMP_JARDIN = {
-  tomate: 15, zanahoria: 25, maiz: 35, brocoli: 45, berenjena: 60,
-  pepino: 75, chile: 90, papa: 105, cebolla: 120, fresa: 140, limon: 160, sandia: 180, aguacate: 200, mango: 230, pina: 260,
+  tomate: 15, zanahoria: 25, cilantro: 30, maiz: 35, brocoli: 45, calabacita: 52, berenjena: 60,
+  pepino: 75, chayote: 82, chile: 90, papa: 105, cebolla: 120, lechuga: 130, fresa: 140, ajo: 155, limon: 160, betabel: 170, sandia: 180, nopal: 190, aguacate: 200, mango: 230, pina: 260,
 };
 const COSTO_EMPLEADO = 30;
 const COSTO_CAJA_EXTRA = (n) => 40 + 30 * n;     // cajas registradoras adicionales (n = las que ya compraste)
@@ -63,8 +63,8 @@ const COSTO_ESTANTE_EXTRA = (n) => 15 + 10 * n;   // n = estanterías extra que 
 // Edificio: arriba queda siempre el pasto con los jardines. Cada ampliación lo ensancha hacia el lado que elijas
 // (izquierda o derecha) y deja 2 estanterías más. Como queda más ancho que la pantalla, la cámara sigue al personaje.
 const TOP = 324;                    // dónde empieza el edificio por arriba (fijo)
-const COSTOS_EDIFICIO = [40, 80, 150, 250, 400];   // lo que cuesta cada ampliación del EDIFICIO, en orden (cada una da 4 estanterías: 2 filas de 2)
-const COSTOS_PATIO = [30, 60];      // lo que cuesta cada ampliación del PATIO (zona de pasto con los jardines), en orden; es aparte del edificio
+const COSTOS_EDIFICIO = [40, 80, 150, 250, 400, 600, 900];   // lo que cuesta cada ampliación del EDIFICIO, en orden (cada una da 4 estanterías: 2 filas de 2)
+const COSTOS_PATIO = [30, 60, 100];      // lo que cuesta cada ampliación del PATIO (zona de pasto con los jardines), en orden; es aparte del edificio
 const JARDIN_FILAS = 3;             // filas de jardines en cada tramo del patio (2 columnas × 3 filas = 6 jardines)
 const JARDINES_POR_TRAMO = 2 * JARDIN_FILAS;   // jardines que caben en el patio inicial y en cada ampliación del patio
 const JARDIN_HUECO = 8;             // separación (px) entre filas de jardines
@@ -77,19 +77,26 @@ const FILA_BAJA_Y = 470;            // y de la 2.ª fila de estanterías de las 
 const PRODUCTOS = {
   tomate: { icono: "🍅", precio: 1, nombre: "jitomate" },
   zanahoria: { icono: "🥕", precio: 2, nombre: "zanahoria" },
-  maiz: { icono: "🌽", precio: 3, nombre: "maíz" },
-  brocoli: { icono: "🥦", precio: 4, nombre: "brócoli" },
-  berenjena: { icono: "🍆", precio: 5, nombre: "berenjena" },
-  pepino: { icono: "🥒", precio: 6, nombre: "pepino" },
-  chile: { icono: "🌶️", precio: 7, nombre: "chile" },
-  papa: { icono: "🥔", precio: 8, nombre: "papa" },
-  cebolla: { icono: "🧅", precio: 9, nombre: "cebolla" },
-  fresa: { icono: "🍓", precio: 10, nombre: "fresa" },
-  limon: { icono: "🍋", precio: 11, nombre: "limón" },
-  sandia: { icono: "🍉", precio: 12, nombre: "sandía" },
-  aguacate: { icono: "🥑", precio: 13, nombre: "aguacate" },
-  mango: { icono: "🥭", precio: 14, nombre: "mango" },
-  pina: { icono: "🍍", precio: 15, nombre: "piña" },
+  cilantro: { icono: "🌿", precio: 3, nombre: "cilantro" },
+  maiz: { icono: "🌽", precio: 4, nombre: "maíz" },
+  brocoli: { icono: "🥦", precio: 5, nombre: "brócoli" },
+  calabacita: { icono: "🍈", precio: 6, nombre: "calabacita" },
+  berenjena: { icono: "🍆", precio: 7, nombre: "berenjena" },
+  pepino: { icono: "🥒", precio: 8, nombre: "pepino" },
+  chayote: { icono: "🍐", precio: 9, nombre: "chayote" },
+  chile: { icono: "🌶️", precio: 10, nombre: "chile" },
+  papa: { icono: "🥔", precio: 11, nombre: "papa" },
+  cebolla: { icono: "🧅", precio: 12, nombre: "cebolla" },
+  lechuga: { icono: "🥬", precio: 13, nombre: "lechuga" },
+  fresa: { icono: "🍓", precio: 14, nombre: "fresa" },
+  ajo: { icono: "🧄", precio: 15, nombre: "ajo" },
+  limon: { icono: "🍋", precio: 16, nombre: "limón" },
+  betabel: { icono: "🍠", precio: 17, nombre: "betabel" },
+  sandia: { icono: "🍉", precio: 18, nombre: "sandía" },
+  nopal: { icono: "🌵", precio: 19, nombre: "nopal" },
+  aguacate: { icono: "🥑", precio: 20, nombre: "aguacate" },
+  mango: { icono: "🥭", precio: 21, nombre: "mango" },
+  pina: { icono: "🍍", precio: 22, nombre: "piña" },
   // Granja (precios provisionales: ajústalos a tu gusto)
   huevo: { icono: "🥚", precio: 8, nombre: "huevo" },
   leche: { icono: "🥛", precio: 10, nombre: "leche" },
@@ -720,6 +727,7 @@ function puntoJardin(g) {                         // lugar junto al jardín, en 
 function nuevoEmpleadoJardin(g) {
   const camisas = {
     tomate: "#e0463d", zanahoria: "#ff9a2e", maiz: "#e8c93a", brocoli: "#2e9d4a", berenjena: "#8f5bd0",
+    cilantro: "#5cb85c", calabacita: "#7fc24a", chayote: "#a8d070", lechuga: "#8fd16a", ajo: "#efe6d2", betabel: "#9b2d5c", nopal: "#2f8f5b",
     pepino: "#3fae5a", chile: "#c9302c", papa: "#b08a5a", cebolla: "#c68ad6", fresa: "#ff5c7a",
     limon: "#f2dc3a", sandia: "#3e9a52", aguacate: "#6b8f2a", mango: "#ffb02e", pina: "#e6a817",
     huevo: "#f4efe0", leche: "#8ecbff", pollo: "#e8a23a", res: "#a0522d", tocino: "#e88aa0",
