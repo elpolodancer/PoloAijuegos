@@ -227,7 +227,12 @@ function rectEstante(i) {
 // Los jardines están en el pasto, pegados al muro de arriba del edificio (a donde se sale por la abertura del pasillo central)
 const CAJA = { x: 10, y: 466, w: 72, h: 40 };     // el mostrador (con toldo, caja registradora y cajón)
 const SLOT_COLS = 4, SLOT_FILAS = 2;               // la fila de cada caja: 4 lugares por renglón, 2 renglones (si hay más gente, se amontonan en el último)
-const MEJORAS_ZONA = { x: 10, y: 556, w: 108, h: 62 };
+// La computadora de mejoras va PEGADA al muro de la izquierda (siempre al borde del edificio: si se amplía a la izquierda, se muda a ese nuevo muro),
+// con la pantalla mirando al este. MEJORAS_ZONA es la alfombra donde te paras, justo al este de la mesa (ver colocarMejoras()).
+const MEJORAS_ZONA = { x: 28, y: 548, w: 62, h: 74 };
+// Bote de basura: pegado al bordillo de abajo, a la derecha de la entrada inicial. Si llevas algo, al acercarte pregunta si lo tiras.
+const BOTE = { x: 244, y: 604, w: 18, h: 18 };
+const ALCANCE_BOTE = 22;
 const PUERTA = { x: 186, y: MUNDO.h + 14 };       // la entrada inicial (las que compres se agregan a «puertas»)
 const PUERTA_Y = MUNDO.h + 14;
 const PASILLO_X = 180;                            // pasillo central entre estanterías
@@ -395,7 +400,11 @@ function fueraEdificio(x, y) {
   if (xMax < wMax && distRect(x, y, { x: xMax, y: TOP, w: wMax - xMax + 100, h: MUNDO.h }) < RADIO - 0.01) return true;
   return false;
 }
-const ESCRITORIO = { x: MEJORAS_ZONA.x + 6, y: MEJORAS_ZONA.y + 2, w: MEJORAS_ZONA.w - 12, h: 22 };   // el escritorio con la computadora de mejoras (no se atraviesa)
+const ESCRITORIO = { x: 4, y: 552, w: 24, h: 64 };   // la mesa con la computadora de mejoras, contra el muro de la izquierda (no se atraviesa)
+function colocarMejoras() {   // la mesa y su alfombra siguen al muro de la izquierda cuando el edificio se amplía hacia allá
+  ESCRITORIO.x = xMin + 4;
+  MEJORAS_ZONA.x = ESCRITORIO.x + ESCRITORIO.w;
+}
 const choca = (x, y) => distRect(x, y, ESCRITORIO) < RADIO || estantes.some((e) => distRect(x, y, rectFull(e)) < RADIO) || chocaPared(x, y) || fueraEdificio(x, y); // estanterías, pared y muros no se atraviesan
 
 function centroParcela(g, i) {
@@ -528,6 +537,32 @@ function cerrarPregunta() {
   pregunta = null;
   elConf.classList.add("oculto");
 }
+// 🗑️ Bote de basura: si llevas algo y te paras junto a él, pregunta si lo tiras (igual que la pregunta de comprar: «Ahora no» no vuelve
+// a preguntar hasta que te alejes)
+const elTirar = document.getElementById("tirar"), elTirarTxt = document.getElementById("tirarTxt");
+let tirando = false, rechazadoBote = false;
+function cerrarTirar() { tirando = false; elTirar.classList.add("oculto"); }
+function revisarBote() {
+  const junto = estado === "jugando" && cerca(BOTE, ALCANCE_BOTE);
+  if (rechazadoBote && !cerca(BOTE, ALCANCE_BOTE + 14)) rechazadoBote = false;
+  if (tirando && (!junto || !carga.length || colocando || pregunta)) cerrarTirar();
+  if (junto && carga.length && !tirando && !rechazadoBote && !colocando && !pregunta) {
+    tirando = true;
+    objetivo = null; tocando = false;                   // te quedas quieto mientras decides
+    elTirarTxt.textContent = "¿Tirar a la basura lo que llevas? " + carga.map((id) => PRODUCTOS[id].icono).join(" ");
+    elTirar.classList.remove("oculto");
+  }
+}
+document.getElementById("tirarSi").addEventListener("click", () => {
+  if (tirando && carga.length) {
+    carga.length = 0;
+    tono(200, 0.18);
+    textos.push({ x: BOTE.x + BOTE.w / 2, y: BOTE.y, vida: 1.4, txt: "🗑️ ¡Tirado!", col: "#ffd24d" });
+  }
+  cerrarTirar();
+});
+document.getElementById("tirarNo").addEventListener("click", () => { rechazadoBote = true; cerrarTirar(); });
+
 function comprarJardin(g) {
   if (g.comprado || g !== siguienteJardin() || !alcanza(g.costo)) return;
   cobrarCompra(g.costo, g.x + g.w / 2, g.y + g.h + 10);
@@ -637,7 +672,7 @@ function fantasmaCaja() {
   const huella = huellaCaja(k);
   let ok = k.y - 11 >= CORREDOR_Y + 14 && k.y <= 548;                     // ni en el pasillo de arriba ni pegada a la pared de abajo
   if (huella.some((r) => r.x < xMin + 6 || r.x + r.w > xMax - 6)) ok = false;
-  const ocupado = [...sitiosEstantes().map((r) => infla(r, 4)), infla(MEJORAS_ZONA, 6)];
+  const ocupado = [...sitiosEstantes().map((r) => infla(r, 4)), infla(MEJORAS_ZONA, 6), infla(ESCRITORIO, 6), infla(BOTE, 6)];
   cajas.forEach((o) => huellaCaja(o).forEach((r) => ocupado.push(r)));
   if (huella.some((r) => ocupado.some((o) => solapa(r, o)))) ok = false;
   return { k, ok };
@@ -652,7 +687,7 @@ function snapPuerta(x) {
 function fantasmaPuerta() {
   const x = snapPuerta(jugador.x);
   const r = { x: x - 30, y: MUNDO.h - 14, w: 60, h: 14 };
-  const ok = !puertas.some((p) => Math.abs(p.x - x) < 70) && !solapa(r, infla(MEJORAS_ZONA, 4));
+  const ok = !puertas.some((p) => Math.abs(p.x - x) < 70) && !solapa(r, infla(MEJORAS_ZONA, 4)) && !solapa(r, infla(BOTE, 4));
   return { x, ok };
 }
 const costoCajaNueva = () => COSTO_CAJA_EXTRA(cajas.length - 1);
@@ -973,6 +1008,7 @@ function ampliar(lado) {
   edificio = ampliaciones.length;
   xMin = 0 - EXT_ANCHO * ampliaciones.filter((a) => a.lado < 0).length;
   xMax = MUNDO.w + EXT_ANCHO * ampliaciones.filter((a) => a.lado > 0).length;
+  colocarMejoras();
   recalcMundo();
 }
 
@@ -1266,6 +1302,7 @@ function actualizar(dt) {
   if (tocando && ptr) objetivo = posicion(ptr);   // sigue al dedo aunque la cámara se mueva
   mover(dt);
   comprarCosas();
+  revisarBote();
   crecerJardin(dt);
   actualizarCorrales(dt);
   traspasos(dt);
@@ -1353,6 +1390,7 @@ const pausa = crearMenuPausa({
     pausado = false;
     if (colocando) terminarColocacion(false);
     if (pregunta) cerrarPregunta();
+    cerrarTirar();
     estado = "inicio";
     ovl.classList.remove("oculto");
     btnMenu.hidden = true;
@@ -1766,20 +1804,32 @@ function dibujarEstanteIso(e) {
   }
 }
 
-// La zona de mejoras: una computadora sobre un escritorio de madera (la pantalla se enciende cuando estás parado en la alfombra)
+// La zona de mejoras: una computadora sobre una mesa de madera PEGADA al muro de la izquierda, con la pantalla mirando al este
+// (hacia la alfombra donde te paras; la pantalla se enciende cuando estás ahí). Se ven las caras sur y este de cada bloque.
 function dibujarEscritorioIso() {
-  const { x, y, w } = MEJORAS_ZONA, on = enMejoras, cx = x + w / 2;
+  const { x, y, h } = ESCRITORIO, on = enMejoras, cy = y + h / 2;
   const plastico = { top: "#cfd5df", sur: "#9aa3b2", este: "#7c8596", borde: "rgba(0,0,0,.3)" };
   const marco = { top: "#3a4152", sur: "#2b3140", este: "#1f2430", borde: "rgba(0,0,0,.45)" };
-  for (const [px, py] of [[x + 8, y + 3], [x + w - 12, y + 3], [x + 8, y + 19], [x + w - 12, y + 19]]) bloque(px, py, 4, 3, 14, PAL.poste);   // patas
-  bloque(x + 6, y + 2, w - 12, 22, 4, PAL.madera, 14);                                                                                   // tablero
-  bloque(cx - 8, y + 6, 16, 5, 2, marco, 18);                                                                                            // base del monitor
-  bloque(cx - 2, y + 7, 4, 2, 6, marco, 20);                                                                                             // cuello
-  bloque(cx - 22, y + 6, 44, 4, 26, marco, 25);                                                                                          // marco del monitor
-  bloque(cx - 19, y + 10, 38, 1, 20, { top: "#9ad8ff", sur: on ? "#7fd8ff" : "#2f4764", este: "#2f4764", borde: null }, 28);            // pantalla
-  bloque(cx - 15, y + 15, 30, 7, 2, plastico, 18);                                                                                       // teclado
-  bloque(cx + 20, y + 16, 5, 6, 2, plastico, 18);                                                                                        // ratón
-  if (on) { const s = P(cx, y + 11, 40); emoji("🛠️", s.x, s.y, 14); }
+  for (const [px, py] of [[x + 2, y + 3], [x + 18, y + 3], [x + 2, y + h - 6], [x + 18, y + h - 6]]) bloque(px, py, 4, 3, 14, PAL.poste);   // patas
+  bloque(x, y, 24, h, 4, PAL.madera, 14);                                                                                                  // tablero
+  bloque(x + 3, cy - 8, 5, 16, 2, marco, 18);                                                                                              // base del monitor
+  bloque(x + 4, cy - 2, 2, 4, 6, marco, 20);                                                                                               // cuello
+  bloque(x + 4, cy - 22, 4, 44, 26, marco, 25);                                                                                            // marco del monitor
+  bloque(x + 8, cy - 19, 1, 38, 20, { top: "#9ad8ff", sur: "#2f4764", este: on ? "#7fd8ff" : "#2f4764", borde: null }, 28);               // pantalla (mira al este)
+  bloque(x + 13, cy - 15, 7, 30, 2, plastico, 18);                                                                                         // teclado
+  bloque(x + 14, cy + 17, 6, 5, 2, plastico, 18);                                                                                          // ratón
+  if (on) { const s = P(x + 9, cy, 40); emoji("🛠️", s.x, s.y, 14); }
+}
+
+// Bote de basura: cuerpo gris con tapa y una ranura; si llevas algo y estás junto a él, la tapa se ve más clara
+function dibujarBoteIso() {
+  const { x, y, w, h } = BOTE;
+  const cuerpo = { top: "#5b6472", sur: "#7d8797", este: "#5e6877", borde: "rgba(0,0,0,.35)" };
+  const tapa = { top: "#aab3c2", sur: "#8e98a8", este: "#727c8c", borde: "rgba(0,0,0,.35)" };
+  bloque(x + 1, y + 1, w - 2, h - 2, 16, cuerpo);                    // cuerpo
+  bloque(x - 1, y - 1, w + 2, h + 2, 3, tapa, 16);                   // tapa
+  bloque(x + 4, y + 7, w - 8, 3, 1, { top: "#1d2128", sur: "#1d2128", este: "#1d2128", borde: null }, 19);   // ranura
+  bloque(x + 6, y - 2, w - 12, 2, 2, tapa, 19);                      // asa
 }
 
 function dibujarCajaIso(k) {
@@ -1875,6 +1925,7 @@ function armarObjetos() {
   estantes.forEach((e) => { const r = rectFull(e); add(r.x, r.y, r.x + r.w, r.y + r.h, () => dibujarEstanteIso(e)); });
   cajas.forEach((k) => add(k.x, k.y, k.x + k.w, k.y + k.h, () => dibujarCajaIso(k)));
   add(ESCRITORIO.x, ESCRITORIO.y, ESCRITORIO.x + ESCRITORIO.w, ESCRITORIO.y + ESCRITORIO.h, dibujarEscritorioIso);
+  add(BOTE.x, BOTE.y, BOTE.x + BOTE.w, BOTE.y + BOTE.h, dibujarBoteIso);
 
   // jardines: valla y cultivos
   for (const g of jardines) {
@@ -1978,6 +2029,7 @@ function dibujarEtiquetas() {
   }
   const m = P(MEJORAS_ZONA.x + MEJORAS_ZONA.w / 2, MEJORAS_ZONA.y + MEJORAS_ZONA.h / 2, 4);
   etiqueta("💻 Mejoras", m.x, m.y, "#fff");
+  { const s = P(BOTE.x + BOTE.w / 2, BOTE.y + BOTE.h, 24); etiqueta("🗑️ Basura", s.x, s.y + 12, "#fff", 11); }
   for (const p of puertas) { const s = P(p.x, MUNDO.h - 6, 46); etiqueta("Entrada", s.x, s.y, "#fff"); }
   for (const k of cajas) {
     if (k.emp || !k.cola.length) continue;

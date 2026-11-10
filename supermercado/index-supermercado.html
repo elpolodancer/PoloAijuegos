@@ -214,6 +214,14 @@
         </div>
       </div>
 
+      <div class="conf abajo oculto" id="tirar">
+        <p id="tirarTxt"></p>
+        <div class="fila">
+          <button class="b3d txt b-rojo" id="tirarSi" type="button"><span class="b-ico">🗑️</span> Tirar</button>
+          <button class="b3d txt b-gris" id="tirarNo" type="button"><span class="b-ico">🚫</span> Ahora no</button>
+        </div>
+      </div>
+
       <!-- Pantalla de inicio: corta. Las instrucciones están en ☰ Pausa → ℹ️ Info -->
       <div class="ovl" id="ovl">
         <h2>🛒 Supermercado</h2>
@@ -225,7 +233,7 @@
       <div class="ovl oculto" id="info">
         <h2>ℹ️ Info</h2>
         <p>Tu tienda está vacía. Camina hasta la estantería y el jardín para comprarlos. Lo que crece en el jardín lo recoges solo al acercarte (al empezar llevas hasta 3; cada mejora 🧤 te deja llevar una más). Cada jardín comprado puede tener su empleado 🧑‍🌾, que lleva lo maduro a la estantería por ti, y hay 31 productos de jardín en total (verduras 🌿🌽🥦🥬🧄🌵 y frutas 🍎🍌🍇🍑🍍…), cada uno con su jardín, su estantería (caben 5) y su empleado. Los clientes toman sus productos y van a la caja: cobra parándote junto a ella o contrata a un empleado en la computadora de mejoras 💻. Las estanterías de jitomates y de zanahorias son fijas; en las estanterías extra, toca el botón ↻ para elegir qué producto llevan.</p>
-        <p>💻 La computadora de mejoras está en la esquina de abajo a la izquierda: párate en su alfombra y se abre. Arriba están los empleados (con sus 50 niveles de cajeros y de empleados que llevan producto), luego las verduras, las frutas, la granja y, al final, las demás mejoras: 🧤 llevar más, 🗄️ estanterías, 🏗️ edificio, 🌱 patio, 🧾 cajas y 🚪 entradas.</p>
+        <p>💻 La computadora de mejoras está pegada al muro de la izquierda, abajo: párate en su alfombra y se abre. 🗑️ El bote de basura está junto a la entrada: si llevas algo que no quieres, acércate y te pregunta si lo tiras. Arriba están los empleados (con sus 50 niveles de cajeros y de empleados que llevan producto), luego las verduras, las frutas, la granja y, al final, las demás mejoras: 🧤 llevar más, 🗄️ estanterías, 🏗️ edificio, 🌱 patio, 🧾 cajas y 🚪 entradas.</p>
         <p>Puedes ampliar por separado el edificio (+4 estanterías) y el patio (+6 jardines), cada uno hacia la izquierda o la derecha. Si el patio se llena, ampliarlo es lo que te deja seguir. La pantalla no cambia de tamaño: la cámara te sigue.</p>
         <p>Las cajas y las entradas nuevas las colocas donde quieras: camina hasta el sitio y toca «Colocar aquí». Cada jardín que desbloquees permite un cliente más a la vez. Al pararte sobre un jardín te preguntará si quieres comprarlo.</p>
         <p>🐄 En la computadora también puedes comprar la granja ($1000): un terreno al norte del patio con gallinas, vacas, pollos, reses y cerdos que dan huevo, leche, pollo, res y tocino.</p>
@@ -235,7 +243,7 @@
     </div>
   </div>
 
-  <script type="module" src="juego-supermercado.js?v=12"></script>
+  <script type="module" src="juego-supermercado.js?v=13"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
   <script type="module" src="../compartido/fondo-madera.js"></script>
 </body>
