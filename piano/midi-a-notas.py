@@ -9,6 +9,8 @@
 #
 # Reglas: se toca una nota por cada nota del MIDI, en orden. Si varias notas empiezan en el mismo instante (acorde) se queda con la
 # más aguda. Las notas muy rápidas o repetidas se dejan tal cual: si te parecen demasiadas, usa otra pista o recorta la melodía a mano.
+# Los MIDI de órgano repiten la misma voz en varias pistas a distinta octava: al elegir pista sola se ignoran esas copias, y la
+# melodía se sube o baja por octavas completas hasta quedar en la zona cómoda del piano (así no suena chillona ni demasiado grave).
 import struct, sys, os
 
 NOMBRES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -54,6 +56,22 @@ def melodia(ons):
     for t, m in ons: por_tick[t] = max(por_tick.get(t, 0), m)  # acorde → la nota más aguda
     return [por_tick[t] for t in sorted(por_tick)]
 
+def centrar(notas):
+    """Sube o baja la melodía por octavas completas para que su nota media quede entre Sol#3 (56) y Sol#5 (80)."""
+    media, d = sum(notas) / len(notas), 0
+    while media + d > 80: d -= 12
+    while media + d < 56: d += 12
+    return [x + d for x in notas], d
+
+def es_copia(pistas, k):
+    """True si la pista k es otra pista más grave repetida a una o más octavas (mismos instantes, mismas notas +12, +24…)."""
+    ticks = sorted({t for t, _ in pistas[k][1]}); mk = melodia(pistas[k][1])
+    for j, (_, ons) in enumerate(pistas):
+        if j == k or not ons or sorted({t for t, _ in ons}) != ticks: continue
+        dif = {a - b for a, b in zip(mk, melodia(ons))}
+        if len(dif) == 1 and dif.pop() > 0: return True
+    return False
+
 if __name__ == "__main__":
     if len(sys.argv) < 2: sys.exit(__doc__)
     ruta = sys.argv[1]
@@ -64,11 +82,12 @@ if __name__ == "__main__":
         if not ons: continue
         media = sum(m for _, m in ons) / len(ons)
         print(f"  {k}: «{nombre}»  {len(ons)} notas, tono medio {media:.0f}")
-        if len(ons) >= 8: candidatas.append((media, k))
+        if len(ons) >= 8 and not es_copia(pistas, k): candidatas.append((media, k))
     if len(sys.argv) > 2: k = int(sys.argv[2])
     elif candidatas: k = max(candidatas)[1]  # por defecto, la pista más aguda (casi siempre la melodía)
     else: sys.exit("No encontré pistas con notas.")
-    notas = melodia(pistas[k][1])
+    notas, desplazo = centrar(melodia(pistas[k][1]))
+    if desplazo: print(f"(La melodía se movió {desplazo // 12:+d} octava(s) para que suene cómoda.)")
     titulo = sys.argv[3] if len(sys.argv) > 3 else os.path.splitext(os.path.basename(ruta))[0]
     print(f"\nPista elegida: {k}  ({len(notas)} notas). Pega esta línea en MELODIAS de juego-piano.js:\n")
     print('  { nombre: "%s", notas: nt("%s") },' % (titulo, " ".join(nota(m) for m in notas)))

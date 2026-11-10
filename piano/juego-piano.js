@@ -19,7 +19,7 @@ function frecuencia(n) {
 }
 // Melodías de dominio público (música clásica). Cada acierto toca la siguiente nota. Para agregar otra: copia una línea y cambia nombre y notas
 const nt = (txt) => txt.trim().split(/\s+/).map(frecuencia).filter(Boolean); // convierte "E4 D4" en frecuencias (la herramienta midi-a-notas.py genera estas líneas desde un archivo .mid)
-const MELODIAS = [
+const MANUALES = [
   { nombre: "Oda a la Alegría (Beethoven)", notas: nt("E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 E4 D4 D4  E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 D4 C4 C4  D4 D4 E4 C4 D4 E4 F4 E4 C4 D4 E4 F4 E4 D4 C4 D4 G3  E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 D4 C4 C4") },
   { nombre: "Para Elisa (Beethoven)", notas: nt("E5 D#5 E5 D#5 E5 B4 D5 C5 A4  C4 E4 A4 B4  E4 G#4 B4 C5  E4 E5 D#5 E5 D#5 E5 B4 D5 C5 A4  C4 E4 A4 B4  E4 C5 B4 A4") },
   { nombre: "Minueto en Sol (Petzold/Bach)", notas: nt("D5 G4 A4 B4 C5 D5 G4 G4  E5 C5 D5 E5 F#5 G5 G4 G4  C5 D5 C5 B4 A4  B4 C5 B4 A4 G4  F#4 G4 A4 B4 G4 B4 A4 G4") },
@@ -63,8 +63,10 @@ const MELODIAS = [
   { nombre: "O Tannenbaum (tradicional alemán)", notas: nt("C4 F4 F4 F4 G4 A4 A4  A4 G4 A4 Bb4 E4 G4 F4") },
   { nombre: "Sakura (tradicional japonés)", notas: nt("A4 A4 B4  A4 A4 B4  A4 B4 C5 B4 A4 B4 A4 F4 E4") },
   { nombre: "Amanecer (Grieg, Peer Gynt)", notas: nt("B4 G#4 F#4 E4 F#4 G#4  B4 G#4 F#4 E4 F#4 G#4  B4 G#4 F#4 E4") },
-  { nombre: "Vocalise (Rachmaninoff, inicio)", notas: nt("E4 D4 C4 D4 E4 F4 E4 G4 A4 B4 A4 G4 F#4 G4 G4 A4 B4 C5 B4 A4 G4 F4 E4 E4 D4 E4 F4 G4 G4 F4 E4 D4 C4") },
 ];
+// Cada canción es { nombre, notas, midi }. «midi: true» = viene de un archivo .mid (melodias-piano.js); los dos botones de filtro del menú las separan.
+const MELODIAS = MANUALES.map((c) => ({ ...c, midi: false }));
+let filtro = null; // null = todas, "midi" = solo las que vienen de un .mid, "sin" = solo las escritas a mano
 let melodia = MELODIAS[0].notas, ultimaMelodia = -1, modo = null; // modo: null = aleatorio, o el número de la canción elegida
 let usuario = null, filas = [], puntos = 0, vivo = false, ultimo = 0, error = null, audio = null, avance = 0, inicio = 0, restante = TIEMPO;
 let actual = 0, vueltas = 0; // canción en juego y vueltas completas de la melodía en esta partida
@@ -195,7 +197,12 @@ function empezar() {
   jugar.hidden = true; alMenu.hidden = true; menu.hidden = true; cv.hidden = false; btnMenu.hidden = false; scrollTo(0, 0);
   document.body.classList.add("jugando"); // el CSS usa esta clase para mover el texto y dejar libre el lienzo
   let k = modo; // canción elegida en el menú...
-  if (k === null) { do { k = Math.floor(Math.random() * MELODIAS.length); } while (k === ultimaMelodia && MELODIAS.length > 1); } // ...o al azar, sin repetir la anterior
+  if (k === null) { // ...o al azar entre las canciones visibles (respeta el filtro del menú), sin repetir la anterior
+    let lista = MELODIAS.map((_, i) => i).filter(visible);
+    if (!lista.length) lista = MELODIAS.map((_, i) => i);
+    if (lista.length > 1) lista = lista.filter((i) => i !== ultimaMelodia);
+    k = lista[Math.floor(Math.random() * lista.length)];
+  }
   ultimaMelodia = k;
   melodia = MELODIAS[k].notas; actual = k; vueltas = 0;
   estado.textContent = "🎼 " + MELODIAS[k].nombre;
@@ -207,7 +214,7 @@ function mostrarMenu() {
   menu.hidden = false; cv.hidden = true; jugar.hidden = true; alMenu.hidden = true; btnMenu.hidden = true; // el ☰ no se muestra en el menú principal
   estado.textContent = "Toca una canción para empezar, o juega al azar. Tienes 1 minuto; si tocas una tecla equivocada, pierdes.";
 }
-MELODIAS.forEach((m, k) => {
+function agregarCuadro(m, k) {
   const b = document.createElement("button");
   b.className = "cuadro"; b.type = "button";
   const h = (k * 47) % 360; // un color distinto por canción
@@ -215,7 +222,25 @@ MELODIAS.forEach((m, k) => {
   pintarCuadro(b, k);
   b.addEventListener("click", () => { modo = k; empezar(); });
   rejilla.appendChild(b); botones.push(b);
-});
+  if (!visible(k)) b.hidden = true;
+}
+MELODIAS.forEach(agregarCuadro);
+// Filtros del menú: «Con MIDI» / «Sin MIDI». Pulsar el botón activo vuelve a mostrar todas. El modo aleatorio también respeta el filtro.
+const fMidi = $("fMidi"), fSin = $("fSin");
+function visible(k) { return !filtro || MELODIAS[k].midi === (filtro === "midi"); }
+function aplicarFiltro() {
+  botones.forEach((b, k) => { b.hidden = !visible(k); });
+  for (const [b, f] of [[fMidi, "midi"], [fSin, "sin"]]) { b.classList.toggle("on", filtro === f); b.setAttribute("aria-pressed", String(filtro === f)); }
+  $("nMidi").textContent = MELODIAS.filter((c) => c.midi).length;
+  $("nSin").textContent = MELODIAS.filter((c) => !c.midi).length;
+}
+fMidi.addEventListener("click", () => { filtro = filtro === "midi" ? null : "midi"; aplicarFiltro(); });
+fSin.addEventListener("click", () => { filtro = filtro === "sin" ? null : "sin"; aplicarFiltro(); });
+// Las canciones de los .mid se cargan aparte: si no se pudieran cargar (archivo ausente), el piano sigue con las escritas a mano
+import("./melodias-piano.js").then((mod) => {
+  for (const c of mod.MELODIAS_MIDI) { const o = { nombre: c.nombre, notas: nt(c.notas), midi: true }; MELODIAS.push(o); agregarCuadro(o, MELODIAS.length - 1); }
+  $("filtros").hidden = false; aplicarFiltro();
+}).catch((e) => console.warn("Piano: no se pudieron cargar las canciones MIDI", e));
 $("modoAzar").addEventListener("click", () => { modo = null; empezar(); });
 alMenu.addEventListener("click", mostrarMenu);
 function dibujar() {

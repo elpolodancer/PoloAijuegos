@@ -54,6 +54,8 @@
     .cuadro small { position: absolute; right: 8px; bottom: 4px; font-size: .75rem; font-weight: 700; text-shadow: 0 0 3px #000; }
     .cuadro:active { transform: translateY(4px); box-shadow: 0 1px 0 #15171a; }
     .cuadro:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+    .filtros { display: flex; gap: 8px; width: 100%; }
+    .filtros .b3d { flex: 1; min-width: 0; padding: 0 8px; font-size: 13px; }
     .fila-fin { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
   </style>
 </head>
@@ -77,6 +79,11 @@
         <p id="estado"></p>
         <div id="menu">
           <button id="modoAzar" class="b3d txt grande b-morado" type="button"><span class="b-ico">🎲</span> Modo aleatorio</button>
+          <!-- Filtros: canciones que vienen de un archivo .mid o que están escritas a mano (aparece cuando cargan las de MIDI) -->
+          <div id="filtros" class="filtros" hidden>
+            <button id="fMidi" class="b3d txt chico b-azul" type="button" aria-pressed="false"><span class="b-ico">🎼</span> Con MIDI (<span id="nMidi">0</span>)</button>
+            <button id="fSin" class="b3d txt chico b-azul" type="button" aria-pressed="false"><span class="b-ico">✍️</span> Sin MIDI (<span id="nSin">0</span>)</button>
+          </div>
           <div id="rejilla"></div>
         </div>
         <div class="fila-fin">
