@@ -5,6 +5,8 @@
 // Recoger, colocar y comprar lo básico es automático por cercanía. En la zona de mejoras 🛠️ compras
 // un empleado de caja, más estanterías y ampliar el edificio a la izquierda o a la derecha (la cámara te sigue).
 
+import { crearMenuPausa } from "../compartido/menu-pausa.js";   // menú ☰ Pausa estándar (no usa Firebase: funciona sin internet)
+
 // ---------- Ajustes (cámbialos a gusto) ----------
 const MUNDO = { w: 360, h: 630 };   // tamaño de la PANTALLA (siempre vertical, como un celular) y del edificio inicial. Arriba hay una franja de pasto fija para los jardines
 const DINERO_INICIAL = 15;          // alcanza justo para comprar la primera estantería y el jardín
@@ -165,11 +167,15 @@ const btnPatIzq = document.getElementById("mejPatIzq");
 const btnPatDer = document.getElementById("mejPatDer");
 const titEd = document.getElementById("titEdificio"), botsEd = document.getElementById("botsEdificio");
 const titPat = document.getElementById("titPatio"), botsPat = document.getElementById("botsPatio");
+const btnMenu = document.getElementById("btnMenu");
+const velBtn = document.getElementById("velBtn"), velInfo = document.getElementById("velInfo"), velPanel = document.getElementById("velPanel");
 const elConf = document.getElementById("confirmar"), elConfTxt = document.getElementById("confTxt");
 const elColocar = document.getElementById("colocar"), elColTxt = document.getElementById("colTxt"), btnColSi = document.getElementById("colSi");
 
 // ---------- Estado ----------
 let estado = "inicio";   // inicio | jugando
+let pausado = false;     // el menú ☰ Pausa está abierto: todo se detiene
+let velocidad = 1;       // x1 … x8: cuántos pasos de juego se corren por cada cuadro (botón ⏩)
 let dinero = DINERO_INICIAL;
 const jugador = { x: 180, y: 440, cara: 1 };
 let objetivo = null;     // {x, y}: hacia dónde camina (toque o arrastre)
@@ -1141,7 +1147,7 @@ document.getElementById("colSi").addEventListener("click", () => terminarColocac
 document.getElementById("colNo").addEventListener("click", () => terminarColocacion(false));
 
 function actualizarHud() {
-  elDinero.textContent = admin.dinero ? "∞" : "$" + dinero;
+  elDinero.textContent = admin.dinero ? "∞" : dinero.toLocaleString("es-MX");
   elCarga.textContent = carga.length + "/" + cargaMax();
   const xe = extraEstante();
   elEstante.textContent = estantes.length
@@ -1187,8 +1193,53 @@ window.addEventListener("blur", () => { for (const k in teclas) teclas[k] = fals
 ovlBtn.addEventListener("click", () => {
   estado = "jugando";
   ovl.classList.add("oculto");
+  btnMenu.hidden = false;       // ☰ Pausa solo se ve dentro de la partida (en la pantalla de inicio no se muestra)
   tono(440, 0.12);
 });
+
+// ----- ☰ Pausa (estándar: compartido/menu-pausa.js) -----
+// «Salir» vuelve a la pantalla de inicio SIN borrar la partida: con «Jugar» sigues donde ibas (el juego aún no se guarda al cerrar la página).
+crearMenuPausa({
+  boton: btnMenu,
+  puedeAbrir: () => estado === "jugando",
+  alAbrir: () => { pausado = true; tocando = false; objetivo = null; velPanel.classList.add("oculto"); },
+  alContinuar: () => { pausado = false; },
+  ayudaSalir: "Vuelves al inicio; con «Jugar» sigues donde ibas.",
+  alSalir: () => {
+    pausado = false;
+    if (colocando) terminarColocacion(false);
+    if (pregunta) cerrarPregunta();
+    estado = "inicio";
+    ovl.classList.remove("oculto");
+    btnMenu.hidden = true;
+  },
+});
+
+// ----- ⏩ Velocidad del tiempo: x1 … x8 -----
+// Cada cuadro se corren «velocidad» pasos de juego de la misma duración (no un paso más largo), así a x8 el personaje y los clientes
+// no atraviesan muebles ni paredes. Acelera TODO: cultivos, animales, clientes, empleados, relojes de la granja y tu propio personaje.
+const VELOCIDADES = [1, 2, 3, 4, 5, 6, 7, 8];
+const COLOR_VEL = { 1: "b-gris", 2: "b-verde", 3: "b-verde", 4: "b-azul", 5: "b-azul", 6: "b-morado", 7: "b-morado", 8: "b-rojo" };
+const botonesVel = VELOCIDADES.map((v) => {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "b3d chico txt " + COLOR_VEL[v]; b.textContent = "x" + v;
+  b.addEventListener("click", () => { fijarVelocidad(v); abrirVel(false); });
+  velPanel.appendChild(b);
+  return b;
+});
+function fijarVelocidad(v) {
+  velocidad = v;
+  velInfo.textContent = "x" + v;
+  velBtn.className = "b3d chico " + COLOR_VEL[v];
+  botonesVel.forEach((b, i) => b.classList.toggle("on", VELOCIDADES[i] === v));
+}
+function abrirVel(abrir) {
+  velPanel.classList.toggle("oculto", !abrir);
+  velBtn.setAttribute("aria-expanded", String(abrir));
+}
+velBtn.addEventListener("click", (ev) => { ev.stopPropagation(); abrirVel(velPanel.classList.contains("oculto")); });
+document.addEventListener("pointerdown", (ev) => { if (!velPanel.classList.contains("oculto") && !velPanel.contains(ev.target) && ev.target !== velBtn && !velBtn.contains(ev.target)) abrirVel(false); });
+fijarVelocidad(1);
 
 // ---------- Dibujo ----------
 // La pantalla es siempre vertical (proporción de un celular): se ajusta al alto disponible y nunca crece.
@@ -1802,9 +1853,9 @@ let ultimo = 0;
 function bucle(ahora) {
   const dt = Math.min(0.05, (ahora - ultimo) / 1000 || 0);
   ultimo = ahora;
-  if (estado === "jugando") actualizar(dt);
+  if (estado === "jugando" && !pausado) for (let i = 0; i < velocidad; i++) actualizar(dt);
   actualizarCamara(dt);
-  actualizarAutos(dt);
+  if (!pausado) actualizarAutos(dt * velocidad);
   actualizarHud();
   dibujar();
   requestAnimationFrame(bucle);

@@ -207,6 +207,8 @@ Cuestan **$2000** cada una. En lugar de entregar producto continuamente, entrega
 - [x] Vista isométrica y carreteras
 - [ ] Modo infinito con las reglas de este documento
 - [x] Granja: terreno, 5 corrales, animales, huevo/leche, cargas de pollo/res/tocino, empleados y mejoras
+- [x] Botón ⏩ de velocidad (x1 a x8)
+- [x] Estándar del repo: «🎮 Juegos» y «☰ Pausa», chip de monedas dorado, fondo de madera clara/oscura
 - [ ] Agrandar granja
 - [ ] Productos por paquete y PC
 - [ ] Calidades

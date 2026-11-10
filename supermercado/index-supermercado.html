@@ -5,29 +5,44 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Supermercado</title>
-  <meta name="theme-color" content="#101114" />
+  <meta name="theme-color" content="#d9a866" />
   <link rel="stylesheet" href="../compartido/estilos.css" />
   <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
   <style>
-    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 30%, #23252b, #101114 70%); }
+    /* El fondo (madera clara u oscura) lo pone compartido/fondo-madera.js: el juego no pone fondo propio en html/body */
 
-    /* Pantalla vertical 360×630 con franja libre arriba para los botones flotantes */
-    .inmersivo .escena { padding-top: calc(54px + env(safe-area-inset-top)); }
+    /* Pantalla vertical 360×630 con franja libre arriba (104 px) para «🎮 Juegos» + «☰ Pausa», como el mapa de niveles estándar */
+    .inmersivo .escena { padding-top: calc(104px + env(safe-area-inset-top)); }
     .inmersivo .marco {
       aspect-ratio: 360 / 630;
-      width: min(100vw, calc((100vh - 54px - env(safe-area-inset-top)) * 360 / 630));
-      width: min(100vw, calc((100dvh - 54px - env(safe-area-inset-top)) * 360 / 630));
-      overflow: hidden; background: #efe3c8;
+      width: min(100vw, calc((100vh - 104px - env(safe-area-inset-top)) * 360 / 630));
+      width: min(100vw, calc((100dvh - 104px - env(safe-area-inset-top)) * 360 / 630));
+      overflow: hidden; background: #efe3c8; border-radius: 16px;
     }
     .inmersivo .lienzo { display: block; }
+    /* En horizontal sobra ancho: el marco usa todo el alto y los botones quedan a los lados */
+    @media (min-aspect-ratio: 1/1) {
+      .inmersivo .escena { padding-top: 0; }
+      .inmersivo .marco { width: min(100vw, calc(100vh * 360 / 630)); width: min(100vw, calc(100dvh * 360 / 630)); }
+    }
 
-    /* Marcadores compactos arriba */
-    .hud-izq { gap: 6px; }
-    .hud-izq .chip, .hud-der .chip { height: 30px; padding: 0 8px; font-size: 13px; }
-    .hud-izq .chip small { margin-right: 4px; font-size: 13px; }
-    .hud-der { gap: 6px; }
+    /* Marcadores: en filas a la derecha de «🎮 Juegos / ☰ Pausa» (esa esquina es de los botones fijos del estándar) */
+    .hud-info { top: max(8px, env(safe-area-inset-top)); left: calc(max(8px, env(safe-area-inset-left)) + 122px); right: calc(max(8px, env(safe-area-inset-right)) + 52px); flex-wrap: wrap; gap: 6px; }
+    .hud-info .chip { padding: 0 10px; font-size: 14px; }
+    .hud-info .chip small { margin-right: 4px; font-size: 14px; }
+    .hud-info .moneda { font-size: 15px; }
+    @media (max-width: 400px) { .hud-info { gap: 4px; } .hud-info .chip { padding: 0 8px; font-size: 13px; } }
+    .nav-juego .b-ico { margin-right: 6px; }   /* aire entre el icono y el texto de «🎮 Juegos» y «☰ Pausa» */
+    /* Arriba a la derecha, en columna: ⏩ velocidad y, debajo, las herramientas de prueba */
+    .hud-der { flex-direction: column; align-items: flex-end; gap: 4px; }
     .b-negro { --c1: #8a8f9c; --c2: #3c404a; --c3: #15171a; }
-    @media (max-width: 400px) { .hud-izq { gap: 4px; } .hud-izq .chip { padding: 0 6px; font-size: 12px; } }
+
+    /* Selector de velocidad: x1 … x8 */
+    .vel-panel { position: fixed; z-index: 7; top: calc(max(8px, env(safe-area-inset-top)) + 50px); right: max(8px, env(safe-area-inset-right));
+      display: grid; grid-template-columns: repeat(4, auto); gap: 6px 8px; padding: 10px 10px 4px; background: #15171af2; border: 2px solid #3b3e46; border-radius: 14px; }
+    .vel-panel h3 { grid-column: 1 / -1; margin: 0 0 2px; font-size: 14px; color: #fff; }
+    .vel-panel .b3d.txt { --t: 40px; min-width: 52px; padding: 0 8px; }
 
     /* Paneles dentro del marco (neutros, sin azul) */
     .mejoras, .adm, .conf { position: absolute; z-index: 3; color: #fff; background: #15171af2; border: 2px solid #3b3e46; border-radius: 14px; }
@@ -53,7 +68,7 @@
     .adm input[type=checkbox] { width: 18px; height: 18px; }
 
     .conf { left: 10px; right: 10px; z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; text-align: center; font-size: 14px; line-height: 1.35; }
-    .conf.abajo { bottom: 8px; }
+    .conf.abajo { bottom: 66px; }   /* sobre las esquinas reservadas de 🌙 (izq.) y ⛶ (der.) */
     .conf p { margin: 0; }
     .conf .fila { display: flex; gap: 10px; margin-bottom: 5px; }
 
@@ -66,16 +81,24 @@
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>
-  <div class="hud hud-izq">
-    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
-    <span class="chip" title="Dinero"><small>💰</small><b id="dinero">$0</b></span>
+  <!-- Botones fijos del estándar (compartido/inmersivo.css): 🎮 Juegos y ☰ Pausa arriba a la izquierda. 🌙/☀️ y ⛶ los crean fondo-madera.js y pantalla-completa.js -->
+  <nav class="nav-juego">
+    <a class="b3d txt b-azuloscuro" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btnMenu" type="button" hidden><span class="b-ico">☰</span> Pausa</button>
+  </nav>
+  <div class="hud hud-info">
+    <span class="chip chip-monedas" title="Dinero"><span class="moneda"></span><b id="dinero">0</b></span>
     <span class="chip" title="Lo que cargas"><small>🧤</small><b id="carga">0/3</b></span>
     <span class="chip" title="Estantería"><small>🗄️</small><b id="estante">0/5</b></span>
     <span class="chip" title="Clientes"><small>🧍</small><b id="clientes">0/3</b></span>
   </div>
   <div class="hud hud-der">
+    <button class="b3d chico b-gris" id="velBtn" type="button" aria-label="Velocidad del tiempo" title="Velocidad del tiempo" aria-haspopup="true" aria-expanded="false"><span class="b-ico">⏩</span><span class="b-info" id="velInfo">x1</span></button>
     <button class="b3d chico b-verde" id="dineroBtn" type="button" hidden aria-label="Sumar dinero" title="Sumar dinero"><span class="b-ico">💰</span></button>
     <button class="b3d chico b-negro" id="admBtn" type="button" hidden aria-label="Admin" title="Admin"><span class="b-ico">⚙️</span></button>
+  </div>
+  <div class="vel-panel oculto" id="velPanel" role="group" aria-label="Velocidad del tiempo">
+    <h3>⏩ Velocidad del tiempo</h3>
   </div>
 
   <div class="escena">
@@ -129,13 +152,16 @@
         <p>Tu tienda está vacía. Camina hasta la estantería y el jardín para comprarlos. Lo que crece en el jardín lo recoges solo al acercarte (al empezar llevas hasta 3; cada mejora 🧤 te deja llevar una más). Cada jardín comprado puede tener su empleado 🧑‍🌾, que lleva lo maduro a la estantería por ti, y hay 15 productos en total (🌽🥦🍆🥒🌶️🥔🧅🍓🍋🍉🥑🥭🍍…), cada uno con su jardín, su estantería (caben 5) y su empleado. Los clientes toman sus productos y van a la caja: cobra parándote junto a ella o contrata a un empleado en la zona de mejoras 🛠️. Las estanterías de jitomates y de zanahorias son fijas; en las estanterías extra, toca el botón ↻ para elegir qué producto llevan.</p>
         <p>En la zona de mejoras 🛠️ también puedes ampliar por separado el edificio (+4 estanterías) y el patio (+6 jardines), cada uno hacia la izquierda o la derecha, como elijas. El patio inicial y cada ampliación caben 6 jardines. Solo ves el siguiente jardín por comprar; si el patio se llena, ampliarlo es lo que te deja seguir. La pantalla no cambia de tamaño: la cámara te sigue.</p>
         <p>En la zona de mejoras también puedes comprar más cajas registradoras 🧾 y más entradas 🚪 y colocarlas donde quieras: camina hasta el sitio y toca «Colocar aquí». Cada jardín que desbloquees permite un cliente más a la vez. Al pararte sobre un jardín te preguntará si quieres comprarlo.</p>
+        <p>🐄 En la zona de mejoras 🛠️ también puedes comprar la granja ($1000): un terreno al norte del patio con gallinas, vacas, pollos, reses y cerdos que dan huevo, leche, pollo, res y tocino.</p>
+        <p>⏩ El botón de arriba a la derecha acelera el tiempo de x1 a x8. ☰ Pausa detiene el juego.</p>
         <p>Toca o arrastra para moverte (o usa las flechas / WASD).</p>
         <div class="jugar"><button class="b3d txt b-verde" id="ovlBtn" type="button"><span class="b-ico">▶️</span> Jugar</button></div>
       </div>
     </div>
   </div>
 
-  <script type="module" src="juego-supermercado.js?v=4"></script>
+  <script type="module" src="juego-supermercado.js?v=6"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
 </body>
 </html>
