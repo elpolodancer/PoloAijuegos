@@ -1,10 +1,10 @@
 # 🛒 Supermercado
 
 Juego de administración en **vista isométrica**: cultiva, cría animales, llena estanterías y atiende clientes.
-Tiene dos modos: **Modo infinito** (sin fin) y **Modo niveles** (50 retos).
+Tiene dos modos: **Modo infinito** (sin fin) y **Modo niveles** (10 niveles por estado de México y por país; ver sección 6).
 
 > Ruta: `supermercado/README.md`
-> Archivos actuales: `index-supermercado.html`, `juego-supermercado.js`
+> Archivos actuales: `index-supermercado.html`, `juego-supermercado.js`, `niveles-supermercado.js`
 > Partidas: 10 ranuras en `localStorage` (`supermercado_partidas_v1`)
 > Marcas: ❓ = por decidir · 🔜 = por programar
 
@@ -177,11 +177,39 @@ Cuestan **$2000** cada una. En lugar de entregar producto continuamente, entrega
 
 ## 6. Modo niveles
 
-> El menú de inicio ya tiene el botón «🗺️ Niveles», apagado hasta que exista esta zona.
+> ✅ **Nota fija: cada estado de México (32) tendrá 10 niveles, y cada país del mundo (194) también tendrá 10.** Máximo previsto: 320 niveles en México + 1 940 en el mundo = 2 260. Se van agregando poco a poco; mientras un nivel no exista, el mapa no deja abrirlo.
 
-- **50 niveles** con misiones distintas.
-- Misiones típicas: llegar a cierto número de productos, juntar cierta cantidad de dinero.
-- 🔜 Por definir: lista de misiones, recompensas, condiciones de inicio de cada nivel, si hay límite de tiempo y si se desbloquean en orden.
+### 6.1 El mapa (estándar del portal)
+- Es el **mapa estándar** de `compartido/mapa-niveles.js` (ver `ESTANDARES-juegos.md`, sección 4-A), con las etapas de `compartido/etapas-mapa.js` y los contornos de `compartido/geografia-mapa.js`. El juego solo le dice que cada etapa tiene **10 niveles** (`crearEtapas({ porEtapa: 10 })`).
+- **México de cerca** sobre madera, con la silueta del país: cada **estado terminado** (sus 10 niveles) hace subir un escalón de **agua azul clara**. Cada estado desbloqueado es un punto: al tocarlo salen sus 10 niveles.
+- Al terminar los **32 estados** aparece el botón **🌍 Mundo** con los **194 países** (mismo efecto de agua, 10 niveles por país). Hasta entonces el jugador no sabe que existe.
+- Los niveles se abren **en orden**. Los estados siguen el orden por defecto de `etapas-mapa.js` (de Quintana Roo hacia el norte). Si se quiere otro orden, se pasa `primeros: [...]` a `crearEtapas` **antes de publicar** (cambiarlo después mueve los niveles de lugar para quien ya jugó).
+- Se entra desde el menú de inicio con **🗺️ Niveles**. Dentro del mapa, **☰ dice «Menú principal»** y regresa al menú de inicio; el botón **♾️ Modo infinito** (a la derecha de «Continuar · nivel N») hace lo mismo. **ℹ️ Info** explica cómo funcionan los niveles.
+- Número global de nivel: 1 a 10 = 1.er estado, 11 a 20 = 2.º estado… y después de los 32 estados siguen los países en el orden de `etapas-mapa.js`.
+
+### 6.2 Cómo funciona un nivel
+- Cada nivel es una **partida aparte que empieza de cero** (dinero inicial como una partida nueva, salvo que el nivel diga otro). **No usa las 10 ranuras** del modo infinito y **su avance no se guarda**: si sales al mapa, empiezas de nuevo.
+- Trae **metas** (se ven en un cuadro arriba del juego) y, a veces, **restricciones** (`edificio`, `patio`, `granja`: lo que no se puede ampliar o comprar; esos botones se esconden en la computadora). El nivel termina cuando **todas las metas** están cumplidas; una meta ya cumplida **no se pierde** aunque después se gaste el dinero.
+- Al terminar sale el cartel **🎉 ¡Nivel completado!** con «Siguiente nivel» (solo si ya existe), «Jugar otra vez» y «Volver al mapa».
+- En ☰ Pausa de un nivel no hay «Guardar partida» y «Salir» dice «Salir al mapa».
+- Lo único que se guarda es cuántos niveles llevas terminados: `localStorage` clave `supermercado_niveles_v1` → `{ v: 1, hecho, t }`. El nivel abierto se calcula (`hecho + 1`, sin pasar del último que ya existe), así que al agregar el nivel siguiente se abre solo para quien terminó el anterior.
+- Los niveles viven en **`niveles-supermercado.js`** (clave = número global del nivel). Tipos de paso de una meta: `jardin` (comprar el jardín), `estante` (tener su estantería), `empleado` (contratar a su empleado) y `dinero` (llegar a N monedas, contando el dinero que tienes en ese momento).
+
+### 6.3 Nivel 1 (Quintana Roo · nivel 1) — «Primeras cosechas» ✅
+- **Empieza como una partida nueva**: $15, sin estanterías ni jardines.
+- **No se puede:** ampliar el edificio, ampliar el patio ni comprar la granja.
+- **3 metas** (todas para terminar):
+  1. 🥕 **Zanahoria:** jardín + estantería + su empleado.
+  2. 🌿 **Cilantro:** jardín + su empleado. (El juego exige la estantería de cilantro para poder contratar a ese empleado, así que se compra sí o sí aunque no sea un paso aparte.)
+  3. 💰 **Llegar a $1,000** (monedas que tienes en ese momento; una vez alcanzado cuenta aunque luego gastes).
+- Sí se permite todo lo demás: subir de nivel las estanterías, mejoras personales, cajeros y sus niveles, cajas y entradas nuevas.
+- Sin ampliar el edificio solo caben 3 estanterías (jitomate, zanahoria y cilantro), que son justo las que hacen falta.
+
+### 6.4 Pendiente de este modo
+- 🔜 Niveles 2 a 10 del primer estado y todos los demás (la lista de metas y restricciones de cada uno está por definir).
+- 🔜 Sincronizar los niveles terminados con la cuenta (`conectar()` de `compartido/progreso.js`, `fusionar` = el mayor `hecho`).
+- 🔜 Recompensas (monedas o puntos) por terminar un nivel, si se decide.
+- ❓ Si los niveles de cada estado deben ir subiendo de dificultad dentro del estado y reiniciar al pasar al siguiente, o seguir una curva continua.
 
 ---
 
@@ -201,7 +229,7 @@ Cuestan **$2000** cada una. En lugar de entregar producto continuamente, entrega
 2. Probabilidades y bono de precio de las calidades (bronce, plata, oro).
 3. Cuáles son los 60 productos finales (30 cultivos + 5 de paquete + 5 de granja = 40; faltan 20 más).
 4. Precios de venta de cada producto y precios de empleados.
-5. Detalle de los 50 niveles.
+5. Detalle de los niveles 2 a 10 de cada estado y de cada país (el nivel 1 del primer estado ya está: sección 6.3).
 6. Sincronizar las partidas guardadas con la cuenta (`compartido/progreso.js`): el guardado local de 10 ranuras ya existe; falta `conectar()` con `fusionar` por ranura (gana la de `t` más reciente).
 
 ---
@@ -211,7 +239,7 @@ Cuestan **$2000** cada una. En lugar de entregar producto continuamente, entrega
 - [x] Prototipo base (jardines, estantería, clientes, caja, mejoras, admin)
 - [x] Vista isométrica y carreteras
 - [x] Menú de inicio (Nueva partida / Continuar / Niveles) y 10 partidas guardadas en el aparato
-- [ ] Pantalla de Niveles (el botón está apagado)
+- [x] Pantalla de Niveles (mapa estándar; botón «🗺️ Niveles» activo)
 - [x] Computadora de mejoras en 4 pestañas: personales (carga y velocidad), empleados, estanterías (5 niveles de +5 espacios) y lo demás
 - [ ] Modo infinito con las reglas de este documento
 - [x] Granja: terreno, 5 corrales, animales, huevo/leche, cargas de pollo/res/tocino, empleados y mejoras
@@ -220,4 +248,5 @@ Cuestan **$2000** cada una. En lugar de entregar producto continuamente, entrega
 - [ ] Agrandar granja
 - [ ] Productos por paquete y PC
 - [ ] Calidades
-- [ ] Modo niveles (50)
+- [x] Nivel 1 (Quintana Roo)
+- [ ] Resto del modo niveles (10 por estado y por país)

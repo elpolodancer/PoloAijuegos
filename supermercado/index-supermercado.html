@@ -22,9 +22,14 @@
     }
     .inmersivo .lienzo { display: block; }
     /* En horizontal sobra ancho: el marco usa todo el alto y los botones quedan a los lados */
+    /* En horizontal (PC) la zona de visión es el DOBLE de ancha: 720×630 (en juego-supermercado.js, ANCHO_PC = 2) */
     @media (min-aspect-ratio: 1/1) {
       .inmersivo .escena { padding-top: 0; }
-      .inmersivo .marco { width: min(100vw, calc(100vh * 360 / 630)); width: min(100vw, calc(100dvh * 360 / 630)); }
+      .inmersivo .marco { aspect-ratio: 720 / 630; width: min(100vw, calc(100vh * 720 / 630)); width: min(100vw, calc(100dvh * 720 / 630)); }
+      /* Los paneles siguen midiendo lo mismo que en vertical (la mitad del marco), centrados */
+      .mejoras, .objetivos { left: 25%; right: 25%; }
+      .adm { left: 25%; right: 25%; }
+      .conf { left: 25%; right: 25%; }
     }
 
     /* Marcadores: en filas a la derecha de «🎮 Juegos / ☰ Pausa» (esa esquina es de los botones fijos del estándar) */
@@ -157,6 +162,20 @@
     .fila-part .b3d.txt { padding: 0 10px; font-size: 13px; }
     .fila-part .b3d .b-ico { margin-right: 4px; }
 
+    /* Modo niveles: cuadro de metas arriba del juego (dentro del marco; deja pasar los toques al juego) y cartel de victoria */
+    .objetivos { position: absolute; z-index: 2; top: 6px; left: 6px; right: 6px; padding: 6px 8px 7px; font-size: 12px; line-height: 1.3; color: #fff; pointer-events: none;
+      background: #15171acc; border: 2px solid #3b3e46; border-radius: 12px; }
+    .objetivos h4 { margin: 0 0 4px; font-size: 12px; color: #ffd24d; }
+    .obj { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 6px; padding: 1px 0; }
+    .obj-ic { flex: none; width: 18px; text-align: center; font-size: 14px; }
+    .obj-tx { font-weight: 800; }
+    .obj-pasos { display: flex; flex-wrap: wrap; gap: 0 8px; margin-left: auto; }
+    .paso { opacity: .65; white-space: nowrap; }
+    .paso.ok { opacity: 1; color: #9dffb0; }
+    .obj.hecho .obj-tx { color: #9dffb0; }
+    .obj-resta { margin-top: 3px; font-size: 11px; color: #ffb4a8; }
+    .ovl .menu-botones .b3d[hidden] { display: none; }
+
     /* Pestañas de la computadora: 4 cuadritos en fila (la mitad de grandes que los botones de mejora) */
     .pestanas { display: flex; align-items: center; gap: 8px; padding: 0 4px 7px; }
     .pest { --ac: #8b93a0; position: relative; flex: none; width: 34px; height: 34px; padding: 4px 0 0; overflow: hidden; font-size: 17px; line-height: 1; cursor: pointer;
@@ -180,7 +199,7 @@
   <!-- Botones fijos del estándar (compartido/inmersivo.css): 🎮 Juegos y ☰ Pausa arriba a la izquierda. 🌙/☀️ y ⛶ los crean fondo-madera.js y pantalla-completa.js -->
   <nav class="nav-juego">
     <a class="b3d txt b-azuloscuro" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🎮</span> Juegos</a>
-    <button class="b3d txt b-gris" id="btnMenu" type="button" hidden><span class="b-ico">☰</span> Pausa</button>
+    <button class="b3d txt b-gris" id="btnMenu" type="button" hidden><span class="b-ico">☰</span><span id="btnMenuTxt">Pausa</span></button>
   </nav>
   <div class="hud hud-info">
     <span class="chip chip-monedas" title="Dinero"><span class="moneda"></span><b id="dinero">0</b></span>
@@ -201,6 +220,8 @@
   <div class="escena">
     <div class="marco" id="tablero">
       <canvas id="lienzo" class="lienzo"></canvas>
+      <!-- Metas del nivel (solo en el modo niveles; lo rellena el juego) -->
+      <div class="objetivos oculto" id="objetivos" aria-live="polite"></div>
 
       <!-- Computadora de mejoras sobre un escritorio: de arriba abajo, empleados, verduras, frutas, granja y lo demás. Los botones los rellena el juego -->
       <div class="mejoras oculto" id="mejoras">
@@ -275,7 +296,7 @@
         </div>
       </div>
 
-      <!-- Menú de inicio: Nueva partida / Continuar / Niveles (todavía sin niveles). Las instrucciones están en ☰ Pausa → ℹ️ Info -->
+      <!-- Menú de inicio: Nueva partida / Continuar (modo infinito, 10 partidas) / Niveles (mapa estándar de compartido/mapa-niveles.js). Las instrucciones están en ☰ Pausa → ℹ️ Info -->
       <div class="ovl" id="ovl">
         <div class="menu-ini" id="menuInicio">
           <h2>🛒 Supermercado</h2>
@@ -283,7 +304,7 @@
           <div class="menu-botones">
             <button class="b3d txt b-verde" id="btnNueva" type="button"><span class="b-ico">🆕</span> Nueva partida</button>
             <button class="b3d txt b-azul" id="btnContinuar" type="button"><span class="b-ico">▶️</span> Continuar</button>
-            <button class="b3d txt b-gris" id="btnNiveles" type="button" disabled title="Próximamente"><span class="b-ico">🗺️</span> Niveles · pronto</button>
+            <button class="b3d txt b-gris" id="btnNiveles" type="button"><span class="b-ico">🗺️</span> Niveles</button>
             <small class="menu-nota" id="menuNota"></small>
           </div>
         </div>
@@ -306,10 +327,33 @@
         <p>💾 Puedes tener hasta 10 partidas. Cada una se guarda sola cada 10 segundos, al abrir ☰ Pausa, al salir y al cerrar la página. En «Continuar» eliges cuál abrir (o la borras); si las 10 están llenas, «Nueva partida» te deja reemplazar una.</p>
         <div class="jugar"><button class="b3d txt b-azul" id="infoVolver" type="button"><span class="b-ico">⬅️</span> Volver</button></div>
       </div>
+
+      <!-- Modo niveles: cartel al cumplir todas las metas -->
+      <div class="ovl oculto" id="nivelFin">
+        <div class="menu-ini">
+          <h2>🎉 ¡Nivel completado!</h2>
+          <p id="finTexto"></p>
+          <div class="menu-botones">
+            <button class="b3d txt b-verde" id="finSiguiente" type="button" hidden><span class="b-ico">▶️</span> Siguiente nivel</button>
+            <button class="b3d txt b-azul" id="finRepetir" type="button"><span class="b-ico">🔁</span> Jugar otra vez</button>
+            <button class="b3d txt b-gris" id="finMapa" type="button"><span class="b-ico">🗺️</span> Volver al mapa</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modo niveles: botón ℹ️ Info del mapa -->
+      <div class="ovl oculto" id="infoNiveles">
+        <h2>ℹ️ Niveles</h2>
+        <p>Cada estado de México tiene 10 niveles, y cada país del mundo también. Toca un estado del mapa para ver sus niveles; se abren en orden.</p>
+        <p>Cada nivel empieza desde cero y trae sus propias metas (se ven arriba del juego) y, a veces, cosas que no se pueden hacer: por ejemplo, sin ampliar el edificio ni el patio y sin comprar la granja. Cuando cumples todas las metas, el nivel termina.</p>
+        <p>El avance de un nivel no se guarda: si sales, lo empiezas de nuevo. Lo que sí se guarda son los niveles que ya completaste. Tu partida del modo infinito no se toca.</p>
+        <p>Al completar todos los estados de México se abre el mapa del mundo.</p>
+        <div class="jugar"><button class="b3d txt b-azul" id="infoNivVolver" type="button"><span class="b-ico">⬅️</span> Volver</button></div>
+      </div>
     </div>
   </div>
 
-  <script type="module" src="juego-supermercado.js?v=20"></script>
+  <script type="module" src="juego-supermercado.js?v=22"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
   <script type="module" src="../compartido/fondo-madera.js"></script>
 </body>

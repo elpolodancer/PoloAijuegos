@@ -5,8 +5,13 @@
 // Recoger, colocar y comprar lo básico es automático por cercanía. En la zona de mejoras 🛠️ compras
 // un empleado de caja, más estanterías y ampliar el edificio y el patio hacia la derecha (la cámara te sigue).
 // Menú de inicio (Nueva partida / Continuar / Niveles) y 10 partidas guardadas en el aparato: ver «Partidas guardadas» más abajo.
+// MODO NIVELES: el botón «Niveles» abre el mapa estándar (compartido/mapa-niveles.js: 32 estados de México y 194 países, 10 niveles cada uno).
+// Los niveles y sus metas viven en niveles-supermercado.js; aquí está lo que hace el juego con ellos: ver «Modo niveles» más abajo.
 
 import { crearMenuPausa } from "../compartido/menu-pausa.js";   // menú ☰ Pausa estándar (no usa Firebase: funciona sin internet)
+import { crearEtapas } from "../compartido/etapas-mapa.js";     // orden de los 32 estados y 194 países
+import { montarMapa } from "../compartido/mapa-niveles.js";     // mapa de niveles estándar (el agua sube un escalón por estado terminado)
+import { NIVELES, NIVELES_LISTOS, NIVELES_POR_ETAPA, evaluarNivel, textoRestricciones } from "./niveles-supermercado.js";
 
 // ---------- Ajustes (cámbialos a gusto) ----------
 const MUNDO = { w: 360, h: 630 };   // tamaño de la PANTALLA (siempre vertical, como un celular) y del edificio inicial. Arriba hay una franja de pasto fija para los jardines
@@ -282,6 +287,10 @@ const elColocar = document.getElementById("colocar"), elColTxt = document.getEle
 
 // ---------- Estado ----------
 let estado = "inicio";   // inicio | jugando
+let nivelActual = 0;     // 0 = partida libre (modo infinito) · n = jugando el nivel n del mapa (número global)
+let nivelTerminado = false;   // ya se cumplieron todas las metas del nivel (el juego queda en pausa con el cartel de victoria)
+let logrados = new Set();     // pasos de las metas ya cumplidos en este nivel (no se pierden aunque después gastes)
+const permite = (que) => !(nivelActual && NIVELES[nivelActual] && NIVELES[nivelActual].restricciones[que] === false);   // ¿este nivel deja ampliar el edificio, el patio o comprar la granja?
 let pausado = false;     // el menú ☰ Pausa está abierto: todo se detiene
 let velocidad = 1;       // x1 … x8: cuántos pasos de juego se corren por cada cuadro (botón ⏩)
 let dinero = DINERO_INICIAL;
@@ -309,6 +318,7 @@ let nivelRepartidor = 0; // nivel de los empleados que llevan producto del jard�
 let nivelPatio = 0;      // cuántas ampliaciones tiene el patio (0 a COSTOS_PATIO.length)
 let pMin = 0, pMax = MUNDO.w;   // límites del PATIO en x: crecen al ampliar el patio
 let wMin = 0, wMax = MUNDO.w;   // el mundo entero: lo más ancho entre edificio y patio (hasta ahí llega la cámara)
+let pantW = MUNDO.w;     // ancho de la PANTALLA en px lógicos: 360 en vertical (celular) y el doble (720) en horizontal (PC). El edificio sigue midiendo MUNDO.w
 let camX = 0, camY = 0;  // cámara (vista isométrica): punto de la pantalla proyectada que queda al centro
 let atorado = 0;         // segundos empujando contra una pared sin avanzar
 let granja = false;      // ¿ya compraste la granja?
@@ -1106,6 +1116,7 @@ function recalcMundo() {
 
 // Admin: deja todo comprado (edificio con una ampliación a cada lado, estanterías, jardines, empleados y carga)
 function desbloquearTodo() {
+  if (nivelActual) { textos.push({ x: jugador.x, y: jugador.y, vida: 2, txt: "No disponible dentro de un nivel", col: "#ff9a8a" }); return; }
   while (edificio < COSTOS_EDIFICIO.length) ampliar(1);   // edificio: todas hacia la derecha
   ampliaciones.forEach((_, i) => { if (!accesos.includes(i)) accesos.push(i); });   // y un acceso al patio en cada ampliación
   while (nivelPatio < COSTOS_PATIO.length) ampliarPatio(1);   // patio: igual, por separado
@@ -1131,6 +1142,10 @@ function desbloquearTodo() {
 
 function comprarMejora(tipo) {
   if (estado !== "jugando" || !enMejoras) return;
+  // Restricciones del nivel (los botones también se esconden en actualizarPanel)
+  if (tipo === "granja" && !permite("granja")) return;
+  if ((tipo === "edificio-der" || tipo.startsWith("acceso:")) && !permite("edificio")) return;
+  if (tipo === "patio-der" && !permite("patio")) return;
   const x = MEJORAS_ZONA.x + MEJORAS_ZONA.w / 2, y = MEJORAS_ZONA.y - 8;
   if (tipo === "carga") {
     if (nivelCarga >= COSTOS_CARGA.length || !alcanza(COSTOS_CARGA[nivelCarga])) return;
@@ -1310,7 +1325,7 @@ function pintarBoton(b, texto, precio, activo, dos) {
 }
 function pintarGranja() {
   titGranja.textContent = granja ? "🐄 Granja (a la izquierda del edificio, por la puerta junto a la computadora)" : "🐄 Granja: terreno a la izquierda del edificio";
-  btnGranja.hidden = granja;
+  btnGranja.hidden = granja || !permite("granja");
   if (!granja) pintarBoton(btnGranja, "🐄 Comprar granja", "$" + COSTO_GRANJA, alcanza(COSTO_GRANJA));
   corrales.forEach((c, i) => {
     const b = btnsCorral[i], ic = PRODUCTOS[c.producto].icono;
@@ -1403,7 +1418,7 @@ function actualizarPanel() {
   if (!hayPrimerEstante()) pintarBoton(btnEstante, "🗄️ Falta la 1.ª estantería", "", false);
   else if (slot < 0) pintarBoton(btnEstante, "🗄️ Estanterías al máximo", "", false);
   else if (slot < TODOS.length && !productorDe(TODOS[slot]).comprado) pintarBoton(btnEstante, "🗄️ Antes compra " + (productorDe(TODOS[slot]).tipo ? "el corral" : "el jardín") + " de " + PRODUCTOS[TODOS[slot]].icono, "", false);
-  else if (ampDe(slot) > edificio) pintarBoton(btnEstante, "🗄️ Agranda el edificio", "", false);
+  else if (ampDe(slot) > edificio) pintarBoton(btnEstante, permite("edificio") ? "🗄️ Agranda el edificio" : "🗄️ Sin sitio en este nivel", "", false);
   else pintarBoton(btnEstante, slot < TODOS.length ? "🗄️ Estantería de " + PRODUCTOS[TODOS[slot]].icono : "🗄️ Estantería nueva", "$" + costoEstanteExtra(), alcanza(costoEstanteExtra()));
   // un empleado por jardín comprado
   jardines.forEach((g, i) => {
@@ -1419,15 +1434,15 @@ function actualizarPanel() {
   pintarGranja();
   // edificio y patio se mejoran por separado: cada uno con su lado a elegir
   const maxEd = edificio >= COSTOS_EDIFICIO.length;
-  btnEdDer.hidden = maxEd;
+  btnEdDer.hidden = maxEd || !permite("edificio");
   if (!maxEd) {
     const c = COSTOS_EDIFICIO[edificio];
     pintarBoton(btnEdDer, "🏗️ Edificio ▶ +4 estantes (derecha)", "$" + c, alcanza(c));
   }
   const maxPat = nivelPatio >= COSTOS_PATIO.length;
   const sig = siguienteJardin();
-  btnPatDer.hidden = maxPat;
-  avisoPatio.hidden = !(sig && !sig.disponible);
+  btnPatDer.hidden = maxPat || !permite("patio");
+  avisoPatio.hidden = !(sig && !sig.disponible) || !permite("patio");
   if (sig && !sig.disponible) avisoPatio.textContent = "🌱 Patio lleno: amplíalo para el jardín de " + PRODUCTOS[sig.producto].icono;
   if (!maxPat) {
     const c = COSTOS_PATIO[nivelPatio];
@@ -1479,12 +1494,13 @@ function actualizarHud() {
   elClientes.textContent = clientes.length + "/" + maxClientes();
   actualizarPanel();
   actualizarBarraColocar();
+  actualizarNivel();
 }
 
 // ---------- Entrada ----------
 function pantallaDe(ev) {
   const r = lienzo.getBoundingClientRect();
-  return { x: ((ev.clientX - r.left) / r.width) * MUNDO.w, y: ((ev.clientY - r.top) / r.height) * MUNDO.h };
+  return { x: ((ev.clientX - r.left) / r.width) * pantW, y: ((ev.clientY - r.top) / r.height) * MUNDO.h };
 }
 // Un toque en la pantalla se convierte al punto del suelo que se ve ahí (y se deja dentro del terreno)
 function posicion(ev) {
@@ -1577,6 +1593,7 @@ function restablecer() {
   patios = []; nivelPatio = 0; pMin = 0; pMax = MUNDO.w;
   nivelCajero = 0; nivelRepartidor = 0; nivelCarga = 0; nivelVelJug = 0;
   granja = false; yMin = 0;
+  nivelActual = 0; nivelTerminado = false; logrados = new Set();   // iniciarNivel() lo vuelve a poner después
   clientes = []; espera = 2; traspasoT = 0; textos = []; enMejoras = false;
   for (const g of jardines) Object.assign(g, nuevoJardin(g.producto, { w: 140, h: 80, cols: 3, filas: 2 }, COSTO_JARDIN_DE[g.producto]));
   corrales.forEach((c, i) => Object.assign(c, nuevoCorral(c.producto, i)));
@@ -1668,6 +1685,7 @@ function iniciarPartida(i, datos) {
   fijarVelocidad(1);
   ovl.classList.add("oculto");
   btnMenu.hidden = false;       // ☰ Pausa solo se ve dentro de la partida
+  rotularMenu(false);
   if (!datos && lee("super_adm_auto")) desbloquearTodo();   // admin: «empezar con todo desbloqueado»
   if (aviso) textos.push({ x: jugador.x, y: jugador.y, vida: 3, txt: aviso, col: "#ff9a8a" });
   if (!guardarActual()) textos.push({ x: jugador.x, y: jugador.y, vida: 3, txt: "⚠️ No se pudo guardar en este aparato", col: "#ff9a8a" });
@@ -1681,6 +1699,7 @@ const menuNota = document.getElementById("menuNota"), listaPartidas = document.g
 const partTitulo = document.getElementById("partTitulo"), partAyuda = document.getElementById("partAyuda");
 
 function mostrarMenu() {
+  if (mapa.abierto()) mapa.cerrar();
   ovl.classList.remove("oculto");
   menuPartidas.hidden = true; menuInicio.hidden = false;
   const n = leerPartidas().filter(Boolean).length;
@@ -1760,6 +1779,153 @@ window.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && estado =
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") guardarActual(); });
 window.addEventListener("pagehide", guardarActual);
 
+// ---------- Modo niveles ----------
+// «Niveles» (menú de inicio) abre el MAPA ESTÁNDAR de compartido/mapa-niveles.js: México con agua que sube un escalón por estado terminado y,
+// al terminar los 32, el mundo con 194 países. Cada estado y cada país tiene NIVELES_POR_ETAPA (10) niveles. Los niveles existentes y sus metas
+// están en niveles-supermercado.js (clave = número global del nivel). Un nivel es una partida APARTE: empieza de cero, con sus restricciones, y se
+// completa al cumplir todas sus metas. No usa las 10 ranuras de partidas guardadas y su avance NO se guarda; lo único que se guarda es cuántos
+// niveles llevas terminados (clave «supermercado_niveles_v1»: { v: 1, hecho, t }). El nivel desbloqueado se calcula: hecho + 1 (sin pasar del último
+// que ya existe), así que al agregar un nivel nuevo se abre solo para quien ya terminó el anterior.
+// Los estados salen en el orden por defecto de etapas-mapa.js (de Quintana Roo hacia el norte). Si quieres otro orden, pasa «primeros» a crearEtapas
+// ANTES de publicar (cambiarlo después mueve los niveles de lugar para quien ya jugó).
+const ETAPAS = crearEtapas({ porEtapa: NIVELES_POR_ETAPA });
+const CLAVE_NIVELES = "supermercado_niveles_v1";
+function leerNiveles() {
+  try {
+    const o = JSON.parse(localStorage.getItem(CLAVE_NIVELES)), h = Math.floor(Number(o && o.hecho));
+    return { hecho: Number.isFinite(h) && h > 0 ? Math.min(h, ETAPAS.total) : 0 };
+  } catch (e) { return { hecho: 0 }; }
+}
+function marcarNivelHecho(n) {
+  if (n <= leerNiveles().hecho) return;
+  try { localStorage.setItem(CLAVE_NIVELES, JSON.stringify({ v: 1, hecho: n, t: Date.now() })); } catch (e) {}
+}
+const progresoMapa = () => { const { hecho } = leerNiveles(); return { hecho, max: Math.max(1, Math.min(hecho + 1, NIVELES_LISTOS)) }; };
+const nombreNivel = (n) => ETAPAS.nombreEtapa(n) + " · nivel " + ETAPAS.etapaDe(n).k;
+
+const btnMenuTxt = document.getElementById("btnMenuTxt");
+const elObj = document.getElementById("objetivos");
+const nivelFin = document.getElementById("nivelFin"), infoNiv = document.getElementById("infoNiveles");
+const btnFinSig = document.getElementById("finSiguiente");
+
+// ☰ dice «Pausa» dentro de una partida y «Menú principal» en el mapa (estándar: vuelve al menú del juego)
+function rotularMenu(enMapa) { btnMenuTxt.textContent = enMapa ? "Menú principal" : "Pausa"; }
+
+const mapa = montarMapa({
+  prefijo: "supermercado",
+  etapas: ETAPAS,
+  progreso: progresoMapa,
+  jugarNivel: (n) => iniciarNivel(n),
+  infoNivel: (n) => { const d = NIVELES[n]; return { sub: d ? "🎯 " + d.objetivos.length : "pronto", clase: n <= leerNiveles().hecho ? "b-verde" : "b-azul", aria: d ? d.nombre : "próximamente" }; },
+  leyenda: "Cada estado y cada país tiene 10 niveles. Cumple todas las metas del nivel para abrir el siguiente.",
+  avisoPrincipal: () => { const h = leerNiveles().hecho; return h ? h + (h === 1 ? " nivel completado" : " niveles completados") : "Toca el primer punto para empezar el nivel 1"; },
+  botonesExtra: [{ icono: "♾️", texto: "Modo infinito", clase: "b-azul", fn: () => volverAlMenu() }],   // junto a «Continuar» (estándar: como «Juego libre»)
+  alInfo: () => infoNiv.classList.remove("oculto"),
+  alCambiarVista: () => rotularMenu(true),
+});
+function abrirMapa(n) {
+  ovl.classList.add("oculto");
+  btnMenu.hidden = false; rotularMenu(true);
+  mapa.abrir(n);
+}
+function volverAlMenu() {   // del mapa al menú de inicio
+  mapa.cerrar();
+  btnMenu.hidden = true; rotularMenu(false);
+  infoNiv.classList.add("oculto");
+  mostrarMenu();
+}
+btnMenu.addEventListener("click", () => { if (estado === "inicio" && mapa.abierto()) volverAlMenu(); });   // en el mapa, ☰ = «Menú principal»
+document.getElementById("btnNiveles").addEventListener("click", () => abrirMapa());
+document.getElementById("infoNivVolver").addEventListener("click", () => infoNiv.classList.add("oculto"));
+window.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !infoNiv.classList.contains("oculto")) { ev.preventDefault(); infoNiv.classList.add("oculto"); } });
+
+// Empieza el nivel n desde cero (con su dinero inicial y sus restricciones)
+function iniciarNivel(n) {
+  const def = NIVELES[n];
+  if (!def) return;
+  if (mapa.abierto()) mapa.cerrar();
+  restablecer();                       // deja nivelActual = 0: se pone justo después
+  nivelActual = n; nivelTerminado = false; logrados = new Set();
+  if (def.dineroInicial != null) dinero = def.dineroInicial;
+  ranuraActual = -1;                   // los niveles no usan las 10 partidas guardadas
+  estado = "jugando"; pausado = false;
+  fijarVelocidad(1);
+  ovl.classList.add("oculto"); nivelFin.classList.add("oculto"); infoNiv.classList.add("oculto");
+  btnMenu.hidden = false; rotularMenu(false);
+  textos.push({ x: jugador.x, y: jugador.y, vida: 3, txt: "🎯 " + nombreNivel(n), col: "#ffd24d" });
+  tono(440, 0.12);
+}
+function salirAlMapa(n) {
+  pausado = false;
+  if (colocando) terminarColocacion(false);
+  if (pregunta) cerrarPregunta();
+  cerrarTirar();
+  nivelActual = 0; nivelTerminado = false; logrados = new Set();
+  estado = "inicio"; ranuraActual = -1;
+  nivelFin.classList.add("oculto");
+  abrirMapa(n);
+}
+
+// Lo que cuenta para las metas (ver evaluarNivel)
+const fotoNivel = () => ({
+  dinero,
+  jardines: Object.fromEntries(jardines.map((g) => [g.producto, { comprado: g.comprado, emp: !!g.emp }])),
+  estantes: estantes.map((e) => e.producto),
+});
+
+// Cuadro de metas arriba del juego (solo dentro de un nivel). Se vuelve a dibujar solo cuando algo cambia.
+let objFirma = "";
+function dibujarObjetivos(def, r) {
+  const t = document.createElement("h4");
+  t.textContent = "🎯 " + nombreNivel(nivelActual) + " · " + def.nombre;
+  const filas = [t];
+  for (const o of r.objetivos) {
+    const f = document.createElement("div");
+    f.className = "obj" + (o.hecho ? " hecho" : "");
+    const ic = document.createElement("span"); ic.className = "obj-ic"; ic.textContent = o.hecho ? "✅" : o.icono;
+    const tx = document.createElement("span"); tx.className = "obj-tx"; tx.textContent = o.texto;
+    const ps = document.createElement("span"); ps.className = "obj-pasos";
+    for (const p of o.pasos) {
+      const s = document.createElement("span");
+      s.className = "paso" + (p.hecho ? " ok" : "");
+      s.textContent = p.rotulo + (p.hecho ? " ✓" : "");
+      ps.appendChild(s);
+    }
+    f.append(ic, tx, ps);
+    filas.push(f);
+  }
+  const rs = textoRestricciones(def);
+  if (rs) { const d = document.createElement("div"); d.className = "obj-resta"; d.textContent = rs; filas.push(d); }
+  elObj.replaceChildren(...filas);
+}
+function actualizarNivel() {   // cada cuadro (desde actualizarHud)
+  const def = nivelActual ? NIVELES[nivelActual] : null;
+  const ver = estado === "jugando" && !!def;
+  elObj.classList.toggle("oculto", !ver);
+  if (!ver) { objFirma = ""; return; }
+  const r = evaluarNivel(def, fotoNivel(), logrados);
+  const firma = JSON.stringify(r);
+  if (firma !== objFirma) { objFirma = firma; dibujarObjetivos(def, r); }
+  if (r.completo && !nivelTerminado) terminarNivel();
+}
+function terminarNivel() {
+  nivelTerminado = true;
+  pausado = true; tocando = false; objetivo = null;
+  if (colocando) terminarColocacion(false);
+  if (pregunta) cerrarPregunta();
+  cerrarTirar(); abrirVel(false);
+  const n = nivelActual;
+  marcarNivelHecho(n);
+  document.getElementById("finTexto").textContent = nombreNivel(n) + " · " + NIVELES[n].nombre;
+  btnFinSig.hidden = !NIVELES[n + 1];   // «Siguiente nivel» solo si ya existe
+  nivelFin.classList.remove("oculto");
+  tono(523, 0.12); setTimeout(() => tono(659, 0.12), 120); setTimeout(() => tono(784, 0.25), 240);
+}
+btnFinSig.addEventListener("click", () => iniciarNivel(nivelActual + 1));
+document.getElementById("finRepetir").addEventListener("click", () => iniciarNivel(nivelActual));
+document.getElementById("finMapa").addEventListener("click", () => salirAlMapa(nivelActual));
+
+
 // ----- ☰ Pausa (estándar: compartido/menu-pausa.js) -----
 // «Salir» guarda la partida y vuelve al menú de inicio; ahí «Continuar» la abre otra vez.
 const pausa = crearMenuPausa({
@@ -1768,15 +1934,17 @@ const pausa = crearMenuPausa({
   alAbrir: () => { pausado = true; tocando = false; objetivo = null; velPanel.classList.add("oculto"); guardarActual(); },
   alContinuar: () => { pausado = false; },
   extras: () => [
-    { icono: "💾", texto: "Guardar partida", clase: "b-oro", ayuda: "Se guarda sola cada 10 segundos y al salir.", alElegir: () => {
+    nivelActual ? null : { icono: "💾", texto: "Guardar partida", clase: "b-oro", ayuda: "Se guarda sola cada 10 segundos y al salir.", alElegir: () => {
       const ok = guardarActual();
       textos.push({ x: jugador.x, y: jugador.y, vida: 1.6, txt: ok ? "💾 Partida guardada" : "⚠️ No se pudo guardar", col: ok ? "#9dffb0" : "#ff9a8a" });
       pausado = false;
     } },
     { icono: "ℹ️", texto: "Info", clase: "b-azul", alElegir: () => info.classList.remove("oculto") },   // el juego sigue en pausa mientras lees
   ],
-  ayudaSalir: "Se guarda la partida y vuelves al inicio.",
+  get textoSalir() { return nivelActual ? "Salir al mapa" : "Salir"; },
+  ayudaSalir: () => (nivelActual ? "Vuelves al mapa. El avance de este nivel no se guarda." : "Se guarda la partida y vuelves al inicio."),
   alSalir: () => {
+    if (nivelActual) { salirAlMapa(nivelActual); return; }
     guardarActual();
     pausado = false;
     if (colocando) terminarColocacion(false);
@@ -1820,20 +1988,24 @@ document.addEventListener("pointerdown", (ev) => { if (!velPanel.classList.conta
 fijarVelocidad(1);
 
 // ---------- Dibujo ----------
-// La pantalla es siempre vertical (proporción de un celular): se ajusta al alto disponible y nunca crece.
+// En vertical la pantalla tiene proporción de celular (360×630); en horizontal (PC) es el doble de ancha (720×630). Se ajusta al alto disponible y nunca crece.
 // Si el edificio es más ancho, solo se ve un trozo y la cámara lo recorre.
 const tablero = lienzo.parentElement;
+const ANCHO_PC = 2;   // en horizontal (PC) la zona de visión es ANCHO_PC veces más ancha (debe coincidir con 720/630 del CSS en index-supermercado.html)
+const horizontal = window.matchMedia("(min-aspect-ratio: 1/1)");
 function ajustar() {
   dpr = window.devicePixelRatio || 1;
+  pantW = horizontal.matches ? MUNDO.w * ANCHO_PC : MUNDO.w;
   // El tamaño del marco lo calcula el CSS (inmersivo): aquí solo se lee el ancho real
   const wReal = lienzo.clientWidth;
-  escala = wReal / MUNDO.w;
+  escala = wReal / pantW;
   lienzo.style.height = MUNDO.h * escala + "px";
   lienzo.width = Math.round(wReal * dpr);
   lienzo.height = Math.round(MUNDO.h * escala * dpr);
   panel.style.bottom = Math.round((MUNDO.h - MEJORAS_ZONA.y + 6) * escala) + "px";   // el panel de mejoras queda justo arriba de la zona 🛠️
 }
 window.addEventListener("resize", ajustar);
+horizontal.addEventListener && horizontal.addEventListener("change", ajustar);
 
 function caja(x, y, w, h, r) {
   ctx.beginPath();
@@ -1885,16 +2057,16 @@ const CALLE = 90;            // ancho de la calle que rodea todo
 const ALTO_ESTANTE = 24;     // altura de las estanterías
 const ALTO_PARED = 16;       // altura de las paredes de atrás (las de adelante son bordillos bajos para ver adentro)
 
-// Mundo (x, y, z) → pantalla (px lógicos de 360×630)
-const P = (x, y, z = 0) => ({ x: (x - y) * ISO - camX + MUNDO.w / 2, y: ((x + y) * ISO) / 2 - camY + CENTRO_Y - z });
+// Mundo (x, y, z) → pantalla (px lógicos de pantW×630: 360 o 720 de ancho)
+const P = (x, y, z = 0) => ({ x: (x - y) * ISO - camX + pantW / 2, y: ((x + y) * ISO) / 2 - camY + CENTRO_Y - z });
 // Pantalla → punto del suelo (z = 0), lo contrario de P
 function desdePantalla(sx, sy) {
-  const u = sx - MUNDO.w / 2 + camX, v = sy - CENTRO_Y + camY;
+  const u = sx - pantW / 2 + camX, v = sy - CENTRO_Y + camY;
   return { x: (u + 2 * v) / (2 * ISO), y: (2 * v - u) / (2 * ISO) };
 }
 const modoPantalla = () => ctx.setTransform(dpr * escala, 0, 0, dpr * escala, 0, 0);
 function modoPlano() {   // después de esto se dibuja en coordenadas del MAPA y sale en isométrico
-  const k = dpr * escala, ox = MUNDO.w / 2 - camX, oy = CENTRO_Y - camY;
+  const k = dpr * escala, ox = pantW / 2 - camX, oy = CENTRO_Y - camY;
   ctx.setTransform(k * ISO, (k * ISO) / 2, -k * ISO, (k * ISO) / 2, k * ox, k * oy);
 }
 function centrarCamara() {
@@ -1903,7 +2075,7 @@ function centrarCamara() {
 }
 function enPantalla(x, y, m = 90) {
   const s = P(x, y);
-  return s.x > -m && s.x < MUNDO.w + m && s.y > -m && s.y < MUNDO.h + m + 60;
+  return s.x > -m && s.x < pantW + m && s.y > -m && s.y < MUNDO.h + m + 60;
 }
 
 // ----- Piezas para dibujar cajas con altura -----
@@ -2457,7 +2629,7 @@ function dibujarEtiquetas() {
 
 function dibujar() {
   modoPantalla();
-  ctx.fillStyle = "#86b86b"; ctx.fillRect(0, 0, MUNDO.w, MUNDO.h);
+  ctx.fillStyle = "#86b86b"; ctx.fillRect(0, 0, pantW, MUNDO.h);
   modoPlano();
   dibujarSuelo();
   dibujarPlanoJuego();
@@ -2534,7 +2706,7 @@ if (verAdmin) {
       return;
     }
     clearTimeout(armado); armado = 0; tReiniciar.textContent = "🔄 Reiniciar partida";
-    if (estado === "jugando") { $("adm").classList.add("oculto"); iniciarPartida(ranuraActual, null); }
+    if (estado === "jugando") { $("adm").classList.add("oculto"); if (nivelActual) iniciarNivel(nivelActual); else iniciarPartida(ranuraActual, null); }
   });
   if (auto.checked) desbloquearTodo();
 }
