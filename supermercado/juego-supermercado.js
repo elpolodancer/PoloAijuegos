@@ -195,10 +195,12 @@ const GRANJA_IDS = ["huevo", "leche", "pollo", "res", "tocino"];
 const IDS = Object.keys(PRODUCTOS).filter((id) => !GRANJA_IDS.includes(id));   // cultivos (jardines)
 const TODOS = Object.keys(PRODUCTOS);                                            // cultivos + granja: el orden de las estanterías fijas
 
-// ----- Granja (terreno nuevo al norte del patio) -----
+// ----- Granja (terreno nuevo a la izquierda del edificio) -----
 const COSTO_GRANJA = 1000;          // comprar la granja (en 🛠️ Mejoras)
-const GRANJA_ALTO = 268;            // cuánto terreno se abre hacia el norte
-const GRANJA_SEP = 4;               // separación entre el patio y los corrales
+const GRANJA_X = -MUNDO.w;          // la granja queda a la IZQUIERDA del edificio: de x = -360 a 0 y de TOP hasta el piso (misma altura que el edificio)
+// Puerta de la granja: un hueco en el muro de la izquierda del edificio, justo arriba de la computadora (y de a a b; c = su centro)
+const PUERTA_GRANJA = { a: 508, b: 548, c: 528 };
+const GRANJA_SEP = 4;               // (ya no se usa)
 // «continuo»: sueltan su producto solos, como un jardín (seg = cada cuántos segundos sale uno) · «carga»: una carga cada cierto tiempo
 const GRANJA_DEF = {
   huevo: { tipo: "continuo", animal: "🐔", nombre: "gallinas", costo: 200, costoEmp: 300, seg: 8, animales: 4 },
@@ -310,7 +312,7 @@ let wMin = 0, wMax = MUNDO.w;   // el mundo entero: lo más ancho entre edificio
 let camX = 0, camY = 0;  // cámara (vista isométrica): punto de la pantalla proyectada que queda al centro
 let atorado = 0;         // segundos empujando contra una pared sin avanzar
 let granja = false;      // ¿ya compraste la granja?
-let yMin = 0;            // borde de arriba del mundo: baja a -GRANJA_ALTO al comprar la granja
+let yMin = 0;            // borde de arriba del mundo (ya no cambia: la granja está a la izquierda)
 let ptr = null;          // último punto tocado (para seguir el dedo mientras la cámara se mueve)
 let dpr = 1;
 let nivelCarga = 0;      // mejoras de carga compradas (0 a COSTOS_CARGA.length)
@@ -352,12 +354,12 @@ function colocarJardines() {
   });
 }
 colocarJardines();
-// Corrales de la granja: 2 columnas × 3 filas al norte del patio (el 1.º abajo a la izquierda)
+// Corrales de la granja: 2 columnas × 3 filas en el terreno de la izquierda (el 1.º abajo, a la izquierda)
 function nuevoCorral(id, i) {
   const d = GRANJA_DEF[id], col = i % 2, fila = Math.floor(i / 2);
   const c = {
     producto: id, tipo: d.tipo, animal: d.animal, nombre: d.nombre, costo: d.costo, costoEmp: d.costoEmp, emp: null, comprado: false, disponible: true,
-    x: col ? 204 : 16, y: -GRANJA_SEP - 80 - fila * (80 + JARDIN_HUECO), w: 140, h: 80, cols: 3, filas: 2,
+    x: GRANJA_X + (col ? 176 : 12), y: TOP + 14 + (2 - fila) * (80 + JARDIN_HUECO), w: 140, h: 80, cols: 3, filas: 2,   // entre las dos columnas y junto al muro queda un pasillo para caminar
     parcelas: [], reloj: 0, stock: 0, nivelVel: 0, nivelCant: 0, nivelTiempo: 0, animales: [],
   };
   if (d.tipo === "continuo") for (let k = 0; k < 6; k++) c.parcelas.push({ t: -1, id: null });
@@ -420,7 +422,12 @@ function chocaPared(x, y) {
 }
 // Bajo la línea del edificio, lo que queda fuera de sus muros (cuando el patio es más ancho) no se puede pisar
 function fueraEdificio(x, y) {
-  if (xMin > wMin && distRect(x, y, { x: wMin - 100, y: TOP, w: xMin - wMin + 100, h: MUNDO.h }) < RADIO - 0.01) return true;
+  if (granja) {
+    // el muro de la izquierda del edificio solo se cruza por la puerta de la granja
+    if (distRect(x, y, { x: xMin, y: TOP, w: 0, h: MUNDO.h - TOP }) < RADIO - 0.01 && !(y - RADIO >= PUERTA_GRANJA.a && y + RADIO <= PUERTA_GRANJA.b)) return true;
+    // arriba de la granja no hay nada: esa esquina no se pisa
+    if (distRect(x, y, { x: GRANJA_X - 100, y: yMin - 100, w: xMin - GRANJA_X + 100, h: TOP - yMin + 100 }) < RADIO - 0.01) return true;
+  } else if (xMin > wMin && distRect(x, y, { x: wMin - 100, y: TOP, w: xMin - wMin + 100, h: MUNDO.h }) < RADIO - 0.01) return true;
   if (xMax < wMax && distRect(x, y, { x: xMax, y: TOP, w: wMax - xMax + 100, h: MUNDO.h }) < RADIO - 0.01) return true;
   return false;
 }
@@ -477,6 +484,18 @@ function siguienteSlot() {
 // Si tocas al otro lado de la pared, primero va a la abertura del pasillo y luego sigue hacia el toque
 function metaEfectiva() {
   const pared = TOP + 7;
+  // La granja está a la izquierda del edificio: de un lado al otro solo se pasa por su puerta (junto a la computadora)
+  if (granja && jugador.y > pared) {
+    const enGranja = jugador.x < xMin, aGranja = objetivo.x < xMin && objetivo.y > pared;
+    if (enGranja !== aGranja) {
+      const pc = PUERTA_GRANJA.c, enLinea = Math.abs(jugador.y - pc) <= 4 && Math.abs(jugador.x - xMin) <= 26;
+      if (!enLinea) {
+        if (!enGranja && jugador.y < CORREDOR_Y - 3) return { x: jugador.x, y: CORREDOR_Y, paso: true };   // baja al pasillo libre
+        return { x: xMin + (enGranja ? -22 : 22), y: pc, paso: true };
+      }
+      return { x: xMin + (enGranja ? 22 : -22), y: pc, paso: true };
+    }
+  }
   if ((jugador.y > pared) === (objetivo.y > pared)) return objetivo;
   const ax = aberturaCerca(jugador.x);   // abertura más cercana: el pasillo central o un acceso gratis de una ampliación
   if (Math.abs(jugador.x - ax) > 3) {
@@ -903,6 +922,20 @@ function nuevoEmpleadoJardin(g) {
 // Camina hacia d: para salir al pasto o volver a entrar pasa por la abertura del pasillo
 function irEmpleado(w, d, dt) {
   const pared = TOP + 7;
+  if (granja) {   // la granja está a la izquierda: de un lado al otro se pasa por la puerta del muro
+    const wf = w.x < xMin, df = d.x < xMin;
+    if (wf && df) return ir(w, d, dt);
+    if (wf !== df) {
+      const pc = PUERTA_GRANJA.c, enLinea = Math.abs(w.y - pc) <= 3 && Math.abs(w.x - xMin) <= 26;
+      if (!enLinea) {
+        if (wf) ir(w, { x: xMin - 22, y: pc }, dt);
+        else irTienda(w, { x: xMin + 22, y: pc }, dt);
+        return false;
+      }
+      ir(w, { x: xMin + (wf ? 22 : -22), y: pc }, dt);
+      return false;
+    }
+  }
   const dentroW = w.y > pared, dentroD = d.y > pared;
   if (dentroW !== dentroD) {
     const ax = aberturaCerca(w.x);   // abertura más cercana (pasillo central o acceso gratis de una ampliación)
@@ -954,7 +987,7 @@ function actualizarEmpleados(dt) {
 }
 
 // ---------- Granja ----------
-// Terreno nuevo al norte del patio (se compra en 🛠️ Mejoras). Un corral por producto:
+// Terreno nuevo a la izquierda del edificio, con puerta en su muro (se compra en 🛠️ Mejoras). Un corral por producto:
 //  · huevo y leche: sueltan su producto solos, como los jardines (recoges lo que aparece);
 //  · pollo, res y tocino: una CARGA cada cierto tiempo (30 de entrada) que se va transportando poco a poco; se mejoran en cantidad y en tiempo.
 const corralDe = (id) => corrales.find((c) => c.producto === id);
@@ -975,7 +1008,7 @@ function nombreCompra(g, larga) {
   return larga ? "el jardín de " + ic + " " + PRODUCTOS[g.producto].nombre : "el jardín " + ic;
 }
 
-function abrirGranja() { granja = true; yMin = -GRANJA_ALTO; }
+function abrirGranja() { granja = true; recalcMundo(); }
 function activarCorral(c) {
   c.comprado = true;
   c.animales = [];
@@ -1065,7 +1098,7 @@ function ampliarPatio(lado) {
 }
 
 function recalcMundo() {
-  wMin = Math.min(xMin, pMin);
+  wMin = Math.min(xMin, pMin, granja ? GRANJA_X : 0);
   wMax = Math.max(xMax, pMax);
 }
 
@@ -1163,7 +1196,7 @@ function comprarMejora(tipo) {
     if (granja || !alcanza(COSTO_GRANJA)) return;
     cobrarCompra(COSTO_GRANJA, x, y);
     abrirGranja();
-    textos.push({ x: jugador.x, y: jugador.y, vida: 2.2, txt: "¡Granja comprada! Camina al norte ▲", col: "#ffd24d" });
+    textos.push({ x: jugador.x, y: jugador.y, vida: 2.2, txt: "¡Granja comprada! Entra por la puerta de la izquierda ◀", col: "#ffd24d" });
   } else if (tipo.startsWith("corral:")) {
     const [, op, id] = tipo.split(":");
     const c = corralDe(id);
@@ -1274,7 +1307,7 @@ function pintarBoton(b, texto, precio, activo, dos) {
   b.disabled = !activo;
 }
 function pintarGranja() {
-  titGranja.textContent = granja ? "🐄 Granja (camina al norte, pasando el patio)" : "🐄 Granja: terreno al norte del patio";
+  titGranja.textContent = granja ? "🐄 Granja (a la izquierda del edificio, por la puerta junto a la computadora)" : "🐄 Granja: terreno a la izquierda del edificio";
   btnGranja.hidden = granja;
   if (!granja) pintarBoton(btnGranja, "🐄 Comprar granja", "$" + COSTO_GRANJA, alcanza(COSTO_GRANJA));
   corrales.forEach((c, i) => {
@@ -2005,10 +2038,10 @@ function dibujarSuelo() {
   for (let x = Math.ceil((X0 - S) / 36) * 36; x < X1 + S; x += 36) { ctx.beginPath(); ctx.moveTo(x, Y1); ctx.lineTo(x, Y1 + S); ctx.stroke(); }
   // terreno del local (pasto)
   ctx.fillStyle = "#9bd27f"; ctx.fillRect(X0, Y0, A, H);
-  if (granja) {   // granja: paja clara y su cerca
-    ctx.fillStyle = "rgba(214,170,80,.25)"; ctx.fillRect(0, yMin, MUNDO.w, -yMin);
+  if (granja) {   // granja: paja clara y su cerca, a la izquierda del edificio
+    ctx.fillStyle = "rgba(214,170,80,.25)"; ctx.fillRect(GRANJA_X, TOP, -GRANJA_X, MUNDO.h - TOP);
     ctx.strokeStyle = "#8a5a2b"; ctx.lineWidth = 4; ctx.setLineDash([10, 5]);
-    ctx.beginPath(); ctx.moveTo(2, 0); ctx.lineTo(2, yMin + 3); ctx.lineTo(MUNDO.w - 2, yMin + 3); ctx.lineTo(MUNDO.w - 2, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, TOP + 2); ctx.lineTo(GRANJA_X + 2, TOP + 2); ctx.lineTo(GRANJA_X + 2, MUNDO.h - 2); ctx.lineTo(0, MUNDO.h - 2); ctx.stroke();
     ctx.setLineDash([]);
   }
   // patio (zona de los jardines): un poco más claro y con su cerca; es una zona aparte del edificio
@@ -2016,7 +2049,7 @@ function dibujarSuelo() {
   ctx.fillRect(pMin, 0, pMax - pMin, TOP);
   ctx.strokeStyle = "#8a5a2b"; ctx.lineWidth = 4; ctx.setLineDash([10, 5]);
   ctx.beginPath(); ctx.moveTo(pMin + 2, TOP); ctx.lineTo(pMin + 2, 3);
-  if (granja) { ctx.moveTo(pMax - 2, 3); } else ctx.lineTo(pMax - 2, 3);   // con la granja, el patio queda abierto por arriba
+  ctx.lineTo(pMax - 2, 3);
   ctx.lineTo(pMax - 2, TOP); ctx.stroke();
   ctx.setLineDash([]);
   // adentro: piso del edificio, con sus ampliaciones y cuadros
@@ -2036,6 +2069,7 @@ function dibujarSuelo() {
   // umbral de cada acceso al patio (el piso sigue por la abertura del muro)
   ctx.fillStyle = "#d8c7a0";
   for (const o of aberturas()) ctx.fillRect(o.a, TOP, o.b - o.a, 14);
+  if (granja) ctx.fillRect(xMin - 4, PUERTA_GRANJA.a, 12, PUERTA_GRANJA.b - PUERTA_GRANJA.a);   // umbral de la puerta de la granja
   // tapete de cada entrada
   for (const p of puertas) { ctx.fillStyle = "#8f6ad0"; caja(p.x - 30, MUNDO.h - 14, 60, 14, 4); ctx.fill(); }
 }
@@ -2276,7 +2310,10 @@ function armarObjetos() {
   const tramoArriba = (a, b) => { if (b > a) add(a, TOP, b, TOP + 14, () => bloque(a, TOP, b - a, 14, ALTO_PARED, PAL.pared)); };
   for (const o of aberturas().sort((p, q) => p.a - q.a)) { tramoArriba(desde, o.a); desde = Math.max(desde, o.b); }
   tramoArriba(desde, xMax);
-  add(xMin, TOP + 14, xMin + 4, MUNDO.h, () => bloque(xMin, TOP + 14, 4, MUNDO.h - TOP - 14, ALTO_PARED, PAL.pared));
+  if (granja) {   // muro de la izquierda con la puerta de la granja
+    const tramoIzq = (a, b) => { if (b > a) add(xMin, a, xMin + 4, b, () => bloque(xMin, a, 4, b - a, ALTO_PARED, PAL.pared)); };
+    tramoIzq(TOP + 14, PUERTA_GRANJA.a); tramoIzq(PUERTA_GRANJA.b, MUNDO.h);
+  } else add(xMin, TOP + 14, xMin + 4, MUNDO.h, () => bloque(xMin, TOP + 14, 4, MUNDO.h - TOP - 14, ALTO_PARED, PAL.pared));
   add(xMax - 4, TOP + 14, xMax, MUNDO.h, () => bloque(xMax - 4, TOP + 14, 4, MUNDO.h - TOP - 14, 8, PAL.bordillo));
   // bordillo de abajo, con un hueco por cada entrada
   const xs = puertas.map((p) => p.x).sort((a, b) => a - b);
@@ -2373,7 +2410,7 @@ function dibujarEtiquetas() {
   for (const cx of [MUNDO.w / 2, ...patios.map((a) => a.x0 + EXT_ANCHO / 2)]) { const s = P(cx, 20); etiqueta("🌱 Patio", s.x, s.y, "#fff", 12); }
   const sig = siguienteJardin();
   if (granja) {
-    const s = P(MUNDO.w / 2, yMin + 12); etiqueta("🐄 Granja", s.x, s.y, "#fff", 12);
+    const s = P(GRANJA_X + MUNDO.w / 2, TOP + 8); etiqueta("🐄 Granja", s.x, s.y, "#fff", 12);
     for (const c of corrales) {
       if (!c.comprado) {
         const s2 = P(c.x + c.w / 2, c.y + c.h / 2, 6);
