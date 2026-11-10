@@ -191,7 +191,7 @@ const PRODUCTOS = {
   res: { icono: "🥩", precio: 24, nombre: "carne de res" },
   tocino: { icono: "🥓", precio: 20, nombre: "tocino" },
 };
-const GRANJA_IDS = ["huevo", "leche", "pollo", "res", "tocino"];
+const GRANJA_IDS = ["huevo", "leche", "pollo", "tocino", "res"];   // en este orden se compran los corrales: gallinas, vacas, pollos, cerdos y reses (las estanterías siguen el orden de PRODUCTOS)
 const IDS = Object.keys(PRODUCTOS).filter((id) => !GRANJA_IDS.includes(id));   // cultivos (jardines)
 const TODOS = Object.keys(PRODUCTOS);                                            // cultivos + granja: el orden de las estanterías fijas
 
@@ -368,6 +368,8 @@ function nuevoCorral(id, i) {
 const corrales = GRANJA_IDS.map(nuevoCorral);
 // Solo se muestra (y se puede comprar) el siguiente jardín: el primero que aún no has comprado
 const siguienteJardin = () => jardines.find((g) => !g.comprado) || null;
+// Corral que toca comprar ahora: el primero que aún no has comprado (se desbloquean en orden)
+const siguienteCorral = () => corrales.find((c) => !c.comprado) || null;
 const jardinDe = (id) => jardines.find((g) => g.producto === id);
 const jardinesComprados = () => jardines.filter((g) => g.comprado).length;
 const maxClientes = () => MAX_CLIENTES + Math.max(0, jardinesComprados() - 1);   // 1 jardín: 3 · 2 jardines: 4 · 3 jardines: 5 …
@@ -999,12 +1001,12 @@ const tiempoNivel = (n) => Math.max(TIEMPO_MIN, CARGA_SEG - TIEMPO_PASO * n);
 const tiempoCarga = (c) => (admin.rapido ? 1 : tiempoNivel(c.nivelTiempo));
 const periodoCont = (c) => GRANJA_DEF[c.producto].seg * Math.pow(VEL_FACTOR, c.nivelVel);
 
-// Lo que se puede comprar caminando hasta ahí: el siguiente jardín y, con la granja abierta, todos los corrales
-const candidatosCompra = () => [siguienteJardin(), ...(granja ? corrales : [])].filter((c) => c && !c.comprado && c.disponible);
+// Lo que se puede comprar caminando hasta ahí: el siguiente jardín y, con la granja abierta, el siguiente corral
+const candidatosCompra = () => [siguienteJardin(), ...(granja ? [siguienteCorral()] : [])].filter((c) => c && !c.comprado && c.disponible);
 const puedeProductor = (g) => (g.tipo ? true : puedeJardin(g));
 function nombreCompra(g, larga) {
   const ic = PRODUCTOS[g.producto].icono;
-  if (g.tipo) return larga ? "el corral de " + g.animal + " " + g.nombre + " (" + ic + ")" : "el corral de " + g.animal;
+  if (g.tipo) return larga ? "el corral de " + ic + " " + g.nombre : "el corral de " + ic;   // se muestra el producto, no el animal
   return larga ? "el jardín de " + ic + " " + PRODUCTOS[g.producto].nombre : "el jardín " + ic;
 }
 
@@ -1311,7 +1313,7 @@ function pintarGranja() {
   btnGranja.hidden = granja;
   if (!granja) pintarBoton(btnGranja, "🐄 Comprar granja", "$" + COSTO_GRANJA, alcanza(COSTO_GRANJA));
   corrales.forEach((c, i) => {
-    const b = btnsCorral[i], ic = PRODUCTOS[c.producto].icono, a = c.animal;
+    const b = btnsCorral[i], ic = PRODUCTOS[c.producto].icono;
     const ver = granja && c.comprado;
     b.emp.hidden = b.vel.hidden = b.cant.hidden = b.tiempo.hidden = !ver;
     if (!ver) return;
@@ -2107,6 +2109,7 @@ function dibujarPlanoJuego() {
     for (const c of corrales) {
       const { x, y, w, h } = c;
       if (!c.comprado) {
+        if (c !== siguienteCorral()) continue;   // solo se muestra el siguiente corral
         ctx.setLineDash([8, 6]); ctx.lineWidth = 3; ctx.strokeStyle = alcanza(c.costo) ? "#2e9d4a" : "#999";
         caja(x, y, w, h, 10); ctx.stroke(); ctx.setLineDash([]);
         ctx.fillStyle = "#ffffff99"; caja(x, y, w, h, 10); ctx.fill();
@@ -2413,8 +2416,9 @@ function dibujarEtiquetas() {
     const s = P(GRANJA_X + MUNDO.w / 2, TOP + 8); etiqueta("🐄 Granja", s.x, s.y, "#fff", 12);
     for (const c of corrales) {
       if (!c.comprado) {
+        if (c !== siguienteCorral()) continue;   // solo se muestra el siguiente corral
         const s2 = P(c.x + c.w / 2, c.y + c.h / 2, 6);
-        etiqueta(c.animal + " " + c.nombre + "  $" + c.costo, s2.x, s2.y, alcanza(c.costo) ? "#bfffcf" : "#fff");
+        etiqueta(PRODUCTOS[c.producto].icono + " " + c.nombre + "  $" + c.costo, s2.x, s2.y, alcanza(c.costo) ? "#bfffcf" : "#fff");
       } else if (c.tipo === "carga") {
         const s3 = P(c.x + c.w - 24, c.y + c.h - 24, 46), tope = cantidadCarga(c) * STOCK_MAX_CARGAS;
         etiqueta("×" + c.stock + (c.stock >= tope ? " lleno" : "  ⏱ " + mmss(c.reloj)), s3.x, s3.y, "#fff", 11);
