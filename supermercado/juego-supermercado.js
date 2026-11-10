@@ -253,8 +253,13 @@ const btnEdIzq = document.getElementById("mejEdIzq");
 const btnEdDer = document.getElementById("mejEdDer");
 const btnPatIzq = document.getElementById("mejPatIzq");
 const btnPatDer = document.getElementById("mejPatDer");
-const titEd = document.getElementById("titEdificio"), botsEd = document.getElementById("botsEdificio");
-const titPat = document.getElementById("titPatio"), botsPat = document.getElementById("botsPatio");
+const avisoPatio = document.getElementById("titPatio");
+// Secciones de la computadora de mejoras, de arriba abajo: empleados, verduras, frutas, granja y lo demás
+const rejEmp = document.getElementById("rejEmp"), rejVer = document.getElementById("rejVer"), rejFru = document.getElementById("rejFru");
+const rejGranja = document.getElementById("rejGranja"), rejOtras = document.getElementById("rejOtras");
+const secciones = ["secEmp", "secVer", "secFru", "secGranja", "secOtras"].map((id) => document.getElementById(id));
+const FRUTAS = new Set(["manzana", "platano", "mango", "granada", "sandia", "melocoton", "uvas", "fresa", "cana", "arroz", "champinon", "naranja", "limon", "pina", "aguacate"]);
+const info = document.getElementById("info"), infoVolver = document.getElementById("infoVolver");
 const btnMenu = document.getElementById("btnMenu");
 const velBtn = document.getElementById("velBtn"), velInfo = document.getElementById("velInfo"), velPanel = document.getElementById("velPanel");
 const elConf = document.getElementById("confirmar"), elConfTxt = document.getElementById("confTxt");
@@ -390,7 +395,8 @@ function fueraEdificio(x, y) {
   if (xMax < wMax && distRect(x, y, { x: xMax, y: TOP, w: wMax - xMax + 100, h: MUNDO.h }) < RADIO - 0.01) return true;
   return false;
 }
-const choca = (x, y) => estantes.some((e) => distRect(x, y, rectFull(e)) < RADIO) || chocaPared(x, y) || fueraEdificio(x, y); // estanterías, pared y muros no se atraviesan
+const ESCRITORIO = { x: MEJORAS_ZONA.x + 6, y: MEJORAS_ZONA.y + 2, w: MEJORAS_ZONA.w - 12, h: 22 };   // el escritorio con la computadora de mejoras (no se atraviesa)
+const choca = (x, y) => distRect(x, y, ESCRITORIO) < RADIO || estantes.some((e) => distRect(x, y, rectFull(e)) < RADIO) || chocaPared(x, y) || fueraEdificio(x, y); // estanterías, pared y muros no se atraviesan
 
 function centroParcela(g, i) {
   const c = i % g.cols, f = Math.floor(i / g.cols);
@@ -1097,37 +1103,35 @@ const btnsEmp = jardines.map((g) => {
   const b = document.createElement("button");
   b.className = "mej"; b.type = "button"; b.hidden = true;
   b.innerHTML = "<span></span><b></b>";
-  panel.appendChild(b);
+  (FRUTAS.has(g.producto) ? rejFru : rejVer).appendChild(b);
   b.addEventListener("click", () => comprarMejora("emp:" + g.producto));
   return b;
 });
 // botones de cajas y entradas nuevas (van justo antes del bloque «Edificio»)
-function botonPanel(tipo) {
+function botonPanel(tipo, cont = rejOtras, antes = null) {
   const b = document.createElement("button");
   b.className = "mej"; b.type = "button";
   b.innerHTML = "<span></span><b></b>";
-  panel.insertBefore(b, titEd);
+  cont.insertBefore(b, antes);
   b.addEventListener("click", () => comprarMejora(tipo));
   return b;
 }
 const btnCajaNueva = botonPanel("caja-nueva");
 const btnPuertaNueva = botonPanel("puerta-nueva");
-const btnNivCajero = botonPanel("nivel-cajero");
-const btnNivRepartidor = botonPanel("nivel-repartidor");
+const btnNivCajero = botonPanel("nivel-cajero", rejEmp);
+const btnNivRepartidor = botonPanel("nivel-repartidor", rejEmp);
 // un botón de «empleado» por cada caja extra colocada
 function crearBotonEmpCaja(k) {
   const i = cajas.length;   // índice que tendrá esa caja
-  return botonPanel("emp-caja:" + i);
+  return botonPanel("emp-caja:" + i, rejEmp, btnNivCajero);
 }
 // 🐄 Granja: comprar el terreno y, por cada corral comprado, su empleado y sus mejoras
-const titGranja = document.createElement("div");
-titGranja.className = "grupo-t"; panel.appendChild(titGranja);
+const titGranja = document.getElementById("titGranja");
 function botonGranja(tipo) {
   const b = document.createElement("button");
   b.className = "mej"; b.type = "button"; b.hidden = true;
-  b.style.borderLeftColor = "#d9a066";
   b.innerHTML = "<span></span><b></b>";
-  panel.appendChild(b);
+  rejGranja.appendChild(b);
   b.addEventListener("click", () => comprarMejora(tipo));
   return b;
 }
@@ -1141,36 +1145,44 @@ btnEdDer.addEventListener("click", () => comprarMejora("edificio-der"));
 btnPatIzq.addEventListener("click", () => comprarMejora("patio-izq"));
 btnPatDer.addEventListener("click", () => comprarMejora("patio-der"));
 
+// Cada botón es un cuadrito: el primer «palabra» del texto es el icono grande, el resto el rótulo corto y abajo el precio (✓ = ya lo tienes)
 function pintarBoton(b, texto, precio, activo) {
-  b.querySelector("span").textContent = texto;
+  let ic = b.querySelector("i");
+  if (!ic) { ic = document.createElement("i"); ic.className = "ic"; b.prepend(ic); }
+  const i = texto.indexOf(" ");
+  ic.textContent = i > 0 ? texto.slice(0, i) : "";
+  b.querySelector("span").textContent = i > 0 ? texto.slice(i + 1) : texto;
   b.querySelector("b").textContent = precio;
+  b.classList.toggle("hecho", precio === "✓");
+  b.title = texto;
   b.disabled = !activo;
 }
 
 function pintarGranja() {
-  titGranja.textContent = granja ? "🐄 Granja (camina al norte, pasando el patio)" : "🐄 Granja: terreno nuevo al norte del patio";
+  titGranja.textContent = granja ? "🐄 Granja (camina al norte, pasando el patio)" : "🐄 Granja: terreno al norte del patio";
   btnGranja.hidden = granja;
-  if (!granja) pintarBoton(btnGranja, "🐄 Comprar la granja", "$" + COSTO_GRANJA, alcanza(COSTO_GRANJA));
+  if (!granja) pintarBoton(btnGranja, "🐄 Comprar granja", "$" + COSTO_GRANJA, alcanza(COSTO_GRANJA));
   corrales.forEach((c, i) => {
     const b = btnsCorral[i], ic = PRODUCTOS[c.producto].icono, a = c.animal;
     const ver = granja && c.comprado;
     b.emp.hidden = b.vel.hidden = b.cant.hidden = b.tiempo.hidden = !ver;
     if (!ver) return;
-    if (c.emp) pintarBoton(b.emp, "🧑‍🌾 Empleado de " + a + " " + c.nombre, "✓", false);
-    else if (!destinosDe(c.producto).length) pintarBoton(b.emp, "🧑‍🌾 Primero la estantería de " + ic, "", false);
-    else pintarBoton(b.emp, "🧑‍🌾 Empleado de " + a + " " + c.nombre, "$" + c.costoEmp, alcanza(c.costoEmp));
+    const iem = "🧑‍🌾" + ic;
+    if (c.emp) pintarBoton(b.emp, iem + " Empleado de " + c.nombre, "✓", false);
+    else if (!destinosDe(c.producto).length) pintarBoton(b.emp, iem + " Falta su estantería", "", false);
+    else pintarBoton(b.emp, iem + " Empleado de " + c.nombre, "$" + c.costoEmp, alcanza(c.costoEmp));
     if (c.tipo === "continuo") {
       b.cant.hidden = b.tiempo.hidden = true;
       const n = c.nivelVel, ahora = periodoCont(c);
-      if (n >= COSTOS_VEL.length) pintarBoton(b.vel, "⚡ " + ic + " al máximo (cada " + ahora.toFixed(1) + " s)", "", false);
-      else pintarBoton(b.vel, "⚡ " + ic + " más rápido: " + ahora.toFixed(1) + " s → " + (ahora * VEL_FACTOR).toFixed(1) + " s", "$" + COSTOS_VEL[n], alcanza(COSTOS_VEL[n]));
+      if (n >= COSTOS_VEL.length) pintarBoton(b.vel, "⚡" + ic + " Al máximo: cada " + ahora.toFixed(1) + " s", "", false);
+      else pintarBoton(b.vel, "⚡" + ic + " Más rápido " + ahora.toFixed(1) + " → " + (ahora * VEL_FACTOR).toFixed(1) + " s", "$" + COSTOS_VEL[n], alcanza(COSTOS_VEL[n]));
     } else {
       b.vel.hidden = true;
       const nc = c.nivelCant, nt = c.nivelTiempo;
-      if (nc >= COSTOS_CANT.length) pintarBoton(b.cant, "📦 " + ic + " carga al máximo (" + cantidadCarga(c) + ")", "", false);
-      else pintarBoton(b.cant, "📦 " + ic + " más carga: " + cantidadCarga(c) + " → " + (cantidadCarga(c) + CARGA_PASO), "$" + COSTOS_CANT[nc], alcanza(COSTOS_CANT[nc]));
-      if (nt >= COSTOS_TIEMPO.length) pintarBoton(b.tiempo, "⏱ " + ic + " espera al mínimo (" + mmss(tiempoNivel(nt)) + ")", "", false);
-      else pintarBoton(b.tiempo, "⏱ " + ic + " menos espera: " + mmss(tiempoNivel(nt)) + " → " + mmss(tiempoNivel(nt + 1)), "$" + COSTOS_TIEMPO[nt], alcanza(COSTOS_TIEMPO[nt]));
+      if (nc >= COSTOS_CANT.length) pintarBoton(b.cant, "📦" + ic + " Carga al máximo: " + cantidadCarga(c), "", false);
+      else pintarBoton(b.cant, "📦" + ic + " Más carga " + cantidadCarga(c) + " → " + (cantidadCarga(c) + CARGA_PASO), "$" + COSTOS_CANT[nc], alcanza(COSTOS_CANT[nc]));
+      if (nt >= COSTOS_TIEMPO.length) pintarBoton(b.tiempo, "⏱" + ic + " Espera mínima " + mmss(tiempoNivel(nt)), "", false);
+      else pintarBoton(b.tiempo, "⏱" + ic + " Menos espera " + mmss(tiempoNivel(nt)) + " → " + mmss(tiempoNivel(nt + 1)), "$" + COSTOS_TIEMPO[nt], alcanza(COSTOS_TIEMPO[nt]));
     }
   });
 }
@@ -1179,66 +1191,67 @@ function actualizarPanel() {
   enMejoras = estado === "jugando" && distRect(jugador.x, jugador.y, MEJORAS_ZONA) <= 4;
   panel.classList.toggle("oculto", !enMejoras || !!colocando);
   if (!enMejoras) return;
-  if (nivelCarga >= COSTOS_CARGA.length) pintarBoton(btnCarga, "🧤 Carga al máximo (" + cargaMax() + ")", "", false);
-  else pintarBoton(btnCarga, "🧤 Llevar más: " + cargaMax() + " → " + (cargaMax() + 1), "$" + COSTOS_CARGA[nivelCarga], alcanza(COSTOS_CARGA[nivelCarga]));
-  pintarBoton(btnEmpleado, cajas[0].emp ? "👷 Empleado de caja" : "👷 Contratar empleado de caja", cajas[0].emp ? "✓" : "$" + COSTO_EMPLEADO, !cajas[0].emp && alcanza(COSTO_EMPLEADO));
+  if (nivelCarga >= COSTOS_CARGA.length) pintarBoton(btnCarga, "🧤 Carga al máximo: " + cargaMax(), "", false);
+  else pintarBoton(btnCarga, "🧤 Llevar más " + cargaMax() + " → " + (cargaMax() + 1), "$" + COSTOS_CARGA[nivelCarga], alcanza(COSTOS_CARGA[nivelCarga]));
+  pintarBoton(btnEmpleado, "👷 Cajero 1", cajas[0].emp ? "✓" : "$" + COSTO_EMPLEADO, !cajas[0].emp && alcanza(COSTO_EMPLEADO));
   cajas.forEach((k, i) => {
     if (!k.boton) return;
-    pintarBoton(k.boton, "👷 Empleado de la caja " + (i + 1), k.emp ? "✓" : "$" + COSTO_EMP_CAJA_EXTRA, !k.emp && alcanza(COSTO_EMP_CAJA_EXTRA));
+    pintarBoton(k.boton, "👷 Cajero " + (i + 1), k.emp ? "✓" : "$" + COSTO_EMP_CAJA_EXTRA, !k.emp && alcanza(COSTO_EMP_CAJA_EXTRA));
   });
   const seg = (v) => (v >= 1 ? v.toFixed(1) : v.toFixed(2)) + " s";
   const hayCajeros = cajas.some((k) => k.emp), hayRepartidores = productores().some((g) => g.emp);
   btnNivCajero.hidden = !hayCajeros;
   btnNivRepartidor.hidden = !hayRepartidores;
   if (hayCajeros) {
-    if (nivelCajero >= NIVELES_EMP) pintarBoton(btnNivCajero, "💵 Cajeros al nivel máximo (" + seg(tiempoCobroEmp()) + " por cliente)", "", false);
-    else pintarBoton(btnNivCajero, "💵 Cajeros nivel " + nivelCajero + "/" + NIVELES_EMP + ": " + seg(tiempoCobroEmp()) + " → " + seg(tiempoCobroEmp(nivelCajero + 1)) + " por cliente", "$" + COSTOS_NIVEL_CAJERO[nivelCajero], alcanza(COSTOS_NIVEL_CAJERO[nivelCajero]));
+    if (nivelCajero >= NIVELES_EMP) pintarBoton(btnNivCajero, "💵 Cajeros al máximo: " + seg(tiempoCobroEmp()) + " por cliente", "", false);
+    else pintarBoton(btnNivCajero, "💵 Cajeros nivel " + nivelCajero + "/" + NIVELES_EMP + ": " + seg(tiempoCobroEmp()) + " → " + seg(tiempoCobroEmp(nivelCajero + 1)), "$" + COSTOS_NIVEL_CAJERO[nivelCajero], alcanza(COSTOS_NIVEL_CAJERO[nivelCajero]));
   }
   if (hayRepartidores) {
-    if (nivelRepartidor >= NIVELES_EMP) pintarBoton(btnNivRepartidor, "🏃 Empleados de jardín y granja al nivel máximo (llevan " + empCarga() + ")", "", false);
-    else pintarBoton(btnNivRepartidor, "🏃 Empleados de jardín y granja nivel " + nivelRepartidor + "/" + NIVELES_EMP + " (más rápidos; llevan " + empCarga() + ")", "$" + COSTOS_NIVEL_REPARTIDOR[nivelRepartidor], alcanza(COSTOS_NIVEL_REPARTIDOR[nivelRepartidor]));
+    if (nivelRepartidor >= NIVELES_EMP) pintarBoton(btnNivRepartidor, "🏃 Empleados al máximo: llevan " + empCarga(), "", false);
+    else pintarBoton(btnNivRepartidor, "🏃 Empleados nivel " + nivelRepartidor + "/" + NIVELES_EMP + ": llevan " + empCarga(), "$" + COSTOS_NIVEL_REPARTIDOR[nivelRepartidor], alcanza(COSTOS_NIVEL_REPARTIDOR[nivelRepartidor]));
   }
   const extraCajas = cajas.length - 1, extraPuertas = puertas.length - 1;
-  if (extraCajas >= MAX_CAJAS_EXTRA) pintarBoton(btnCajaNueva, "🧾 Cajas registradoras al máximo", "", false);
-  else pintarBoton(btnCajaNueva, "🧾 Comprar caja registradora (la colocas tú)", "$" + costoCajaNueva(), !colocando && alcanza(costoCajaNueva()));
+  if (extraCajas >= MAX_CAJAS_EXTRA) pintarBoton(btnCajaNueva, "🧾 Cajas al máximo", "", false);
+  else pintarBoton(btnCajaNueva, "🧾 Caja nueva", "$" + costoCajaNueva(), !colocando && alcanza(costoCajaNueva()));
   if (extraPuertas >= MAX_PUERTAS_EXTRA) pintarBoton(btnPuertaNueva, "🚪 Entradas al máximo", "", false);
-  else pintarBoton(btnPuertaNueva, "🚪 Comprar entrada (la colocas tú)", "$" + costoPuertaNueva(), !colocando && alcanza(costoPuertaNueva()));
+  else pintarBoton(btnPuertaNueva, "🚪 Entrada nueva", "$" + costoPuertaNueva(), !colocando && alcanza(costoPuertaNueva()));
   const slot = siguienteSlot();
-  if (!hayPrimerEstante()) pintarBoton(btnEstante, "🗄️ Primero compra la estantería", "", false);
+  if (!hayPrimerEstante()) pintarBoton(btnEstante, "🗄️ Falta la 1.ª estantería", "", false);
   else if (slot < 0) pintarBoton(btnEstante, "🗄️ Estanterías al máximo", "", false);
-  else if (slot < TODOS.length && !productorDe(TODOS[slot]).comprado) pintarBoton(btnEstante, "🗄️ Primero compra " + (productorDe(TODOS[slot]).tipo ? "el corral" : "el jardín") + " de " + PRODUCTOS[TODOS[slot]].icono, "", false);
-  else if (ampDe(slot) > edificio) pintarBoton(btnEstante, "🗄️ Agranda el edificio para más", "", false);
+  else if (slot < TODOS.length && !productorDe(TODOS[slot]).comprado) pintarBoton(btnEstante, "🗄️ Antes compra " + (productorDe(TODOS[slot]).tipo ? "el corral" : "el jardín") + " de " + PRODUCTOS[TODOS[slot]].icono, "", false);
+  else if (ampDe(slot) > edificio) pintarBoton(btnEstante, "🗄️ Agranda el edificio", "", false);
   else pintarBoton(btnEstante, slot < TODOS.length ? "🗄️ Estantería de " + PRODUCTOS[TODOS[slot]].icono : "🗄️ Estantería nueva", "$" + costoEstanteExtra(), alcanza(costoEstanteExtra()));
   // un empleado por jardín comprado
   jardines.forEach((g, i) => {
     const b = btnsEmp[i], ic = PRODUCTOS[g.producto].icono;
     b.hidden = !g.comprado;
     if (!g.comprado) return;
-    if (g.emp) pintarBoton(b, "🧑‍🌾 Empleado del jardín " + ic, "✓", false);
-    else if (!destinosDe(g.producto).length) pintarBoton(b, "🧑‍🌾 Primero la estantería de " + ic, "", false);
-    else pintarBoton(b, "🧑‍🌾 Empleado del jardín " + ic, "$" + g.costoEmp, alcanza(g.costoEmp));
+    const iem = "🧑‍🌾" + ic;
+    if (g.emp) pintarBoton(b, iem + " Empleado", "✓", false);
+    else if (!destinosDe(g.producto).length) pintarBoton(b, iem + " Falta su estantería", "", false);
+    else pintarBoton(b, iem + " Empleado", "$" + g.costoEmp, alcanza(g.costoEmp));
   });
   pintarGranja();
   // edificio y patio se mejoran por separado: cada uno con su lado a elegir
   const maxEd = edificio >= COSTOS_EDIFICIO.length;
-  titEd.textContent = maxEd ? "🏗️ Edificio al máximo" : "🏗️ Ampliar edificio (+4 estanterías)";
-  botsEd.hidden = maxEd;
+  btnEdIzq.hidden = btnEdDer.hidden = maxEd;
   if (!maxEd) {
     const c = COSTOS_EDIFICIO[edificio];
-    pintarBoton(btnEdIzq, "◀ Izquierda", "$" + c, alcanza(c));
-    pintarBoton(btnEdDer, "Derecha ▶", "$" + c, alcanza(c));
+    pintarBoton(btnEdIzq, "🏗️ Edificio ◀ +4 estantes", "$" + c, alcanza(c));
+    pintarBoton(btnEdDer, "🏗️ Edificio ▶ +4 estantes", "$" + c, alcanza(c));
   }
   const maxPat = nivelPatio >= COSTOS_PATIO.length;
   const sig = siguienteJardin();
-  titPat.textContent = maxPat ? "🌱 Patio al máximo"
-    : sig && !sig.disponible ? "🌱 Patio lleno: amplíalo para el jardín de " + PRODUCTOS[sig.producto].icono
-    : "🌱 Ampliar patio (+6 jardines)";
-  botsPat.hidden = maxPat;
+  btnPatIzq.hidden = btnPatDer.hidden = maxPat;
+  avisoPatio.hidden = !(sig && !sig.disponible);
+  if (sig && !sig.disponible) avisoPatio.textContent = "🌱 Patio lleno: amplíalo para el jardín de " + PRODUCTOS[sig.producto].icono;
   if (!maxPat) {
     const c = COSTOS_PATIO[nivelPatio];
-    pintarBoton(btnPatIzq, "◀ Izquierda", "$" + c, alcanza(c));
-    pintarBoton(btnPatDer, "Derecha ▶", "$" + c, alcanza(c));
+    pintarBoton(btnPatIzq, "🌱 Patio ◀ +6 jardines", "$" + c, alcanza(c));
+    pintarBoton(btnPatDer, "🌱 Patio ▶ +6 jardines", "$" + c, alcanza(c));
   }
+  // las secciones sin botones visibles (por ejemplo, frutas antes de comprar la primera) no se muestran
+  for (const sec of secciones) sec.hidden = !sec.querySelector(".mej:not([hidden])");
 }
 
 function actualizar(dt) {
@@ -1321,11 +1334,12 @@ ovlBtn.addEventListener("click", () => {
 
 // ----- ☰ Pausa (estándar: compartido/menu-pausa.js) -----
 // «Salir» vuelve a la pantalla de inicio SIN borrar la partida: con «Jugar» sigues donde ibas (el juego aún no se guarda al cerrar la página).
-crearMenuPausa({
+const pausa = crearMenuPausa({
   boton: btnMenu,
-  puedeAbrir: () => estado === "jugando",
+  puedeAbrir: () => estado === "jugando" && info.classList.contains("oculto"),
   alAbrir: () => { pausado = true; tocando = false; objetivo = null; velPanel.classList.add("oculto"); },
   alContinuar: () => { pausado = false; },
+  extras: () => [{ icono: "ℹ️", texto: "Info", clase: "b-azul", alElegir: () => info.classList.remove("oculto") }],   // el juego sigue en pausa mientras lees
   ayudaSalir: "Vuelves al inicio; con «Jugar» sigues donde ibas.",
   alSalir: () => {
     pausado = false;
@@ -1336,6 +1350,11 @@ crearMenuPausa({
     btnMenu.hidden = true;
   },
 });
+
+// ℹ️ Info: vuelve al menú de pausa (Esc también)
+function cerrarInfo() { info.classList.add("oculto"); pausa.abrir(); }
+infoVolver.addEventListener("click", cerrarInfo);
+window.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !info.classList.contains("oculto")) { ev.preventDefault(); cerrarInfo(); } });
 
 // ----- ⏩ Velocidad del tiempo: x1 … x8 -----
 // Cada cuadro se corren «velocidad» pasos de juego de la misma duración (no un paso más largo), así a x8 el personaje y los clientes
@@ -1661,9 +1680,10 @@ function dibujarPlanoJuego() {
   }
   { // zona de mejoras
     const { x, y, w, h } = MEJORAS_ZONA;
-    ctx.fillStyle = enMejoras ? "#8fb8ff" : "#b9cdf0";
+    ctx.fillStyle = enMejoras ? "#7d93c9" : "#5f759f";   // alfombra frente al escritorio
     caja(x, y, w, h, 10); ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = "#4a6fb5"; caja(x, y, w, h, 10); ctx.stroke();
+    ctx.lineWidth = 3; ctx.strokeStyle = "#33415f"; caja(x, y, w, h, 10); ctx.stroke();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(255,255,255,.35)"; caja(x + 5, y + 5, w - 10, h - 10, 7); ctx.stroke();
   }
   if (colocando && estado === "jugando") {
     if (colocando.tipo === "caja") {
@@ -1736,6 +1756,22 @@ function dibujarEstanteIso(e) {
       else { ctx.globalAlpha = 0.25; emoji(PRODUCTOS.zanahoria.icono, s.x, s.y, 14); ctx.globalAlpha = 1; }
     }
   }
+}
+
+// La zona de mejoras: una computadora sobre un escritorio de madera (la pantalla se enciende cuando estás parado en la alfombra)
+function dibujarEscritorioIso() {
+  const { x, y, w } = MEJORAS_ZONA, on = enMejoras, cx = x + w / 2;
+  const plastico = { top: "#cfd5df", sur: "#9aa3b2", este: "#7c8596", borde: "rgba(0,0,0,.3)" };
+  const marco = { top: "#3a4152", sur: "#2b3140", este: "#1f2430", borde: "rgba(0,0,0,.45)" };
+  for (const [px, py] of [[x + 8, y + 3], [x + w - 12, y + 3], [x + 8, y + 19], [x + w - 12, y + 19]]) bloque(px, py, 4, 3, 14, PAL.poste);   // patas
+  bloque(x + 6, y + 2, w - 12, 22, 4, PAL.madera, 14);                                                                                   // tablero
+  bloque(cx - 8, y + 6, 16, 5, 2, marco, 18);                                                                                            // base del monitor
+  bloque(cx - 2, y + 7, 4, 2, 6, marco, 20);                                                                                             // cuello
+  bloque(cx - 22, y + 6, 44, 4, 26, marco, 25);                                                                                          // marco del monitor
+  bloque(cx - 19, y + 10, 38, 1, 20, { top: "#9ad8ff", sur: on ? "#7fd8ff" : "#2f4764", este: "#2f4764", borde: null }, 28);            // pantalla
+  bloque(cx - 15, y + 15, 30, 7, 2, plastico, 18);                                                                                       // teclado
+  bloque(cx + 20, y + 16, 5, 6, 2, plastico, 18);                                                                                        // ratón
+  if (on) { const s = P(cx, y + 11, 40); emoji("🛠️", s.x, s.y, 14); }
 }
 
 function dibujarCajaIso(k) {
@@ -1830,6 +1866,7 @@ function armarObjetos() {
   // muebles
   estantes.forEach((e) => { const r = rectFull(e); add(r.x, r.y, r.x + r.w, r.y + r.h, () => dibujarEstanteIso(e)); });
   cajas.forEach((k) => add(k.x, k.y, k.x + k.w, k.y + k.h, () => dibujarCajaIso(k)));
+  add(ESCRITORIO.x, ESCRITORIO.y, ESCRITORIO.x + ESCRITORIO.w, ESCRITORIO.y + ESCRITORIO.h, dibujarEscritorioIso);
 
   // jardines: valla y cultivos
   for (const g of jardines) {
@@ -1932,7 +1969,7 @@ function dibujarEtiquetas() {
     etiqueta("$" + COSTO_PRIMER_ESTANTE, s.x, s.y + 9, col);
   }
   const m = P(MEJORAS_ZONA.x + MEJORAS_ZONA.w / 2, MEJORAS_ZONA.y + MEJORAS_ZONA.h / 2, 4);
-  etiqueta("🛠️ Mejoras", m.x, m.y, "#fff");
+  etiqueta("💻 Mejoras", m.x, m.y, "#fff");
   for (const p of puertas) { const s = P(p.x, MUNDO.h - 6, 46); etiqueta("Entrada", s.x, s.y, "#fff"); }
   for (const k of cajas) {
     if (k.emp || !k.cola.length) continue;
