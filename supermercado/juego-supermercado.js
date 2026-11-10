@@ -3,7 +3,7 @@
 // «Supermercado»: tienda pequeña y vacía. Compras una estantería y un jardín; en el jardín crecen verduras,
 // las recoges y las colocas en las estanterías. Los clientes toman sus productos, van a la caja y pagan.
 // Recoger, colocar y comprar lo básico es automático por cercanía. En la zona de mejoras 🛠️ compras
-// un empleado de caja, más estanterías y ampliar el edificio a la izquierda o a la derecha (la cámara te sigue).
+// un empleado de caja, más estanterías y ampliar el edificio y el patio hacia la derecha (la cámara te sigue).
 // Menú de inicio (Nueva partida / Continuar / Niveles) y 10 partidas guardadas en el aparato: ver «Partidas guardadas» más abajo.
 
 import { crearMenuPausa } from "../compartido/menu-pausa.js";   // menú ☰ Pausa estándar (no usa Firebase: funciona sin internet)
@@ -259,9 +259,7 @@ const panel = document.getElementById("mejoras");
 const btnCarga = document.getElementById("mejCarga");
 const btnEmpleado = document.getElementById("mejEmpleado");
 const btnEstante = document.getElementById("mejEstante");
-const btnEdIzq = document.getElementById("mejEdIzq");
 const btnEdDer = document.getElementById("mejEdDer");
-const btnPatIzq = document.getElementById("mejPatIzq");
 const btnPatDer = document.getElementById("mejPatDer");
 const avisoPatio = document.getElementById("titPatio");
 // Secciones de la computadora de mejoras, de arriba abajo: empleados, verduras, frutas, granja y lo demás
@@ -1044,6 +1042,7 @@ function costoEstanteExtra() {
 
 // Ensancha el edificio hacia un lado (-1 izquierda, 1 derecha): el mundo crece y la cámara lo recorre
 function ampliar(lado) {
+  lado = 1;   // ya no hay ampliaciones a la izquierda (las partidas viejas con ◀ pasan a ▶)
   const n = ampliaciones.filter((a) => a.lado === lado).length;   // cuántas hay ya de ese lado
   ampliaciones.push({ lado, x0: lado < 0 ? -(n + 1) * EXT_ANCHO : MUNDO.w + n * EXT_ANCHO });
   edificio = ampliaciones.length;
@@ -1055,6 +1054,7 @@ function ampliar(lado) {
 
 // Ensancha el PATIO (la zona de los jardines) hacia un lado, sin tocar el edificio: da sitio para 6 jardines más
 function ampliarPatio(lado) {
+  lado = 1;
   const n = patios.filter((a) => a.lado === lado).length;
   patios.push({ lado, x0: lado < 0 ? -(n + 1) * EXT_ANCHO : MUNDO.w + n * EXT_ANCHO });
   nivelPatio = patios.length;
@@ -1071,9 +1071,9 @@ function recalcMundo() {
 
 // Admin: deja todo comprado (edificio con una ampliación a cada lado, estanterías, jardines, empleados y carga)
 function desbloquearTodo() {
-  while (edificio < COSTOS_EDIFICIO.length) ampliar(edificio % 2 === 0 ? -1 : 1);   // edificio: una ampliación a cada lado
+  while (edificio < COSTOS_EDIFICIO.length) ampliar(1);   // edificio: todas hacia la derecha
   ampliaciones.forEach((_, i) => { if (!accesos.includes(i)) accesos.push(i); });   // y un acceso al patio en cada ampliación
-  while (nivelPatio < COSTOS_PATIO.length) ampliarPatio(nivelPatio % 2 === 0 ? 1 : -1);   // patio: igual, por separado
+  while (nivelPatio < COSTOS_PATIO.length) ampliarPatio(1);   // patio: igual, por separado
   for (let sl = 0; sl < MAX_ESTANTES; sl++) {
     if (!estantes.some((e) => e.slot === sl)) nuevoEstante(sl, sl < TODOS.length ? TODOS[sl] : IDS[0]);
   }
@@ -1178,12 +1178,12 @@ function comprarMejora(tipo) {
       if (c.tipo !== "carga" || c.nivelTiempo >= COSTOS_TIEMPO.length || !alcanza(COSTOS_TIEMPO[c.nivelTiempo])) return;
       cobrarCompra(COSTOS_TIEMPO[c.nivelTiempo], x, y); c.nivelTiempo++;
     }
-  } else if (tipo === "edificio-izq" || tipo === "edificio-der") {
+  } else if (tipo === "edificio-der") {
     if (edificio >= COSTOS_EDIFICIO.length) return;
     const costo = COSTOS_EDIFICIO[edificio];
     if (!alcanza(costo)) return;
     cobrarCompra(costo, x, y);
-    const lado = tipo === "edificio-izq" ? -1 : 1;
+    const lado = 1;   // solo hacia la derecha
     ampliar(lado);
     textos.push({ x: jugador.x, y: jugador.y, vida: 1.6, txt: lado < 0 ? "◀ ¡Edificio ampliado!" : "¡Edificio ampliado! ▶", col: "#ffd24d" });
   } else if (tipo.startsWith("acceso:")) {   // acceso GRATIS al patio en una ampliación (no cuesta nada)
@@ -1192,12 +1192,12 @@ function comprarMejora(tipo) {
     accesos.push(i);
     tono(660, 0.08);
     textos.push({ x: jugador.x, y: jugador.y, vida: 1.6, txt: "🚪 ¡Acceso al patio abierto!", col: "#9dffb0" });
-  } else if (tipo === "patio-izq" || tipo === "patio-der") {
+  } else if (tipo === "patio-der") {
     if (nivelPatio >= COSTOS_PATIO.length) return;
     const costo = COSTOS_PATIO[nivelPatio];
     if (!alcanza(costo)) return;
     cobrarCompra(costo, x, y);
-    const lado = tipo === "patio-izq" ? -1 : 1;
+    const lado = 1;   // solo hacia la derecha
     ampliarPatio(lado);
     textos.push({ x: jugador.x, y: jugador.y, vida: 1.6, txt: lado < 0 ? "◀ ¡Patio ampliado!" : "¡Patio ampliado! ▶", col: "#9dffb0" });
   }
@@ -1245,9 +1245,7 @@ btnCarga.addEventListener("click", () => comprarMejora("carga"));
 btnVelJug.addEventListener("click", () => comprarMejora("velocidad"));
 btnEmpleado.addEventListener("click", () => comprarMejora("empleado"));
 btnEstante.addEventListener("click", () => comprarMejora("estante"));
-btnEdIzq.addEventListener("click", () => comprarMejora("edificio-izq"));
 btnEdDer.addEventListener("click", () => comprarMejora("edificio-der"));
-btnPatIzq.addEventListener("click", () => comprarMejora("patio-izq"));
 btnPatDer.addEventListener("click", () => comprarMejora("patio-der"));
 
 // Cada botón es un cuadrito: el primer «palabra» del texto es el icono grande, el resto el rótulo corto y abajo el precio (✓ = ya lo tienes)
@@ -1386,21 +1384,19 @@ function actualizarPanel() {
   pintarGranja();
   // edificio y patio se mejoran por separado: cada uno con su lado a elegir
   const maxEd = edificio >= COSTOS_EDIFICIO.length;
-  btnEdIzq.hidden = btnEdDer.hidden = maxEd;
+  btnEdDer.hidden = maxEd;
   if (!maxEd) {
     const c = COSTOS_EDIFICIO[edificio];
-    pintarBoton(btnEdIzq, "🏗️ Edificio ◀ +4 estantes", "$" + c, alcanza(c));
-    pintarBoton(btnEdDer, "🏗️ Edificio ▶ +4 estantes", "$" + c, alcanza(c));
+    pintarBoton(btnEdDer, "🏗️ Edificio ▶ +4 estantes (derecha)", "$" + c, alcanza(c));
   }
   const maxPat = nivelPatio >= COSTOS_PATIO.length;
   const sig = siguienteJardin();
-  btnPatIzq.hidden = btnPatDer.hidden = maxPat;
+  btnPatDer.hidden = maxPat;
   avisoPatio.hidden = !(sig && !sig.disponible);
   if (sig && !sig.disponible) avisoPatio.textContent = "🌱 Patio lleno: amplíalo para el jardín de " + PRODUCTOS[sig.producto].icono;
   if (!maxPat) {
     const c = COSTOS_PATIO[nivelPatio];
-    pintarBoton(btnPatIzq, "🌱 Patio ◀ +6 jardines", "$" + c, alcanza(c));
-    pintarBoton(btnPatDer, "🌱 Patio ▶ +6 jardines", "$" + c, alcanza(c));
+    pintarBoton(btnPatDer, "🌱 Patio ▶ +6 jardines (derecha)", "$" + c, alcanza(c));
   }
   pintarAccesos();
   pintarNivelesEstante();
