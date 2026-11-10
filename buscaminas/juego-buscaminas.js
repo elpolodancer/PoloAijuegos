@@ -22,10 +22,15 @@ const COLOR_TAM = ["b-verde", "b-verde", "b-azul", "b-azul", "b-morado", "b-mora
 const TAM_MAX = 56;        // tamaño máximo de casilla (px)
 const TAM_MIN = 14;        // tamaño mínimo de casilla (px)
 const PAUSA_LARGA = 400;   // ms para poner bandera con pulsación larga
+// Zoom (botón 🔍 y teclas + / −): en tableros grandes se puede acercar. Cada paso muestra en pantalla unas 10×10, 8×8 o 6×6 casillas
+// (el número es cuántas casillas caben a lo largo del lado corto de la zona de juego); el resto del tablero se ve arrastrando.
+// El 0 es el tablero entero. Un paso que no agrandaría las casillas (tableros chicos) simplemente no aparece.
+const ZOOMS = [0, 10, 8, 6];
+const TAM_ZOOM_MAX = 72;   // tamaño máximo de casilla con zoom (px)
 // ===================
 
 const $ = (id) => document.getElementById(id);
-const tab = $("tablero"), msg = $("msg"), zona = $("juego"), cara = $("cara-ico");
+const tab = $("tablero"), visor = $("visor"), btnZoom = $("zoom"), zoomInfo = $("zoom-info"), msg = $("msg"), zona = $("juego"), cara = $("cara-ico");
 const hud = $("hud"), controles = $("controles"), btnMenu = $("btn-menu"), btnMenuTxt = $("btn-menu-txt");
 const btnSig = $("siguiente"), sigIco = $("sig-ico");
 const acotar = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -242,6 +247,7 @@ function nueva() {
     return b;
   });
   transpuesto = null; // fuerza a colocar las casillas de nuevo
+  recentrar = true;   // tablero nuevo: la vista (si hay zoom) empieza en el centro
   ajustarTam();
   cara.textContent = "🙂";
   btnSig.hidden = true;
@@ -258,6 +264,7 @@ function acomodar() {
   const tr = horizontal.matches;
   if (tr === transpuesto) return;
   transpuesto = tr;
+  recentrar = true;
   tab.style.gridTemplateColumns = `repeat(${tr ? N.filas : N.cols}, var(--t))`;
   botones.forEach((b, i) => {
     const f = Math.floor(i / N.cols), c = i % N.cols;
@@ -265,6 +272,10 @@ function acomodar() {
     b.style.gridRow = (tr ? c : f) + 1;
   });
 }
+
+// Zoom elegido (se recuerda entre partidas y entre visitas) y pasos que sirven para el tablero actual
+let zoomPaso = acotar(Math.floor(Number(leerLS("zoom"))) || 0, 0, ZOOMS.length - 1);
+let pasoActual = 0, pasosUtiles = [0], recentrar = true;
 
 // El tamaño de casilla se calcula con el espacio REAL de la zona de juego (ya descontadas las esquinas reservadas del CSS)
 function ajustarTam() {
@@ -276,11 +287,56 @@ function ajustarTam() {
   let alto = zona.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
   // En vertical el mensaje va debajo del tablero; en horizontal va fijo en el margen izquierdo y no resta alto
   if (getComputedStyle(msg).position !== "fixed") alto -= msg.offsetHeight + (parseFloat(cs.rowGap) || 8);
-  ancho -= 12 + (vc - 1) * 2;
-  alto -= 12 + (vf - 1) * 2;
-  const t = Math.max(TAM_MIN, Math.floor(Math.min(ancho / vc, alto / vf, TAM_MAX)));
+  const extraC = 12 + (vc - 1) * 2, extraF = 12 + (vf - 1) * 2; // relleno y separaciones del tablero
+  const tFit = Math.max(TAM_MIN, Math.floor(Math.min((ancho - extraC) / vc, (alto - extraF) / vf, TAM_MAX)));
+
+  // Zoom: pasos que de verdad agrandan las casillas respecto al tablero entero
+  const lado = Math.min(ancho, alto) - 12;
+  const tPaso = (p) => Math.min(TAM_ZOOM_MAX, Math.floor(lado / ZOOMS[p]));
+  pasosUtiles = ZOOMS.map((_, p) => p).filter((p) => p === 0 || tPaso(p) > tFit + 2);
+  pasoActual = pasosUtiles.includes(zoomPaso) ? zoomPaso : 0; // en un tablero chico se ve entero, pero se recuerda la elección
+  const t = pasoActual ? tPaso(pasoActual) : tFit;
   tab.style.setProperty("--t", t + "px");
+
+  // El visor es del tamaño del tablero, o del espacio libre si el tablero (con zoom) no cabe: ahí se desplaza
+  visor.style.width = Math.min(vc * t + extraC, ancho) + "px";
+  visor.style.height = Math.min(vf * t + extraF, alto) + "px";
+  if (recentrar) {
+    visor.scrollLeft = (visor.scrollWidth - visor.clientWidth) / 2;
+    visor.scrollTop = (visor.scrollHeight - visor.clientHeight) / 2;
+    recentrar = false;
+  }
+
+  btnZoom.hidden = pasosUtiles.length < 2;
+  zoomInfo.hidden = !pasoActual;
+  if (pasoActual) zoomInfo.textContent = ZOOMS[pasoActual] + "×" + ZOOMS[pasoActual];
+  const txt = pasoActual ? `Zoom: se ven unas ${ZOOMS[pasoActual]}×${ZOOMS[pasoActual]} casillas (toca para cambiar)` : "Zoom (ahora: tablero completo)";
+  btnZoom.title = txt; btnZoom.setAttribute("aria-label", txt);
 }
+
+// dir: 1 = siguiente paso (el botón da la vuelta al llegar al final), +1/-1 con las teclas «+» y «−» (sin dar la vuelta)
+function cambiarZoom(dir, vuelta) {
+  if (!N || zona.hidden || pasosUtiles.length < 2) return;
+  const i = pasosUtiles.indexOf(pasoActual);
+  let j = i + dir;
+  if (j >= pasosUtiles.length) j = vuelta ? 0 : i;
+  if (j < 0) j = i;
+  if (j === i) return;
+  // Se conserva el punto del tablero que está en el centro de la vista
+  const cx = (visor.scrollLeft + visor.clientWidth / 2) / Math.max(1, visor.scrollWidth);
+  const cy = (visor.scrollTop + visor.clientHeight / 2) / Math.max(1, visor.scrollHeight);
+  zoomPaso = pasosUtiles[j];
+  escribirLS("zoom", zoomPaso);
+  ajustarTam();
+  visor.scrollLeft = cx * visor.scrollWidth - visor.clientWidth / 2;
+  visor.scrollTop = cy * visor.scrollHeight - visor.clientHeight / 2;
+}
+btnZoom.addEventListener("click", () => cambiarZoom(1, true));
+addEventListener("keydown", (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === "+" || e.key === "=") cambiarZoom(1, false);
+  else if (e.key === "-" || e.key === "_") cambiarZoom(-1, false);
+});
 new ResizeObserver(ajustarTam).observe(zona); // cubre girar el celular, pantalla completa y cambios de ventana
 
 function actualizarMinas() { $("minas").textContent = "💣 " + (N.minas - banderas); }
