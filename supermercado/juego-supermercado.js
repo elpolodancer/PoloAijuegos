@@ -1,4 +1,5 @@
 // Ruta: supermercado/juego-supermercado.js
+// VISTA ISOMÉTRICA: la lógica sigue en un mapa plano (x, y); el dibujo y los toques se proyectan (ver «Vista isométrica» más abajo).
 // «Supermercado»: tienda pequeña y vacía. Compras una estantería y un jardín; en el jardín crecen verduras,
 // las recoges y las colocas en las estanterías. Los clientes toman sus productos, van a la caja y pagan.
 // Recoger, colocar y comprar lo básico es automático por cercanía. En la zona de mejoras 🛠️ compras
@@ -60,7 +61,7 @@ const COSTO_ESTANTE_EXTRA = (n) => 15 + 10 * n;   // n = estanterías extra que 
 // Edificio: arriba queda siempre el pasto con los jardines. Cada ampliación lo ensancha hacia el lado que elijas
 // (izquierda o derecha) y deja 2 estanterías más. Como queda más ancho que la pantalla, la cámara sigue al personaje.
 const TOP = 324;                    // dónde empieza el edificio por arriba (fijo)
-const COSTOS_EDIFICIO = [40, 80, 150, 250];   // lo que cuesta cada ampliación del EDIFICIO, en orden (cada una da 4 estanterías: 2 filas de 2)
+const COSTOS_EDIFICIO = [40, 80, 150, 250, 400];   // lo que cuesta cada ampliación del EDIFICIO, en orden (cada una da 4 estanterías: 2 filas de 2)
 const COSTOS_PATIO = [30, 60];      // lo que cuesta cada ampliación del PATIO (zona de pasto con los jardines), en orden; es aparte del edificio
 const JARDIN_FILAS = 3;             // filas de jardines en cada tramo del patio (2 columnas × 3 filas = 6 jardines)
 const JARDINES_POR_TRAMO = 2 * JARDIN_FILAS;   // jardines que caben en el patio inicial y en cada ampliación del patio
@@ -87,8 +88,39 @@ const PRODUCTOS = {
   aguacate: { icono: "🥑", precio: 13, nombre: "aguacate" },
   mango: { icono: "🥭", precio: 14, nombre: "mango" },
   pina: { icono: "🍍", precio: 15, nombre: "piña" },
+  // Granja (precios provisionales: ajústalos a tu gusto)
+  huevo: { icono: "🥚", precio: 8, nombre: "huevo" },
+  leche: { icono: "🥛", precio: 10, nombre: "leche" },
+  pollo: { icono: "🍗", precio: 18, nombre: "pollo" },
+  res: { icono: "🥩", precio: 24, nombre: "carne de res" },
+  tocino: { icono: "🥓", precio: 20, nombre: "tocino" },
 };
-const IDS = Object.keys(PRODUCTOS);
+const GRANJA_IDS = ["huevo", "leche", "pollo", "res", "tocino"];
+const IDS = Object.keys(PRODUCTOS).filter((id) => !GRANJA_IDS.includes(id));   // cultivos (jardines)
+const TODOS = Object.keys(PRODUCTOS);                                            // cultivos + granja: el orden de las estanterías fijas
+
+// ----- Granja (terreno nuevo al norte del patio) -----
+const COSTO_GRANJA = 1000;          // comprar la granja (en 🛠️ Mejoras)
+const GRANJA_ALTO = 268;            // cuánto terreno se abre hacia el norte
+const GRANJA_SEP = 4;               // separación entre el patio y los corrales
+// «continuo»: sueltan su producto solos, como un jardín (seg = cada cuántos segundos sale uno) · «carga»: una carga cada cierto tiempo
+const GRANJA_DEF = {
+  huevo: { tipo: "continuo", animal: "🐔", nombre: "gallinas", costo: 200, costoEmp: 300, seg: 8, animales: 4 },
+  leche: { tipo: "continuo", animal: "🐄", nombre: "vacas", costo: 400, costoEmp: 400, seg: 12, animales: 4 },
+  pollo: { tipo: "carga", animal: "🐔", nombre: "pollos", costo: 2000, costoEmp: 800, animales: 4 },
+  res: { tipo: "carga", animal: "🐄", nombre: "reses", costo: 2000, costoEmp: 800, animales: 3 },
+  tocino: { tipo: "carga", animal: "🐖", nombre: "cerdos", costo: 2000, costoEmp: 800, animales: 3 },
+};
+const CARGA_BASE = 30;              // unidades de cada carga al empezar
+const CARGA_SEG = 600;              // segundos entre cargas (10 minutos)
+const STOCK_MAX_CARGAS = 3;         // cargas que se pueden acumular sin recoger (luego se detiene el reloj)
+const COSTOS_CANT = [800, 1500, 2500, 4000];    // mejora «más carga»: cada una suma CARGA_PASO
+const CARGA_PASO = 10;
+const COSTOS_TIEMPO = [800, 1500, 2500, 4000];  // mejora «menos espera»: cada una resta TIEMPO_PASO segundos
+const TIEMPO_PASO = 90;
+const TIEMPO_MIN = 120;
+const COSTOS_VEL = [150, 300, 600, 1200];       // huevo y leche: mejora «más rápido»: cada una multiplica el tiempo por VEL_FACTOR
+const VEL_FACTOR = 0.8;
 
 // Lugares del mapa (x, y, w, h en unidades del mapa)
 const ESTANTE_W = 120, ESTANTE_H = 44;
@@ -159,7 +191,10 @@ let patios = [];         // ampliaciones del PATIO (zona de pasto con los jardin
 let nivelPatio = 0;      // cuántas ampliaciones tiene el patio (0 a COSTOS_PATIO.length)
 let pMin = 0, pMax = MUNDO.w;   // límites del PATIO en x: crecen al ampliar el patio
 let wMin = 0, wMax = MUNDO.w;   // el mundo entero: lo más ancho entre edificio y patio (hasta ahí llega la cámara)
-let camX = 0;            // cámara: x del mapa que se ve en el borde izquierdo de la pantalla
+let camX = 0, camY = 0;  // cámara (vista isométrica): punto de la pantalla proyectada que queda al centro
+let atorado = 0;         // segundos empujando contra una pared sin avanzar
+let granja = false;      // ¿ya compraste la granja?
+let yMin = 0;            // borde de arriba del mundo: baja a -GRANJA_ALTO al comprar la granja
 let ptr = null;          // último punto tocado (para seguir el dedo mientras la cámara se mueve)
 let dpr = 1;
 let nivelCarga = 0;      // mejoras de carga compradas (0 a COSTOS_CARGA.length)
@@ -198,6 +233,18 @@ function colocarJardines() {
   });
 }
 colocarJardines();
+// Corrales de la granja: 2 columnas × 3 filas al norte del patio (el 1.º abajo a la izquierda)
+function nuevoCorral(id, i) {
+  const d = GRANJA_DEF[id], col = i % 2, fila = Math.floor(i / 2);
+  const c = {
+    producto: id, tipo: d.tipo, animal: d.animal, nombre: d.nombre, costo: d.costo, costoEmp: d.costoEmp, emp: null, comprado: false, disponible: true,
+    x: col ? 204 : 16, y: -GRANJA_SEP - 80 - fila * (80 + JARDIN_HUECO), w: 140, h: 80, cols: 3, filas: 2,
+    parcelas: [], reloj: 0, stock: 0, nivelVel: 0, nivelCant: 0, nivelTiempo: 0, animales: [],
+  };
+  if (d.tipo === "continuo") for (let k = 0; k < 6; k++) c.parcelas.push({ t: -1, id: null });
+  return c;
+}
+const corrales = GRANJA_IDS.map(nuevoCorral);
 // Solo se muestra (y se puede comprar) el siguiente jardín: el primero que aún no has comprado
 const siguienteJardin = () => jardines.find((g) => !g.comprado) || null;
 const jardinDe = (id) => jardines.find((g) => g.producto === id);
@@ -279,7 +326,7 @@ const espaciosZanahoria = () => EXTRA_ZANAHORIA_CAP - extra.length - carga.filte
 
 function nuevoEstante(slot, producto) {
   // las estanterías de cada producto son fijas: su producto no se puede cambiar (así nunca falta alguno y los clientes no se van)
-  estantes.push({ slot, ...rectEstante(slot), producto, items: [], fija: slot < IDS.length });
+  estantes.push({ slot, ...rectEstante(slot), producto, items: [], fija: slot < TODOS.length });
 }
 
 function siguienteSlot() {
@@ -307,10 +354,13 @@ function metaEfectiva() {
 
 function mover(dt) {
   let dx = 0, dy = 0;
-  if (teclas.arrowleft || teclas.a) dx -= 1;
-  if (teclas.arrowright || teclas.d) dx += 1;
-  if (teclas.arrowup || teclas.w) dy -= 1;
-  if (teclas.arrowdown || teclas.s) dy += 1;
+  // Las teclas se leen en la PANTALLA (isométrica): ↑ sube por la pantalla, → va a la derecha de la pantalla, etc.
+  let ux = 0, uy = 0;
+  if (teclas.arrowleft || teclas.a) ux -= 1;
+  if (teclas.arrowright || teclas.d) ux += 1;
+  if (teclas.arrowup || teclas.w) uy -= 1;
+  if (teclas.arrowdown || teclas.s) uy += 1;
+  if (ux || uy) { dx = ux + 2 * uy; dy = 2 * uy - ux; }   // pantalla → mapa (se normaliza más abajo)
   let paso = VELOCIDAD * dt;
   if (dx || dy) {
     objetivo = null;
@@ -326,9 +376,12 @@ function mover(dt) {
   if (!dx && !dy) return;
   if (dx) jugador.cara = dx > 0 ? 1 : -1;
   const nx = Math.max(wMin + RADIO, Math.min(wMax - RADIO, jugador.x + dx * paso));
-  const ny = Math.max(RADIO, Math.min(MUNDO.h - RADIO, jugador.y + dy * paso));
-  if (!choca(nx, jugador.y)) jugador.x = nx;
-  if (!choca(jugador.x, ny)) jugador.y = ny;
+  const ny = Math.max(yMin + RADIO, Math.min(MUNDO.h - RADIO, jugador.y + dy * paso));
+  let movio = false;
+  if (!choca(nx, jugador.y)) { if (nx !== jugador.x) movio = true; jugador.x = nx; }
+  if (!choca(jugador.x, ny)) { if (ny !== jugador.y) movio = true; jugador.y = ny; }
+  // si tocas un lugar al que no se puede llegar (calle, muro), deja de empujar contra la pared
+  if (objetivo && !movio) { atorado += paso / VELOCIDAD; if (atorado > 0.4) { objetivo = null; atorado = 0; } } else atorado = 0;
 }
 
 function cobrarCompra(costo, x, y) {
@@ -344,24 +397,22 @@ function comprarCosas() {
     cobrarCompra(COSTO_PRIMER_ESTANTE, r0.x + r0.w / 2, r0.y + r0.h + 10);
     nuevoEstante(0, "tomate");
   }
-  // Jardín: al pararte encima te pregunta si quieres comprarlo (no se compra solo)
-  const g = siguienteJardin();
-  const puedes = g && g.disponible && puedeJardin(g) && alcanza(g.costo) && cerca(g, ALCANCE_JARDIN);
+  // Jardín o corral: al pararte encima te pregunta si quieres comprarlo (no se compra solo)
+  const g = candidatosCompra().find((c) => cerca(c, ALCANCE_JARDIN)) || null;   // el que tienes bajo los pies
+  const puedes = g && puedeProductor(g) && alcanza(g.costo);
   if (rechazado && !cerca(rechazado, ALCANCE_JARDIN + 14)) rechazado = null;   // ya te alejaste: puede volver a preguntar
-  // Si estás sobre el jardín pero aún no se puede comprar, un texto flotante dice por qué (una vez por visita)
-  const encima = g && g.disponible && cerca(g, ALCANCE_JARDIN);
+  // Si estás sobre él pero aún no se puede comprar, un texto flotante dice por qué (una vez por visita)
   if (avisado && !cerca(avisado, ALCANCE_JARDIN + 14)) avisado = null;
-  if (encima && !puedes && avisado !== g) {
+  if (g && !puedes && avisado !== g) {
     avisado = g;
-    const ic = PRODUCTOS[g.producto].icono;
-    const txt = !puedeJardin(g) ? "Primero compra la estantería de " + PRODUCTOS[IDS[IDS.indexOf(g.producto) - 1]].icono : "Faltan $" + Math.max(1, Math.ceil(g.costo - dinero)) + " para el jardín " + ic;
+    const txt = !puedeProductor(g) ? "Primero compra la estantería de " + PRODUCTOS[IDS[IDS.indexOf(g.producto) - 1]].icono : "Faltan $" + Math.max(1, Math.ceil(g.costo - dinero)) + " para " + nombreCompra(g, false);
     textos.push({ x: g.x + g.w / 2, y: g.y + g.h / 2, vida: 2.4, txt, col: "#ffd24d" });
   }
   if (puedes && !colocando) {
     if (!pregunta && rechazado !== g) {
       pregunta = g;
       objetivo = null; tocando = false;                 // te quedas quieto mientras decides
-      elConfTxt.textContent = "¿Comprar el jardín de " + PRODUCTOS[g.producto].icono + " " + PRODUCTOS[g.producto].nombre + " por $" + g.costo + "?";
+      elConfTxt.textContent = "¿Comprar " + nombreCompra(g, true) + " por $" + g.costo + "?";
       elConf.classList.remove("oculto");
     }
   } else if (pregunta) cerrarPregunta();
@@ -377,7 +428,7 @@ function comprarJardin(g) {
   g.comprado = true;
   g.reloj = creceSeg();
 }
-document.getElementById("confSi").addEventListener("click", () => { if (pregunta) comprarJardin(pregunta); cerrarPregunta(); });
+document.getElementById("confSi").addEventListener("click", () => { if (pregunta) { if (pregunta.tipo) comprarCorral(pregunta); else comprarJardin(pregunta); } cerrarPregunta(); });
 document.getElementById("confNo").addEventListener("click", () => { rechazado = pregunta; cerrarPregunta(); });
 
 function crecerJardin(dt) {
@@ -414,6 +465,11 @@ function traspasos(dt) {
     const p = g.parcelas.find((q) => q.t >= maduraSeg() && ex.includes(q.id));
     if (p) { carga.push(p.id); p.t = -1; p.id = null; tono(660, 0.07); break; }
   }
+  for (const g of corrales) {   // granja: huevos, leche y las cargas de pollo, res y tocino
+    if (!g.comprado || carga.length >= cargaMax() || !cerca(g, ALCANCE_JARDIN)) continue;
+    const id = sacarDe(g, ex);
+    if (id) { carga.push(id); tono(660, 0.07); break; }
+  }
   const destinos = estantes.slice();
   const xe = extraEstante();
   if (xe) destinos.push(xe);
@@ -430,7 +486,7 @@ function cambiarProducto(e) {
     textos.push({ x: e.x + e.w / 2, y: e.y + e.h + 12, vida: 1.2, txt: "Primero vacíala", col: "#ffd24d" });
     return;
   }
-  e.producto = IDS[(IDS.indexOf(e.producto) + 1) % IDS.length];
+  e.producto = TODOS[(TODOS.indexOf(e.producto) + 1) % TODOS.length];
   tono(600, 0.08);
 }
 
@@ -660,6 +716,7 @@ function nuevoEmpleadoJardin(g) {
     tomate: "#e0463d", zanahoria: "#ff9a2e", maiz: "#e8c93a", brocoli: "#2e9d4a", berenjena: "#8f5bd0",
     pepino: "#3fae5a", chile: "#c9302c", papa: "#b08a5a", cebolla: "#c68ad6", fresa: "#ff5c7a",
     limon: "#f2dc3a", sandia: "#3e9a52", aguacate: "#6b8f2a", mango: "#ffb02e", pina: "#e6a817",
+    huevo: "#f4efe0", leche: "#8ecbff", pollo: "#e8a23a", res: "#a0522d", tocino: "#e88aa0",
   };
   return { x: MEJORAS_ZONA.x + MEJORAS_ZONA.w / 2, y: MEJORAS_ZONA.y - 8, vel: EMP_VEL, carga: [], cd: 0, off: azar(-22, 22), camisa: camisas[g.producto] || "#888" };
 }
@@ -682,14 +739,14 @@ function irEmpleado(w, d, dt) {
 }
 function actualizarEmpleados(dt) {
   const ex = productosExistentes();
-  for (const g of jardines) {
+  for (const g of productores()) {
     const em = g.emp;
     if (!em) continue;
     em.cd -= dt;
-    const maduros = g.parcelas.filter((p) => p.t >= maduraSeg() && ex.includes(p.id));
+    const nListos = listosDe(g, ex);
     const espacio = espacioLibre(g.producto);
     const puedeColocar = em.carga.length > 0 && espacio > 0;
-    const puedeRecoger = maduros.length > 0 && em.carga.length < EMP_CARGA && espacio - em.carga.length > 0;
+    const puedeRecoger = nListos > 0 && em.carga.length < EMP_CARGA && espacio - em.carga.length > 0;
     if (puedeColocar && (em.carga.length >= EMP_CARGA || !puedeRecoger)) {
       const e = destinosDe(g.producto).find((q) => q.items.length < capDe(q));
       const r = rectFull(e);
@@ -698,10 +755,92 @@ function actualizarEmpleados(dt) {
       } else irEmpleado(em, { x: Math.max(xMin + 14, Math.min(xMax - 14, e.x + e.w / 2 + em.off)), y: standY(e, 14) }, dt);
     } else if (puedeRecoger) {
       if (distRect(em.x, em.y, g) <= ALCANCE_JARDIN) {
-        if (em.cd <= 0) { const p = maduros[0]; em.carga.push(p.id); p.t = -1; p.id = null; em.cd = TRASPASO_SEG * 2; }
+        if (em.cd <= 0) { const id = sacarDe(g, ex); if (id) em.carga.push(id); em.cd = TRASPASO_SEG * 2; }
       } else irEmpleado(em, puntoJardin(g), dt);
     } else {
       irEmpleado(em, puntoJardin(g), dt);          // sin nada que hacer: espera junto a su jardín
+    }
+  }
+}
+
+// ---------- Granja ----------
+// Terreno nuevo al norte del patio (se compra en 🛠️ Mejoras). Un corral por producto:
+//  · huevo y leche: sueltan su producto solos, como los jardines (recoges lo que aparece);
+//  · pollo, res y tocino: una CARGA cada cierto tiempo (30 de entrada) que se va transportando poco a poco; se mejoran en cantidad y en tiempo.
+const corralDe = (id) => corrales.find((c) => c.producto === id);
+const productorDe = (id) => jardinDe(id) || corralDe(id);
+const productores = () => [...jardines, ...corrales.filter((c) => c.comprado)];
+const mmss = (s) => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+const cantidadCarga = (c) => CARGA_BASE + CARGA_PASO * c.nivelCant;
+const tiempoNivel = (n) => Math.max(TIEMPO_MIN, CARGA_SEG - TIEMPO_PASO * n);
+const tiempoCarga = (c) => (admin.rapido ? 1 : tiempoNivel(c.nivelTiempo));
+const periodoCont = (c) => GRANJA_DEF[c.producto].seg * Math.pow(VEL_FACTOR, c.nivelVel);
+
+// Lo que se puede comprar caminando hasta ahí: el siguiente jardín y, con la granja abierta, todos los corrales
+const candidatosCompra = () => [siguienteJardin(), ...(granja ? corrales : [])].filter((c) => c && !c.comprado && c.disponible);
+const puedeProductor = (g) => (g.tipo ? true : puedeJardin(g));
+function nombreCompra(g, larga) {
+  const ic = PRODUCTOS[g.producto].icono;
+  if (g.tipo) return larga ? "el corral de " + g.animal + " " + g.nombre + " (" + ic + ")" : "el corral de " + g.animal;
+  return larga ? "el jardín de " + ic + " " + PRODUCTOS[g.producto].nombre : "el jardín " + ic;
+}
+
+function abrirGranja() { granja = true; yMin = -GRANJA_ALTO; }
+function activarCorral(c) {
+  c.comprado = true;
+  c.animales = [];
+  for (let i = 0; i < GRANJA_DEF[c.producto].animales; i++) c.animales.push({ x: azar(c.x + 14, c.x + c.w - 14), y: azar(c.y + 14, c.y + c.h - 14), tx: 0, ty: 0, t: 0 });
+  if (c.tipo === "carga") { c.stock = cantidadCarga(c); c.reloj = tiempoCarga(c); }   // la primera carga ya viene lista
+  else c.reloj = periodoCont(c);
+}
+function comprarCorral(c) {
+  if (c.comprado || !granja || !alcanza(c.costo)) return;
+  cobrarCompra(c.costo, c.x + c.w / 2, c.y + c.h + 10);
+  activarCorral(c);
+}
+
+// ¿Cuántos productos de este productor (jardín o corral) se pueden recoger ya? Solo si hay estantería de ese producto.
+function listosDe(g, ex) {
+  if (g.tipo === "carga") return ex.includes(g.producto) ? g.stock : 0;
+  if (g.tipo === "continuo") return g.parcelas.filter((q) => q.t >= 0 && ex.includes(q.id)).length;
+  return g.parcelas.filter((q) => q.t >= maduraSeg() && ex.includes(q.id)).length;
+}
+function sacarDe(g, ex) {
+  if (listosDe(g, ex) <= 0) return null;
+  if (g.tipo === "carga") { g.stock--; return g.producto; }
+  const p = g.parcelas.find((q) => (g.tipo === "continuo" ? q.t >= 0 : q.t >= maduraSeg()) && ex.includes(q.id));
+  if (!p) return null;
+  const id = p.id; p.t = -1; p.id = null;
+  return id;
+}
+
+function actualizarCorrales(dt) {
+  if (!granja) return;
+  const ex = productosExistentes();
+  for (const c of corrales) {
+    if (!c.comprado) continue;
+    for (const a of c.animales) {   // los animales caminan al azar dentro de su corral
+      a.t -= dt;
+      if (a.t <= 0) { a.tx = azar(c.x + 14, c.x + c.w - 14); a.ty = azar(c.y + 14, c.y + c.h - 14); a.t = azar(2, 5); }
+      const vx = a.tx - a.x, vy = a.ty - a.y, d = Math.hypot(vx, vy);
+      if (d > 1) { const p = Math.min(d, 14 * dt); a.x += (vx / d) * p; a.y += (vy / d) * p; }
+    }
+    if (c.tipo === "carga") {
+      const tope = cantidadCarga(c) * STOCK_MAX_CARGAS;
+      if (c.stock < tope) {
+        c.reloj -= dt;
+        if (c.reloj <= 0) { c.stock = Math.min(tope, c.stock + cantidadCarga(c)); c.reloj = tiempoCarga(c); }
+      }
+    } else {
+      c.reloj -= dt;
+      if (c.reloj <= 0) {
+        c.reloj = admin.rapido ? 0 : periodoCont(c);
+        const libres = c.parcelas.filter((p) => p.t < 0);
+        if (libres.length && ex.includes(c.producto)) {
+          const poner = admin.rapido ? libres : [libres[Math.floor(Math.random() * libres.length)]];
+          for (const p of poner) { p.t = 0; p.id = c.producto; }
+        }
+      }
     }
   }
 }
@@ -742,13 +881,18 @@ function desbloquearTodo() {
   while (edificio < COSTOS_EDIFICIO.length) ampliar(edificio % 2 === 0 ? -1 : 1);   // edificio: una ampliación a cada lado
   while (nivelPatio < COSTOS_PATIO.length) ampliarPatio(nivelPatio % 2 === 0 ? 1 : -1);   // patio: igual, por separado
   for (let sl = 0; sl < MAX_ESTANTES; sl++) {
-    if (!estantes.some((e) => e.slot === sl)) nuevoEstante(sl, sl < IDS.length ? IDS[sl] : IDS[0]);
+    if (!estantes.some((e) => e.slot === sl)) nuevoEstante(sl, sl < TODOS.length ? TODOS[sl] : IDS[0]);
   }
   const zan = estantes.find((e) => e.slot === 1);
   if (zan && extra.length) zan.items.push(...extra.splice(0));
   for (const g of jardines) {
     if (!g.comprado) { g.comprado = true; g.reloj = creceSeg(); }
     if (!g.emp) g.emp = nuevoEmpleadoJardin(g);
+  }
+  if (!granja) abrirGranja();
+  for (const c of corrales) {
+    if (!c.comprado) activarCorral(c);
+    if (!c.emp) c.emp = nuevoEmpleadoJardin(c);
   }
   cajas[0].emp = true;
   nivelCarga = COSTOS_CARGA.length;
@@ -777,25 +921,44 @@ function comprarMejora(tipo) {
     cobrarCompra(COSTO_EMP_CAJA_EXTRA, x, y);
     k.emp = true;
   } else if (tipo.startsWith("emp:")) {
-    const g = jardinDe(tipo.slice(4));
+    const g = productorDe(tipo.slice(4));
     if (!g || !g.comprado || g.emp || !alcanza(g.costoEmp) || !destinosDe(g.producto).length) return;
     cobrarCompra(g.costoEmp, x, y);
     g.emp = nuevoEmpleadoJardin(g);
   } else if (tipo === "estante") {
     const slot = siguienteSlot();
     if (!hayPrimerEstante() || slot < 0 || ampDe(slot) > edificio) return;
-    const delProducto = slot < IDS.length;       // la estantería número «slot» es del producto IDS[slot]
-    if (delProducto && !jardinDe(IDS[slot]).comprado) return;
+    const delProducto = slot < TODOS.length;     // la estantería número «slot» es del producto TODOS[slot]
+    if (delProducto && !productorDe(TODOS[slot]).comprado) return;
     const costo = costoEstanteExtra();
     if (!alcanza(costo)) return;
     cobrarCompra(costo, x, y);
     if (delProducto) {
-      nuevoEstante(slot, IDS[slot]);
+      nuevoEstante(slot, TODOS[slot]);
       // las zanahorias de los espacios extra pasan a la estantería nueva de zanahorias
-      if (IDS[slot] === "zanahoria") estantes[estantes.length - 1].items.push(...extra.splice(0));
+      if (TODOS[slot] === "zanahoria") estantes[estantes.length - 1].items.push(...extra.splice(0));
     } else {
       // estantería adicional: lleva el producto que quieras (se cambia con ↻)
       nuevoEstante(slot, IDS[0]);
+    }
+  } else if (tipo === "granja") {
+    if (granja || !alcanza(COSTO_GRANJA)) return;
+    cobrarCompra(COSTO_GRANJA, x, y);
+    abrirGranja();
+    textos.push({ x: jugador.x, y: jugador.y, vida: 2.2, txt: "¡Granja comprada! Camina al norte ▲", col: "#ffd24d" });
+  } else if (tipo.startsWith("corral:")) {
+    const [, op, id] = tipo.split(":");
+    const c = corralDe(id);
+    if (!c || !c.comprado) return;
+    if (op === "vel") {
+      if (c.tipo !== "continuo" || c.nivelVel >= COSTOS_VEL.length || !alcanza(COSTOS_VEL[c.nivelVel])) return;
+      cobrarCompra(COSTOS_VEL[c.nivelVel], x, y); c.nivelVel++;
+    } else if (op === "cant") {
+      if (c.tipo !== "carga" || c.nivelCant >= COSTOS_CANT.length || !alcanza(COSTOS_CANT[c.nivelCant])) return;
+      cobrarCompra(COSTOS_CANT[c.nivelCant], x, y); c.nivelCant++;
+    } else if (op === "tiempo") {
+      if (c.tipo !== "carga" || c.nivelTiempo >= COSTOS_TIEMPO.length || !alcanza(COSTOS_TIEMPO[c.nivelTiempo])) return;
+      cobrarCompra(COSTOS_TIEMPO[c.nivelTiempo], x, y); c.nivelTiempo++;
     }
   } else if (tipo === "edificio-izq" || tipo === "edificio-der") {
     if (edificio >= COSTOS_EDIFICIO.length) return;
@@ -804,7 +967,7 @@ function comprarMejora(tipo) {
     cobrarCompra(costo, x, y);
     const lado = tipo === "edificio-izq" ? -1 : 1;
     ampliar(lado);
-    textos.push({ x: jugador.x, y: jugador.y - 34, vida: 1.6, txt: lado < 0 ? "◀ ¡Edificio ampliado!" : "¡Edificio ampliado! ▶", col: "#ffd24d" });
+    textos.push({ x: jugador.x, y: jugador.y, vida: 1.6, txt: lado < 0 ? "◀ ¡Edificio ampliado!" : "¡Edificio ampliado! ▶", col: "#ffd24d" });
   } else if (tipo === "patio-izq" || tipo === "patio-der") {
     if (nivelPatio >= COSTOS_PATIO.length) return;
     const costo = COSTOS_PATIO[nivelPatio];
@@ -812,7 +975,7 @@ function comprarMejora(tipo) {
     cobrarCompra(costo, x, y);
     const lado = tipo === "patio-izq" ? -1 : 1;
     ampliarPatio(lado);
-    textos.push({ x: jugador.x, y: jugador.y - 34, vida: 1.6, txt: lado < 0 ? "◀ ¡Patio ampliado!" : "¡Patio ampliado! ▶", col: "#9dffb0" });
+    textos.push({ x: jugador.x, y: jugador.y, vida: 1.6, txt: lado < 0 ? "◀ ¡Patio ampliado!" : "¡Patio ampliado! ▶", col: "#9dffb0" });
   }
 }
 // botones de «empleado de jardín» (uno por jardín; solo se ven los de jardines ya comprados)
@@ -840,6 +1003,20 @@ function crearBotonEmpCaja(k) {
   const i = cajas.length;   // índice que tendrá esa caja
   return botonPanel("emp-caja:" + i);
 }
+// 🐄 Granja: comprar el terreno y, por cada corral comprado, su empleado y sus mejoras
+const titGranja = document.createElement("div");
+titGranja.className = "grupo-t"; panel.appendChild(titGranja);
+function botonGranja(tipo) {
+  const b = document.createElement("button");
+  b.className = "mej"; b.type = "button"; b.hidden = true;
+  b.style.borderLeftColor = "#d9a066";
+  b.innerHTML = "<span></span><b></b>";
+  panel.appendChild(b);
+  b.addEventListener("click", () => comprarMejora(tipo));
+  return b;
+}
+const btnGranja = botonGranja("granja");
+const btnsCorral = corrales.map((c) => ({ emp: botonGranja("emp:" + c.producto), vel: botonGranja("corral:vel:" + c.producto), cant: botonGranja("corral:cant:" + c.producto), tiempo: botonGranja("corral:tiempo:" + c.producto) }));
 btnCarga.addEventListener("click", () => comprarMejora("carga"));
 btnEmpleado.addEventListener("click", () => comprarMejora("empleado"));
 btnEstante.addEventListener("click", () => comprarMejora("estante"));
@@ -852,6 +1029,34 @@ function pintarBoton(b, texto, precio, activo) {
   b.querySelector("span").textContent = texto;
   b.querySelector("b").textContent = precio;
   b.disabled = !activo;
+}
+
+function pintarGranja() {
+  titGranja.textContent = granja ? "🐄 Granja (camina al norte, pasando el patio)" : "🐄 Granja: terreno nuevo al norte del patio";
+  btnGranja.hidden = granja;
+  if (!granja) pintarBoton(btnGranja, "🐄 Comprar la granja", "$" + COSTO_GRANJA, alcanza(COSTO_GRANJA));
+  corrales.forEach((c, i) => {
+    const b = btnsCorral[i], ic = PRODUCTOS[c.producto].icono, a = c.animal;
+    const ver = granja && c.comprado;
+    b.emp.hidden = b.vel.hidden = b.cant.hidden = b.tiempo.hidden = !ver;
+    if (!ver) return;
+    if (c.emp) pintarBoton(b.emp, "🧑‍🌾 Empleado de " + a + " " + c.nombre, "✓", false);
+    else if (!destinosDe(c.producto).length) pintarBoton(b.emp, "🧑‍🌾 Primero la estantería de " + ic, "", false);
+    else pintarBoton(b.emp, "🧑‍🌾 Empleado de " + a + " " + c.nombre, "$" + c.costoEmp, alcanza(c.costoEmp));
+    if (c.tipo === "continuo") {
+      b.cant.hidden = b.tiempo.hidden = true;
+      const n = c.nivelVel, ahora = periodoCont(c);
+      if (n >= COSTOS_VEL.length) pintarBoton(b.vel, "⚡ " + ic + " al máximo (cada " + ahora.toFixed(1) + " s)", "", false);
+      else pintarBoton(b.vel, "⚡ " + ic + " más rápido: " + ahora.toFixed(1) + " s → " + (ahora * VEL_FACTOR).toFixed(1) + " s", "$" + COSTOS_VEL[n], alcanza(COSTOS_VEL[n]));
+    } else {
+      b.vel.hidden = true;
+      const nc = c.nivelCant, nt = c.nivelTiempo;
+      if (nc >= COSTOS_CANT.length) pintarBoton(b.cant, "📦 " + ic + " carga al máximo (" + cantidadCarga(c) + ")", "", false);
+      else pintarBoton(b.cant, "📦 " + ic + " más carga: " + cantidadCarga(c) + " → " + (cantidadCarga(c) + CARGA_PASO), "$" + COSTOS_CANT[nc], alcanza(COSTOS_CANT[nc]));
+      if (nt >= COSTOS_TIEMPO.length) pintarBoton(b.tiempo, "⏱ " + ic + " espera al mínimo (" + mmss(tiempoNivel(nt)) + ")", "", false);
+      else pintarBoton(b.tiempo, "⏱ " + ic + " menos espera: " + mmss(tiempoNivel(nt)) + " → " + mmss(tiempoNivel(nt + 1)), "$" + COSTOS_TIEMPO[nt], alcanza(COSTOS_TIEMPO[nt]));
+    }
+  });
 }
 
 function actualizarPanel() {
@@ -873,9 +1078,9 @@ function actualizarPanel() {
   const slot = siguienteSlot();
   if (!hayPrimerEstante()) pintarBoton(btnEstante, "🗄️ Primero compra la estantería", "", false);
   else if (slot < 0) pintarBoton(btnEstante, "🗄️ Estanterías al máximo", "", false);
-  else if (slot < IDS.length && !jardinDe(IDS[slot]).comprado) pintarBoton(btnEstante, "🗄️ Primero compra el jardín de " + PRODUCTOS[IDS[slot]].icono, "", false);
+  else if (slot < TODOS.length && !productorDe(TODOS[slot]).comprado) pintarBoton(btnEstante, "🗄️ Primero compra " + (productorDe(TODOS[slot]).tipo ? "el corral" : "el jardín") + " de " + PRODUCTOS[TODOS[slot]].icono, "", false);
   else if (ampDe(slot) > edificio) pintarBoton(btnEstante, "🗄️ Agranda el edificio para más", "", false);
-  else pintarBoton(btnEstante, slot < IDS.length ? "🗄️ Estantería de " + PRODUCTOS[IDS[slot]].icono : "🗄️ Estantería nueva", "$" + costoEstanteExtra(), alcanza(costoEstanteExtra()));
+  else pintarBoton(btnEstante, slot < TODOS.length ? "🗄️ Estantería de " + PRODUCTOS[TODOS[slot]].icono : "🗄️ Estantería nueva", "$" + costoEstanteExtra(), alcanza(costoEstanteExtra()));
   // un empleado por jardín comprado
   jardines.forEach((g, i) => {
     const b = btnsEmp[i], ic = PRODUCTOS[g.producto].icono;
@@ -885,6 +1090,7 @@ function actualizarPanel() {
     else if (!destinosDe(g.producto).length) pintarBoton(b, "🧑‍🌾 Primero la estantería de " + ic, "", false);
     else pintarBoton(b, "🧑‍🌾 Empleado del jardín " + ic, "$" + g.costoEmp, alcanza(g.costoEmp));
   });
+  pintarGranja();
   // edificio y patio se mejoran por separado: cada uno con su lado a elegir
   const maxEd = edificio >= COSTOS_EDIFICIO.length;
   titEd.textContent = maxEd ? "🏗️ Edificio al máximo" : "🏗️ Ampliar edificio (+4 estanterías)";
@@ -912,10 +1118,11 @@ function actualizar(dt) {
   mover(dt);
   comprarCosas();
   crecerJardin(dt);
+  actualizarCorrales(dt);
   traspasos(dt);
   actualizarEmpleados(dt);
   actualizarClientes(dt);
-  textos.forEach((t) => { t.y -= 28 * dt; t.vida -= dt; });
+  textos.forEach((t) => { t.z = (t.z || 0) + 28 * dt; t.vida -= dt; });
   textos = textos.filter((t) => t.vida > 0);
 }
 
@@ -946,15 +1153,20 @@ function actualizarHud() {
 }
 
 // ---------- Entrada ----------
-function posicion(ev) {
+function pantallaDe(ev) {
   const r = lienzo.getBoundingClientRect();
-  return { x: camX + ((ev.clientX - r.left) / r.width) * MUNDO.w, y: ((ev.clientY - r.top) / r.height) * MUNDO.h };
+  return { x: ((ev.clientX - r.left) / r.width) * MUNDO.w, y: ((ev.clientY - r.top) / r.height) * MUNDO.h };
+}
+// Un toque en la pantalla se convierte al punto del suelo que se ve ahí (y se deja dentro del terreno)
+function posicion(ev) {
+  const s = pantallaDe(ev), m = desdePantalla(s.x, s.y);
+  return { x: Math.max(wMin + RADIO, Math.min(wMax - RADIO, m.x)), y: Math.max(yMin + RADIO, Math.min(MUNDO.h - RADIO, m.y)) };
 }
 lienzo.addEventListener("pointerdown", (ev) => {
   if (estado !== "jugando") return;
-  const p = posicion(ev);
-  // botón ↻ de una estantería: cambia su producto (no te mueve)
-  const e = estantes.find((q) => !q.fija && Math.hypot(p.x - centroSelector(q).x, p.y - centroSelector(q).y) <= 18);
+  const p = posicion(ev), s = pantallaDe(ev);
+  // botón ↻ de una estantería: cambia su producto (no te mueve). Se busca donde se VE el botón, sobre el mueble
+  const e = estantes.find((q) => { if (q.fija) return false; const c = P(q.x + 13, q.y + q.h / 2, ALTO_ESTANTE + 8); return Math.hypot(s.x - c.x, s.y - c.y) <= 20; });
   if (e) { cambiarProducto(e); return; }
   lienzo.setPointerCapture(ev.pointerId);
   tocando = true;
@@ -1032,288 +1244,558 @@ function persona(x, y, camisa, piel, delantal) {
   ctx.beginPath(); ctx.arc(x - 3, y - 11, 1.4, 0, Math.PI * 2); ctx.arc(x + 3, y - 11, 1.4, 0, Math.PI * 2); ctx.fill();
 }
 
+// ---------- Vista isométrica ----------
+// La lógica del juego sigue en un mapa plano (x, y). Aquí solo se PROYECTA a la pantalla en rombos 2:1:
+//   x crece hacia abajo-derecha · y crece hacia abajo-izquierda · z es la altura.
+// Lo plano (calle, banqueta, piso, camas de cultivo) se dibuja con UNA transformación (modoPlano).
+// Lo que tiene altura (muebles, paredes, personas, cultivos, autos) se dibuja uno por uno, ordenado por profundidad.
+const ISO = 0.85;            // escala horizontal de la proyección (el alto de pantalla es la mitad: rombos 2:1)
+const CENTRO_Y = 340;        // en qué altura de la pantalla queda el personaje
+const BANQUETA = 36;         // ancho de la banqueta alrededor del local (por ahí entran los clientes)
+const CALLE = 90;            // ancho de la calle que rodea todo
+const ALTO_ESTANTE = 24;     // altura de las estanterías
+const ALTO_PARED = 16;       // altura de las paredes de atrás (las de adelante son bordillos bajos para ver adentro)
+
+// Mundo (x, y, z) → pantalla (px lógicos de 360×630)
+const P = (x, y, z = 0) => ({ x: (x - y) * ISO - camX + MUNDO.w / 2, y: ((x + y) * ISO) / 2 - camY + CENTRO_Y - z });
+// Pantalla → punto del suelo (z = 0), lo contrario de P
+function desdePantalla(sx, sy) {
+  const u = sx - MUNDO.w / 2 + camX, v = sy - CENTRO_Y + camY;
+  return { x: (u + 2 * v) / (2 * ISO), y: (2 * v - u) / (2 * ISO) };
+}
+const modoPantalla = () => ctx.setTransform(dpr * escala, 0, 0, dpr * escala, 0, 0);
+function modoPlano() {   // después de esto se dibuja en coordenadas del MAPA y sale en isométrico
+  const k = dpr * escala, ox = MUNDO.w / 2 - camX, oy = CENTRO_Y - camY;
+  ctx.setTransform(k * ISO, (k * ISO) / 2, -k * ISO, (k * ISO) / 2, k * ox, k * oy);
+}
+function centrarCamara() {
+  camX = (jugador.x - jugador.y) * ISO;
+  camY = ((jugador.x + jugador.y) * ISO) / 2;
+}
+function enPantalla(x, y, m = 90) {
+  const s = P(x, y);
+  return s.x > -m && s.x < MUNDO.w + m && s.y > -m && s.y < MUNDO.h + m + 60;
+}
+
+// ----- Piezas para dibujar cajas con altura -----
+function sombra(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  return "rgb(" + Math.round(((n >> 16) & 255) * f) + "," + Math.round(((n >> 8) & 255) * f) + "," + Math.round((n & 255) * f) + ")";
+}
+const paleta = (c) => ({ top: c, sur: sombra(c, 0.8), este: sombra(c, 0.62), borde: "rgba(0,0,0,.25)" });
+const PAL = {
+  madera: { top: "#c79055", sur: "#9a6b3c", este: "#7a5430", borde: "rgba(0,0,0,.25)" },
+  pared: { top: "#e3c394", sur: "#b9885a", este: "#9a6f45", borde: "rgba(0,0,0,.25)" },
+  bordillo: { top: "#d8d6cf", sur: "#aeaca4", este: "#908e86", borde: "rgba(0,0,0,.2)" },
+  mostrador: { top: "#e8c48e", sur: "#8a5a2b", este: "#6e4520", borde: "rgba(0,0,0,.3)" },
+  registro: { top: "#4a5568", sur: "#3b4658", este: "#2b3140", borde: "rgba(0,0,0,.3)" },
+  poste: { top: "#a9753f", sur: "#8a5a2b", este: "#6e4520", borde: null },
+  vidrio: { top: "#cfe8f5", sur: "#9ec4d8", este: "#7ba3b8", borde: "rgba(0,0,0,.2)" },
+};
+
+function poligono(pts, relleno, borde) {
+  ctx.beginPath();
+  pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+  ctx.closePath();
+  if (relleno) { ctx.fillStyle = relleno; ctx.fill(); }
+  if (borde) { ctx.strokeStyle = borde; ctx.lineWidth = 1; ctx.stroke(); }
+}
+// Caja con altura: ocupa x..x+w, y..y+h del mapa y sube «alto» px desde la altura z0. Se ven la cara sur, la este y la tapa.
+function bloque(x, y, w, h, alto, col, z0 = 0) {
+  const z1 = z0 + alto;
+  poligono([P(x, y + h, z0), P(x + w, y + h, z0), P(x + w, y + h, z1), P(x, y + h, z1)], col.sur, col.borde);
+  poligono([P(x + w, y, z0), P(x + w, y + h, z0), P(x + w, y + h, z1), P(x + w, y, z1)], col.este, col.borde);
+  poligono([P(x, y, z1), P(x + w, y, z1), P(x + w, y + h, z1), P(x, y + h, z1)], col.top, col.borde);
+}
+const losa = (x0, y0, x1, y1, z, col) => poligono([P(x0, y0, z), P(x1, y0, z), P(x1, y1, z), P(x0, y1, z)], col);
+
+// ----- Orden de profundidad -----
+// Cada objeto es una caja del mapa {x0,y0,x1,y1}. A está DETRÁS de B si queda entero al oeste o al norte de B.
+function ordenar(l) {
+  const n = l.length;
+  l.forEach((o) => { o.k = (o.x0 + o.x1 + o.y0 + o.y1) / 2; });
+  l.sort((a, b) => a.k - b.k);
+  const atras = (a, b) => a.x1 <= b.x0 || a.y1 <= b.y0;
+  const antes = l.map(() => []);                 // antes[j] = los que deben dibujarse antes que j
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const ab = atras(l[i], l[j]), ba = atras(l[j], l[i]);
+      if (ab && !ba) antes[j].push(i);
+      else if (ba && !ab) antes[i].push(j);
+    }
+  }
+  const visto = new Array(n).fill(false), res = [];
+  const visitar = (i) => {
+    if (visto[i]) return;
+    visto[i] = true;
+    for (const d of antes[i]) visitar(d);
+    res.push(l[i]);
+  };
+  for (let i = 0; i < n; i++) visitar(i);
+  return res;
+}
+
+// ----- Autos decorativos que dan vueltas por la calle -----
+const autos = ["#e0463d", "#2f9bff", "#ffd24d", "#a14df0", "#3fcf4a"].map((color, i) => ({ lado: i % 4, t: 40 + i * 70, vel: 70 + (i % 3) * 18, color }));
+function carrilAutos() {
+  const m = BANQUETA + CALLE * 0.75;
+  return { x0: wMin - m, x1: wMax + m, y0: yMin - m, y1: MUNDO.h + m };
+}
+function puntoAuto(a) {
+  const q = carrilAutos();
+  const esq = [{ x: q.x0, y: q.y1 }, { x: q.x1, y: q.y1 }, { x: q.x1, y: q.y0 }, { x: q.x0, y: q.y0 }];
+  const p = esq[a.lado], s = esq[(a.lado + 1) % 4];
+  const largo = Math.hypot(s.x - p.x, s.y - p.y), f = Math.min(1, a.t / largo);
+  return { x: p.x + (s.x - p.x) * f, y: p.y + (s.y - p.y) * f, alongX: a.lado % 2 === 0, largo };
+}
+function actualizarAutos(dt) {
+  for (const a of autos) {
+    a.t += a.vel * dt;
+    const p = puntoAuto(a);
+    if (a.t >= p.largo) { a.t -= p.largo; a.lado = (a.lado + 1) % 4; }
+  }
+}
+function dibujarAuto(a, p, w, h) {
+  losa(p.x - w / 2, p.y - h / 2, p.x + w / 2, p.y + h / 2, 0, "rgba(0,0,0,.28)");
+  bloque(p.x - w / 2, p.y - h / 2, w, h, 9, paleta(a.color), 2);
+  bloque(p.x - w * 0.28, p.y - h * 0.28, w * 0.56, h * 0.56, 7, PAL.vidrio, 11);
+}
+
+// Árboles decorativos fuera de la calle
+function arbolesFuera() {
+  const m = BANQUETA + CALLE + 40, l = [];
+  const X0 = wMin - m, X1 = wMax + m, Y0 = yMin - m, Y1 = MUNDO.h + m;
+  let i = 0;
+  for (let x = X0; x <= X1; x += 90, i++) { const d = i % 2 ? 26 : 0; l.push([x, Y0 - d], [x, Y1 + d]); }
+  for (let y = Y0 + 90, j = 0; y < Y1 - 40; y += 90, j++) { const d = j % 2 ? 26 : 0; l.push([X0 - d, y], [X1 + d, y]); }
+  return l;
+}
+
+// Postes de la valla que rodea cada jardín
+function postesDe(g) {
+  const { x, y, w, h } = g, p = [];
+  const nx = Math.max(1, Math.round(w / 48)), ny = Math.max(1, Math.round(h / 48));
+  for (let i = 0; i < nx; i++) p.push([x + (w * i) / nx, y]);
+  for (let i = 0; i < ny; i++) p.push([x + w, y + (h * i) / ny]);
+  for (let i = 0; i < nx; i++) p.push([x + w - (w * i) / nx, y + h]);
+  for (let i = 0; i < ny; i++) p.push([x, y + h - (h * i) / ny]);
+  return p;
+}
+function dibujarPoste(a, b) {
+  const sa = P(a[0], a[1], 15), sb = P(b[0], b[1], 15), ba = P(a[0], a[1], 8), bb = P(b[0], b[1], 8);
+  ctx.strokeStyle = "#8a5a2b"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.moveTo(ba.x, ba.y); ctx.lineTo(bb.x, bb.y); ctx.stroke();
+  bloque(a[0] - 1.5, a[1] - 1.5, 3, 3, 17, PAL.poste);
+}
+
+// ----- Suelo (plano) -----
 function dibujarSuelo() {
-  // afuera: pasto (por todo el ancho del mundo)
-  ctx.fillStyle = "#9bd27f";
-  ctx.fillRect(wMin - 2, 0, wMax - wMin + 4, MUNDO.h);
+  const S = BANQUETA, R = CALLE, X0 = wMin, X1 = wMax, Y0 = yMin, Y1 = MUNDO.h, A = X1 - X0, H = Y1 - Y0;
+  // terreno de afuera
+  ctx.fillStyle = "#86b86b"; ctx.fillRect(X0 - 1600, Y0 - 1600, A + 3200, H + 3200);
+  // calle alrededor del local: bordillo, asfalto, rayas blancas, línea central amarilla y cebras
+  ctx.fillStyle = "#d4d2cb"; ctx.fillRect(X0 - S - R - 8, Y0 - S - R - 8, A + 2 * (S + R + 8), H + 2 * (S + R + 8));
+  ctx.fillStyle = "#4a4d55"; ctx.fillRect(X0 - S - R, Y0 - S - R, A + 2 * (S + R), H + 2 * (S + R));
+  ctx.setLineDash([]); ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(255,255,255,.75)";
+  ctx.strokeRect(X0 - S - 6, Y0 - S - 6, A + 2 * (S + 6), H + 2 * (S + 6));
+  ctx.strokeRect(X0 - S - R + 6, Y0 - S - R + 6, A + 2 * (S + R - 6), H + 2 * (S + R - 6));
+  ctx.strokeStyle = "#f2d04a"; ctx.lineWidth = 3; ctx.setLineDash([22, 16]);
+  const c = S + R / 2;
+  ctx.strokeRect(X0 - c, Y0 - c, A + 2 * c, H + 2 * c);
+  ctx.setLineDash([]);
+  ctx.fillStyle = "rgba(255,255,255,.85)";
+  for (const p of puertas) for (let yy = Y1 + S + 6; yy < Y1 + S + R - 8; yy += 14) ctx.fillRect(p.x - 26, yy, 52, 7);
+  // banqueta
+  ctx.fillStyle = "#c9c6bd"; ctx.fillRect(X0 - S, Y0 - S, A + 2 * S, H + 2 * S);
+  ctx.strokeStyle = "rgba(0,0,0,.1)"; ctx.lineWidth = 1;
+  for (let x = Math.ceil((X0 - S) / 36) * 36; x < X1 + S; x += 36) { ctx.beginPath(); ctx.moveTo(x, Y1); ctx.lineTo(x, Y1 + S); ctx.stroke(); }
+  // terreno del local (pasto)
+  ctx.fillStyle = "#9bd27f"; ctx.fillRect(X0, Y0, A, H);
+  if (granja) {   // granja: paja clara y su cerca
+    ctx.fillStyle = "rgba(214,170,80,.25)"; ctx.fillRect(0, yMin, MUNDO.w, -yMin);
+    ctx.strokeStyle = "#8a5a2b"; ctx.lineWidth = 4; ctx.setLineDash([10, 5]);
+    ctx.beginPath(); ctx.moveTo(2, 0); ctx.lineTo(2, yMin + 3); ctx.lineTo(MUNDO.w - 2, yMin + 3); ctx.lineTo(MUNDO.w - 2, 0); ctx.stroke();
+    ctx.setLineDash([]);
+  }
   // patio (zona de los jardines): un poco más claro y con su cerca; es una zona aparte del edificio
   ctx.fillStyle = "rgba(255,255,255,.12)";
   ctx.fillRect(pMin, 0, pMax - pMin, TOP);
   ctx.strokeStyle = "#8a5a2b"; ctx.lineWidth = 4; ctx.setLineDash([10, 5]);
-  ctx.beginPath(); ctx.moveTo(pMin + 2, TOP); ctx.lineTo(pMin + 2, 3); ctx.lineTo(pMax - 2, 3); ctx.lineTo(pMax - 2, TOP); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(pMin + 2, TOP); ctx.lineTo(pMin + 2, 3);
+  if (granja) { ctx.moveTo(pMax - 2, 3); } else ctx.lineTo(pMax - 2, 3);   // con la granja, el patio queda abierto por arriba
+  ctx.lineTo(pMax - 2, TOP); ctx.stroke();
   ctx.setLineDash([]);
-  for (const cx of [MUNDO.w / 2, ...patios.map((a) => a.x0 + EXT_ANCHO / 2)]) etiqueta("🌱 Patio", cx, 20, "#fff", 12);
-  const sig = siguienteJardin();
-  if (sig && !sig.disponible) etiqueta("🌱 Amplía el patio para el siguiente jardín", MUNDO.w / 2, 40, "#ffd24d");
-  // adentro: piso del edificio, con sus ampliaciones
+  // adentro: piso del edificio, con sus ampliaciones y cuadros
   ctx.fillStyle = "#efe3c8";
   ctx.fillRect(xMin, TOP, xMax - xMin, MUNDO.h - TOP);
   ctx.fillStyle = "rgba(150,105,40,.07)";
   for (const a of ampliaciones) ctx.fillRect(a.x0, TOP, EXT_ANCHO, MUNDO.h - TOP);
   ctx.fillStyle = "rgba(0,0,0,.04)";
   const t = 40;
-  const c0 = Math.max(Math.floor(xMin / t), Math.floor(camX / t));
-  const c1 = Math.min(Math.ceil(xMax / t), Math.ceil((camX + MUNDO.w) / t));
-  for (let f = 0; f < MUNDO.h / t; f++)
-    for (let c = c0; c < c1; c++) if ((f + c) % 2 && f * t >= TOP - 1) ctx.fillRect(c * t, f * t, t, t);
-  // paredes y puerta
-  ctx.fillStyle = "#b9885a";
-  ctx.fillRect(xMin, TOP, ABERTURA.a - xMin, 14);              // pared de arriba, con hueco al centro
-  ctx.fillRect(ABERTURA.b, TOP, xMax - ABERTURA.b, 14);
-  ctx.fillRect(xMin, TOP, 4, MUNDO.h - TOP);
-  ctx.fillRect(xMax - 4, TOP, 4, MUNDO.h - TOP);
-  for (const p of puertas) {
-    ctx.fillStyle = "#8f6ad0"; caja(p.x - 30, MUNDO.h - 14, 60, 14, 4); ctx.fill();
-    etiqueta("Entrada", p.x, MUNDO.h - 26, "#6a4a1a");
+  for (let f = Math.ceil((TOP - 1) / t); f * t < MUNDO.h; f++) {
+    for (let k = Math.floor(xMin / t); k < Math.ceil(xMax / t); k++) {
+      if (!((f + k) % 2)) continue;
+      const x0 = Math.max(xMin, k * t), x1 = Math.min(xMax, (k + 1) * t);
+      if (x1 > x0) ctx.fillRect(x0, f * t, x1 - x0, Math.min(t, MUNDO.h - f * t));
+    }
   }
+  // tapete de cada entrada
+  for (const p of puertas) { ctx.fillStyle = "#8f6ad0"; caja(p.x - 30, MUNDO.h - 14, 60, 14, 4); ctx.fill(); }
 }
 
-function dibujarMejoras() {
-  const { x, y, w, h } = MEJORAS_ZONA;
-  ctx.fillStyle = enMejoras ? "#8fb8ff" : "#b9cdf0";
-  caja(x, y, w, h, 10); ctx.fill();
-  ctx.lineWidth = 3; ctx.strokeStyle = "#4a6fb5"; caja(x, y, w, h, 10); ctx.stroke();
-  etiqueta("🛠️ Mejoras", x + w / 2, y + h / 2, "#fff");
-}
-
-function dibujarCaja(k) {
-  const { x, y, w, h } = k;
-  // ¿hay un cliente ya parado frente al mostrador y alguien que cobre? (el cajón se abre)
-  const c0 = k.cola[0];
-  const s0 = slotCaja(k, 0);
-  const frente = c0 && Math.hypot(c0.x - s0.x, c0.y - s0.y) < 3;
-  const abierto = frente && hayCajero(k);
-  // sombra
-  ctx.fillStyle = "rgba(0,0,0,.18)"; caja(x + 2, y + 4, w, h, 8); ctx.fill();
-  // mueble de madera (frente con tablones)
-  ctx.fillStyle = "#8a5a2b"; caja(x, y, w, h, 8); ctx.fill();
-  ctx.strokeStyle = "rgba(0,0,0,.18)"; ctx.lineWidth = 1;
-  for (let i = 1; i < 5; i++) { ctx.beginPath(); ctx.moveTo(x + (i * w) / 5, y + h - 10); ctx.lineTo(x + (i * w) / 5, y + h - 1); ctx.stroke(); }
-  // cubierta clara del mostrador, con un brillo arriba
-  ctx.fillStyle = "#e8c48e"; caja(x + 2, y + 2, w - 4, h - 12, 6); ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,.35)"; caja(x + 5, y + 4, w - 10, 3, 2); ctx.fill();
-  ctx.lineWidth = 2; ctx.strokeStyle = "#6e4520"; caja(x, y, w, h, 8); ctx.stroke();
-  // caja registradora: pantalla verde con $, cuerpo oscuro y teclas
-  ctx.fillStyle = "#3b4658"; caja(x + 6, y + 11, 27, 15, 3); ctx.fill();
-  ctx.fillStyle = "#2b3140"; caja(x + 9, y + 4, 18, 10, 2); ctx.fill();
-  ctx.fillStyle = abierto ? "#b6ffcf" : "#8ff0b4"; caja(x + 10.5, y + 5.5, 15, 7, 1.5); ctx.fill();
-  ctx.font = "bold 7px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillStyle = "#1d6a3a"; ctx.fillText("$", x + 18, y + 9.3);
-  ctx.fillStyle = "#cfd8e6";
-  for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) ctx.fillRect(x + 9 + i * 5.5, y + 16 + j * 4.5, 3.5, 3);
-  // cajón de la registradora (se abre al cobrar, con billetes)
-  ctx.fillStyle = "#2b3140"; caja(x + 7, y + h - 9, 24, 6, 2); ctx.fill();
-  if (abierto) {
-    ctx.fillStyle = "#e9eef6"; caja(x + 7, y + h - 8, 24, 9, 2); ctx.fill();
-    ctx.fillStyle = "#6fcf7a"; caja(x + 10, y + h - 6, 18, 3, 1); ctx.fill();
-    ctx.fillStyle = "#4fae5a"; caja(x + 12, y + h - 3, 14, 2, 1); ctx.fill();
+// Lo plano del juego: camas de cultivo, lugares por comprar, zona de mejoras, sitio donde colocas algo y marca de destino
+function dibujarPlanoJuego() {
+  for (const g of jardines) {
+    if (!g.disponible) continue;
+    const { x, y, w, h } = g;
+    if (!g.comprado) {
+      if (g !== siguienteJardin()) continue;   // solo se muestra el siguiente jardín
+      const puede = alcanza(g.costo) && puedeJardin(g);
+      ctx.setLineDash([8, 6]); ctx.lineWidth = 3;
+      ctx.strokeStyle = puede ? "#2e9d4a" : "#999";
+      caja(x, y, w, h, 10); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = "#ffffff99"; caja(x, y, w, h, 10); ctx.fill();
+      continue;
+    }
+    ctx.fillStyle = "#6fae52"; caja(x, y, w, h, 10); ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = "#8a5a2b"; caja(x, y, w, h, 10); ctx.stroke();
+    g.parcelas.forEach((p, i) => {
+      const c = centroParcela(g, i);
+      ctx.fillStyle = "#6b4426";
+      ctx.beginPath(); ctx.ellipse(c.x, c.y, 21, 18, 0, 0, Math.PI * 2); ctx.fill();
+    });
   }
-  // letrero en el frente
-  ctx.font = "bold 8px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillStyle = "#ffe9c4"; ctx.fillText("CAJA", x + 53, y + h - 5);
-  // sobre el mostrador: la compra del cliente que está pagando, o un recibo si no hay nadie
-  if (frente && c0.carrito.length) {
-    c0.carrito.slice(0, 6).forEach((id, i) => emoji(PRODUCTOS[id].icono, x + 41 + (i % 3) * 11, y + 10 + Math.floor(i / 3) * 12, 11));
-  } else {
-    emoji("🧾", x + 53, y + 14, 14);
-  }
-  // toldo de rayas rojas y blancas con festón
-  const n = Math.round(w / 8);
-  for (let i = 0; i < n; i++) {
-    ctx.fillStyle = i % 2 ? "#ffffff" : "#e0463d";
-    ctx.fillRect(x + (i * w) / n, y - 11, w / n + 0.5, 8);
-    ctx.beginPath(); ctx.arc(x + ((i + 0.5) * w) / n, y - 3.5, w / n / 2, 0, Math.PI); ctx.fill();
-  }
-  ctx.fillStyle = "rgba(0,0,0,.15)"; ctx.fillRect(x, y - 11, w, 2);
-  if (k.emp) {
-    const pe = posEmpleadoCaja(k);
-    persona(pe.x, pe.y, "#d9534f", "#d9a066", true);
-  } else if (k.cola.length) {
-    etiqueta("¡Cobra aquí!", x + w / 2, y - 24, "#ffd24d");
-  }
-}
-
-function dibujarEstantes() {
-  // lugar de la primera estantería, mientras no se compra
   if (!hayPrimerEstante()) {
     const { x, y, w, h } = rectEstante(0);
     ctx.setLineDash([8, 6]); ctx.lineWidth = 3;
     ctx.strokeStyle = alcanza(COSTO_PRIMER_ESTANTE) ? "#2e9d4a" : "#999";
     caja(x, y, w, h, 8); ctx.stroke(); ctx.setLineDash([]);
     ctx.fillStyle = "#ffffff99"; caja(x, y, w, h, 8); ctx.fill();
-    const col = alcanza(COSTO_PRIMER_ESTANTE) ? "#bfffcf" : "#fff";
-    etiqueta("🥬 Estantería", x + w / 2, y + 14, col);
-    etiqueta("$" + COSTO_PRIMER_ESTANTE, x + w / 2, y + 31, col);
   }
-  for (const e of estantes) {
-    const { x, y, w, h } = e;
-    const ancho = (w - 28) / ESTANTE_CAP;
-    const conExtra = e.slot === 0 && extrasActivas();
-    // la estantería de jitomates, con los 2 espacios de zanahoria, se ensancha hacia abajo como un solo mueble
-    const tw = 24 + EXTRA_ZANAHORIA_CAP * ancho + 4;
-    if (conExtra) { ctx.fillStyle = "#9a6b3c"; caja(x, y + h - 10, tw, EXT_H + 10, 8); ctx.fill(); }
-    ctx.fillStyle = "#9a6b3c"; caja(x, y, w, h, 8); ctx.fill();
-    ctx.fillStyle = "#c79055"; caja(x + 24, y + 4, w - 28, h - 8, 6); ctx.fill();
-    // panel con el producto que lleva; solo las estanterías extra tienen el botón ↻ para cambiarlo
-    ctx.fillStyle = "#f3e0c2"; caja(x + 3, y + 4, 20, h - 8, 6); ctx.fill();
-    if (e.fija) {
-      emoji(PRODUCTOS[e.producto].icono, x + 13, y + h / 2, 15);
-    } else {
-      emoji(PRODUCTOS[e.producto].icono, x + 13, y + h / 2 - 5, 14);
-      etiqueta("↻", x + 13, y + h / 2 + 11, "#6a4a1a", 11);
-    }
-    for (let i = 0; i < ESTANTE_CAP; i++) {
-      const cx = x + 24 + (i + 0.5) * ancho, cy = y + h / 2;
-      ctx.fillStyle = "rgba(0,0,0,.12)"; caja(cx - ancho / 2 + 1.5, cy - 14, ancho - 3, 28, 5); ctx.fill();
-      if (e.items[i]) emoji(PRODUCTOS[e.items[i]].icono, cx, cy + 1, 16);
-      else { ctx.globalAlpha = 0.22; emoji(PRODUCTOS[e.producto].icono, cx, cy + 1, 14); ctx.globalAlpha = 1; }
-    }
-    if (conExtra) {
-      // parte de abajo del mismo mueble: panel de 🥕 y 2 espacios para zanahorias
-      const ty = y + h;
-      ctx.fillStyle = "#f3e0c2"; caja(x + 3, ty + 1, 20, EXT_H - 4, 6); ctx.fill();
-      emoji(PRODUCTOS.zanahoria.icono, x + 13, ty + EXT_H / 2 - 1, 14);
-      ctx.fillStyle = "#c79055"; caja(x + 24, ty + 1, tw - 28, EXT_H - 4, 6); ctx.fill();
-      for (let i = 0; i < EXTRA_ZANAHORIA_CAP; i++) {
-        const cx = x + 24 + (i + 0.5) * ancho, cy = ty + EXT_H / 2 - 1;
-        ctx.fillStyle = "rgba(0,0,0,.12)"; caja(cx - ancho / 2 + 1.5, cy - 10, ancho - 3, 20, 5); ctx.fill();
-        if (extra[i]) emoji(PRODUCTOS[extra[i]].icono, cx, cy + 1, 16);
-        else { ctx.globalAlpha = 0.25; emoji(PRODUCTOS.zanahoria.icono, cx, cy + 1, 14); ctx.globalAlpha = 1; }
+  if (granja) {
+    for (const c of corrales) {
+      const { x, y, w, h } = c;
+      if (!c.comprado) {
+        ctx.setLineDash([8, 6]); ctx.lineWidth = 3; ctx.strokeStyle = alcanza(c.costo) ? "#2e9d4a" : "#999";
+        caja(x, y, w, h, 10); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = "#ffffff99"; caja(x, y, w, h, 10); ctx.fill();
+        continue;
       }
+      ctx.fillStyle = c.tipo === "carga" ? "#c9a25a" : "#d8bf7a"; caja(x, y, w, h, 10); ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = "#8a5a2b"; caja(x, y, w, h, 10); ctx.stroke();
+      if (c.tipo === "continuo") c.parcelas.forEach((p, i) => { const pc = centroParcela(c, i); ctx.fillStyle = "#b8923e"; ctx.beginPath(); ctx.ellipse(pc.x, pc.y, 20, 17, 0, 0, Math.PI * 2); ctx.fill(); });
     }
   }
-}
-
-function dibujarJardines() {
-  jardines.forEach(dibujarJardin);
-}
-
-function dibujarJardin(g) {
-  const { x, y, w, h } = g;
-  if (!g.comprado) {
-    if (!g.disponible || g !== siguienteJardin()) return;   // solo se muestra el siguiente jardín
-    const puede = alcanza(g.costo) && puedeJardin(g);
-    ctx.setLineDash([8, 6]); ctx.lineWidth = 3;
-    ctx.strokeStyle = puede ? "#2e9d4a" : "#999";
-    caja(x, y, w, h, 10); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = "#ffffff99"; caja(x, y, w, h, 10); ctx.fill();
-    etiqueta(PRODUCTOS[g.producto].icono + " Jardín  $" + g.costo, x + w / 2, y + h / 2, puede ? "#bfffcf" : "#fff");
-    return;
+  { // zona de mejoras
+    const { x, y, w, h } = MEJORAS_ZONA;
+    ctx.fillStyle = enMejoras ? "#8fb8ff" : "#b9cdf0";
+    caja(x, y, w, h, 10); ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = "#4a6fb5"; caja(x, y, w, h, 10); ctx.stroke();
   }
-  ctx.fillStyle = "#6fae52"; caja(x, y, w, h, 10); ctx.fill();
-  ctx.lineWidth = 4; ctx.strokeStyle = "#8a5a2b"; caja(x, y, w, h, 10); ctx.stroke();
-  g.parcelas.forEach((p, i) => {
-    const c = centroParcela(g, i);
-    ctx.fillStyle = "#6b4426";
-    ctx.beginPath(); ctx.ellipse(c.x, c.y + 4, 21, 18, 0, 0, Math.PI * 2); ctx.fill();
-    if (p.t < 0) return;
-    const m = maduraSeg();
-    const k = m ? Math.min(1, p.t / m) : 1;
-    if (k < 1) {
-      // brote: crece de a poco
-      ctx.fillStyle = "#3f9a3a";
-      ctx.beginPath(); ctx.arc(c.x, c.y, 3 + 9 * k, 0, Math.PI * 2); ctx.fill();
+  if (colocando && estado === "jugando") {
+    if (colocando.tipo === "caja") {
+      const { k, ok } = fantasmaCaja();
+      ctx.fillStyle = ok ? "rgba(60,200,100,.28)" : "rgba(230,60,60,.3)";
+      for (const r of huellaCaja(k)) ctx.fillRect(r.x, r.y, r.w, r.h);   // la fila de clientes también ocupa lugar
+      ctx.lineWidth = 3; ctx.strokeStyle = ok ? "#2e9d4a" : "#e04646"; ctx.setLineDash([6, 4]);
+      caja(k.x - 2, k.y - 13, k.w + 4, k.h + 13, 8); ctx.stroke(); ctx.setLineDash([]);
     } else {
-      emoji(PRODUCTOS[p.id].icono, c.x, c.y + 1, 26);
+      const { x, ok } = fantasmaPuerta();
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = ok ? "#58d27a" : "#e04646"; caja(x - 30, MUNDO.h - 14, 60, 14, 4); ctx.fill();
+      ctx.globalAlpha = 1;
     }
-  });
-}
-
-function dibujarFantasma() {
-  if (!colocando || estado !== "jugando") return;
-  if (colocando.tipo === "caja") {
-    const { k, ok } = fantasmaCaja();
-    ctx.fillStyle = ok ? "rgba(60,200,100,.18)" : "rgba(230,60,60,.2)";
-    for (const r of huellaCaja(k)) ctx.fillRect(r.x, r.y, r.w, r.h);      // la fila de clientes también ocupa lugar
-    ctx.globalAlpha = 0.6;
-    dibujarCaja(k);
-    ctx.globalAlpha = 1;
-    ctx.lineWidth = 3; ctx.strokeStyle = ok ? "#2e9d4a" : "#e04646"; ctx.setLineDash([6, 4]);
-    caja(k.x - 2, k.y - 13, k.w + 4, k.h + 13, 8); ctx.stroke(); ctx.setLineDash([]);
-  } else {
-    const { x, ok } = fantasmaPuerta();
-    ctx.globalAlpha = 0.65;
-    ctx.fillStyle = ok ? "#58d27a" : "#e04646"; caja(x - 30, MUNDO.h - 14, 60, 14, 4); ctx.fill();
-    ctx.globalAlpha = 1;
-    etiqueta("Entrada", x, MUNDO.h - 26, ok ? "#1d6a3a" : "#a02020");
+  }
+  if (objetivo && estado === "jugando") {   // marca del lugar al que caminas (en el suelo se ve como óvalo)
+    ctx.strokeStyle = "rgba(0,0,0,.3)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(objetivo.x, objetivo.y, 8, 0, Math.PI * 2); ctx.stroke();
   }
 }
 
-function dibujarPersonajes() {
-  const todos = [{ y: jugador.y, f: () => dibujarJugador() }];
-  clientes.forEach((c) => todos.push({ y: c.y, f: () => dibujarCliente(c) }));
-  jardines.forEach((g) => { if (g.emp) todos.push({ y: g.emp.y, f: () => dibujarEmpleado(g) }); });
-  todos.sort((a, b) => a.y - b.y).forEach((o) => o.f());
+// ----- Granja -----
+function dibujarAnimal(c, a) {
+  const s = P(a.x, a.y);
+  ctx.fillStyle = "rgba(0,0,0,.2)"; ctx.beginPath(); ctx.ellipse(s.x, s.y, 9, 4, 0, 0, Math.PI * 2); ctx.fill();
+  emoji(c.animal, s.x, s.y - 9, 20);
+}
+function dibujarProvisiones(c, cx, cy) {   // cajón de la carga: se ve lleno cuando hay algo por recoger
+  bloque(cx, cy, 28, 28, 14, PAL.madera);
+  if (c.stock > 0) {
+    bloque(cx + 4, cy + 4, 20, 20, 9, PAL.madera, 14);
+    const s = P(cx + 14, cy + 14, 36);
+    emoji(PRODUCTOS[c.producto].icono, s.x, s.y, 20);
+  }
+}
+
+// ----- Objetos con altura -----
+function dibujarEstanteIso(e) {
+  const { x, y, w, h } = e, H = ALTO_ESTANTE;
+  const conExtra = e.slot === 0 && extrasActivas();
+  const ancho = (w - 28) / ESTANTE_CAP;
+  const tw = 24 + EXTRA_ZANAHORIA_CAP * ancho + 4;
+  bloque(x, y, w, h, H, PAL.madera);
+  if (conExtra) bloque(x, y + h, tw, EXT_H, H, PAL.madera);   // un solo mueble que crece hacia el frente
+  // tapa: panel del producto y un espacio por cada pieza que cabe
+  losa(x + 3, y + 4, x + 23, y + h - 4, H, "#f3e0c2");
+  losa(x + 24, y + 4, x + w - 4, y + h - 4, H, "#b57f46");
+  for (let i = 0; i < ESTANTE_CAP; i++) losa(x + 24 + i * ancho + 1.5, y + 7, x + 24 + (i + 1) * ancho - 1.5, y + h - 7, H, "rgba(0,0,0,.16)");
+  const ic = P(x + 13, y + h / 2, H + 8);
+  if (e.fija) emoji(PRODUCTOS[e.producto].icono, ic.x, ic.y, 15);
+  else {
+    emoji(PRODUCTOS[e.producto].icono, ic.x, ic.y - 3, 14);
+    etiqueta("↻", ic.x, ic.y + 10, "#6a4a1a", 11);
+  }
+  for (let i = 0; i < ESTANTE_CAP; i++) {
+    const s = P(x + 24 + (i + 0.5) * ancho, y + h / 2, H + 8);
+    if (e.items[i]) emoji(PRODUCTOS[e.items[i]].icono, s.x, s.y, 16);
+    else { ctx.globalAlpha = 0.22; emoji(PRODUCTOS[e.producto].icono, s.x, s.y, 14); ctx.globalAlpha = 1; }
+  }
+  if (conExtra) {   // parte del frente: panel de 🥕 y 2 espacios para zanahorias
+    const ty = y + h;
+    losa(x + 3, ty + 2, x + 23, ty + EXT_H - 2, H, "#f3e0c2");
+    losa(x + 24, ty + 2, x + tw - 4, ty + EXT_H - 2, H, "#b57f46");
+    const sc = P(x + 13, ty + EXT_H / 2, H + 8);
+    emoji(PRODUCTOS.zanahoria.icono, sc.x, sc.y, 14);
+    for (let i = 0; i < EXTRA_ZANAHORIA_CAP; i++) {
+      losa(x + 24 + i * ancho + 1.5, ty + 4, x + 24 + (i + 1) * ancho - 1.5, ty + EXT_H - 4, H, "rgba(0,0,0,.16)");
+      const s = P(x + 24 + (i + 0.5) * ancho, ty + EXT_H / 2, H + 8);
+      if (extra[i]) emoji(PRODUCTOS[extra[i]].icono, s.x, s.y, 16);
+      else { ctx.globalAlpha = 0.25; emoji(PRODUCTOS.zanahoria.icono, s.x, s.y, 14); ctx.globalAlpha = 1; }
+    }
+  }
+}
+
+function dibujarCajaIso(k) {
+  const { x, y, w, h } = k;
+  const c0 = k.cola[0], s0 = slotCaja(k, 0);
+  const frente = c0 && Math.hypot(c0.x - s0.x, c0.y - s0.y) < 3;
+  const abierto = frente && hayCajero(k);
+  const yp = y + h * 0.55;   // hasta dónde llega el toldo
+  bloque(x, y, w, h, 20, PAL.mostrador);
+  for (const px of [x + 2, x + w - 4]) bloque(px, yp - 1, 2, 2, 22, PAL.poste, 20);   // postes del toldo
+  bloque(x + 6, y + 10, 24, 16, 8, PAL.registro, 20);                                  // caja registradora
+  if (abierto) bloque(x + 8, y + 26, 20, 8, 3, { top: "#6fcf7a", sur: "#e9eef6", este: "#cfd8e6", borde: "rgba(0,0,0,.2)" }, 17);   // cajón abierto con billetes
+  bloque(x + 10, y + 8, 14, 3, 10, { top: abierto ? "#b6ffcf" : "#8ff0b4", sur: "#2f6f4a", este: "#1f4f34", borde: "rgba(0,0,0,.3)" }, 28);   // pantalla
+  // toldo de rayas rojas y blancas, flotando sobre el mostrador
+  const n = Math.round(w / 8);
+  for (let i = 0; i < n; i++) losa(x + (i * w) / n, y - 8, x + ((i + 1) * w) / n, yp, 42, i % 2 ? "#ffffff" : "#e0463d");
+  const sl = P(x + w / 2, y + h, 11);
+  etiqueta("CAJA", sl.x, sl.y, "#ffe9c4", 9);
+  // sobre el mostrador: la compra del cliente que está pagando, o un recibo si no hay nadie
+  if (frente && c0.carrito.length) {
+    c0.carrito.slice(0, 6).forEach((id, i) => { const s = P(x + 38 + (i % 3) * 10, y + 12 + Math.floor(i / 3) * 11, 26); emoji(PRODUCTOS[id].icono, s.x, s.y, 11); });
+  } else {
+    const s = P(x + 52, y + 24, 26);
+    emoji("🧾", s.x, s.y, 12);
+  }
+}
+
+function dibujarCultivo(p, c) {
+  const m = maduraSeg(), k = m ? Math.min(1, p.t / m) : 1, s = P(c.x, c.y);
+  if (k < 1) {   // brote: crece de a poco
+    ctx.fillStyle = "#3f9a3a";
+    ctx.beginPath(); ctx.arc(s.x, s.y - 5, 3 + 9 * k, 0, Math.PI * 2); ctx.fill();
+  } else emoji(PRODUCTOS[p.id].icono, s.x, s.y - 12, 26);
 }
 
 function dibujarJugador() {
-  persona(jugador.x, jugador.y, "#2e9d4a", "#f5cfa0", true);
+  const s = P(jugador.x, jugador.y);
+  persona(s.x, s.y - 12, "#2e9d4a", "#f5cfa0", true);
   // lo que cargas, encima de la cabeza
-  carga.forEach((id, i) => emoji(PRODUCTOS[id].icono, jugador.x + (i - (carga.length - 1) / 2) * 15, jugador.y - 30, 15));
+  carga.forEach((id, i) => emoji(PRODUCTOS[id].icono, s.x + (i - (carga.length - 1) / 2) * 15, s.y - 42, 15));
 }
 
 function dibujarEmpleado(g) {
-  const em = g.emp;
-  persona(em.x, em.y, em.camisa, "#d9a066", true);
+  const em = g.emp, s = P(em.x, em.y), bx = s.x, by = s.y - 12;
+  persona(bx, by, em.camisa, "#d9a066", true);
   ctx.fillStyle = "#e8c26b";                      // sombrero de paja
-  ctx.beginPath(); ctx.ellipse(em.x, em.y - 17, 12, 3.5, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(em.x, em.y - 18, 6.5, Math.PI, 0); ctx.fill();
-  em.carga.forEach((id, i) => emoji(PRODUCTOS[id].icono, em.x + (i - (em.carga.length - 1) / 2) * 14, em.y - 32, 14));
+  ctx.beginPath(); ctx.ellipse(bx, by - 17, 12, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(bx, by - 18, 6.5, Math.PI, 0); ctx.fill();
+  em.carga.forEach((id, i) => emoji(PRODUCTOS[id].icono, bx + (i - (em.carga.length - 1) / 2) * 14, by - 32, 14));
 }
 
 function dibujarCliente(c) {
-  persona(c.x, c.y, c.camisa, c.piel, false);
+  const s = P(c.x, c.y), bx = s.x, by = s.y - 12;
+  persona(bx, by, c.camisa, c.piel, false);
   // burbuja: lo que le falta por tomar, lo que va a pagar o ✅ al salir
   let txt;
   if (c.estado === "comprando") {
     txt = Object.keys(c.lista).filter((id) => c.lista[id] > 0).map((id) => PRODUCTOS[id].icono + "×" + c.lista[id]).join(" ");
   } else if (c.estado === "cola") {
-    txt = "💲" + c.carrito.reduce((s, id) => s + PRODUCTOS[id].precio, 0);
+    txt = "💲" + c.carrito.reduce((suma, id) => suma + PRODUCTOS[id].precio, 0);
   } else txt = "✅";
   if (!txt) return;
   ctx.font = "13px system-ui, sans-serif";
   const w = ctx.measureText(txt).width + 14;
-  ctx.fillStyle = "#fff"; caja(c.x - w / 2, c.y - 44, w, 20, 8); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(c.x - 4, c.y - 24); ctx.lineTo(c.x + 4, c.y - 24); ctx.lineTo(c.x, c.y - 19); ctx.fill();
+  ctx.fillStyle = "#fff"; caja(bx - w / 2, by - 44, w, 20, 8); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(bx - 4, by - 24); ctx.lineTo(bx + 4, by - 24); ctx.lineTo(bx, by - 19); ctx.fill();
   ctx.fillStyle = "#222"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText(txt, c.x, c.y - 33);
+  ctx.fillText(txt, bx, by - 33);
 }
 
-function dibujar() {
-  // cámara: el mundo se desplaza al lado contrario de donde mira (la pantalla siempre mide lo mismo)
-  ctx.setTransform(dpr * escala, 0, 0, dpr * escala, -Math.round(camX * escala * dpr), 0);
-  dibujarSuelo();
-  dibujarMejoras();
-  dibujarJardines();
-  cajas.forEach(dibujarCaja);
-  dibujarEstantes();
-  dibujarPersonajes();
-  dibujarFantasma();
-  // marca del lugar al que caminas
-  if (objetivo && estado === "jugando") {
-    ctx.strokeStyle = "rgba(0,0,0,.25)"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(objetivo.x, objetivo.y, 8, 0, Math.PI * 2); ctx.stroke();
+// Reúne todo lo que tiene altura, cada cosa con su caja en el mapa para poder ordenarla
+function armarObjetos() {
+  const l = [];
+  const add = (x0, y0, x1, y1, f) => l.push({ x0, y0, x1, y1, f });
+  const gente = (x, y, f) => add(x - 6, y - 6, x + 6, y + 6, f);
+
+  // paredes: arriba y a la izquierda altas; derecha y abajo, bordillos bajos para que se vea el interior
+  add(xMin, TOP, ABERTURA.a, TOP + 14, () => bloque(xMin, TOP, ABERTURA.a - xMin, 14, ALTO_PARED, PAL.pared));
+  add(ABERTURA.b, TOP, xMax, TOP + 14, () => bloque(ABERTURA.b, TOP, xMax - ABERTURA.b, 14, ALTO_PARED, PAL.pared));
+  add(xMin, TOP + 14, xMin + 4, MUNDO.h, () => bloque(xMin, TOP + 14, 4, MUNDO.h - TOP - 14, ALTO_PARED, PAL.pared));
+  add(xMax - 4, TOP + 14, xMax, MUNDO.h, () => bloque(xMax - 4, TOP + 14, 4, MUNDO.h - TOP - 14, 8, PAL.bordillo));
+  // bordillo de abajo, con un hueco por cada entrada
+  const xs = puertas.map((p) => p.x).sort((a, b) => a - b);
+  let ini = xMin;
+  const tramo = (a, b) => { if (b > a) add(a, MUNDO.h - 6, b, MUNDO.h, () => bloque(a, MUNDO.h - 6, b - a, 6, 8, PAL.bordillo)); };
+  for (const px of xs) { tramo(ini, px - 34); ini = Math.max(ini, px + 34); }
+  tramo(ini, xMax);
+  for (const p of puertas) {
+    for (const px of [p.x - 34, p.x + 30]) add(px, MUNDO.h - 14, px + 4, MUNDO.h, () => bloque(px, MUNDO.h - 14, 4, 14, 38, PAL.poste));
+  }
+
+  // muebles
+  estantes.forEach((e) => { const r = rectFull(e); add(r.x, r.y, r.x + r.w, r.y + r.h, () => dibujarEstanteIso(e)); });
+  cajas.forEach((k) => add(k.x, k.y, k.x + k.w, k.y + k.h, () => dibujarCajaIso(k)));
+
+  // jardines: valla y cultivos
+  for (const g of jardines) {
+    if (!g.comprado || !enPantalla(g.x + g.w / 2, g.y + g.h / 2, 170)) continue;
+    const ps = postesDe(g);
+    ps.forEach((pt, i) => add(pt[0] - 2, pt[1] - 2, pt[0] + 2, pt[1] + 2, () => dibujarPoste(pt, ps[(i + 1) % ps.length])));
+    g.parcelas.forEach((p, i) => {
+      if (p.t < 0) return;
+      const c = centroParcela(g, i);
+      add(c.x - 8, c.y - 8, c.x + 8, c.y + 8, () => dibujarCultivo(p, c));
+    });
+  }
+
+  // corrales: valla, animales, productos sueltos y cajón de carga
+  if (granja) {
+    for (const c of corrales) {
+      if (!c.comprado || !enPantalla(c.x + c.w / 2, c.y + c.h / 2, 170)) continue;
+      const ps = postesDe(c);
+      ps.forEach((pt, i) => add(pt[0] - 2, pt[1] - 2, pt[0] + 2, pt[1] + 2, () => dibujarPoste(pt, ps[(i + 1) % ps.length])));
+      c.animales.forEach((a) => add(a.x - 7, a.y - 7, a.x + 7, a.y + 7, () => dibujarAnimal(c, a)));
+      if (c.tipo === "continuo") {
+        c.parcelas.forEach((p, i) => {
+          if (p.t < 0) return;
+          const pc = centroParcela(c, i);
+          add(pc.x - 8, pc.y - 8, pc.x + 8, pc.y + 8, () => { const s = P(pc.x, pc.y); emoji(PRODUCTOS[p.id].icono, s.x, s.y - 8, 20); });
+        });
+      } else {
+        const cx = c.x + c.w - 38, cy = c.y + c.h - 38;
+        add(cx, cy, cx + 28, cy + 28, () => dibujarProvisiones(c, cx, cy));
+      }
+    }
+  }
+  // personas
+  gente(jugador.x, jugador.y, dibujarJugador);
+  clientes.forEach((c) => gente(c.x, c.y, () => dibujarCliente(c)));
+  productores().forEach((g) => { if (g.emp) gente(g.emp.x, g.emp.y, () => dibujarEmpleado(g)); });
+  cajas.forEach((k) => {
+    if (!k.emp) return;
+    const pe = posEmpleadoCaja(k);
+    gente(pe.x, pe.y, () => { const s = P(pe.x, pe.y); persona(s.x, s.y - 12, "#d9534f", "#d9a066", true); });
+  });
+
+  // la calle: autos y árboles
+  autos.forEach((a) => {
+    const p = puntoAuto(a);
+    if (!enPantalla(p.x, p.y, 80)) return;
+    const w = p.alongX ? 38 : 20, h = p.alongX ? 20 : 38;
+    add(p.x - w / 2, p.y - h / 2, p.x + w / 2, p.y + h / 2, () => dibujarAuto(a, p, w, h));
+  });
+  arbolesFuera().forEach(([x, y]) => {
+    if (!enPantalla(x, y, 70)) return;
+    add(x - 10, y - 10, x + 10, y + 10, () => {
+      const s = P(x, y);
+      ctx.fillStyle = "rgba(0,0,0,.18)"; ctx.beginPath(); ctx.ellipse(s.x, s.y, 16, 7, 0, 0, Math.PI * 2); ctx.fill();
+      emoji("🌳", s.x, s.y - 22, 44);
+    });
+  });
+  return l;
+}
+
+// Lo que se coloca (caja nueva) se dibuja encima y translúcido
+function dibujarFantasmaIso() {
+  if (!colocando || estado !== "jugando") return;
+  if (colocando.tipo === "caja") {
+    const { k } = fantasmaCaja();
+    ctx.globalAlpha = 0.6;
+    dibujarCajaIso(k);
+    ctx.globalAlpha = 1;
+  } else {
+    const { x, ok } = fantasmaPuerta();
+    const s = P(x, MUNDO.h - 6, 46);
+    etiqueta("Entrada", s.x, s.y, ok ? "#bfffcf" : "#ffb0b0");
+  }
+}
+
+// Letreros y textos: se dibujan al final, de frente a la pantalla
+function dibujarEtiquetas() {
+  for (const cx of [MUNDO.w / 2, ...patios.map((a) => a.x0 + EXT_ANCHO / 2)]) { const s = P(cx, 20); etiqueta("🌱 Patio", s.x, s.y, "#fff", 12); }
+  const sig = siguienteJardin();
+  if (granja) {
+    const s = P(MUNDO.w / 2, yMin + 12); etiqueta("🐄 Granja", s.x, s.y, "#fff", 12);
+    for (const c of corrales) {
+      if (!c.comprado) {
+        const s2 = P(c.x + c.w / 2, c.y + c.h / 2, 6);
+        etiqueta(c.animal + " " + c.nombre + "  $" + c.costo, s2.x, s2.y, alcanza(c.costo) ? "#bfffcf" : "#fff");
+      } else if (c.tipo === "carga") {
+        const s3 = P(c.x + c.w - 24, c.y + c.h - 24, 46), tope = cantidadCarga(c) * STOCK_MAX_CARGAS;
+        etiqueta("×" + c.stock + (c.stock >= tope ? " lleno" : "  ⏱ " + mmss(c.reloj)), s3.x, s3.y, "#fff", 11);
+      }
+    }
+  }
+  if (sig && !sig.disponible) { const s = P(MUNDO.w / 2, 60); etiqueta("🌱 Amplía el patio para el siguiente jardín", s.x, s.y, "#ffd24d"); }
+  if (sig && sig.disponible) {
+    const puede = alcanza(sig.costo) && puedeJardin(sig), s = P(sig.x + sig.w / 2, sig.y + sig.h / 2, 6);
+    etiqueta(PRODUCTOS[sig.producto].icono + " Jardín  $" + sig.costo, s.x, s.y, puede ? "#bfffcf" : "#fff");
+  }
+  if (!hayPrimerEstante()) {
+    const r = rectEstante(0), s = P(r.x + r.w / 2, r.y + r.h / 2, 6), col = alcanza(COSTO_PRIMER_ESTANTE) ? "#bfffcf" : "#fff";
+    etiqueta("🥬 Estantería", s.x, s.y - 8, col);
+    etiqueta("$" + COSTO_PRIMER_ESTANTE, s.x, s.y + 9, col);
+  }
+  const m = P(MEJORAS_ZONA.x + MEJORAS_ZONA.w / 2, MEJORAS_ZONA.y + MEJORAS_ZONA.h / 2, 4);
+  etiqueta("🛠️ Mejoras", m.x, m.y, "#fff");
+  for (const p of puertas) { const s = P(p.x, MUNDO.h - 6, 46); etiqueta("Entrada", s.x, s.y, "#fff"); }
+  for (const k of cajas) {
+    if (k.emp || !k.cola.length) continue;
+    const s = P(k.x + k.w / 2, k.y, 52);
+    etiqueta("¡Cobra aquí!", s.x, s.y, "#ffd24d");
   }
   for (const t of textos) {
+    const s = P(t.x, t.y, 24 + (t.z || 0));
     ctx.globalAlpha = Math.min(1, t.vida * 2);
     ctx.font = "bold 16px system-ui, sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.lineWidth = 4; ctx.strokeStyle = "#0009"; ctx.strokeText(t.txt, t.x, t.y);
-    ctx.fillStyle = t.col; ctx.fillText(t.txt, t.x, t.y);
+    ctx.lineWidth = 4; ctx.strokeStyle = "#0009"; ctx.strokeText(t.txt, s.x, s.y);
+    ctx.fillStyle = t.col; ctx.fillText(t.txt, s.x, s.y);
   }
-  // flechas en los bordes: hay más edificio fuera de la pantalla
-  ctx.globalAlpha = 0.55;
-  if (camX > wMin + 1) etiqueta("◀", camX + 12, MUNDO.h / 2, "#fff", 18);
-  if (camX < wMax - MUNDO.w - 1) etiqueta("▶", camX + MUNDO.w - 12, MUNDO.h / 2, "#fff", 18);
   ctx.globalAlpha = 1;
 }
 
+function dibujar() {
+  modoPantalla();
+  ctx.fillStyle = "#86b86b"; ctx.fillRect(0, 0, MUNDO.w, MUNDO.h);
+  modoPlano();
+  dibujarSuelo();
+  dibujarPlanoJuego();
+  modoPantalla();
+  ordenar(armarObjetos()).forEach((o) => o.f());
+  dibujarFantasmaIso();
+  dibujarEtiquetas();
+}
+
 // ---------- Bucle ----------
-// La cámara sigue al personaje en horizontal, sin salirse del edificio
+// La cámara sigue al personaje en pantalla (isométrica), en las dos direcciones
 function actualizarCamara(dt) {
-  const meta = Math.max(wMin, Math.min(wMax - MUNDO.w, jugador.x - MUNDO.w / 2));
-  camX += (meta - camX) * Math.min(1, dt * CAMARA_SUAVE);
-  if (Math.abs(meta - camX) < 0.05) camX = meta;
+  const mx = (jugador.x - jugador.y) * ISO, my = ((jugador.x + jugador.y) * ISO) / 2;
+  const f = Math.min(1, dt * CAMARA_SUAVE);
+  camX += (mx - camX) * f;
+  camY += (my - camY) * f;
 }
 
 let ultimo = 0;
@@ -1322,6 +1804,7 @@ function bucle(ahora) {
   ultimo = ahora;
   if (estado === "jugando") actualizar(dt);
   actualizarCamara(dt);
+  actualizarAutos(dt);
   actualizarHud();
   dibujar();
   requestAnimationFrame(bucle);
@@ -1347,7 +1830,7 @@ if (verAdmin) {
   bd.hidden = false;
   bd.addEventListener("click", () => {
     dinero += DINERO_RAPIDO;
-    textos.push({ x: jugador.x, y: jugador.y - 34, vida: 1.1, txt: "+$" + DINERO_RAPIDO, col: "#7dff9a" });
+    textos.push({ x: jugador.x, y: jugador.y, vida: 1.1, txt: "+$" + DINERO_RAPIDO, col: "#7dff9a" });
     tono(880, 0.06);
   });
   $("admBtn").addEventListener("click", () => $("adm").classList.toggle("oculto"));
@@ -1367,4 +1850,5 @@ if (verAdmin) {
 }
 
 ajustar();
+centrarCamara();
 requestAnimationFrame((t) => { ultimo = t; bucle(t); });
