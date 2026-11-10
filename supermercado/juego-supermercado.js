@@ -620,6 +620,19 @@ function crecerJardin(dt) {
   }
 }
 
+// Botón 🧤 «no recoger»: con recoger=false el personaje no toma nada de jardines ni corrales (sigue colocando lo que ya lleva)
+let recogerAuto = true;
+const noRecBtn = document.getElementById("noRecBtn"), noRecInfo = document.getElementById("noRecInfo");
+function pintarNoRec() {
+  noRecBtn.className = "b3d chico " + (recogerAuto ? "b-verde" : "b-rojo");
+  noRecInfo.textContent = recogerAuto ? "SÍ" : "NO";
+  noRecBtn.setAttribute("aria-pressed", String(!recogerAuto));
+  const t = recogerAuto ? "Recoger automáticamente: activado (toca para dejar de recoger)" : "Recoger automáticamente: desactivado (toca para volver a recoger)";
+  noRecBtn.title = t; noRecBtn.setAttribute("aria-label", t);
+}
+noRecBtn.addEventListener("click", (ev) => { ev.stopPropagation(); recogerAuto = !recogerAuto; pintarNoRec(); tono(recogerAuto ? 660 : 330, 0.08); });
+pintarNoRec();
+
 // Recoger del jardín y colocar en las estanterías, solos y de uno en uno
 function traspasos(dt) {
   traspasoT -= dt;
@@ -627,14 +640,14 @@ function traspasos(dt) {
   traspasoT = TRASPASO_SEG;
   const ex = productosExistentes();
   for (const g of jardines) {
-    if (!g.comprado || carga.length >= cargaMax() || !cerca(g, ALCANCE_JARDIN)) continue;
+    if (!recogerAuto || !g.comprado || carga.length >= cargaMax() || !cerca(g, ALCANCE_JARDIN)) continue;
     // sin estantería de zanahorias solo puedes tomar tantas como espacios extra libres haya
     if (g.producto === "zanahoria" && extrasActivas() && espaciosZanahoria() <= 0) continue;
     const p = g.parcelas.find((q) => q.t >= maduraSeg() && ex.includes(q.id));
     if (p) { carga.push(p.id); p.t = -1; p.id = null; tono(660, 0.07); break; }
   }
   for (const g of corrales) {   // granja: huevos, leche y las cargas de pollo, res y tocino
-    if (!g.comprado || carga.length >= cargaMax() || !cerca(g, ALCANCE_JARDIN)) continue;
+    if (!recogerAuto || !g.comprado || carga.length >= cargaMax() || !cerca(g, ALCANCE_JARDIN)) continue;
     const id = sacarDe(g, ex);
     if (id) { carga.push(id); tono(660, 0.07); break; }
   }
