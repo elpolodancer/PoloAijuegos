@@ -853,15 +853,23 @@ function actualizarEmpleados(dt) {
     em.vel = empVel();
     const nListos = listosDe(g, ex);
     const espacio = espacioLibre(g.producto);
+    const cap = empCarga();
     const puedeColocar = em.carga.length > 0 && espacio > 0;
-    const puedeRecoger = nListos > 0 && em.carga.length < empCarga() && espacio - em.carga.length > 0;
-    if (puedeColocar && (em.carga.length >= empCarga() || !puedeRecoger)) {
+    const puedeRecoger = nListos > 0 && em.carga.length < cap && espacio - em.carga.length > 0;
+    // El empleado trabaja por viajes y se mantiene en su paso hasta terminarlo (antes lo reevaluaba cada cuadro: al soltar 1 producto
+    // ya podía recoger otro y volvía al jardín con el resto en las manos):
+    //   «recoger»: junta hasta llenar su carga (o hasta que ya no haya más que recoger) y entonces va a la estantería;
+    //   «colocar»: suelta TODO lo que lleva (o hasta que se llene la estantería) y solo entonces vuelve por más.
+    if (em.modo !== "colocar") em.modo = "recoger";
+    if (em.modo === "recoger" && em.carga.length > 0 && !puedeRecoger) em.modo = "colocar";
+    else if (em.modo === "colocar" && (em.carga.length === 0 || espacio <= 0)) em.modo = "recoger";
+    if (em.modo === "colocar" && puedeColocar) {
       const e = destinosDe(g.producto).find((q) => q.items.length < capDe(q));
       const r = rectFull(e);
       if (distRect(em.x, em.y, r) <= ALCANCE_ESTANTE - 24) {
         if (em.cd <= 0) { e.items.push(em.carga.shift()); em.cd = empTraspaso(); }
       } else irEmpleado(em, { x: Math.max(xMin + 14, Math.min(xMax - 14, e.x + e.w / 2 + em.off)), y: standY(e, 14) }, dt);
-    } else if (puedeRecoger) {
+    } else if (em.modo === "recoger" && puedeRecoger) {
       if (distRect(em.x, em.y, g) <= ALCANCE_JARDIN) {
         if (em.cd <= 0) { const id = sacarDe(g, ex); if (id) em.carga.push(id); em.cd = empTraspaso(); }
       } else irEmpleado(em, puntoJardin(g), dt);
