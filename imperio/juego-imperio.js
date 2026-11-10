@@ -3,9 +3,9 @@
 // guerreros exploran y atacan; el personaje principal pica, fabrica tablones y construye cajones.
 import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
 const VEL = .23; // casillas por segundo por cada punto de velocidad (humano = 10 → 2.3 casillas/s)
-const N_ORIGINAL = 44, AREA_X = 5; // las partidas viejas son de 44×44; el mapa nuevo tiene 5 veces esa área (ponle 25 para un lado 5 veces mayor)
-const N_NUEVO = Math.round(N_ORIGINAL * Math.sqrt(AREA_X)); // 98×98
-let N = N_NUEVO; // lado del mapa de la partida en curso (al cargar una partida vieja vuelve a 44)
+const N_ORIGINAL = 44, LADO_MAPA = 300; // las partidas viejas son de 44×44 (y las de 98×98 se abren con su tamaño); el mapa nuevo es de 300×300 casillas
+const N_NUEVO = LADO_MAPA;
+let N = N_NUEVO; // lado del mapa de la partida en curso (al cargar una partida vieja vuelve a su tamaño)
 const TW = 32, TH = 16, $ = (id) => document.getElementById(id);
 const RES = {
   arbol: { nom: "Madera", v: 1, n: 6, c: "#2e7d32" }, roca: { nom: "Piedra", v: 1, n: 8, c: "#9aa0a6" },
@@ -72,7 +72,16 @@ const dmgDe = (u) => UN[u.k].dmg * (u.k == "e" ? 1 : 1 + BONO_ARMA * nivelArma()
 const ED = {
   poste: { nom: "Poste de imperio", w: 1, hp: 120, c: "#c0392b" }, baul: { nom: "Baúl", w: 1, hp: 80, c: "#8b5a2b", ran: 20 }, cajonM: { nom: "Cajón de madera", w: 1, hp: 60, c: "#a1763f" }, cajonN: { nom: "Cajón de minerales", w: 1, hp: 60, c: "#6b7280" }, centro: { nom: "Castillo destruido", w: 2, hp: 400, c: "#9e9588" }, refugio: { nom: "Refugio", w: 2, hp: 200, c: "#8d6e63" }, almacen: { nom: "Almacén", costo: 60, w: 1, hp: 150, c: "#a47148" }, torre: { nom: "Torre", costo: 120, w: 1, hp: 200, c: "#8a8fa3" },
   arqueros: { nom: "Torre de arqueros", ico: "🏹", costo: 150, w: 1, hp: 220, c: "#8d8a84" }, canon: { nom: "Cañón con ruedas", ico: "💣", costo: 250, w: 1, hp: 250, c: "#3c4048" }, hospital: { nom: "Hospital", ico: "🏥", costo: 200, w: 2, hp: 300, c: "#f1efe9" },
-  muroM: { nom: "Muro de madera", costo: 15, w: 1, hp: 150, c: "#a1763f" }, muroP: { nom: "Muro de piedra", costo: 30, w: 1, hp: 400, c: "#8d8a84" }, herrero: { nom: "Herrero", ico: "⚒️", costo: 220, w: 2, hp: 300, c: "#4a4f57" } };
+  muroM: { nom: "Muro de madera", costo: 15, w: 1, hp: 150, c: "#a1763f" }, muroP: { nom: "Muro de piedra", costo: 30, w: 1, hp: 400, c: "#8d8a84" }, herrero: { nom: "Herrero", ico: "⚒️", costo: 220, w: 2, hp: 300, c: "#4a4f57" },
+  // Edificios de la economía (10 nov 2026). Costos provisionales. Todos ocupan 2×2 y los construye un Constructor, como el resto.
+  minera: { nom: "Casa de piedra y minerales", corto: "Minería", ico: "⛏️", costo: 180, w: 2, hp: 300, c: "#6b7080" },
+  tesoro: { nom: "Tesorería del ayuntamiento", corto: "Tesorería", ico: "🏦", costo: 300, w: 2, hp: 500, c: "#b8a46a" },
+  verduras: { nom: "Tienda de vegetales", corto: "Vegetales", ico: "🥕", costo: 120, w: 2, hp: 250, c: "#5a9e3f" },
+  armeria: { nom: "Armería", ico: "🛡️", costo: 260, w: 2, hp: 350, c: "#5d6b86" } };
+const MINERAL = ["roca", "carbon", "cobre", "hierro", "oro", "plata", "diamante"]; // lo que se entrega en la casa de piedra y minerales
+const IMPUESTO = .1, CAP_TESORO = 500; // la tesorería junta el 10 % extra de cada entrega de recursos, hasta 500 (se recoge con un botón)
+const CAP_VERDURAS = 200;               // vegetales que cabe en la tienda (todavía no hay cosechas que se los vendan)
+const ARMADURA = 60;                    // la armería vende una armadura por tropa: duplica su vida
 // Herrero: cada arma que forja (en orden) sube el golpe de todas tus tropas y del personaje un 25 % sobre el base
 const ARMAS = [["Espada de madera", 80], ["Espada de cobre", 160], ["Espada de plata", 300], ["Espada de oro", 500], ["Espada de diamante", 800]], BONO_ARMA = .25;
 const esMuro = (k) => k == "muroM" || k == "muroP";
@@ -104,8 +113,12 @@ function generarMapa() {
   const sem = [{ x: 9, y: 9, t: 0 }]; // zonas de tierra: semillas aleatorias (la más cercana manda), más semillas mientras más grande el mapa
   const TIPOS = [0, 1, 2, 0, 1, 2, 0, 1, 2, 1, 2];
   for (let k = 0, n = Math.round(11 * esc); k < n; k++) sem.push({ x: Math.random() * N, y: Math.random() * N, t: TIPOS[k % TIPOS.length] });
+  const CEL = 16, nc = Math.ceil(N / CEL), celdas = Array.from({ length: nc * nc }, () => []); // las semillas se reparten en celdas de 16×16 para no compararlas todas con cada casilla
+  for (const q of sem) celdas[Math.min(nc - 1, (q.y / CEL) | 0) * nc + Math.min(nc - 1, (q.x / CEL) | 0)].push(q);
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-    let m = 1e9, t = 0; for (const q of sem) { const d = Math.hypot(q.x - x, q.y - y) + Math.random() * 1.5; if (d < m) { m = d; t = q.t; } }
+    let m = 1e9, t = 0; const c0 = (x / CEL) | 0, r0 = (y / CEL) | 0;
+    for (let r = Math.max(0, r0 - 2); r <= Math.min(nc - 1, r0 + 2); r++) for (let c = Math.max(0, c0 - 2); c <= Math.min(nc - 1, c0 + 2); c++) for (const q of celdas[r * nc + c]) { const d = Math.hypot(q.x - x, q.y - y) + Math.random() * 1.5; if (d < m) { m = d; t = q.t; } }
+    if (m > 2 * CEL) for (const q of sem) { const d = Math.hypot(q.x - x, q.y - y) + Math.random() * 1.5; if (d < m) { m = d; t = q.t; } } // sin semilla cerca (raro): se mira todas
     bio[y * N + x] = cercaDeBase(x, y, 6) ? 0 : t; // alrededor de cada base siempre hay llanura
   }
   const agua = (x, y) => { if (x >= 0 && y >= 0 && x < N && y < N && !cercaDeBase(x, y, 8)) bio[y * N + x] = 3; };
@@ -219,15 +232,19 @@ function crearUnidad(k) { // el personaje aparece junto a la base; las tropas, e
   }
 }
 // ----- Ruta (BFS por casillas) -----
+let _rVis = new Uint32Array(0), _rPrev = new Int32Array(0), _rCola = new Int32Array(0), _rGen = 0; // buffers de ruta(): se reutilizan (el mapa es grande)
 function ruta(u, tx, ty, cerca) {
-  const s = (u.y | 0) * N + (u.x | 0), prev = new Int32Array(N * N).fill(-2), q = [s]; prev[s] = -1; let f = -1;
-  for (let i = 0; i < q.length; i++) {
-    const c = q[i], x = c % N, y = (c / N) | 0;
+  if (_rVis.length != N * N) { _rVis = new Uint32Array(N * N); _rPrev = new Int32Array(N * N); _rCola = new Int32Array(N * N); _rGen = 0; }
+  if (++_rGen >= 4294967295) { _rVis.fill(0); _rGen = 1; }
+  const prev = _rPrev, q = _rCola, s = (u.y | 0) * N + (u.x | 0); let f = -1, ini = 0, fin = 0;
+  _rVis[s] = _rGen; prev[s] = -1; q[fin++] = s;
+  while (ini < fin) {
+    const c = q[ini++], x = c % N, y = (c / N) | 0;
     if (cerca ? Math.max(Math.abs(x - tx), Math.abs(y - ty)) <= cerca : x == tx && y == ty) { f = c; break; }
     for (const [dx, dy] of D4) {
       const a = x + dx, b = y + dy;
-      if (a < 0 || b < 0 || a >= N || b >= N || prev[b * N + a] != -2 || (bloq[b * N + a] && (cerca || a != tx || b != ty))) continue;
-      prev[b * N + a] = c; q.push(b * N + a);
+      if (a < 0 || b < 0 || a >= N || b >= N || _rVis[b * N + a] == _rGen || (bloq[b * N + a] && (cerca || a != tx || b != ty))) continue;
+      _rVis[b * N + a] = _rGen; prev[b * N + a] = c; q[fin++] = b * N + a;
     }
   }
   const p = []; if (f < 0) return p;
@@ -243,7 +260,11 @@ function mover(u, tx, ty, dt, v = (UN[u.k].vel || 10) * VEL) {
 function paso(u, dt) { if (!u.p.length) return false; if (mover(u, u.p[0].x, u.p[0].y, dt)) u.p.shift(); return true; }
 const distRect = (u, x, y, w) => Math.hypot(Math.max(x - u.x, 0, u.x - (x + w)), Math.max(y - u.y, 0, u.y - (y + w)));
 const cercano = (lista, u, r) => lista.reduce((m, e) => { const d = Math.hypot(e.x - u.x, e.y - u.y); return d < r && (!m || d < m.d) ? { e, d } : m; }, null)?.e;
-function bodega(u) { return eds.filter((b) => b.prog >= 1 && b.hp > 0 && (b.k == "centro" || b.k == "almacen")).sort((a, b) => Math.hypot(a.x - u.x, a.y - u.y) - Math.hypot(b.x - u.x, b.y - u.y))[0]; }
+function bodega(u) { const mi = !!(u.carry && MINERAL.includes(u.carry.t)); return eds.filter((b) => b.prog >= 1 && b.hp > 0 && (b.k == "centro" || b.k == "almacen" || (mi && b.k == "minera"))).sort((a, b) => Math.hypot(a.x - u.x, a.y - u.y) - Math.hypot(b.x - u.x, b.y - u.y))[0]; }
+function impuesto(v) { // la tesorería (si hay una con espacio) junta un 10 % extra de lo que se entrega
+  const t = eds.find((b) => b.k == "tesoro" && b.prog >= 1 && b.hp > 0 && (b.am || 0) < CAP_TESORO);
+  if (t) t.am = Math.min(CAP_TESORO, (t.am || 0) + v * IMPUESTO);
+}
 function buscarRes(u, t) { let m = -1, md = 1e9; res.forEach((r, i) => { if (r && r.t == t && expl[i]) { const d = Math.hypot(i % N - u.x, ((i / N) | 0) - u.y); if (d < md) { md = d; m = i; } } }); return m; }
 function golpe(a, b, dmg) { b.hp -= dmg; fx.push({ x1: a.x, y1: a.y, x2: b.x + (b.w ? b.w / 2 : 0), y2: b.y + (b.w ? b.w / 2 : 0), t: .15 }); }
 
@@ -311,7 +332,7 @@ function actualizar(u, dt) {
       }
     } else {
       const b = bodega(u); if (!b) { u.o = null; return; }
-      if (distRect(u, b.x, b.y, b.w) < 1.6) { dinero += u.carry.n * RES[u.carry.t].v; u.carry.n = 0; o.f = "ir"; }
+      if (distRect(u, b.x, b.y, b.w) < 1.6) { const v = u.carry.n * RES[u.carry.t].v; dinero += v; impuesto(v); u.carry.n = 0; o.f = "ir"; }
       else if (!paso(u, dt)) { u.p = ruta(u, b.x, b.y, b.w); if (!u.p.length) u.o = null; }
     }
   }
@@ -528,10 +549,12 @@ function sigObra(u) {
   u.o = null; u.p = [];
   while (u.cola && u.cola.length) { const b = u.cola.shift(); if (b.hp > 0 && (b.prog < 1 || b.hp < b.mh)) { u.o = { t: "con", b }; return; } }
 }
+const RADIO_IA = 36; // casillas: los animales a más distancia de tus tropas y edificios se quedan quietos (con 300×300 hay más de mil)
+const cercaDeAlgo = (a) => us.some((u) => Math.abs(u.x - a.x) < RADIO_IA && Math.abs(u.y - a.y) < RADIO_IA) || eds.some((b) => Math.abs(b.x - a.x) < RADIO_IA && Math.abs(b.y - a.y) < RADIO_IA);
 function tick(dt) {
   if (fin) return; _ord = {};
   tReloj += dt; controlHeroe(dt);
-  us.forEach((u) => actualizar(u, dt)); enem.forEach((e) => actualizar(e, dt)); anim.forEach((a) => iaAnimal(a, dt));
+  us.forEach((u) => actualizar(u, dt)); enem.forEach((e) => actualizar(e, dt)); anim.forEach((a) => { if (cercaDeAlgo(a)) iaAnimal(a, dt); });
   const blancos = enem.concat(anim.filter((a) => ANI[a.k].dmg > 0)); // enemigos y animales que atacan
   eds.forEach((b) => { // torres, torres de arqueros y cañones disparan; el hospital cura
     if (b.prog < 1) return; b.cd = Math.max(0, b.cd - dt);
@@ -568,7 +591,11 @@ function barra(x, y, f, col) { const z = cam.z; cx.fillStyle = "#000a"; cx.fillR
 function dibujar() {
   _muros = null;
   cx.fillStyle = "#05070d"; cx.fillRect(0, 0, W, H); const z = cam.z;
-  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+  // Casillas que se ven: se invierte P() en las 4 esquinas de la ventana (+4 casillas de margen para lo que tiene altura). Con 300×300 no se recorre todo el mapa.
+  let gx0 = N, gx1 = -1, gy0 = N, gy1 = -1;
+  for (const [sx, sy] of [[0, 0], [W, 0], [W, H], [0, H]]) { const u = (sx - cam.x) / (TW * z), v = (sy - cam.y) / (TH * z), a = (u + v) / 2, b = (v - u) / 2; gx0 = Math.min(gx0, a); gx1 = Math.max(gx1, a); gy0 = Math.min(gy0, b); gy1 = Math.max(gy1, b); }
+  gx0 = Math.max(0, Math.floor(gx0) - 4); gx1 = Math.min(N - 1, Math.ceil(gx1) + 4); gy0 = Math.max(0, Math.floor(gy0) - 4); gy1 = Math.min(N - 1, Math.ceil(gy1) + 4);
+  for (let y = gy0; y <= gy1; y++) for (let x = gx0; x <= gx1; x++) {
     const i = y * N + x; if (!expl[i]) continue;
     const a = P(x, y); if (a[0] < -TW * z * 2 || a[0] > W + TW * z * 2 || a[1] < -TH * z * 2 || a[1] > H + TH * z * 2) continue;
     const b = bio[i], v = (x * 7 + y * 13) % 5, col = b == 3 ? "hsl(205,55%," + (30 + 3 * Math.sin(tReloj * 1.5 + x + y)) + "%)" : b == 4 ? "hsl(45,40%," + (58 + v) + "%)" : b == 1 ? "hsl(120,30%," + (23 + v) + "%)" : b == 2 ? "hsl(30,8%," + (38 + v) + "%)" : "hsl(92,38%," + (36 + v) + "%)";
@@ -578,7 +605,7 @@ function dibujar() {
   }
   if (colocar) { const t = tileMouse; if (t) { const w = (ED[colocar] && ED[colocar].w) || 1, ok = cabe(t.x, t.y, w) && zonaOk(t.y * N + t.x, colocar); poly([P(t.x, t.y), P(t.x + w, t.y), P(t.x + w, t.y + w), P(t.x, t.y + w)], ok ? "rgba(80,255,120,.5)" : "rgba(255,70,70,.5)"); } }
   const L = [];
-  res.forEach((r, i) => { if (r && expl[i]) L.push({ d: i % N + ((i / N) | 0) + 1, f: () => dibRes(i % N, (i / N) | 0, r) }); });
+  for (let y = gy0; y <= gy1; y++) for (let x = gx0; x <= gx1; x++) { const i = y * N + x, r = res[i]; if (r && expl[i]) L.push({ d: x + y + 1, f: () => dibRes(x, y, r) }); }
   eds.forEach((b) => L.push({ d: b.x + b.y + b.w, f: () => dibEd(b) }));
   if (colocar && tileMouse && ED[colocar] && tileMouse.x >= 0 && tileMouse.y >= 0 && tileMouse.x < N && tileMouse.y < N) { // vista previa: el edificio semitransparente (más tenue si no cabe)
     const t = tileMouse, d = ED[colocar], ok = cabe(t.x, t.y, d.w) && zonaOk(t.y * N + t.x, colocar), g = { k: colocar, x: t.x, y: t.y, w: d.w, mh: d.hp, hp: d.hp, prog: 1, cd: 0, fantasma: ok ? .6 : .3 };
@@ -732,6 +759,59 @@ function dibHerrero(b) {
   for (let i = 0; i < 3; i++) { const f = (t + i / 3) % 1, c = Q(X + 1.25, Y + .3, 46 + f * 22); cx.fillStyle = "rgba(190,190,195," + (.55 * (1 - f)) + ")"; cx.beginPath(); cx.arc(c[0] + f * 5 * z, c[1], (3 + f * 4) * z, 0, 7); cx.fill(); }
   prisma(X + 1.55, Y + 1.5, .38, .28, 5, "#2b2d33", 0, 0); prisma(X + 1.6, Y + 1.53, .28, .2, 4, "#454952", 5, 0); // yunque
 }
+// ----- Casa de piedra y minerales, tesorería, tienda de vegetales y armería (2×2, prismas isométricos) -----
+function dibMineria(b) {
+  const X = b.x, Y = b.y;
+  poly([Q(X - .05, Y - .05, 0), Q(X + 2.05, Y - .05, 0), Q(X + 2.05, Y + 2.05, 0), Q(X - .05, Y + 2.05, 0)], "#5e5a52"); // suelo de grava
+  prisma(X + .1, Y + .1, 1.15, 1.2, 17, "#8a8f9c", 0, 4);                      // caseta de piedra
+  poly([Q(X + .3, Y + 1.3, 0), Q(X + .85, Y + 1.3, 0), Q(X + .85, Y + 1.3, 11), Q(X + .3, Y + 1.3, 11)], "#1d1a17"); // boca de la mina
+  prisma(X + .25, Y + 1.3, .08, .08, 13, "#6d4524", 0, 0); prisma(X + .82, Y + 1.3, .08, .08, 13, "#6d4524", 0, 0);   // postes de la entrada
+  prisma(X + .22, Y + 1.3, .7, .08, 3, "#8b5a2b", 12, 0);                      // dintel
+  prisma(X + .02, Y + .02, 1.3, 1.4, 4, "#6d4524", 17, 0);                     // techo de madera
+  prisma(X + .15, Y + .15, .22, .22, 8, "#9aa0a6", 21, 0);                     // piedra sobre el techo
+  prisma(X + 1.4, Y + .3, .5, .42, 6, "#6d4524", 3, 0);                        // carreta
+  prisma(X + 1.45, Y + .75, .1, .05, 4, "#222", 0, 0); prisma(X + 1.75, Y + .75, .1, .05, 4, "#222", 0, 0); // ruedas
+  prisma(X + 1.47, Y + .35, .36, .3, 3, "#ffd23f", 9, 0);                      // oro en la carreta
+  prisma(X + 1.0, Y + 1.55, .3, .3, 5, "#2b2b2b", 0, 0);                       // carbón
+  prisma(X + 1.4, Y + 1.35, .3, .3, 6, "#9aa0a6", 0, 0);                       // piedra
+  prisma(X + 1.65, Y + 1.62, .26, .26, 4, "#d2793a", 0, 0);                    // cobre
+  prisma(X + .2, Y + 1.62, .06, .06, 15, "#6d4524", 0, 0); prisma(X + .12, Y + 1.6, .2, .1, 3, "#cfd8e3", 15, 0); // pico apoyado
+}
+function dibTesoro(b) {
+  const X = b.x, Y = b.y, lleno = Math.min(1, (b.am || 0) / CAP_TESORO);
+  prisma(X + .05, Y + .05, 1.9, 1.9, 3, "#a7a49d", 0, 0);                      // escalón de piedra
+  prisma(X + .2, Y + .2, 1.6, 1.6, 20, "#cfc6ae", 3, 5);                       // muros claros
+  poly([Q(X + .7, Y + 1.8, 3), Q(X + 1.3, Y + 1.8, 3), Q(X + 1.3, Y + 1.8, 16), Q(X + .7, Y + 1.8, 16)], "#5a3a1c"); // puerta
+  poly([Q(X + .75, Y + 1.8, 3), Q(X + 1.25, Y + 1.8, 3), Q(X + 1.25, Y + 1.8, 14), Q(X + .75, Y + 1.8, 14)], "#7a5128");
+  for (const px of [.3, 1.45]) prisma(X + px, Y + 1.8, .13, .13, 20, "#ece6d3", 3, 0); // columnas de la entrada
+  prisma(X + .1, Y + .1, 1.8, 1.8, 5, "#9c7a1e", 23, 0);                       // techo dorado
+  prisma(X + .5, Y + .5, 1.0, 1.0, 5, "#d4af37", 28, 0);
+  prisma(X + .85, Y + .85, .3, .3, 4, "#ffd23f", 33, 0);                       // moneda en la cima
+  if (lleno > 0) prisma(X + 1.55, Y + 1.5, .3, .22, 2 + 8 * lleno, "#ffd23f", 3, 0); // montón de monedas: crece con los impuestos
+}
+function dibVerduras(b) {
+  const X = b.x, Y = b.y;
+  prisma(X + .1, Y + .1, 1.8, .15, 22, "#8a5a2b", 0, 4);                        // pared de atrás del puesto
+  prisma(X + .12, Y + .92, .08, .08, 22, "#6d4c2f", 0, 0); prisma(X + 1.8, Y + .92, .08, .08, 22, "#6d4c2f", 0, 0); // postes
+  [["#c0392b"], ["#f1efe9"], ["#c0392b"], ["#f1efe9"]].forEach(([c], i) => prisma(X + .05 + i * .475, Y + .05, .475, 1.0, 3, c, 22, 0)); // toldo a rayas
+  prisma(X + .15, Y + 1.15, .55, .6, 7, "#a1763f", 0, 3); prisma(X + .19, Y + 1.19, .47, .52, 2, "#f08a24", 7, 0);       // zanahorias
+  prisma(X + .8, Y + 1.15, .55, .6, 7, "#a1763f", 0, 3);  prisma(X + .84, Y + 1.19, .47, .52, 3, "#5cb85c", 7, 0);       // coles
+  prisma(X + 1.45, Y + 1.15, .5, .6, 7, "#a1763f", 0, 3); prisma(X + 1.49, Y + 1.19, .42, .52, 3, "#d9362b", 7, 0);      // jitomates
+  prisma(X + .15, Y + .4, .35, .35, 9, "#7a4a22", 0, 3);                        // barril
+}
+function dibArmeria(b) {
+  const X = b.x, Y = b.y, z = cam.z;
+  prisma(X + .15, Y + .15, 1.4, 1.4, 20, "#5d6b86", 0, 4);                     // paredes azul acero
+  poly([Q(X + .55, Y + 1.55, 0), Q(X + 1.15, Y + 1.55, 0), Q(X + 1.15, Y + 1.55, 13), Q(X + .55, Y + 1.55, 13)], "#2b1a10"); // puerta
+  prisma(X + .05, Y + .05, 1.6, 1.6, 4, "#2f3a52", 20, 0);                     // techo oscuro
+  prisma(X + .05, Y + .05, 1.6, .08, 2, "#d4af37", 24, 0);                     // filo dorado
+  const c = Q(X + 1.35, Y + 1.55, 15);                                          // escudo sobre la pared
+  cx.fillStyle = "#b3302a"; cx.strokeStyle = "#e8e9ed"; cx.lineWidth = Math.max(1, z); cx.beginPath();
+  cx.moveTo(c[0] - 5 * z, c[1] - 6 * z); cx.lineTo(c[0] + 5 * z, c[1] - 6 * z); cx.lineTo(c[0] + 5 * z, c[1] + 1 * z); cx.lineTo(c[0], c[1] + 7 * z); cx.lineTo(c[0] - 5 * z, c[1] + 1 * z); cx.closePath(); cx.fill(); cx.stroke();
+  prisma(X + 1.7, Y + .5, .08, 1.0, 12, "#6d4524", 0, 0);                      // armero de lanzas
+  for (const py of [.6, .95, 1.3]) prisma(X + 1.72, Y + py, .04, .04, 26, "#c9d3e6", 0, 0);
+  prisma(X + 1.55, Y + 1.7, .22, .22, 12, "#9aa0a6", 0, 0); prisma(X + 1.54, Y + 1.69, .24, .24, 4, "#cfd8e3", 12, 0); // maniquí con casco
+}
 function dibEd(b) {
   if (b.k == "poste") { // poste con bandera
     const z = cam.z, c = P(b.x + .5, b.y + .5);
@@ -741,9 +821,9 @@ function dibEd(b) {
     if (sel === b) { cx.strokeStyle = "#fff"; cx.lineWidth = 2; cx.strokeRect(c[0] - 12 * z, c[1] - 38 * z, 24 * z, 42 * z); }
     return;
   }
-  const z = cam.z, d = ED[b.k], h = ({ torre: 40, centro: 54, refugio: 36, arqueros: 56, canon: 22, hospital: 34, muroM: 17, muroP: 22, herrero: 30 })[b.k] || 14;
+  const z = cam.z, d = ED[b.k], h = ({ torre: 40, centro: 54, refugio: 36, arqueros: 56, canon: 22, hospital: 34, muroM: 17, muroP: 22, herrero: 30, minera: 30, tesoro: 36, verduras: 26, armeria: 30 })[b.k] || 14;
   cx.globalAlpha = b.fantasma || (b.prog < 1 ? .6 : 1);
-  if (b.k == "centro") dibCastillo(b); else if (b.k == "refugio") dibCabana(b); else if (b.k == "arqueros") dibArqueros(b); else if (b.k == "canon") dibCanon(b); else if (b.k == "hospital") dibHospital(b); else if (b.k == "herrero") dibHerrero(b); else if (esMuro(b.k)) dibMuro(b); else caja(b.x + .1, b.y + .1, b.w - .2, h * (b.prog < 1 ? .4 + b.prog * .6 : 1), d.c);
+  if (b.k == "centro") dibCastillo(b); else if (b.k == "refugio") dibCabana(b); else if (b.k == "arqueros") dibArqueros(b); else if (b.k == "canon") dibCanon(b); else if (b.k == "hospital") dibHospital(b); else if (b.k == "herrero") dibHerrero(b); else if (b.k == "minera") dibMineria(b); else if (b.k == "tesoro") dibTesoro(b); else if (b.k == "verduras") dibVerduras(b); else if (b.k == "armeria") dibArmeria(b); else if (esMuro(b.k)) dibMuro(b); else caja(b.x + .1, b.y + .1, b.w - .2, h * (b.prog < 1 ? .4 + b.prog * .6 : 1), d.c);
   cx.globalAlpha = 1;
   const c = P(b.x + b.w / 2, b.y + b.w / 2);
   if (sel === b && RANGO[b.k] && b.prog >= 1) { cx.strokeStyle = b.k == "hospital" ? "rgba(90,255,140,.8)" : "rgba(255,255,255,.65)"; cx.setLineDash([6, 5]); cx.lineWidth = 2; cx.beginPath(); cx.ellipse(c[0], c[1], RANGO[b.k] * 45.25 * z, RANGO[b.k] * 22.6 * z, 0, 0, 7); cx.stroke(); cx.setLineDash([]); }
@@ -925,6 +1005,19 @@ function panel(soloTexto) {
       dinero -= ARMAS[n][1]; sel.nv = n + 1; aviso(ARMAS[n][0] + ": tus tropas golpean +" + Math.round(BONO_ARMA * 100) + " % más"); panel();
     });
   }
+  if (!soloTexto && sel && sel.k == "tesoro" && sel.prog >= 1) { // recoger los impuestos juntados
+    const n = Math.floor(sel.am || 0);
+    boton("💰 Recoger impuestos $" + n, () => { const m = Math.floor(sel.am || 0); if (m < 1) return; dinero += m; sel.am -= m; aviso("Recogiste $" + m + " de impuestos"); panel(); }, n < 1);
+  }
+  if (!soloTexto && sel && sel.k == "armeria" && sel.prog >= 1) { // armadura: duplica la vida de una tropa
+    const sin = us.filter((u) => !u.arm);
+    if (!sin.length) boton("🛡️ Todas las tropas tienen armadura", () => {}, true);
+    else boton("🛡️ Armadura $" + ARMADURA + " (" + sin.length + " sin ella)", () => {
+      if (dinero < ARMADURA) return aviso("No alcanza el dinero");
+      const u = sin.find((x) => x.k == "g") || sin.find(esHeroe) || sin[0]; // primero los guerreros
+      dinero -= ARMADURA; u.arm = 1; u.hp += u.mh; u.mh *= 2; aviso(UN[u.k].nom + " con armadura: el doble de vida"); panel();
+    });
+  }
   if (!soloTexto && sel && sel.inv && sel.w) {
     const acepta = (t) => sel.k == "baul" || (sel.k == "cajonM") == MADERA.includes(t), cerca = () => { const h = heroe(); return h && Math.hypot(h.x - sel.x - .5, h.y - sel.y - .5) < 2.5; };
     boton("Guardar", () => { if (!cerca()) return aviso("Acércate (a menos de 2 casillas)"); pasar(heroe().inv, sel.inv, acepta, capac(sel)); invHud(); panel(); });
@@ -936,6 +1029,10 @@ function panel(soloTexto) {
   else if (sel.k == "refugio") s.textContent = "Refugio · aquí se crean tus tropas: $" + UN.r.costo + " cada una · vida " + Math.ceil(sel.hp) + "/" + sel.mh;
   else if (sel.w && DEF[sel.k] && sel.k != "torre") s.textContent = ED[sel.k].nom + " · dispara a enemigos y animales hostiles a " + DEF[sel.k].r + " casillas" + (DEF[sel.k].area ? " (daño en área)" : "") + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
   else if (sel.k == "herrero") s.textContent = "Herrero · " + ((sel.nv || 0) ? ARMAS[sel.nv - 1][0] : "sin armas todavía") + " (" + (sel.nv || 0) + "/" + ARMAS.length + ") · tus tropas golpean +" + Math.round(BONO_ARMA * 100 * (sel.nv || 0)) + " % · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
+  else if (sel.k == "minera") s.textContent = "Casa de piedra y minerales · tus recolectores entregan aquí piedra y minerales (más cerca de las minas, menos viaje) · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
+  else if (sel.k == "tesoro") s.textContent = "Tesorería del ayuntamiento · impuestos juntados $" + Math.floor(sel.am || 0) + "/" + CAP_TESORO + " (cobra el " + Math.round(IMPUESTO * 100) + " % extra de cada entrega de recursos) · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
+  else if (sel.k == "verduras") s.textContent = "Tienda de vegetales · vegetales " + Math.floor(sel.am || 0) + "/" + CAP_VERDURAS + " · todavía no hay cosechas que le vendan (pendiente) · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
+  else if (sel.k == "armeria") s.textContent = "Armería · vende armaduras ($" + ARMADURA + "): duplican la vida de la tropa · con armadura: " + us.filter((u) => u.arm).length + "/" + us.length + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
   else if (sel.k == "hospital") s.textContent = "Hospital · cura " + CURA.hps + " de vida por segundo a tus tropas a " + CURA.r + " casillas · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
   else if (sel.w) s.textContent = ED[sel.k].nom + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + (sel.prog < 1 ? " · en obra" : "");
   else s.textContent = UN[sel.k].nom + " · vida " + Math.ceil(sel.hp) + "/" + sel.mh + " · golpe " + Math.round(dmgDe(sel)) + (sel.gr != null && grupos[sel.gr] ? " · Grupo " + (sel.gr + 1) : "") + " · " + ({ r: "toca un recurso para juntarlo", c: "toca una obra o edificio dañado; o elige qué construir", g: "toca el mapa para explorar o un animal para atacar", h: "flechas o WASD para moverte · barra espaciadora o clic para atacar y picar (10 golpes por árbol o roca) · en pantalla táctil, toca el mapa" })[sel.k];
@@ -1052,7 +1149,7 @@ function crea(forzar) {
 }
 $("bCrea").addEventListener("click", () => { alternar("crea"); crea(true); });
 // ----- Edificios: todos los que se pueden construir, con candado si no alcanza el dinero -----
-const LISTA_EDIF = [["almacen", "🏪", "b-azul"], ["torre", "🏰", "b-gris"], ["arqueros", "🏹", "b-verde"], ["canon", "💣", "b-negro"], ["hospital", "🏥", "b-rojo"], ["herrero", "⚒️", "b-morado"], ["muroM", ICO.tablon, "b-oro"], ["muroP", "🧱", "b-gris"]];
+const LISTA_EDIF = [["almacen", "🏪", "b-azul"], ["torre", "🏰", "b-gris"], ["arqueros", "🏹", "b-verde"], ["canon", "💣", "b-negro"], ["hospital", "🏥", "b-rojo"], ["herrero", "⚒️", "b-morado"], ["minera", "⛏️", "b-gris"], ["tesoro", "🏦", "b-oro"], ["verduras", "🥕", "b-verde"], ["armeria", "🛡️", "b-azul"], ["muroM", ICO.tablon, "b-oro"], ["muroP", "🧱", "b-gris"]];
 let sigEdif = "";
 function edif(forzar) {
   const z = $("edif"); if (z.hidden) return;
@@ -1063,7 +1160,7 @@ function edif(forzar) {
   LISTA_EDIF.forEach(([k, ico, color]) => {
     const d = ED[k], falta = dinero < d.costo, b = document.createElement("button"); b.type = "button";
     b.className = "b3d cuad " + color + (falta ? " cerrado" : "") + (colocar == k ? " on" : ""); b.title = d.nom + " · $" + d.costo + (falta ? " (te faltan $" + Math.ceil(d.costo - dinero) + ")" : ""); b.setAttribute("aria-label", b.title);
-    b.innerHTML = '<span class="b-ico">' + ico + '</span><span class="b-nom">' + d.nom.replace("Torre de arqueros", "Arqueros").replace("Cañón con ruedas", "Cañón") + '</span><span class="b-info">$' + d.costo + '</span>' + (falta ? '<span class="b-lock">🔒</span>' : "");
+    b.innerHTML = '<span class="b-ico">' + ico + '</span><span class="b-nom">' + (d.corto || d.nom.replace("Torre de arqueros", "Arqueros").replace("Cañón con ruedas", "Cañón")) + '</span><span class="b-info">$' + d.costo + '</span>' + (falta ? '<span class="b-lock">🔒</span>' : "");
     b.addEventListener("click", () => {
       if (dinero < d.costo) return aviso("Te faltan $" + Math.ceil(d.costo - dinero) + " para " + d.nom);
       const cs = us.filter((u) => u.k == "c"); if (!cs.length) return aviso("Necesitas un Constructor: créalo tocando el refugio");
@@ -1131,19 +1228,31 @@ const subir = () => { if (nube) nube.guardado(); };
 // Mapas grandes: bio y expl se guardan como pares «valor:repeticiones» separados por «;» (el guardado cabe en la nube)
 const comprimir = (a) => { const r = []; for (let i = 0; i < a.length;) { let j = i; while (j < a.length && a[j] === a[i]) j++; r.push(a[i] + ":" + (j - i)); i = j; } return r.join(";"); };
 const descomprimir = (t, n) => { const a = new Uint8Array(n); let p = 0; if (t) for (const e of t.split(";")) { const [v, c] = e.split(":"); a.fill(+v, p, p + +c); p += +c; } return a; };
+// Árboles y rocas se guardan como texto corto: «letra del tipo + distancia a la casilla anterior (+ n cantidad / g golpes si no son los normales)»; cada entrada empieza con su letra, así los números no se pegan. El orden de COD_RES no se cambia (se agrega al final).
+const COD_RES = ["arbol", "roca", "carbon", "cobre", "hierro", "oro", "diamante", "plata"];
+function comprimirRes() {
+  let ant = 0, s = "";
+  res.forEach((r, i) => { if (!r || COD_RES.indexOf(r.t) < 0) return; s += String.fromCharCode(65 + COD_RES.indexOf(r.t)) + (i - ant) + (r.n != RES[r.t].n ? "n" + r.n : "") + (r.g ? "g" + +r.g.toFixed(2) : ""); ant = i; });
+  return s;
+}
 function estado() {
   return { n: N, dinero, oleada, tReloj, tOleada, muertes, cam, expl: comprimir(expl), bio: comprimir(bio),
-    res: res.map((r, i) => r && (r.t == "mina" ? [i, r.t, r.n, r.g || 0, r.oro, r.plata, r.cobre, r.carbon] : [i, r.t, r.n, r.g || 0])).filter(Boolean),
-    us: us.map((u) => [u.k, u.x, u.y, u.hp, u.carry.t, u.carry.n, u.o && u.o.t == "rec" ? [u.o.i, u.o.tipo] : 0, u.inv || 0, u.gr == null ? -1 : u.gr, u.reu ? 1 : 0, u.jug ? 1 : 0]),
-    anim: anim.map((a) => [a.k, a.x, a.y, a.hp, a.g || 0]), stock, eds: eds.map((b) => [b.k, b.x, b.y, b.hp, b.prog, b.inv || 0, b.nv || 0]), enem: enem.map((e) => [e.x, e.y, e.hp, e.mh]), grupos: grupos.map((g) => [g.x, g.y, g.tarea || 0]) };
+    resC: comprimirRes(), res: res.map((r, i) => r && COD_RES.indexOf(r.t) < 0 && (r.t == "mina" ? [i, r.t, r.n, r.g || 0, r.oro, r.plata, r.cobre, r.carbon] : [i, r.t, r.n, r.g || 0])).filter(Boolean), // res = minas (y lo raro); resC = árboles y rocas
+    us: us.map((u) => [u.k, u.x, u.y, u.hp, u.carry.t, u.carry.n, u.o && u.o.t == "rec" ? [u.o.i, u.o.tipo] : 0, u.inv || 0, u.gr == null ? -1 : u.gr, u.reu ? 1 : 0, u.jug ? 1 : 0, u.arm ? 1 : 0]),
+    anim: anim.map((a) => [a.k, +a.x.toFixed(1), +a.y.toFixed(1), +a.hp.toFixed(1), a.g || 0]), stock, eds: eds.map((b) => [b.k, b.x, b.y, b.hp, b.prog, b.inv || 0, b.nv || 0, +(b.am || 0).toFixed(1)]), enem: enem.map((e) => [e.x, e.y, e.hp, e.mh]), grupos: grupos.map((g) => [g.x, g.y, g.tarea || 0]) };
 }
 function cargar(s) {
   N = s.n || N_ORIGINAL; // las partidas viejas no traen «n» y son de 44×44
   res = new Array(N * N).fill(null); bloq = new Uint8Array(N * N); vis = new Uint8Array(N * N); expl = s.n ? descomprimir(s.expl, N * N) : Uint8Array.from(s.expl.split(""), Number);
   bio = s.bio ? (s.n ? descomprimir(s.bio, N * N) : Uint8Array.from(s.bio.split(""), Number)) : new Uint8Array(N * N); bio.forEach((v, i) => v == 3 && (bloq[i] = 1)); // partidas viejas: todo llanura
+  let i0 = 0;
   s.res.forEach(([i, t, n, g, o, pl, co, ca]) => { res[i] = { t, n, g: g || 0 }; if (t == "mina") Object.assign(res[i], { oro: o, plata: pl, cobre: co, carbon: ca }); bloq[i] = 1; });
-  eds = []; s.eds.forEach(([k, x, y, hp, prog, inv, nv]) => { const b = ponerEdificio(k, x, y, true); b.hp = hp; b.prog = prog; if (inv) b.inv = inv; if (nv) b.nv = nv; }); ponerRefugio(); // partidas viejas: se agrega el refugio si falta
-  us = s.us.map(([k, x, y, hp, ct, cn, o, inv, gr, reu, jug]) => ({ k, jug: !!jug, x, y, hp, gr: k == "h" || gr == null || gr < 0 ? null : gr, reu: reu === undefined ? true : !!reu, mh: UN[k].hp, p: [], cd: 0, inv: inv || (k == "h" ? [] : null), carry: { t: ct, n: cn }, o: o ? { t: "rec", i: o[0], tipo: o[1], f: cn >= 5 ? "vol" : "ir" } : null }));
+  if (s.resC) for (const m of s.resC.matchAll(/([A-Z])(\d+)(?:n([\d.]+))?(?:g([\d.]+))?/g)) { // árboles y rocas (formato compacto; las partidas viejas los traen en s.res)
+    i0 += +m[2]; const t = COD_RES[m[1].charCodeAt(0) - 65]; if (!t) continue;
+    res[i0] = { t, n: m[3] != null ? +m[3] : RES[t].n, g: m[4] != null ? +m[4] : 0 }; bloq[i0] = 1;
+  }
+  eds = []; s.eds.forEach(([k, x, y, hp, prog, inv, nv, am]) => { const b = ponerEdificio(k, x, y, true); b.hp = hp; b.prog = prog; if (inv) b.inv = inv; if (nv) b.nv = nv; if (am) b.am = am; }); ponerRefugio(); // partidas viejas: se agrega el refugio si falta
+  us = s.us.map(([k, x, y, hp, ct, cn, o, inv, gr, reu, jug, arm]) => ({ k, jug: !!jug, arm: arm ? 1 : 0, x, y, hp, gr: k == "h" || gr == null || gr < 0 ? null : gr, reu: reu === undefined ? true : !!reu, mh: UN[k].hp * (arm ? 2 : 1), p: [], cd: 0, inv: inv || (k == "h" ? [] : null), carry: { t: ct, n: cn }, o: o ? { t: "rec", i: o[0], tipo: o[1], f: cn >= 5 ? "vol" : "ir" } : null }));
   enem = s.enem.map(([x, y, hp, mh]) => ({ k: "e", x, y, hp, mh, cd: 0 }));
   grupos = (s.grupos || []).map(([x, y, t], id) => ({ id, x, y, tarea: t || null })); grSel = null; moverGrupo = null;
   nPostes = eds.filter((b) => b.k == "poste").length; recalcZona();
