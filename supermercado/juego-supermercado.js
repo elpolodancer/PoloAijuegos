@@ -34,6 +34,20 @@ const EXT_ANCHO = 300;              // ancho (px del mapa) que añade cada ampli
 const CAMARA_SUAVE = 8;             // qué tan rápido te sigue la cámara (más alto = más pegada al personaje)
 const EMP_CARGA = 3;                // productos que lleva de golpe un empleado de jardín
 const EMP_VEL = 85 * 0.5;           // velocidad (px/s) de los empleados de jardín: 50% de la original (85). Pon 85 para la velocidad de antes
+// Niveles de empleados: son mejoras GLOBALES (valen para todos los cajeros y para todos los empleados que llevan producto).
+// Un empleado de caja sin mejoras cobra LENTO (tú, parado junto a la caja, cobras siempre en COBRO_SEG).
+const NIVELES_EMP = 50;                 // cuántas mejoras tiene cada tipo
+const COBRO_EMP_SEG = 4;                // segundos que tarda un empleado de caja en cobrar a un cliente al nivel 0
+const COBRO_EMP_MIN = 0.4;              // ... y al nivel 50 (baja ×0.955 por nivel)
+const COBRO_EMP_R = Math.pow(COBRO_EMP_MIN / COBRO_EMP_SEG, 1 / NIVELES_EMP);
+const EMP_VEL_PASO = 2.1;               // px/s que suma cada nivel a la velocidad de los empleados que llevan producto (nivel 50 ≈ tu velocidad)
+const EMP_CARGA_CADA = 10;              // +1 producto de carga cada tantos niveles (3 → 8)
+const EMP_TRASPASO_MIN = 0.1;           // lo más rápido que coloca/recoge un producto (al nivel 0 tarda 0.4 s; baja ×0.972 por nivel)
+const EMP_TRASPASO_R = 0.972;
+// Precio de cada nivel: crece ~12 % por nivel y se redondea (más bonito de leer)
+const redondeaPrecio = (v) => (v < 50 ? Math.round(v) : v < 500 ? Math.round(v / 5) * 5 : Math.round(v / 10) * 10);
+const COSTOS_NIVEL_CAJERO = Array.from({ length: NIVELES_EMP }, (_, i) => redondeaPrecio(10 * Math.pow(1.12, i)));       // $10 … ≈$2600 (total ≈ $24 000)
+const COSTOS_NIVEL_REPARTIDOR = Array.from({ length: NIVELES_EMP }, (_, i) => redondeaPrecio(15 * Math.pow(1.125, i)));  // $15 … ≈$4800 (total ≈ $43 000)
 const JARDIN_SEP = 4;               // separación (px) entre los jardines y el muro de arriba del edificio
 
 // Costos
@@ -268,6 +282,8 @@ let edificio = 0;        // cuántas ampliaciones tiene el edificio (0 a COSTOS_
 let ampliaciones = [];   // cada una: { lado: -1 (izquierda) o 1 (derecha), x0: dónde empieza en el mapa }
 let xMin = 0, xMax = MUNDO.w;   // límites del EDIFICIO en x: crecen al ampliar el edificio
 let patios = [];         // ampliaciones del PATIO (zona de pasto con los jardines), aparte del edificio: { lado, x0 }
+let nivelCajero = 0;     // nivel de los empleados de caja (0 a NIVELES_EMP)
+let nivelRepartidor = 0; // nivel de los empleados que llevan producto del jardín/corral a la estantería (0 a NIVELES_EMP)
 let nivelPatio = 0;      // cuántas ampliaciones tiene el patio (0 a COSTOS_PATIO.length)
 let pMin = 0, pMax = MUNDO.w;   // límites del PATIO en x: crecen al ampliar el patio
 let wMin = 0, wMax = MUNDO.w;   // el mundo entero: lo más ancho entre edificio y patio (hasta ahí llega la cámara)
@@ -358,6 +374,10 @@ function distRect(x, y, r) {
   const dy = Math.max(r.y - y, 0, y - (r.y + r.h));
   return Math.hypot(dx, dy);
 }
+const tiempoCobroEmp = (n = nivelCajero) => Math.max(COBRO_EMP_MIN, COBRO_EMP_SEG * Math.pow(COBRO_EMP_R, n));
+const empVel = () => EMP_VEL + EMP_VEL_PASO * nivelRepartidor;
+const empCarga = () => EMP_CARGA + Math.floor(nivelRepartidor / EMP_CARGA_CADA);
+const empTraspaso = () => Math.max(EMP_TRASPASO_MIN, TRASPASO_SEG * 2 * Math.pow(EMP_TRASPASO_R, nivelRepartidor));
 const cerca = (r, alcance) => distRect(jugador.x, jugador.y, r) <= alcance;
 // La pared de arriba del edificio solo se cruza por la abertura del pasillo
 function chocaPared(x, y) {
@@ -761,7 +781,7 @@ function actualizarClientes(dt) {
     k.cola.forEach((c, i) => {
       const llego = irTienda(c, slotCaja(k, i), dt);
       if (i !== 0 || !llego || !hayCajero(k)) return;
-      c.t -= dt;
+      c.t -= dt * Math.max(k.emp ? COBRO_SEG / tiempoCobroEmp() : 0, cerca(k, ALCANCE_CAJA) ? 1 : 0);
       if (c.t > 0) return;
       // se cobra toda la compra junta, de una sola vez
       const total = c.carrito.reduce((suma, id) => suma + PRODUCTOS[id].precio, 0);
@@ -824,19 +844,20 @@ function actualizarEmpleados(dt) {
     const em = g.emp;
     if (!em) continue;
     em.cd -= dt;
+    em.vel = empVel();
     const nListos = listosDe(g, ex);
     const espacio = espacioLibre(g.producto);
     const puedeColocar = em.carga.length > 0 && espacio > 0;
-    const puedeRecoger = nListos > 0 && em.carga.length < EMP_CARGA && espacio - em.carga.length > 0;
-    if (puedeColocar && (em.carga.length >= EMP_CARGA || !puedeRecoger)) {
+    const puedeRecoger = nListos > 0 && em.carga.length < empCarga() && espacio - em.carga.length > 0;
+    if (puedeColocar && (em.carga.length >= empCarga() || !puedeRecoger)) {
       const e = destinosDe(g.producto).find((q) => q.items.length < capDe(q));
       const r = rectFull(e);
       if (distRect(em.x, em.y, r) <= ALCANCE_ESTANTE - 24) {
-        if (em.cd <= 0) { e.items.push(em.carga.shift()); em.cd = TRASPASO_SEG * 2; }
+        if (em.cd <= 0) { e.items.push(em.carga.shift()); em.cd = empTraspaso(); }
       } else irEmpleado(em, { x: Math.max(xMin + 14, Math.min(xMax - 14, e.x + e.w / 2 + em.off)), y: standY(e, 14) }, dt);
     } else if (puedeRecoger) {
       if (distRect(em.x, em.y, g) <= ALCANCE_JARDIN) {
-        if (em.cd <= 0) { const id = sacarDe(g, ex); if (id) em.carga.push(id); em.cd = TRASPASO_SEG * 2; }
+        if (em.cd <= 0) { const id = sacarDe(g, ex); if (id) em.carga.push(id); em.cd = empTraspaso(); }
       } else irEmpleado(em, puntoJardin(g), dt);
     } else {
       irEmpleado(em, puntoJardin(g), dt);          // sin nada que hacer: espera junto a su jardín
@@ -1022,6 +1043,18 @@ function comprarMejora(tipo) {
       // estantería adicional: lleva el producto que quieras (se cambia con ↻)
       nuevoEstante(slot, IDS[0]);
     }
+  } else if (tipo === "nivel-cajero") {
+    if (nivelCajero >= NIVELES_EMP || !cajas.some((k) => k.emp)) return;
+    const costo = COSTOS_NIVEL_CAJERO[nivelCajero];
+    if (!alcanza(costo)) return;
+    cobrarCompra(costo, x, y);
+    nivelCajero++;
+  } else if (tipo === "nivel-repartidor") {
+    if (nivelRepartidor >= NIVELES_EMP || !productores().some((g) => g.emp)) return;
+    const costo = COSTOS_NIVEL_REPARTIDOR[nivelRepartidor];
+    if (!alcanza(costo)) return;
+    cobrarCompra(costo, x, y);
+    nivelRepartidor++;
   } else if (tipo === "granja") {
     if (granja || !alcanza(COSTO_GRANJA)) return;
     cobrarCompra(COSTO_GRANJA, x, y);
@@ -1079,6 +1112,8 @@ function botonPanel(tipo) {
 }
 const btnCajaNueva = botonPanel("caja-nueva");
 const btnPuertaNueva = botonPanel("puerta-nueva");
+const btnNivCajero = botonPanel("nivel-cajero");
+const btnNivRepartidor = botonPanel("nivel-repartidor");
 // un botón de «empleado» por cada caja extra colocada
 function crearBotonEmpCaja(k) {
   const i = cajas.length;   // índice que tendrá esa caja
@@ -1151,6 +1186,18 @@ function actualizarPanel() {
     if (!k.boton) return;
     pintarBoton(k.boton, "👷 Empleado de la caja " + (i + 1), k.emp ? "✓" : "$" + COSTO_EMP_CAJA_EXTRA, !k.emp && alcanza(COSTO_EMP_CAJA_EXTRA));
   });
+  const seg = (v) => (v >= 1 ? v.toFixed(1) : v.toFixed(2)) + " s";
+  const hayCajeros = cajas.some((k) => k.emp), hayRepartidores = productores().some((g) => g.emp);
+  btnNivCajero.hidden = !hayCajeros;
+  btnNivRepartidor.hidden = !hayRepartidores;
+  if (hayCajeros) {
+    if (nivelCajero >= NIVELES_EMP) pintarBoton(btnNivCajero, "💵 Cajeros al nivel máximo (" + seg(tiempoCobroEmp()) + " por cliente)", "", false);
+    else pintarBoton(btnNivCajero, "💵 Cajeros nivel " + nivelCajero + "/" + NIVELES_EMP + ": " + seg(tiempoCobroEmp()) + " → " + seg(tiempoCobroEmp(nivelCajero + 1)) + " por cliente", "$" + COSTOS_NIVEL_CAJERO[nivelCajero], alcanza(COSTOS_NIVEL_CAJERO[nivelCajero]));
+  }
+  if (hayRepartidores) {
+    if (nivelRepartidor >= NIVELES_EMP) pintarBoton(btnNivRepartidor, "🏃 Empleados de jardín y granja al nivel máximo (llevan " + empCarga() + ")", "", false);
+    else pintarBoton(btnNivRepartidor, "🏃 Empleados de jardín y granja nivel " + nivelRepartidor + "/" + NIVELES_EMP + " (más rápidos; llevan " + empCarga() + ")", "$" + COSTOS_NIVEL_REPARTIDOR[nivelRepartidor], alcanza(COSTOS_NIVEL_REPARTIDOR[nivelRepartidor]));
+  }
   const extraCajas = cajas.length - 1, extraPuertas = puertas.length - 1;
   if (extraCajas >= MAX_CAJAS_EXTRA) pintarBoton(btnCajaNueva, "🧾 Cajas registradoras al máximo", "", false);
   else pintarBoton(btnCajaNueva, "🧾 Comprar caja registradora (la colocas tú)", "$" + costoCajaNueva(), !colocando && alcanza(costoCajaNueva()));
