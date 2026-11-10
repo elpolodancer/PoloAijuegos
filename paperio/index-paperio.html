@@ -5,25 +5,27 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Paperio</title>
-  <meta name="theme-color" content="#101114" />
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
   <link rel="stylesheet" href="../compartido/estilos.css" />
   <link rel="stylesheet" href="../compartido/inmersivo.css" /> <!-- DESPUÉS de estilos.css -->
   <style>
-    html.inmersivo { --fondo-juego: #101114; }
     /* Juego de ventana completa: el lienzo ocupa toda la pantalla y los menús se abren encima */
     #escena { position: fixed; inset: 0; }
     #lienzo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 
     /* Marcadores arriba a la izquierda (arriba a la derecha el lienzo dibuja el top 5) */
-    .datos { flex-wrap: wrap; gap: 5px; max-width: calc(100vw - 160px); }
+    /* Los marcadores van debajo de «🎮 Juegos» y «☰» (zona reservada arriba a la izquierda, ≈ 120 × 92) */
+    .hud-izq.datos { top: calc(max(8px, env(safe-area-inset-top)) + 96px); flex-wrap: wrap; gap: 5px; max-width: calc(100vw - 160px); }
     .datos .chip { height: 26px; padding: 0 9px; font-size: 12.5px; font-variant-numeric: tabular-nums; }
-    .hud-abajo { align-items: flex-end; }
+    /* Abajo a la izquierda queda libre para 🌙/☀️ (56 × 60): los boosts empiezan 64 px adentro */
+    .hud-abajo { align-items: flex-end; left: calc(max(10px, env(safe-area-inset-left)) + 64px); }
     #boosts { display: flex; gap: 8px; }
 
     /* Capas de menú: cubren el juego, hacen scroll por dentro y dejan libres las franjas de los botones flotantes (arriba: marcadores; abajo: 🏠 y ⛶) */
     #velo, #menu, #inicio, #mapa { position: absolute; inset: 0; display: flex; overflow: auto; overscroll-behavior: contain; touch-action: pan-y;
       padding: calc(64px + env(safe-area-inset-top, 0px)) 12px calc(64px + env(safe-area-inset-bottom, 0px)); background: rgba(16, 17, 20, .9); }
-    #velo { z-index: 1; } #menu { z-index: 2; background: rgba(16, 17, 20, .96); } #inicio { z-index: 3; } #mapa { z-index: 4; background: rgba(16, 17, 20, .96); }
+    #velo { z-index: 1; } #inicio { z-index: 3; background: transparent; } #mapa { z-index: 4; background: rgba(16, 17, 20, .96); }
     .panel { width: 100%; max-width: 380px; margin: auto; padding: 14px 16px; text-align: center; background: var(--tarjeta); border: 2px solid var(--borde); border-radius: 18px; box-shadow: 0 6px 0 #0c0d0f; }
     .panel h2 { margin: 0 0 6px; font-size: 1.4rem; }
     .panel p { margin: 0 0 10px; font-size: .82rem; color: var(--suave); line-height: 1.35; }
@@ -85,16 +87,20 @@
 </head>
 <body class="inmersivo" data-pantalla-auto>
   <!-- Marcadores flotantes -->
-  <div class="hud hud-izq datos">
+  <div class="hud hud-izq datos" id="hudDatos" hidden>
     <span class="chip" id="stNivel" title="Nivel">Nv 1</span>
     <span class="chip" id="stTerr" title="Territorio">▦ 0 %</span>
     <span class="chip" id="stBajas" title="Bajas">☠ 0</span>
     <span class="chip" id="stMejor" title="Mejor territorio">🏆 0 %</span>
-    <span class="chip" id="stMonedas" title="Monedas">🪙 0</span>
+    <span class="chip chip-monedas" id="stMonedas" title="Monedas"><span class="moneda"></span><span>0</span></span>
   </div>
-  <!-- Botones flotantes de abajo: volver y boosts de la partida -->
+  <!-- Navegación estándar de todos los juegos (arriba a la izquierda) -->
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> Pausa</button>
+  </nav>
+  <!-- Boosts de la partida -->
   <div class="hud hud-abajo">
-    <a class="b3d chico b-gris" href="../index.html" title="Volver a Juegos" aria-label="Volver a Juegos"><span class="b-ico" aria-hidden="true">🏠</span></a>
     <div id="boosts" hidden>
       <button class="b3d b-oro" id="usarInvenc" type="button" title="Invencible (tecla 1)" aria-label="Activar Invencible (tecla 1)"><span class="b-ico estrella" aria-hidden="true">⭐</span><span class="b-info" id="nInvenc">×0</span></button>
       <button class="b3d b-azul" id="usarVeloz" type="button" title="Velocidad doble (tecla 2)" aria-label="Activar Velocidad doble (tecla 2)"><span class="b-ico" aria-hidden="true">⚡</span><span class="b-info" id="nVeloz">×0</span></button>
@@ -106,34 +112,21 @@
     <div id="velo">
       <div class="panel">
         <h2 id="velTitulo">Paperio</h2>
-        <p id="velTexto">Sal de tu territorio y regresa para quedarte con todo lo que encierres. Si alguien toca tu estela, pierdes; si tú tocas la suya, pierde él. Mantén el dedo pulsado y arrástralo hacia donde quieras ir, o usa las flechas / WASD. Durante la partida activa tus boosts con los botones ⭐ y ⚡ (o las teclas 1 y 2).</p>
-        <div class="selnivel" id="selNivel">
-          <button class="b3d chico b-gris" id="nivelAnt" type="button" aria-label="Nivel anterior">◀</button>
-          <div><small id="nivelNum">Nivel 1</small><b id="nivelNom">Colina</b></div>
-          <button class="b3d chico b-gris" id="nivelSig" type="button" aria-label="Nivel siguiente">▶</button>
-        </div>
         <div class="tienda">
-          <span class="chip" id="velMonedas">🪙 0</span>
-          <button class="b3d txt b-verde" id="comprarInicio" type="button">Inicio más grande · 50 🪙</button>
-          <button class="b3d txt b-oro" id="comprarInvenc" type="button"><span class="estrella">⭐</span> <span id="txtInvenc">Invencible · 100 🪙</span></button>
-          <button class="b3d txt b-azul" id="comprarVeloz" type="button">⚡ <span id="txtVeloz">Velocidad ×2 · 80 🪙</span></button>
+          <span class="chip chip-monedas" id="velMonedas"><span class="moneda"></span><span>0</span></span>
+          <button class="b3d txt b-verde" id="comprarInicio" type="button">Inicio más grande · 50 💰</button>
+          <button class="b3d txt b-oro" id="comprarInvenc" type="button"><span class="estrella">⭐</span> <span id="txtInvenc">Invencible · 100 💰</span></button>
+          <button class="b3d txt b-azul" id="comprarVeloz" type="button">⚡ <span id="txtVeloz">Velocidad ×2 · 80 💰</span></button>
           <small>Inicio más grande: tu círculo de inicio será 75 % más grande en la próxima partida. Invencible (8 s) y Velocidad ×2 (10 s) se guardan y los activas tú durante la partida.</small>
         </div>
         <ul id="velDatos"></ul>
         <div class="acciones">
           <button class="b3d txt b-verde" id="jugar" type="button">Jugar</button>
-          <button class="b3d txt b-azul" id="verNiveles" type="button"><span class="b-ico" aria-hidden="true">☰</span> Niveles</button>
+          <button class="b3d txt b-azul" id="volverEtapa" type="button" hidden><span class="b-ico" aria-hidden="true">🗺️</span> Niveles</button>
           <button class="b3d txt b-gris" id="irInicio" type="button"><span class="b-ico" aria-hidden="true">⌂</span> Menú</button>
           <button class="b3d txt b-morado" id="entrar" type="button" hidden>🔑 Entrar con Google</button>
         </div>
         <div id="ranking" hidden></div>
-      </div>
-    </div>
-    <div id="menu" hidden>
-      <div class="menu-caja">
-        <div class="menu-cab"><h2>Niveles</h2><button class="b3d txt chico b-rojo" id="menuCerrar" type="button">✕ Cerrar</button></div>
-        <p id="menuInfo"></p>
-        <div id="menuRejilla"></div>
       </div>
     </div>
     <div id="inicio" hidden>
@@ -172,6 +165,7 @@
   </div>
   <div id="aviso" role="status"></div>
   <script type="module" src="juego-paperio.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>

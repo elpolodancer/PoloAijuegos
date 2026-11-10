@@ -7,8 +7,9 @@
 // - El territorio vive en una rejilla fina (cada casilla es muy pequeña) que se dibuja estirada y suavizada,
 //   así los bordes se ven redondeados y no «cuadrados».
 import { NIVELES, crearForma } from "./niveles-paperio.js";
-import { montarMapa } from "./mapa.js";
+import { montarMapa } from "./paperio-mapa.js";
 import { encolarPuntos } from "../compartido/cola-puntos.js";
+import { crearMenuPausa } from "../compartido/menu-pausa.js";
 const ID = "paperio";
 
 // ----- Ajustes -----
@@ -47,6 +48,7 @@ const SEG_VELOZ = 10;                 // segundos que dura
 const MULT_VELOZ = 2;                 // multiplicador de velocidad del jugador con el boost
 const NOMBRES = ["Tú", "Lola", "Pepe", "Nico", "Rosa", "Toño", "Mara", "Beto"];
 const TONOS = [255, 5, 38, 135, 178, 300, 340, 55]; // color de cada uno (el primero es el jugador)
+// (ya no se muestra en pantalla)
 const TEXTO_AYUDA = "Sal de tu territorio y regresa para quedarte con todo lo que encierres. Si alguien toca tu estela, pierdes; si tú tocas la suya, pierde él. Mantén el dedo pulsado y arrástralo hacia donde quieras ir, o usa las flechas / WASD. Durante la partida activa tus boosts con los botones ⭐ y ⚡ (o las teclas 1 y 2).";
 
 // ----- Partida simple: un mundo grande y 4 dificultades a elegir (se muestran en el menú de inicio) -----
@@ -87,8 +89,10 @@ let sucio = true, bajas = 0, maxPct = 0, tiempo = 0, mejorPct = 0;
 let fx = [];
 let nivelActual = 0, nivelConstruido = -1, desbloqueado = 0, ganado = false;
 let simple = null;                    // null = modo niveles; si no, el «nivel» de la partida simple en curso
+let etapaNv = null;                   // nivel de un estado del mapa en curso (colima.js, campeche.js...): { ...nivel, etapa: id del estado }
+let pausado = false;                  // true mientras el menú de pausa está abierto (la simulación se congela)
 let bono = null, monBono = [], bonoMonedas = 0; // bono de Michoacán en curso (ver michoacan.js), sus monedas {x, y, hasta} y lo recogido
-const nvActual = () => bono || simple || NIVELES[nivelActual];
+const nvActual = () => bono || simple || etapaNv || NIVELES[nivelActual];
 let monedas = 0, monedasPartida = 0, tramosPagados = 0, boostInicio = false, usarBoost = false; // boostInicio = comprado y pendiente; usarBoost = activo en la partida en curso
 let reloj = 0;                        // pasos de simulación transcurridos (60 por segundo)
 let nInvenc = 0, nVeloz = 0;          // boosts comprados y guardados (se activan durante la partida)
@@ -104,6 +108,18 @@ let vw = 300, vh = 300, cs = 4;
 try { mejorPct = Number(localStorage.getItem("paperio_mejor")) || 0; } catch (e) {}
 try { desbloqueado = Math.min(NIVELES.length - 1, Number(localStorage.getItem("paperio_nivel")) || 0); } catch (e) {}
 const nivelMax = () => (DESBLOQUEAR_TODOS ? NIVELES.length - 1 : desbloqueado);
+// Progreso de los estados del mapa: id del estado -> nivel más alto TERMINADO (los niveles de cada estado se abren en orden)
+function limpiarEtapas(o) {
+  const r = {};
+  if (o && typeof o === "object") for (const k in o) { const n = Math.min(100, Math.floor(Number(o[k]))); if (n > 0) r[k] = n; }
+  return r;
+}
+let etapasHechas = {};
+try { etapasHechas = limpiarEtapas(JSON.parse(localStorage.getItem("paperio_etapas"))); } catch (e) {}
+function guardarEtapas() {
+  try { localStorage.setItem("paperio_etapas", JSON.stringify(etapasHechas)); } catch (e) {}
+  guardarNube(false);
+}
 try {
   monedas = Math.max(0, Math.floor(Number(localStorage.getItem("paperio_monedas")) || 0));
   boostInicio = localStorage.getItem("paperio_boost_inicio") === "1";
@@ -128,9 +144,9 @@ const CLAVE_NUBE = "paperio_nube";
 let nube = null, tNube = 0;
 function guardarNube(cambioTienda) {
   // Un dispositivo sin nada guardado no crea copia: así no pisa la de la cuenta
-  if (!(desbloqueado > 0 || mejorPct > 0 || monedas > 0 || boostInicio || nInvenc > 0 || nVeloz > 0)) return;
+  if (!(desbloqueado > 0 || mejorPct > 0 || monedas > 0 || boostInicio || nInvenc > 0 || nVeloz > 0 || Object.keys(etapasHechas).length)) return;
   if (cambioTienda || !tNube) tNube = Date.now();
-  try { localStorage.setItem(CLAVE_NUBE, JSON.stringify({ nivel: desbloqueado, mejor: mejorPct, monedas, boostInicio: !!boostInicio, nInvenc, nVeloz, t: tNube })); } catch (e) {}
+  try { localStorage.setItem(CLAVE_NUBE, JSON.stringify({ nivel: desbloqueado, mejor: mejorPct, monedas, boostInicio: !!boostInicio, nInvenc, nVeloz, etapas: etapasHechas, t: tNube })); } catch (e) {}
   if (nube) nube.guardado();
 }
 function unirPaperio(a, b) {
@@ -140,7 +156,13 @@ function unirPaperio(a, b) {
   if (!ok(b)) return a;
   const ta = Number(a.t) || 0, tb = Number(b.t) || 0, n = tb > ta ? b : a;
   return { nivel: Math.max(Number(a.nivel) || 0, Number(b.nivel) || 0), mejor: Math.max(Number(a.mejor) || 0, Number(b.mejor) || 0),
-    monedas: n.monedas, boostInicio: !!n.boostInicio, nInvenc: n.nInvenc, nVeloz: n.nVeloz, t: Math.max(ta, tb) };
+    monedas: n.monedas, boostInicio: !!n.boostInicio, nInvenc: n.nInvenc, nVeloz: n.nVeloz, etapas: unirEtapas(a.etapas, b.etapas), t: Math.max(ta, tb) };
+}
+// Niveles de los estados: de cada estado gana el nivel más alto terminado
+function unirEtapas(a, b) {
+  const r = limpiarEtapas(a), y = limpiarEtapas(b);
+  for (const k in y) r[k] = Math.max(r[k] || 0, y[k]);
+  return r;
 }
 function aplicarNube(v) {
   if (!v || typeof v !== "object") return;
@@ -151,6 +173,9 @@ function aplicarNube(v) {
   nInvenc = Math.max(0, Math.floor(Number(v.nInvenc)) || 0);
   nVeloz = Math.max(0, Math.floor(Number(v.nVeloz)) || 0);
   tNube = Number(v.t) || 0;
+  etapasHechas = unirEtapas(etapasHechas, v.etapas);
+  try { localStorage.setItem("paperio_etapas", JSON.stringify(etapasHechas)); } catch (e) {}
+  try { mapa.refrescar(); } catch (e) {}
   escribirClaves();
   try { localStorage.setItem("paperio_nivel", String(desbloqueado)); localStorage.setItem("paperio_mejor", String(mejorPct)); } catch (e) {}
   try { refrescarTienda(); refrescarBoosts(); } catch (e) {}
@@ -161,13 +186,13 @@ function ganarMonedas(n) {
   guardarMonedas();
 }
 function refrescarTienda() {
-  $("velMonedas").textContent = "🪙 " + monedas;
+  $("velMonedas").lastChild.textContent = monedas;
   const b = $("comprarInicio");
-  b.textContent = boostInicio ? "✓ Inicio más grande listo" : "Inicio más grande · " + PRECIO_INICIO_GRANDE + " 🪙";
+  b.textContent = boostInicio ? "✓ Inicio más grande listo" : "Inicio más grande · " + PRECIO_INICIO_GRANDE + " 💰";
   b.disabled = boostInicio || monedas < PRECIO_INICIO_GRANDE;
-  $("txtInvenc").textContent = "Invencible · " + PRECIO_INVENCIBLE + " 🪙" + (nInvenc ? " (tienes " + nInvenc + ")" : "");
+  $("txtInvenc").textContent = "Invencible · " + PRECIO_INVENCIBLE + " 💰" + (nInvenc ? " (tienes " + nInvenc + ")" : "");
   $("comprarInvenc").disabled = monedas < PRECIO_INVENCIBLE;
-  $("txtVeloz").textContent = "Velocidad ×2 · " + PRECIO_VELOZ + " 🪙" + (nVeloz ? " (tienes " + nVeloz + ")" : "");
+  $("txtVeloz").textContent = "Velocidad ×2 · " + PRECIO_VELOZ + " 💰" + (nVeloz ? " (tienes " + nVeloz + ")" : "");
   $("comprarVeloz").disabled = monedas < PRECIO_VELOZ;
 }
 $("comprarInicio").addEventListener("click", () => {
@@ -881,7 +906,7 @@ function terminarBono() {
 function iniciar(demo) {
   dueno.fill(0); rastro.fill(0); rastroIdx.fill(0); clave.fill(0); limpiarCapas();
   fx = []; metaDedo = null;
-  const llave = bono ? "bono" + bono.n : simple ? "simple" : nivelActual; // qué mapa hace falta
+  const llave = bono ? "bono" + bono.n : simple ? "simple" : etapaNv ? "e" + etapaNv.etapa + "-" + etapaNv.n : nivelActual; // qué mapa hace falta
   if (nivelConstruido !== llave) { construirNivel(nvActual()); nivelConstruido = llave; }
   const nb = nvActual().bots;
   const nBots = nb === 0 ? 0 : Math.max(1, Math.min(NUM_BOTS, nb || 4)); // bots: 0 = sin rivales (el bono)
@@ -898,77 +923,30 @@ function iniciar(demo) {
   if (!demo) { cam.x = yo.x; cam.y = yo.y; }
 }
 
-function etiquetaNivel() {
-  const nv = NIVELES[nivelActual];
-  $("nivelNum").textContent = "Nivel " + (nivelActual + 1) + " de " + NIVELES.length;
-  $("nivelNom").textContent = nv.nombre + (nv.tier ? " · dificultad " + nv.tier + "/10" : "") + " · meta " + nv.meta + " %";
-  $("nivelAnt").disabled = nivelActual <= 0;
-  $("nivelSig").disabled = nivelActual >= nivelMax();
-  $("stNivel").textContent = "Nv " + (nivelActual + 1);
-}
-function elegirNivel(i) {
-  if (i < 0 || i > nivelMax() || i >= NIVELES.length) return;
-  nivelActual = i; ganado = false; simple = null; bono = null;
-  iniciar(true);
-  mostrarVelo("Paperio", TEXTO_AYUDA, []);
-}
-$("nivelAnt").addEventListener("click", () => elegirNivel(nivelActual - 1));
-$("nivelSig").addEventListener("click", () => elegirNivel(nivelActual + 1));
-
-// ----- Menú principal: cuadrícula de niveles (5 columnas) -----
-// Cada cuadro es un nivel: bloqueado (🔒), pasado (borde verde), el siguiente por pasar (borde morado).
-// Los niveles de la escala de 10 dificultades muestran «D1»…«D10» abajo del número.
-const COLUMNAS_MENU = 5;
-function construirMenu() {
-  const rej = $("menuRejilla");
-  rej.style.gridTemplateColumns = "repeat(" + COLUMNAS_MENU + ", 1fr)";
-  rej.innerHTML = "";
-  const max = nivelMax();
-  NIVELES.forEach((nv, i) => {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "b3d nv" + (i > max ? " bloq" : i === max ? " actual" : " hecho") + (i === nivelActual ? " sel" : "");
-    b.disabled = i > max;
-    b.title = nv.nombre + (nv.tier ? " · dificultad " + nv.tier + "/10" : "");
-    b.setAttribute("aria-label", "Nivel " + (i + 1) + ": " + nv.nombre + (i > max ? " (bloqueado)" : ""));
-    const n = document.createElement("b");
-    n.textContent = String(i + 1);
-    const t = document.createElement("small");
-    t.textContent = i > max ? "🔒" : nv.tier ? "D" + nv.tier : i < max ? "✓" : "★";
-    b.append(n, t);
-    b.addEventListener("click", () => { $("menu").hidden = true; elegirNivel(i); });
-    rej.appendChild(b);
-  });
-  $("menuInfo").textContent = "Desbloqueados: " + (max + 1) + " de " + NIVELES.length + " · D = dificultad (1 a 10)";
-}
-function abrirMenu() {
-  $("velo").hidden = true;
-  construirMenu();
-  $("menu").hidden = false;
-  const objetivo = $("menuRejilla").querySelector(".actual") || $("menuRejilla").querySelector(".sel");
-  if (objetivo) objetivo.scrollIntoView({ block: "center" });
-}
-$("menuCerrar").addEventListener("click", () => { $("menu").hidden = true; $("velo").hidden = false; });
-$("verNiveles").addEventListener("click", abrirMenu);
+// (Se eliminó el menú viejo de 10 niveles: ahora los niveles se eligen en el mapa.)
+const etiquetaNivel = () => { $("stNivel").textContent = "Nv " + (nivelActual + 1); };
 
 function fmtTiempo(s) { s = Math.floor(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
 
 async function terminar(gano) {
+  let primera = true; // false = nivel de un estado que ya habías pasado
   estado = "fin";
   ganado = !!gano;
   if (gano) { // se detiene al jugador (conserva su territorio) y se desbloquea el siguiente nivel
     yo.vivo = false;
     for (const i of yo.cola) if (rastro[i] === 1) { rastro[i] = 0; pix(i); }
     yo.cola = []; yo.ruta = [];
-    if (nivelActual + 1 < NIVELES.length && nivelActual + 1 > desbloqueado) {
+    if (etapaNv) { // nivel de un estado del mapa: se anota como terminado (solo la primera vez da puntos y monedas del nivel)
+      if (etapaNv.n > (etapasHechas[etapaNv.etapa] || 0)) { etapasHechas[etapaNv.etapa] = etapaNv.n; guardarEtapas(); } else primera = false;
+    } else if (nivelActual + 1 < NIVELES.length && nivelActual + 1 > desbloqueado) {
       desbloqueado = nivelActual + 1;
       try { localStorage.setItem("paperio_nivel", String(desbloqueado)); } catch (e) {}
       guardarNube(false);
     }
   }
-  if (gano) ganarMonedas(MONEDAS_POR_NIVEL);
+  if (gano && primera) ganarMonedas(MONEDAS_POR_NIVEL);
   const pct = Math.max(maxPct, 0);
-  const puntos = Math.round(pct * PUNTOS_POR_PCT) + bajas * PUNTOS_POR_BAJA + (gano ? PUNTOS_POR_NIVEL : 0);
+  const puntos = Math.round(pct * PUNTOS_POR_PCT) + bajas * PUNTOS_POR_BAJA + (gano && primera ? PUNTOS_POR_NIVEL : 0);
   if (pct > mejorPct) {
     mejorPct = pct;
     try { localStorage.setItem("paperio_mejor", String(pct)); } catch (e) {}
@@ -996,8 +974,6 @@ async function terminar(gano) {
 
 function mostrarVelo(titulo, texto, datos) {
   $("velTitulo").textContent = titulo;
-  $("velTexto").textContent = texto;
-  $("velTexto").hidden = !texto;
   const ul = $("velDatos");
   ul.innerHTML = "";
   for (const [k, v] of datos) {
@@ -1007,11 +983,13 @@ function mostrarVelo(titulo, texto, datos) {
     li.append(k + ": ", b);
     ul.appendChild(li);
   }
-  $("jugar").textContent = estado === "fin" ? (ganado && nivelActual + 1 < NIVELES.length ? "Siguiente nivel" : "Jugar otra vez") : "Jugar";
+  const haySig = etapaNv ? !!mapa.siguiente(etapaNv.etapa, etapaNv.n) : nivelActual + 1 < NIVELES.length;
+  $("jugar").textContent = estado === "fin" ? (ganado && haySig ? "Siguiente nivel" : "Jugar otra vez") : "Jugar";
+  $("volverEtapa").hidden = !(etapaNv || bono); // volver a la lista de niveles del estado
   etiquetaNivel();
-  $("selNivel").hidden = !!(simple || bono);
   if (simple) $("stNivel").textContent = "Simple";
   else if (bono) $("stNivel").textContent = bono.nombre;
+  else if (etapaNv) $("stNivel").textContent = "Nv " + etapaNv.n;
   refrescarTienda();
   marcarEntrar();
   $("velo").hidden = false;
@@ -1023,6 +1001,11 @@ let tAviso = 0;
 function aviso(txt) { const a = $("aviso"); a.textContent = txt; a.classList.add("ver"); clearTimeout(tAviso); tAviso = setTimeout(() => a.classList.remove("ver"), 4000); }
 $("entrar").addEventListener("click", () => { if (J) J.entrar().catch((e) => aviso(e.message)); });
 $("jugar").addEventListener("click", () => {
+  if (etapaNv) { // nivel de un estado: «Siguiente nivel» si lo pasaste; si no, repite el mismo
+    const sig = ganado ? mapa.siguiente(etapaNv.etapa, etapaNv.n) : null;
+    empezarNivelEtapa(sig || etapaNv, etapaNv.etapa);
+    return;
+  }
   if (ganado && nivelActual + 1 < NIVELES.length) nivelActual++;
   ganado = false;
   $("velo").hidden = true; iniciar(false);
@@ -1059,14 +1042,14 @@ const mapa = montarMapa({
   raiz: $("mapa"), titulo: $("mapaTitulo"), info: $("mapaInfo"), lienzo: $("mapaLienzo"),
   atras: $("mapaAtras"), ir: $("mapaIr"),
   alSalir: () => { mapa.cerrar(); mostrarInicio(); },
-  jugarBono: empezarBono,
+  jugarBono: empezarBono, jugarNivel: empezarNivelEtapa, progreso: () => etapasHechas,
 });
 
 function mostrarInicio() {
-  const eraSimple = !!(simple || bono);
-  simple = null; bono = null; ganado = false;
+  const eraSimple = !!(simple || bono || etapaNv);
+  simple = null; bono = null; etapaNv = null; ganado = false;
   if (estado !== "demo" || eraSimple) iniciar(true); // de fondo se ve una demostración
-  $("velo").hidden = true; $("menu").hidden = true; mapa.cerrar();
+  $("velo").hidden = true; mapa.cerrar();
   $("inicioSimple").hidden = true; $("inicioBotones").hidden = false;
   $("inicio").hidden = false;
 }
@@ -1084,7 +1067,7 @@ function cambiarDificultad(d) {
 }
 function empezarSimple() {
   const d = DIFICULTADES[difSimple];
-  bono = null;
+  bono = null; etapaNv = null;
   simple = { nombre: "Simple · " + d.nombre, bots: d.bots, meta: Infinity, dificultad: d.dificultad, rasgos: d.rasgos, forma: MUNDO_SIMPLE };
   ganado = false;
   $("inicio").hidden = true; $("velo").hidden = true;
@@ -1096,22 +1079,49 @@ $("difAnt").addEventListener("click", () => cambiarDificultad(-1));
 $("difSig").addEventListener("click", () => cambiarDificultad(1));
 $("simpleJugar").addEventListener("click", empezarSimple);
 $("simpleAtras").addEventListener("click", () => { $("inicioSimple").hidden = true; $("inicioBotones").hidden = false; });
-$("btnNiveles").addEventListener("click", () => {
-  $("inicio").hidden = true;
-  simple = null; bono = null; ganado = false;
-  iniciar(true);
-  mostrarVelo("Paperio", TEXTO_AYUDA, []);
-  abrirMenu();
-});
-function empezarBono(b) {
-  bono = b; simple = null; ganado = false;
+$("btnNiveles").addEventListener("click", () => { $("inicio").hidden = true; mapa.abrir(true); });
+// Un nivel de un estado del mapa (id = «col», «camp», «bcs»...)
+function empezarNivelEtapa(nv, id) {
+  etapaNv = { ...nv, etapa: id }; simple = null; bono = null; ganado = false;
   mapa.cerrar();
-  $("inicio").hidden = true; $("velo").hidden = true; $("menu").hidden = true;
+  $("inicio").hidden = true; $("velo").hidden = true;
+  iniciar(false);
+  $("stNivel").textContent = "Nv " + nv.n;
+}
+function empezarBono(b) {
+  bono = b; simple = null; etapaNv = null; ganado = false;
+  mapa.cerrar();
+  $("inicio").hidden = true; $("velo").hidden = true;
   iniciar(false);
   $("stNivel").textContent = b.nombre;
 }
 $("btnMapa").addEventListener("click", () => { $("inicio").hidden = true; mapa.abrir(); });
 $("irInicio").addEventListener("click", mostrarInicio);
+$("volverEtapa").addEventListener("click", () => { $("velo").hidden = true; etapaNv = null; bono = null; mapa.abrir(true); });
+
+// ----- Navegación estándar: «🎮 Juegos» y «☰» (Pausa en la partida, Menú principal fuera de ella) -----
+const enPartida = () => estado === "jugando" && !!yo && yo.vivo;
+const pausa = crearMenuPausa({
+  puedeAbrir: enPartida,
+  alAbrir: () => { pausado = true; metaDedo = null; puls.clear(); metaTeclas = null; },
+  alContinuar: () => { pausado = false; },
+  ayudaSalir: "Pierdes esta partida.",
+  alSalir: () => { pausado = false; mostrarInicio(); },
+});
+const btnMenu = $("btn-menu");
+let navTxt = "";
+function actualizarNav() {
+  $("hudDatos").hidden = estado !== "jugando"; // los marcadores solo se ven jugando (no sobre los menús)
+  const enInicio = !$("inicio").hidden, p = enPartida();
+  const k = enInicio ? "x" : p ? "p" : "m";
+  if (k === navTxt) return;
+  navTxt = k;
+  btnMenu.hidden = enInicio; // en el menú principal del juego no se muestra
+  btnMenu.innerHTML = '<span class="b-ico">☰</span> ' + (p ? "Pausa" : "Menú principal");
+  btnMenu.title = p ? "Pausa" : "Volver al menú principal de Paperio";
+}
+btnMenu.addEventListener("click", () => { if (enPartida()) pausa.abrir(); else mostrarInicio(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden) pausa.abrir(); }); // al cambiar de pestaña se pausa sola
 
 // ----- Controles -----
 // Dedo / ratón: mantén pulsado y arrastra: la cabeza gira hacia donde apuntes (como una palanca flotante).
@@ -1186,9 +1196,9 @@ function capa(c, dy) {
 function dibujar(k) {
   subirCapas();
 
-  // fuera del mapa (azul)
-  ctx.fillStyle = "#2c6e9e";
-  ctx.fillRect(0, 0, vw, vh);
+  // fuera del mapa: transparente, para que se vea la madera (estándar de los juegos).
+  // Para volver al azul: ctx.fillStyle = "#2c6e9e"; ctx.fillRect(0, 0, vw, vh);
+  ctx.clearRect(0, 0, vw, vh);
 
   // el suelo del mapa (con su sombra abajo) y, encima, territorio y estelas.
   // Son capas de alta resolución con los bordes ya suavizados (ver «Capas de territorio»).
@@ -1297,6 +1307,8 @@ function bucle(ts) {
   requestAnimationFrame(bucle);
   const dt = Math.min(0.1, Math.max(0, (ts - ultimo) / 1000));
   ultimo = ts;
+  actualizarNav();
+  if (pausado) return; // menú de pausa abierto: todo queda congelado
   acum += dt;
   while (acum >= SIM) { paso(); acum -= SIM; }
   if (estado === "jugando" && yo.vivo) tiempo += dt;
@@ -1326,19 +1338,18 @@ function bucle(ts) {
     hud = txt;
     if (bono) { // en el bono: tiempo que queda y monedas recogidas
       $("stTerr").textContent = "⏱ " + Math.max(0, Math.ceil(bono.duracion - tiempo)) + " s";
-      $("stBajas").textContent = "🪙 +" + bonoMonedas;
+      $("stBajas").textContent = "💰 +" + bonoMonedas;
     } else {
       $("stTerr").textContent = "▦ " + pct.toFixed(1) + " %";
       $("stBajas").textContent = "☠ " + bajas;
     }
     $("stMejor").textContent = "🏆 " + Math.max(mejorPct, maxPct).toFixed(1) + " %";
-    $("stMonedas").textContent = "🪙 " + monedas;
+    $("stMonedas").lastChild.textContent = monedas;
   }
 }
 
 ajustar();
 iniciar(true);
-mostrarVelo("Paperio", TEXTO_AYUDA, []);
 mostrarInicio(); // al abrir el juego se muestra el menú de inicio
 cargarRanking();
 requestAnimationFrame((ts) => { ultimo = ts; bucle(ts); });
