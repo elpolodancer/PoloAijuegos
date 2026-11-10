@@ -1,0 +1,87 @@
+<!doctype html>
+<!-- Proyecto: Juegos (portal) · juego «Supervivencia» -->
+<!-- Ruta: supervivencia/index-supervivencia.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Supervivencia</title>
+  <meta name="theme-color" content="#d9a866" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <style>
+    /* El fondo (madera clara u oscura) lo pone compartido/fondo-madera.js: el juego no pone fondo propio en html/body.
+       Aquí el lienzo ocupa TODA la ventana (el mapa de 50×50 es grande) y es transparente: fuera del mapa se ve la madera. */
+    .inmersivo .escena { display: block; }
+    .inmersivo canvas.lienzo.mundo { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; margin: 0; border: 0; border-radius: 0; background: transparent; touch-action: none; }
+    .nav-juego .b-ico { margin-right: 6px; }
+
+    /* Barra de herramientas abajo al centro. Deja libres las esquinas de 🌙 (izq.) y ⛶ (der.): ≈ 56 px a cada lado; si no cabe, baja a 2 filas */
+    .hud-barra { position: fixed; z-index: 5; left: calc(max(10px, env(safe-area-inset-left)) + 52px); right: calc(max(10px, env(safe-area-inset-right)) + 52px);
+      bottom: max(14px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
+    .hud-barra > * { pointer-events: auto; }
+    .herramientas { display: flex; flex-wrap: wrap-reverse; justify-content: center; gap: 4px 8px; }
+    .herramientas .b3d { margin-bottom: 5px; }
+    .b-ico.muestra { display: block; width: 22px; height: 22px; border-radius: 5px; border: 2px solid rgba(0,0,0,.55); box-shadow: inset 0 2px 0 rgba(255,255,255,.35); }
+    .m-madera  { background: repeating-linear-gradient(0deg, #b9803f 0 5px, #8f5e2c 5px 6px); }
+    .m-piedra  { background: radial-gradient(circle at 30% 30%, #c9ccd1 0 3px, transparent 4px), radial-gradient(circle at 70% 65%, #b3b7bd 0 4px, transparent 5px), #8d9298; }
+    .m-baldosa { background: conic-gradient(#e9eef5 25%, #7fa6d6 0 50%, #e9eef5 0 75%, #7fa6d6 0) 0 0 / 11px 11px; }
+    .chip-herr { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    @media (max-height: 420px) { .b-ico.muestra { width: 18px; height: 18px; } }
+
+    .ayuda-mapa { position: fixed; z-index: 4; left: 50%; top: calc(max(8px, env(safe-area-inset-top)) + 4px); transform: translateX(-50%); padding: 6px 12px; max-width: min(60vw, 420px);
+      font-size: 12px; line-height: 1.3; text-align: center; color: #fff; background: #15171acc; border: 2px solid #3b3e46; border-radius: 12px; pointer-events: none; transition: opacity .6s; }
+    .ayuda-mapa.fuera { opacity: 0; }
+    @media (max-width: 520px) { .ayuda-mapa { top: calc(max(8px, env(safe-area-inset-top)) + 96px); max-width: 80vw; } }
+
+    .ovl { position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: max(20px, env(safe-area-inset-top)) 20px 0; text-align: center; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; color: #fff; background: #101114f2; }
+    .ovl[hidden] { display: none; }
+    .ovl h2 { margin: 0; font-size: 26px; }
+    .ovl p { margin: 0; max-width: 46ch; line-height: 1.4; font-size: 14px; }
+    .ovl .jugar { position: sticky; bottom: 0; margin-top: auto; padding: 10px 0 16px; width: 100%; display: flex; justify-content: center; background: #101114; }
+    .ovl .jugar .b3d { --t: 48px; font-size: 18px; }
+  </style>
+</head>
+<body class="inmersivo" data-pantalla-auto>
+  <!-- Botones fijos del estándar: 🎮 Juegos y ☰ Pausa arriba a la izquierda. 🌙/☀️ y ⛶ los crean fondo-madera.js y pantalla-completa.js -->
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" aria-label="Volver al portal" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btnMenu" type="button" title="Pausa"><span class="b-ico">☰</span><span id="btnMenuTxt">Pausa</span></button>
+  </nav>
+
+  <div class="escena">
+    <canvas id="lienzo" class="lienzo mundo" aria-label="Mapa de 50 por 50 casillas en vista isométrica"></canvas>
+  </div>
+
+  <div class="ayuda-mapa" id="ayudaMapa">Toca el suelo (o usa las flechas / WASD) para mover al personaje. Abajo eliges qué construir.</div>
+
+  <!-- Herramientas: mover, tres tipos de piso, quitar piso y plantar/talar árboles -->
+  <div class="hud hud-barra">
+    <span class="chip chip-herr" id="chipHerr">✋ Mover</span>
+    <div class="herramientas" id="herramientas" role="group" aria-label="Herramientas">
+      <button class="b3d chico b-verde" type="button" data-h="mover" title="Mover al personaje" aria-label="Mover al personaje"><span class="b-ico">✋</span></button>
+      <button class="b3d chico b-oro" type="button" data-h="madera" title="Piso de madera" aria-label="Piso de madera"><span class="b-ico muestra m-madera"></span></button>
+      <button class="b3d chico b-gris" type="button" data-h="piedra" title="Piso de piedra" aria-label="Piso de piedra"><span class="b-ico muestra m-piedra"></span></button>
+      <button class="b3d chico b-azul" type="button" data-h="baldosa" title="Piso de baldosas" aria-label="Piso de baldosas"><span class="b-ico muestra m-baldosa"></span></button>
+      <button class="b3d chico b-rojo" type="button" data-h="quitar" title="Quitar piso" aria-label="Quitar piso"><span class="b-ico">🧽</span></button>
+      <button class="b3d chico b-verde" type="button" data-h="arbol" title="Plantar o talar árbol" aria-label="Plantar o talar árbol"><span class="b-ico">🌳</span></button>
+    </div>
+  </div>
+
+  <!-- ℹ️ Info (se abre desde ☰ Pausa) -->
+  <div class="ovl" id="info" hidden>
+    <h2>ℹ️ Supervivencia</h2>
+    <p>Un mundo de 50×50 casillas en vista isométrica. Tu personaje empieza en el centro.</p>
+    <p>✋ <b>Mover:</b> toca o mantén el dedo sobre el suelo y el personaje camina rodeando los árboles. En computadora también sirven las flechas o WASD.</p>
+    <p>🟫 ⬜ 🟦 <b>Piso:</b> elige un tipo y toca o arrastra por el mapa para colocarlo. 🧽 lo quita.</p>
+    <p>🌳 <b>Árbol:</b> toca una casilla vacía para plantar uno; si ya hay un árbol, lo tala. Arrastrando se hace igual en varias casillas.</p>
+    <p>🔍 Con dos dedos (o la rueda del ratón) acercas y alejas. Tu mundo se guarda solo en este aparato.</p>
+    <div class="jugar"><button class="b3d txt b-azul" id="infoVolver" type="button"><span class="b-ico">⬅️</span> Volver</button></div>
+  </div>
+
+  <script type="module" src="juego-supervivencia.js?v=1"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+</body>
+</html>
