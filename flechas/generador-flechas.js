@@ -8,6 +8,7 @@
 //      Si no se logra, se quitan flechas atascadas (deja casillas vacías, que se dibujan como puntitos).
 //   4) Se hacen varios intentos y se queda con el de mayor «profundidad» (más rondas para sacar todo = más difícil).
 import { azarSemilla, crearEstado, analizar, golpeaPropio } from "./logica-flechas.js";
+import { nivelFijo } from "./niveles-fijos-flechas.js";
 
 // ====== DIFICULTADES (medidas tomadas de las capturas del nivel 1; ver README-flechas.md) ======
 //   cols, filas   casillas del tablero
@@ -25,12 +26,57 @@ export const DIFICULTADES = {
 };
 export const ORDEN = ["facil", "medio", "dificil", "extra", "ultra"];
 
-// PROVISIONAL: por ahora todos los niveles de una dificultad tienen el mismo tamaño y solo cambia la semilla.
-// Cuando lleguen las capturas de los niveles 2 y 3, aquí se calibra cómo crece el tablero y el largo de las flechas con «nivel».
+// ----- FÁCIL: calibrado con los 15 niveles de las capturas (ver README-flechas.md, sección 3) -----
+// Los niveles 1 a 15 son FIJOS (niveles-fijos-flechas.js). Del 16 en adelante el bot elige, por semilla, una forma de tablero y un estilo
+// con las mismas proporciones que se vieron: casi todos rectángulos de 8 a 20 casillas por lado, y de vez en cuando un tablero ancho,
+// en cruz o en cuatro islas. Las flechas son pocas (unas 5 a 32) y largas (promedio 6 a 15).
+const FORMAS_FACIL = [
+  { peso: 40, forma: "rect",  min: 10, max: 19, cuadrado: true },   // niveles 5, 7, 8, 10, 13, 14, 15
+  { peso: 20, forma: "rect",  min: 15, max: 20 },                    // nivel 9 y 11 (15x16, 15x20)
+  { peso: 14, forma: "ruido", min: 15, max: 19, cuadrado: true },   // casi llenos con huecos sueltos (niveles 3, 9, 12)
+  { peso: 10, forma: "ancho", cols: [28, 33], filas: [12, 14] },     // nivel 12 (33x14)
+  { peso: 8,  forma: "cruz",  cols: [26, 30], filas: [26, 30] },     // nivel 4 (30x30)
+  { peso: 8,  forma: "islas", min: 13, max: 16, cuadrado: true },   // nivel 6 (15x15)
+];
+// «largas»: pocas vueltas (niveles 1, 2, 5, 13: 2 giros por flecha). «serpientes»: muchas vueltas (niveles 9, 11, 14: 5 a 6 giros).
+const ESTILOS_FACIL = { largas: { recto: 0.8, sesgo: 0.7 }, serpientes: { recto: 0.35, sesgo: 0.9 } };
+
+function perfilFacil(nivel, base) {
+  const r = azarSemilla(semillaDe("facil-forma", nivel));
+  let t = FORMAS_FACIL.reduce((s, f) => s + f.peso, 0) * r();
+  const f = FORMAS_FACIL.find((x) => (t -= x.peso) < 0) || FORMAS_FACIL[0];
+  const entre = (a, b) => a + Math.floor(r() * (b - a + 1));
+  let cols, filas;
+  if (f.cols) { cols = entre(f.cols[0], f.cols[1]); filas = entre(f.filas[0], f.filas[1]); }
+  else { cols = entre(f.min, f.max); filas = f.cuadrado ? cols : entre(f.min, f.max); }
+  const estilo = r() < 0.55 ? "largas" : "serpientes";
+  return { ...base, cols, filas, forma: f.forma, estilo, lmin: 2, lmax: Math.max(12, Math.round((cols + filas) * 0.6)), ...ESTILOS_FACIL[estilo], rondasMax: 9, largoEstilo: estilo === "largas" ? 1 : 0.85, intentos: 4 };
+}
+
 export function parametros(dif, nivel) {
   const d = DIFICULTADES[dif];
   if (!d) throw new RangeError("Dificultad desconocida: " + dif);
-  return { ...d };
+  if (dif === "facil") return perfilFacil(nivel, { ...d, forma: "rect" });
+  return { ...d, forma: "rect" }; // PROVISIONAL (Medio a Ultra): todos los niveles del mismo tamaño; se calibra con sus capturas
+}
+
+// Casillas que usa el tablero (1 = hay flechas, 0 = hueco). Los tableros no siempre son rectángulos.
+function mascara(forma, cols, filas, r) {
+  const m = new Uint8Array(cols * filas).fill(1);
+  const quitar = (x, y) => { if (x >= 0 && y >= 0 && x < cols && y < filas) m[y * cols + x] = 0; };
+  if (forma === "ruido") { // huecos sueltos (~3 %)
+    for (let i = 0; i < m.length; i++) if (r() < 0.03) m[i] = 0;
+  } else if (forma === "ancho") { // algunos huecos más grandes en la parte de abajo
+    for (let k = 0; k < 4; k++) { const w = 2 + ((r() * 4) | 0), x0 = (r() * (cols - w)) | 0, y0 = filas - 1 - ((r() * 2) | 0); for (let x = x0; x < x0 + w; x++) quitar(x, y0); }
+  } else if (forma === "cruz") { // cruz gorda: se quitan las cuatro esquinas
+    const bx = Math.round(cols * 0.36), by = Math.round(filas * 0.36);
+    for (let y = 0; y < filas; y++) for (let x = 0; x < cols; x++) if ((x < bx || x >= cols - bx) && (y < by || y >= filas - by)) quitar(x, y);
+  } else if (forma === "islas") { // cuatro islas en las esquinas, separadas por un hueco en cruz
+    const gx = Math.max(2, Math.round(cols * 0.28)), gy = Math.max(2, Math.round(filas * 0.28));
+    const x0 = Math.floor((cols - gx) / 2), y0 = Math.floor((filas - gy) / 2);
+    for (let y = 0; y < filas; y++) for (let x = 0; x < cols; x++) if ((x >= x0 && x < x0 + gx) || (y >= y0 && y < y0 + gy)) quitar(x, y);
+  }
+  return m;
 }
 
 export function semillaDe(dif, nivel) { // FNV-1a
@@ -40,9 +86,9 @@ export function semillaDe(dif, nivel) { // FNV-1a
 }
 
 // ---------- 1) TROCEAR ----------
-function trocear(cols, filas, p, r) {
+function trocear(cols, filas, p, r, mask) {
   const n = cols * filas;
-  const libre = new Uint8Array(n).fill(1);
+  const libre = Uint8Array.from(mask);
   const dueno = new Int32Array(n).fill(-1);
   const vec = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   const vecinas = Array.from({ length: n }, (_, i) => {
@@ -52,7 +98,7 @@ function trocear(cols, filas, p, r) {
   });
   const grado = (i) => { let g = 0; for (const j of vecinas[i]) g += libre[j]; return g; };
   const caminos = [];
-  let quedan = n;
+  let quedan = libre.reduce((t, x) => t + x, 0);
 
   while (quedan > 0) {
     let ini = -1, gm = 9, emp = 0;
@@ -167,27 +213,84 @@ function reparar(cols, filas, flechas, r, pasos) {
   return { flechas, est, analisis: a };
 }
 
+// ---------- 3b) PULIR (solo cuando la dificultad trae meta de largo y rondas, hoy Fácil) ----------
+// La reparación deja muchas flechas cortas y cadenas muy hondas. Aquí se (1) FUSIONAN flechas cuyos extremos se tocan hasta llegar al largo
+// promedio de las capturas y (2) se voltean puntas para bajar las rondas, siempre sin perder la solución.
+function pulir(cols, filas, flechas, p, r, meta) {
+  const ocupadas = flechas.reduce((t, f) => t + f.celdas.length, 0);
+  let est = crearEstado(cols, filas, flechas), a = analizar(est);
+  const vec = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  let gasto = flechas.length * 14;
+  while (gasto-- > 0 && flechas.length * meta > ocupadas) {
+    const i = (r() * flechas.length) | 0, fi = flechas[i];
+    const porCola = r() < 0.5;
+    const e = porCola ? fi.celdas[0] : fi.celdas[fi.celdas.length - 1];
+    const [dx, dy] = vec[(r() * 4) | 0];
+    const vx = e[0] + dx, vy = e[1] + dy;
+    if (vx < 0 || vy < 0 || vx >= cols || vy >= filas) continue;
+    const j = est.celda[vy * cols + vx];
+    if (j < 0 || j === i) continue;
+    const fj = flechas[j], cj = fj.celdas;
+    let B;
+    if (cj[0][0] === vx && cj[0][1] === vy) B = cj.slice();
+    else if (cj[cj.length - 1][0] === vx && cj[cj.length - 1][1] === vy) B = cj.slice().reverse();
+    else continue; // la casilla vecina está a medio camino de la otra flecha: no se puede unir
+    const A = porCola ? fi.celdas.slice().reverse() : fi.celdas.slice();
+    if (A.length + B.length > 36) continue; // en las capturas la flecha más larga mide 35 casillas
+    const union = puntas(A.concat(B), cols, filas, r);
+    if (!union) continue;
+    const nuevas = flechas.filter((_, k) => k !== i && k !== j).concat([{ celdas: union }]);
+    const e2 = crearEstado(cols, filas, nuevas), a2 = analizar(e2);
+    if (a2.resuelto && a2.profundidad <= p.rondasMax + 3) { flechas = nuevas; est = e2; a = a2; }
+  }
+  gasto = flechas.length * 40;
+  while (gasto-- > 0 && a.profundidad > p.rondasMax) {
+    const f = flechas[(r() * flechas.length) | 0], rev = f.celdas.slice().reverse();
+    if (golpeaPropio(cols, filas, rev)) continue;
+    const antes = f.celdas;
+    f.celdas = rev;
+    const b = analizar(est);
+    if (b.resuelto && (b.profundidad < a.profundidad || (b.profundidad === a.profundidad && b.capas[0].length >= a.capas[0].length))) a = b;
+    else f.celdas = antes;
+  }
+  return { flechas, est, analisis: a };
+}
+
 function intentar(p, r) {
-  const caminos = trocear(p.cols, p.filas, p, r);
+  const mask = mascara(p.forma || "rect", p.cols, p.filas, r);
+  const hay = mask.reduce((t, x) => t + x, 0);
+  const caminos = trocear(p.cols, p.filas, p, r, mask);
   const base = aFlechas(caminos, p.cols, p.filas, r);
-  const { flechas, est, analisis } = reparar(p.cols, p.filas, base, r, p.cols * p.filas * 4);
+  let res = reparar(p.cols, p.filas, base, r, p.cols * p.filas * 4);
+  if (p.rondasMax) res = pulir(p.cols, p.filas, res.flechas, p, r, (6 + Math.sqrt(hay) / 3) * p.largoEstilo);
+  const { flechas, est, analisis } = res;
   const ocupadas = flechas.reduce((s, f) => s + f.celdas.length, 0);
   return {
     cols: p.cols, filas: p.filas, flechas,
     profundidad: analisis.profundidad,
     libresAlInicio: analisis.capas[0] ? analisis.capas[0].length : 0,
-    relleno: ocupadas / (p.cols * p.filas),
+    relleno: ocupadas / hay, ocupadas,
   };
 }
 
 // Devuelve { cols, filas, flechas: [{ celdas }], profundidad, libresAlInicio, relleno }
 export function generar(dif, nivel = 1) {
+  const fijo = nivelFijo(dif, nivel); // niveles copiados de las capturas: se usan tal cual
+  if (fijo) {
+    const a = analizar(crearEstado(fijo.cols, fijo.filas, fijo.flechas));
+    const ocupadas = fijo.flechas.reduce((t, f) => t + f.celdas.length, 0);
+    return { ...fijo, fijo: true, profundidad: a.profundidad, libresAlInicio: a.capas[0] ? a.capas[0].length : 0, relleno: 1, ocupadas };
+  }
   const p = parametros(dif, nivel);
   const base = semillaDe(dif, nivel);
   let mejor = null;
   for (let k = 0; k < p.intentos; k++) {
     const g = intentar(p, azarSemilla((base + k * 7919) >>> 0));
-    if (!mejor || g.profundidad > mejor.profundidad) mejor = g;
+    // con meta (Fácil): se queda con el más cercano a las capturas (pocas rondas y largo promedio parecido); sin meta: el más profundo
+    const pun = (x) => p.rondasMax
+      ? Math.max(0, x.profundidad - p.rondasMax) * 3 + Math.abs((x.flechas.length * (6 + Math.sqrt(x.ocupadas) / 3) * p.largoEstilo) / x.ocupadas - 1) * 5
+      : -x.profundidad;
+    if (!mejor || pun(g) < pun(mejor)) mejor = g;
   }
   return mejor;
 }

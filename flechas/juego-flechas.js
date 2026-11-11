@@ -37,6 +37,7 @@ let volando = [];   // flechas saliendo del tablero
 let rebotes = [];   // flechas bloqueadas (rojas, con un empujoncito)
 let pista = -1;     // flecha señalada por la bombilla
 let cache = null;   // último nivel generado (para reiniciar sin volver a generarlo)
+let ocup0 = null;   // casillas que al empezar tenían flecha (los huecos del tablero no llevan puntitos)
 let anchoCss = 0, altoCss = 0, cell = 10, raf = 0;
 
 // ----- Pantallas -----
@@ -110,6 +111,7 @@ function jugar(d, n) {
     const g = cache && cache.clave === clave ? cache.g : generar(d, n);
     cache = { clave, g };
     est = crearEstado(g.cols, g.filas, g.flechas);
+    ocup0 = est.celda.slice();
     total = g.flechas.length;
     $("cargando").hidden = true;
     jugando = true;
@@ -201,7 +203,7 @@ function dibujar() {
     cx.fillStyle = "rgba(47,62,74,.28)";
     const r = Math.max(0.8, cell * 0.05);
     for (let y = 0; y < est.filas; y++) for (let x = 0; x < est.cols; x++) {
-      if (est.celda[y * est.cols + x] !== -1) continue;
+      if (est.celda[y * est.cols + x] !== -1 || ocup0[y * est.cols + x] === -1) continue; // solo donde había flecha y ya salió
       cx.beginPath(); cx.arc((x + 0.5) * cell, (y + 0.5) * cell, r, 0, 6.2832); cx.fill();
     }
   }
