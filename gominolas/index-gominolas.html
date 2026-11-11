@@ -5,53 +5,69 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Conecta gominolas</title>
-  <meta name="theme-color" content="#101114" />
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
   <link rel="stylesheet" href="../compartido/estilos.css" />
   <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 30%, #23252b, #101114 70%); }
-    /* Columna: franja de botones (fija) + marcadores + barra de movimientos + tablero 6×8 */
-    .inmersivo .escena { flex-direction: column; gap: 8px; padding: calc(54px + env(safe-area-inset-top, 0px)) 0 calc(8px + env(safe-area-inset-bottom, 0px)); }
-    .fila-chips { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; flex: none; width: min(100vw, 520px); padding: 0 8px; }
+    /* Columna: marcadores + barra de movimientos + tablero 6×8. Arriba a la izquierda va «🎮 Juegos» + «☰» (≈120×92): se deja ese espacio. */
+    .inmersivo .escena { flex-direction: column; gap: 8px; padding: calc(100px + env(safe-area-inset-top, 0px)) 0 calc(8px + env(safe-area-inset-bottom, 0px)); }
+    .panel-info { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: none; }
+    .fila-chips { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; width: min(100vw, 520px); padding: 0 8px; }
     .fila-chips .chip { height: 30px; padding: 0 10px; font-size: 13px; }
-    .tiempo { flex: none; width: min(calc(100vw - 24px), 480px); height: 14px; background: rgba(255,255,255,.14); border: 2px solid #15171a; border-radius: 99px; overflow: hidden; }
+    .tiempo { flex: none; width: min(calc(100vw - 24px), 480px); height: 14px; background: rgba(0,0,0,.28); border: 2px solid #15171a; border-radius: 99px; overflow: hidden; }
     #barra { height: 100%; width: 100%; border-radius: 99px; background: linear-gradient(90deg, #ff7aa8, #ffd24d); transition: width .1s linear; }
     #barra.poco { background: #ff4d5e; }
     .tablero { position: relative; flex: none; overflow: hidden; border-radius: 22px; background: linear-gradient(160deg, #6a3d9a, #3b2a73); box-shadow: 0 8px 0 #251a4d, 0 14px 22px rgba(0,0,0,.5); touch-action: none; user-select: none; -webkit-user-select: none;
-      width: min(calc(100vw - 24px), calc((100vh - 170px) * 0.75), 480px);
-      width: min(calc(100vw - 24px), calc((100dvh - 170px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * 0.75), 480px); }
+      width: min(calc(100vw - 24px), calc((100vh - 216px) * 0.75), 480px);
+      width: min(calc(100vw - 24px), calc((100dvh - 216px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * 0.75), 480px); }
     canvas { display: block; width: 100%; touch-action: none; }
+    .hud-der { z-index: 7; } /* el botón de entrar queda por encima del mapa */
     .ovl { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; justify-content: safe center; gap: 12px; padding: 24px; text-align: center; background: rgba(10,10,12,.84); color: #fff; overflow-y: auto; }
     .ovl.oculto { display: none; }
     .ovl h2 { margin: 0; font-size: 1.7rem; }
     .ovl p { margin: 0; max-width: 34ch; font-size: .9rem; line-height: 1.45; color: #e3e5ea; }
+    /* Horizontal con poco alto: el tablero ocupa toda la altura y los marcadores pasan a una columna a la derecha (bajo el botón de entrar) */
+    @media (orientation: landscape) and (max-height: 640px) {
+      .inmersivo .escena { padding: calc(8px + env(safe-area-inset-top, 0px)) 0 calc(8px + env(safe-area-inset-bottom, 0px)); }
+      .panel-info { position: fixed; z-index: 5; top: calc(56px + env(safe-area-inset-top, 0px)); right: max(10px, env(safe-area-inset-right)); align-items: stretch; width: 112px; }
+      .fila-chips { flex-direction: column; flex-wrap: nowrap; align-items: stretch; width: 100%; padding: 0; }
+      .fila-chips .chip { justify-content: space-between; }
+      .tiempo { width: 100%; }
+      .tablero { width: calc((100vh - 24px) * 0.75); width: calc((100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * 0.75); }
+    }
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>
-  <div class="hud hud-izq">
-    <a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a>
-  </div>
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> <span id="txt-menu">Pausa</span></button>
+  </nav>
   <div class="hud hud-der">
     <button class="b3d chico txt b-azul" id="entrar" type="button" title="Entrar con Google para guardar puntos" hidden>👤 Entrar con Google</button>
   </div>
   <div class="escena">
-    <div class="fila-chips">
-      <span class="chip"><small>Puntos</small><b id="pts">0</b></span>
-      <span class="chip"><small>Movs</small><b id="movs">0</b></span>
-      <span class="chip"><small>Negras</small><b id="negras">0</b></span>
-      <span class="chip"><small>Nivel</small><b id="nivel">1</b></span>
+    <div class="panel-info">
+      <div class="fila-chips">
+        <span class="chip"><small>Puntos</small><b id="pts">0</b></span>
+        <span class="chip"><small>Movs</small><b id="movs">0</b></span>
+        <span class="chip"><small>Negras</small><b id="negras">0</b></span>
+        <span class="chip"><small>Nivel</small><b id="nivel">1</b></span>
+      </div>
+      <div class="tiempo" title="Movimientos que quedan"><div id="barra"></div></div>
     </div>
-    <div class="tiempo" title="Movimientos que quedan"><div id="barra"></div></div>
     <div class="tablero">
       <canvas id="lienzo"></canvas>
-      <div class="ovl" id="ovl">
-        <h2 id="ovlTitulo">Conecta gominolas</h2>
-        <p id="ovlTexto">Arrastra el dedo por 3 o más gominolas iguales y juntas (también en diagonal). Rompe las que rodean a las negras para eliminarlas antes de quedarte sin movimientos.</p>
+      <div class="ovl oculto" id="ovl">
+        <h2 id="ovlTitulo"></h2>
+        <p id="ovlTexto"></p>
         <button class="b3d txt grande b-verde" id="ovlBtn" type="button">Jugar</button>
+        <button class="b3d txt b-azul" id="ovlMapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
       </div>
     </div>
   </div>
   <script type="module" src="juego-gominolas.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>

@@ -5,6 +5,9 @@
 // Si un movimiento no elimina ninguna negra, aparece una nueva abajo.
 // Perfil y sesión: se cargan aparte para que el juego funcione aunque Firebase no esté disponible
 import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
+import { crearMenuPausa } from "../compartido/menu-pausa.js"; // menú de pausa estándar (☰)
+import { montarMapa } from "../compartido/mapa-niveles.js";   // menú principal ESTÁNDAR: México con agua, mundo y listas de niveles
+import { crearEtapas } from "../compartido/etapas-mapa.js";   // 32 estados + 194 países
 let nube = null; // se llena al cargar compartido/progreso.js (abajo del todo)
 let entrar = async () => { throw new Error("Sesión no disponible sin conexión"); };
 
@@ -92,7 +95,10 @@ let grid = [];          // grid[fila][col] = { k: color (o NEGRA / ESPECIAL), y:
 let estado = "inicio";  // inicio | jugando | fin
 let puntos = 0;
 let puntosInicioNivel = 0; // puntos con los que empezó el nivel actual (al reintentar se vuelve a ellos)
-let nivel = 1;
+let nivel = 1;          // nivel MÁS ALTO desbloqueado (el progreso; el nivel «hecho» más alto es nivel − 1)
+let actual = 1;         // nivel que se está jugando (puede ser uno anterior si se repite desde el mapa)
+let pendiente = 1;      // nivel que empieza el botón de la pantalla de resultado (siguiente, o el mismo si se perdió)
+let ganoUltimo = false; // el último nivel terminado se ganó (para que el agua del mapa suba al volver)
 let movs = 0;           // movimientos que quedan
 let movsIni = 1;        // movimientos con que empezó el nivel
 let mejor = 0;
@@ -113,6 +119,62 @@ function guardarProg() {
   if (nube) nube.guardado();
 }
 if (mejor || nivel > 1) guardarProg(); // pasa lo de las claves de antes a la nueva
+
+// ---------- Mapa de niveles (menú principal), botón «☰» y menú de pausa ----------
+// 100 niveles por estado de México (32) y por país (194): 22 600 en total. Los niveles se abren en orden.
+// El mapa lo dibuja compartido/mapa-niveles.js; aquí solo se le dice el progreso y qué pasa al elegir un nivel.
+const NIVELES_POR_ETAPA = 100;
+const ETAPAS = crearEtapas({ porEtapa: NIVELES_POR_ETAPA });
+const TOTAL_NIVELES = ETAPAS.total;
+const btnMenu = document.getElementById("btn-menu");
+
+// «☰» (estándar): en el mapa principal NO se muestra; en el resto del mapa y en las pantallas de resultado dice «Menú principal»;
+// dentro de una partida dice «Pausa» y abre el menú de pausa.
+function menuBoton() {
+  const enMapa = mapa.abierto();
+  btnMenu.hidden = enMapa && mapa.esPrincipal();
+  const enPartida = !enMapa && estado === "jugando";
+  document.getElementById("txt-menu").textContent = enPartida ? "Pausa" : "Menú principal";
+  btnMenu.title = enPartida ? "Pausa" : "Volver al mapa principal";
+}
+// Ventana «Info» del mapa (usa los estilos .pausa-* de compartido/inmersivo.css)
+function abrirInfo() {
+  const fondo = document.createElement("div");
+  fondo.className = "pausa-fondo"; fondo.setAttribute("role", "dialog"); fondo.setAttribute("aria-modal", "true");
+  const panel = document.createElement("div"); panel.className = "pausa-panel";
+  const t = document.createElement("h2"); t.textContent = "ℹ️ Cómo se juega";
+  const txt = document.createElement("p"); txt.style.cssText = "margin:0 0 12px;line-height:1.45;font-size:.92rem";
+  txt.textContent = "Arrastra por 3 o más gominolas iguales y juntas. Rompe las que rodean a las negras para eliminarlas: si en una jugada no eliminas ninguna, aparece otra. Cadenas de 5 crean un poder ↔️ (rompe una fila) y de 7 un poder ↕️ (rompe una columna): tócalos o inclúyelos en una cadena y se activan en la última casilla. Dos poderes juntos se aplican a la vez." + " Los niveles se desbloquean en orden: cada estado y cada país tiene 100. Al terminar un estado se desbloquea el siguiente y el agua del mapa sube.";
+  const ok = document.createElement("button"); ok.type = "button"; ok.className = "b3d txt b-verde"; ok.textContent = "Entendido";
+  const cerrar = () => { fondo.remove(); };
+  ok.addEventListener("click", cerrar); fondo.addEventListener("click", (e) => { if (e.target === fondo) cerrar(); });
+  panel.append(t, txt, ok); fondo.appendChild(panel); document.body.appendChild(fondo);
+  try { ok.focus({ preventScroll: true }); } catch (e) {}
+}
+const mapa = montarMapa({
+  prefijo: "gominolas",                 // claves de localStorage del mapa: «gominolas-agua» y «gominolas-mundo-visto»
+  etapas: ETAPAS,
+  progreso: () => ({ max: Math.min(nivel, TOTAL_NIVELES), hecho: Math.min(nivel - 1, TOTAL_NIVELES) }),
+  jugarNivel: (n) => { mapa.cerrar(); puntosInicioNivel = 0; jugar(n); },
+  alInfo: abrirInfo,
+  alCambiarVista: () => menuBoton(),
+});
+function abrirMapa(aguaSube) {
+  estado = "inicio"; cadena = null;
+  ovl.classList.add("oculto");
+  mapa.abrir(Math.min(nivel, TOTAL_NIVELES), !!aguaSube);
+  menuBoton();
+}
+crearMenuPausa({
+  boton: btnMenu,
+  puedeAbrir: () => estado === "jugando" && !mapa.abierto(),
+  alAbrir: () => { cadena = null; },
+  extras: () => [{ icono: "🔄", texto: "Reiniciar nivel", clase: "b-azul", ayuda: "Vuelves a empezar este nivel con tus puntos de antes.", alElegir: () => empezar() }],
+  textoSalir: "Salir al mapa",
+  alSalir: () => abrirMapa(false),
+  ayudaSalir: "Se pierde lo avanzado en este nivel.",
+});
+btnMenu.addEventListener("click", () => { if (mapa.abierto()) mapa.principal(); else if (estado === "fin") { ovl.classList.add("oculto"); mapa.abrir(); menuBoton(); } });
 
 // ---------- Sonido ----------
 let ac = null;
@@ -426,23 +488,23 @@ function actualizarHud() {
   elPts.textContent = puntos;
   elMovs.textContent = Math.max(0, movs);
   elNegras.textContent = contarNegras();
-  elNivel.textContent = nivel;
+  elNivel.textContent = actual;
   elBarra.style.width = Math.max(0, (movs / movsIni) * 100) + "%";
   elBarra.classList.toggle("poco", movs <= 3);
 }
 
-function mostrarInicio() {
-  ovlTitulo.textContent = "Conecta gominolas";
-  ovlTexto.textContent = "Arrastra por 3 o más gominolas iguales y juntas. Rompe las que rodean a las negras para eliminarlas: si en una jugada no eliminas ninguna, aparece otra. Cadenas de 5 crean un poder ↔️ (rompe una fila) y de 7 un poder ↕️ (rompe una columna): tócalos o inclúyelos en una cadena y se activan en la última casilla. Dos poderes juntos se aplican a la vez.";
-  ovlBtn.textContent = nivel > 1 ? "Jugar nivel " + nivel : "Jugar";
+// Empieza el nivel n (el que se elige en el mapa o el siguiente tras ganar)
+function jugar(n) {
+  actual = Math.max(1, Math.min(TOTAL_NIVELES, Math.floor(Number(n)) || 1));
+  empezar();
 }
 
 function empezar() {
   partida++;
   puntos = puntosInicioNivel;
-  const fijo = NIVELES[nivel - 1];
-  const n = fijo ? fijo.negras : negrasDelNivel(nivel);
-  movsIni = fijo ? fijo.movs : movimientosDelNivel(n, nivel);
+  const fijo = NIVELES[actual - 1];
+  const n = fijo ? fijo.negras : negrasDelNivel(actual);
+  movsIni = fijo ? fijo.movs : movimientosDelNivel(n, actual);
   movs = movsIni;
   cadena = null;
   particulas = [];
@@ -451,6 +513,7 @@ function empezar() {
   llenar();
   colocarNegras(n);
   estado = "jugando";
+  menuBoton();
   ovl.classList.add("oculto");
   actualizarHud();
   tono(NOTAS[4], 0.15);
@@ -459,6 +522,7 @@ function empezar() {
 function ganar() {
   estado = "fin";
   cadena = null;
+  menuBoton();
   const bono = movs * BONO_MOVIMIENTO;
   puntos += bono;
   const ganados = puntos - puntosInicioNivel;
@@ -468,22 +532,29 @@ function ganar() {
     nuevoRecord = true;
   }
   actualizarHud();
-  ovlTitulo.textContent = "¡Nivel " + nivel + " superado!";
-  ovlTexto.textContent = ganados + " puntos" + (bono ? " (bono +" + bono + ")" : "") + (nuevoRecord ? " · ¡nuevo récord!" : "");
-  ovlBtn.textContent = "Siguiente nivel";
+  const primera = actual >= nivel; // primera vez que se pasa: solo entonces suma puntos al perfil y desbloquea el siguiente
+  ovlTitulo.textContent = "¡Nivel " + actual + " superado!";
+  ovlTexto.textContent = ganados + " puntos" + (bono ? " (bono +" + bono + ")" : "") + (nuevoRecord ? " · ¡nuevo récord!" : "") + (primera ? "" : " · nivel repetido: no suma al perfil");
+  ganoUltimo = true;
+  pendiente = Math.min(actual + 1, TOTAL_NIVELES);
+  ovlBtn.textContent = actual >= TOTAL_NIVELES ? "Repetir nivel " + actual : "Siguiente nivel";
+  if (actual >= TOTAL_NIVELES) pendiente = actual;
   puntosInicioNivel = puntos;
-  nivel++;
+  if (primera) nivel = Math.min(TOTAL_NIVELES + 1, actual + 1);
   guardarProg(); // récord y nivel, en el dispositivo y (con internet y sesión) en la cuenta
   setTimeout(() => ovl.classList.remove("oculto"), 700);
-  enviarPuntos(ganados);
+  if (primera) enviarPuntos(ganados);
 }
 
 function perder() {
   estado = "fin";
   cadena = null;
+  menuBoton();
   ovlTitulo.textContent = "¡Sin movimientos!";
   ovlTexto.textContent = "Quedaron " + contarNegras() + " gominolas negras.";
-  ovlBtn.textContent = "Reintentar nivel " + nivel;
+  ganoUltimo = false;
+  pendiente = actual;
+  ovlBtn.textContent = "Reintentar nivel " + actual;
   setTimeout(() => ovl.classList.remove("oculto"), 700);
 }
 
@@ -504,7 +575,9 @@ async function enviarPuntos(pts) {
   if (mia === partida) ovlTexto.textContent += faltan === 0 ? " · +" + sumar + " al perfil ✓" : " · +" + sumar + " anotados: se enviarán a tu perfil cuando tengas internet y hayas entrado con Google";
 }
 
-ovlBtn.addEventListener("click", empezar);
+ovlBtn.addEventListener("click", () => jugar(pendiente));
+// «🗺️ Mapa»: vuelve al mapa; si se terminó un estado o país, el agua sube al llegar
+document.getElementById("ovlMapa").addEventListener("click", () => abrirMapa(ganoUltimo && actual % NIVELES_POR_ETAPA === 0 && actual >= nivel - 1));
 
 // ---------- Dibujo ----------
 function ajustar() {
@@ -672,7 +745,8 @@ function bucle(ahora) {
 ajustar();
 llenar();
 colocarNegras(NEGRAS_MIN);
-mostrarInicio();
+mapa.abrir();   // el juego empieza en el mapa (México de cerca)
+menuBoton();
 actualizarHud();
 requestAnimationFrame((t) => { ultimo = t; bucle(t); });
 
@@ -683,8 +757,9 @@ import("../compartido/progreso.js").then((p) => {
     fusionar: p.unirMaximos,
     alCambiar: (v) => {
       mejor = Math.max(mejor, Number(v.mejor) || 0);
-      // el nivel solo se cambia en la pantalla de inicio, para no alterar un nivel en juego ni el texto del botón de «Reintentar»
-      if (estado === "inicio") { nivel = Math.max(nivel, Number(v.nivel) || 1); mostrarInicio(); }
+      // «nivel» es solo el progreso (el nivel en juego es «actual»), así que se puede actualizar en cualquier momento
+      nivel = Math.max(nivel, Number(v.nivel) || 1);
+      if (mapa.abierto()) mapa.refrescar();
       actualizarHud();
     },
   });
