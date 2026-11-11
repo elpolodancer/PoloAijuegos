@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es" class="inmersivo">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#d9a866">
+<title>Spider</title>
+<script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+<link rel="stylesheet" href="../compartido/estilos.css">
+<link rel="stylesheet" href="../compartido/inmersivo.css">
+<style>
+.pantalla { position: fixed; inset: 0; }
+.pantalla[hidden] { display: none; }
+/* Menú principal */
+#menu { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 60px 16px; overflow-y: auto; text-align: center; color: var(--txt-fondo); }
+#menu h1 { margin: 0; font-size: clamp(2rem, 8vw, 3rem); text-shadow: var(--sombra-txt); }
+#menu p { margin: 0; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
+.fila { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+#menu .b3d.txt { --t: 48px; }
+.principales .b3d.txt { --t: 58px; font-size: 18px; min-width: 210px; }
+#aviso { min-height: 1.3em; font-weight: 700; }
+/* Mesa */
+#mesa { position: absolute; left: 6px; right: 6px; top: 100px; bottom: 68px; }
+@media (min-aspect-ratio: 1/1) { #mesa { left: 128px; top: 52px; } }
+.col { position: absolute; top: 0; bottom: 0; }
+.hueco { position: absolute; left: 0; top: 0; border: 2px dashed var(--txt-fondo-suave); border-radius: 6px; opacity: .55; }
+.carta { position: absolute; left: 0; display: flex; justify-content: flex-start; align-items: flex-start; padding: 2px 3px; font-weight: 800; line-height: 1; color: #1b1d22; background: linear-gradient(180deg, #fff, #ecebe6); border: 1px solid #555; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+.carta.roja { color: #c4261d; }
+.carta .pl { position: absolute; left: 0; right: 0; bottom: 6%; text-align: center; opacity: .85; }
+.carta.dorso { background: repeating-linear-gradient(45deg, #2b4d9b 0 4px, #3b63c4 4px 8px); border-color: #14285c; }
+.carta.sel { outline: 3px solid #ffb020; outline-offset: -1px; transform: translateY(-3px); z-index: 3; }
+.carta.mal { animation: mal .25s; }
+@keyframes mal { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+.barra-inf { position: fixed; z-index: 5; bottom: max(14px, env(safe-area-inset-bottom)); left: 64px; right: 64px; display: flex; justify-content: center; align-items: center; gap: 12px; pointer-events: none; }
+.barra-inf > * { pointer-events: auto; }
+.chip small { margin-right: 4px; }
+#toast { position: fixed; z-index: 8; left: 50%; bottom: 80px; transform: translateX(-50%); padding: 8px 16px; font-weight: 800; color: #fff; background: rgba(20,22,26,.9); border-radius: 999px; }
+#toast[hidden] { display: none; }
+</style>
+</head>
+<body class="inmersivo">
+<nav class="nav-juego" aria-label="Navegación">
+  <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+  <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> Pausa</button>
+</nav>
+
+<main class="pantalla" id="menu">
+  <h1>🕷️ Spider</h1>
+  <p>Ordena cada palo de K a A y quita las 8 series.</p>
+  <div class="fila" id="dificultades" role="group" aria-label="Dificultad"></div>
+  <p id="desc-dif"></p>
+  <div class="fila principales">
+    <button class="b3d txt b-verde" id="b-libre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
+    <button class="b3d txt b-azul" id="b-niveles" type="button"><span class="b-ico">🎯</span> Niveles</button>
+    <button class="b3d txt b-morado" id="b-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+  </div>
+  <p id="aviso" aria-live="polite"></p>
+  <p id="mejores"></p>
+</main>
+
+<section class="pantalla" id="juego" hidden aria-label="Partida">
+  <div class="hud hud-der">
+    <span class="chip" id="c-tiempo">0:00</span>
+    <span class="chip"><small>Mov.</small><span id="c-movs">0</span></span>
+    <span class="chip"><small>Series</small><span id="c-series">0/8</span></span>
+  </div>
+  <div id="mesa"></div>
+  <div class="barra-inf">
+    <button class="b3d txt b-azul" id="b-deshacer" type="button"><span class="b-ico">↶</span> Deshacer</button>
+    <button class="b3d txt b-verde" id="b-repartir" type="button"><span class="b-ico">🃏</span> Repartir<span class="b-info" id="n-rep">5</span></button>
+    <span class="chip" id="c-estado"></span>
+  </div>
+</section>
+<div id="toast" hidden role="status"></div>
+
+<script type="module" src="juego-spider.js"></script>
+<script type="module" src="../compartido/fondo-madera.js"></script>
+<script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
