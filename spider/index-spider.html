@@ -29,8 +29,17 @@
 .carta .pl { position: absolute; left: 0; right: 0; bottom: 6%; text-align: center; opacity: .85; }
 .carta.dorso { background: repeating-linear-gradient(45deg, #2b4d9b 0 4px, #3b63c4 4px 8px); border-color: #14285c; }
 .carta.sel { outline: 3px solid #ffb020; outline-offset: -1px; transform: translateY(-3px); z-index: 3; }
-.carta.mal { animation: mal .25s; }
-@keyframes mal { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+/* Avisos sobre la mesa: recuadro ROJO delgado con triple parpadeo (tramo bloqueado), recuadro VERDE (pista de movimiento)
+   y «Repartir» en AMARILLO OSCURO cuando ya no quedan movimientos. Los recuadros no reciben toques. */
+.zona { position: absolute; pointer-events: none; opacity: 0; border: 2px solid #e0201b; border-radius: 8px; box-shadow: 0 0 5px rgba(224,32,27,.6); }
+.zona-mal { animation: triple .42s steps(1, end) 3 forwards; }
+@keyframes triple { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 0; } }
+.zona-pista { border-color: #16a34a; box-shadow: 0 0 8px rgba(22,163,74,.9); animation: pulso 1s ease-in-out infinite; }
+.zona-dest { border-style: dashed; }
+@keyframes pulso { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+.alerta-rep { outline: 4px solid #b8860b; outline-offset: 3px; animation: amarillo .8s ease-in-out infinite; }
+@keyframes amarillo { 50% { outline-color: rgba(184,134,11,.1); } }
+@media (prefers-reduced-motion: reduce) { .zona-mal, .zona-pista { animation: none; opacity: 1; } .alerta-rep { animation: none; } }
 .barra-inf { position: fixed; z-index: 5; bottom: max(14px, env(safe-area-inset-bottom)); left: 64px; right: 64px; display: flex; justify-content: center; align-items: center; gap: 12px; pointer-events: none; }
 .barra-inf > * { pointer-events: auto; }
 .chip small { margin-right: 4px; }
