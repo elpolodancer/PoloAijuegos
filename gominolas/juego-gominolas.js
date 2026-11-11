@@ -8,7 +8,9 @@ import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de p
 import { crearMenuPausa } from "../compartido/menu-pausa.js"; // menú de pausa estándar (☰)
 import { montarMapa } from "../compartido/mapa-niveles.js";   // menú principal ESTÁNDAR: México con agua, mundo y listas de niveles
 import { crearEtapas } from "../compartido/etapas-mapa.js";   // 32 estados + 194 países
-import { TABLEROS, DIFICULTADES, parametrosLibre, parametrosCampana } from "./logica-gominolas.js"; // balance: tableros, dificultades, negras y movimientos (el bot de pruebas usa los mismos números)
+import { TABLEROS, DIFICULTADES, parametrosLibre, parametrosNivel } from "./logica-gominolas.js"; // balance: tableros, dificultades, negras y movimientos (el bot de pruebas usa los mismos números)
+import { nivelDe } from "./catalogo-gominolas.js"; // qué tablero, dificultad, tipo y patrón tiene cada uno de los 22 600 niveles
+import { estrellasDe, estrellasDeNivel, ponerEstrellas, unirEstrellas, recompensa, carteraVacia, saldo, ganarMonedas, gastarMonedas, unirCarteras, unirProgresoGominolas } from "./cartera-gominolas.js"; // monedas, cartera y estrellas
 let nube = null; // se llena al cargar compartido/progreso.js (abajo del todo)
 let entrar = async () => { throw new Error("Sesión no disponible sin conexión"); };
 
@@ -27,7 +29,7 @@ const CLAVE_NIVEL = "gominolas_nivel";
 const CLAVE_PROG = "gominolas_progreso"; // { mejor, nivel } juntos, para sincronizarlos con la cuenta (antes: las dos claves de arriba)
 
 // Gominolas negras. Cuántas hay, cuántos movimientos se dan y cuántas negras nuevas salen por jugada fallida se calculan en
-// logica-gominolas.js (campaña: parametrosCampana; modo libre: parametrosLibre según tablero y dificultad).
+// logica-gominolas.js (campaña: parametrosNivel(nivelDe(n)); modo libre: parametrosLibre según tablero y dificultad).
 let zonaIni = 5;            // filas de abajo donde nacen las negras al empezar (depende de la altura del tablero)
 let zonaNva = 3;            // filas de abajo donde aparece la negra extra cuando no eliminas ninguna
 let penaliza = 1;           // negras nuevas por jugada que no elimina ninguna: campaña 1; libre fácil 1, medio 2, difícil 3
@@ -36,12 +38,15 @@ const BONO_MOVIMIENTO = 20; // puntos por cada movimiento que te sobre al ganar
 
 // Poderes: una cadena larga deja un osito con poder en la última casilla. Ese osito CONSERVA EL COLOR de la cadena que lo creó
 // y solo se activa cuando lo incluyes en una cadena de ositos de ese mismo color (tocarlo solo no hace nada).
-// El poder se activa en la última casilla seleccionada. Si la cadena lleva los dos poderes, se aplican ambos: fila + columna.
-const CADENA_HORIZONTAL = 5; // 5 o 6 gominolas → poder horizontal (rompe toda la fila)
-const CADENA_VERTICAL = 7;   // 7 o más → poder vertical (rompe toda la columna)
+// El poder se activa en la última casilla seleccionada. Si la cadena lleva varios poderes, se aplican todos: fila + columna (+ color).
+// Mismos números que logica-gominolas.js (ahí se miden con el bot).
+const CADENA_HORIZONTAL = 7; // 7 o 8 gominolas → poder horizontal (rompe toda la fila)
+const CADENA_VERTICAL = 9;   // 9 o más → poder vertical (rompe toda la columna)
+// «color» no lo deja ninguna cadena: se coloca desde la tienda (50 monedas) y, al entrar en una cadena, rompe todas las gominolas de ese color
 const PODERES = {
   horizontal: { icono: "↔️" },
   vertical: { icono: "↕️" },
+  color: { icono: "🎨" },
 };
 
 const NEGRA = -1;           // valor de «k» de una gominola negra
@@ -81,7 +86,7 @@ const ovlMapa = document.getElementById("ovlMapa");
 const rotNivel = document.getElementById("rotNivel");
 
 // ---------- Estado ----------
-let grid = [];          // grid[fila][col] = { k: color (o NEGRA), y: fila visual, v: velocidad, p: poder ("horizontal" | "vertical", solo en ositos con poder) }
+let grid = [];          // grid[fila][col] = { k: color (o NEGRA), y: fila visual, v: velocidad, p: poder ("horizontal" | "vertical" | "color", solo en ositos con poder) }
 let estado = "inicio";  // inicio | jugando | fin
 let puntos = 0;
 let puntosInicioNivel = 0; // puntos con los que empezó el nivel actual (al reintentar se vuelve a ellos)
@@ -107,13 +112,30 @@ const CLAVE_SEL = "gominolas_libre_sel";
 
 try { mejor = parseInt(localStorage.getItem(CLAVE_MEJOR), 10) || 0; } catch (e) {}
 try { nivel = parseInt(localStorage.getItem(CLAVE_NIVEL), 10) || 1; } catch (e) {}
+// Estrellas por nivel (texto con un dígito 0-3 por nivel) y cartera de monedas (contadores por dispositivo): ver cartera-gominolas.js
+let estrellas = "";
+let cartera = carteraVacia();
+const CLAVE_DISP = "gominolas_dispositivo"; // id de ESTE dispositivo: la cartera lleva un contador de monedas por dispositivo
+let idDisp = "";
+try { idDisp = localStorage.getItem(CLAVE_DISP) || ""; if (!idDisp) { idDisp = Math.random().toString(36).slice(2, 10); localStorage.setItem(CLAVE_DISP, idDisp); } } catch (e) {}
+if (!idDisp) idDisp = "t" + Math.random().toString(36).slice(2, 8); // sin localStorage: vale solo en esta sesión
 const tomarRecords = (p) => { for (const k in p || {}) if (k.startsWith("l_")) recordsLibre[k] = Math.max(Number(p[k]) || 0, recordsLibre[k] || 0); };
-try { const p = JSON.parse(localStorage.getItem(CLAVE_PROG)); if (p) { mejor = Math.max(mejor, Number(p.mejor) || 0); nivel = Math.max(nivel, Number(p.nivel) || 1); tomarRecords(p); } } catch (e) {}
+try { const p = JSON.parse(localStorage.getItem(CLAVE_PROG)); if (p) { mejor = Math.max(mejor, Number(p.mejor) || 0); nivel = Math.max(nivel, Number(p.nivel) || 1); tomarRecords(p); estrellas = unirEstrellas(estrellas, p.est); cartera = unirCarteras(cartera, p.cartera); } } catch (e) {}
 try { const [t, d] = (localStorage.getItem(CLAVE_SEL) || "").split("|"); libre.t = TABLEROS.find((x) => x.id === t) || libre.t; libre.d = DIFICULTADES[d] || libre.d; } catch (e) {}
 function guardarProg() {
-  try { localStorage.setItem(CLAVE_PROG, JSON.stringify({ mejor, nivel, ...recordsLibre })); } catch (e) {}
+  // unirProgresoGominolas(x, null) deja las claves en el mismo orden que usa la sincronización (así no se ve «cambio» donde no lo hay)
+  try { localStorage.setItem(CLAVE_PROG, JSON.stringify(unirProgresoGominolas({ mejor, nivel, ...recordsLibre, est: estrellas, cartera }, null))); } catch (e) {}
   if (nube) nube.guardado();
 }
+// Chip dorado de monedas (arriba a la derecha). gastar(n) cobra si alcanza (los boosts de la tienda cuestan PRECIOS.* de cartera-gominolas.js)
+const elMonedas = document.getElementById("monedas");
+function pintarMonedas() { if (elMonedas) elMonedas.textContent = saldo(cartera).toLocaleString("es-MX"); }
+function gastar(n) {
+  if (!gastarMonedas(cartera, idDisp, n)) return false;
+  pintarMonedas(); guardarProg();
+  return true;
+}
+pintarMonedas();
 if (mejor || nivel > 1 || Object.keys(recordsLibre).length) guardarProg(); // pasa lo de las claves de antes a la nueva
 
 // ---------- Mapa de niveles (menú principal), botón «☰» y menú de pausa ----------
@@ -152,6 +174,7 @@ const mapa = montarMapa({
   etapas: ETAPAS,
   progreso: () => ({ max: Math.min(nivel, TOTAL_NIVELES), hecho: Math.min(nivel - 1, TOTAL_NIVELES) }),
   jugarNivel: (n) => { mapa.cerrar(); puntosInicioNivel = 0; jugar(n); },
+  infoNivel: (n) => { const e = estrellasDeNivel(estrellas, n); return e ? { sub: "★".repeat(e) + "☆".repeat(3 - e), sinMarca: true, aria: e + (e === 1 ? " estrella" : " estrellas") } : {}; },
   alInfo: abrirInfo,
   alCambiarVista: () => menuBoton(),
   botonesExtra: [{ icono: "♾️", texto: "Modo libre", clase: "b-morado", fn: () => { mapa.cerrar(); mostrarLibre(); } }], // estándar: junto a «Continuar»
@@ -348,16 +371,25 @@ function cayendo() {
 
 // ---------- Niveles: cuántas negras y movimientos se calculan en logica-gominolas.js ----------
 
-// Convierte en negras «cant» gominolas al azar de las filas de abajo
-function colocarNegras(cant) {
-  const celdas = [];
-  for (let f = FILAS - 1; f >= Math.max(0, FILAS - zonaIni); f--)
-    for (let c = 0; c < COLUMNAS; c++) celdas.push([f, c]);
-  for (let i = celdas.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [celdas[i], celdas[j]] = [celdas[j], celdas[i]];
+// Convierte en negras «cant» gominolas de las filas de abajo. Con filasCompletas > 0, esa cantidad de filas de la zona quedan TODAS negras
+// (nunca dos pegadas) y las que sobran van al azar en el resto de la zona. El total siempre es «cant». (Misma regla que logica-gominolas.js)
+function colocarNegras(cant, filasCompletas = 0) {
+  const desde = Math.max(0, FILAS - zonaIni);
+  const mezclar = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const filasNegras = [];
+  const k = Math.min(filasCompletas, Math.floor(cant / COLUMNAS));
+  if (k > 0) {
+    const cand = [];
+    for (let f = FILAS - 1; f >= desde; f--) cand.push(f);
+    for (const f of mezclar(cand)) {
+      if (filasNegras.length >= k) break;
+      if (filasNegras.every((x) => Math.abs(x - f) > 1)) filasNegras.push(f);
+    }
+    for (const f of filasNegras) for (let c = 0; c < COLUMNAS; c++) grid[f][c].k = NEGRA;
   }
-  celdas.slice(0, cant).forEach(([f, c]) => { grid[f][c].k = NEGRA; });
+  const celdas = [];
+  for (let f = FILAS - 1; f >= desde; f--) if (!filasNegras.includes(f)) for (let c = 0; c < COLUMNAS; c++) celdas.push([f, c]);
+  mezclar(celdas).slice(0, cant - filasNegras.length * COLUMNAS).forEach(([f, c]) => { grid[f][c].k = NEGRA; });
   let intentos = 0;
   while (!hayJugada() && intentos++ < 50) barajar();
 }
@@ -439,7 +471,19 @@ function lineasDePoderes(cad, ult) {
   const tipos = new Set(cad.map(({ f, c }) => grid[f][c].p).filter(Boolean));
   if (tipos.has("horizontal")) for (let c = 0; c < COLUMNAS; c++) lista.push([ult.f, c]);
   if (tipos.has("vertical")) for (let f = 0; f < FILAS; f++) lista.push([f, ult.c]);
+  if (tipos.has("color")) { // todas las gominolas del color de la cadena
+    const kc = grid[ult.f][ult.c].k;
+    for (let f = 0; f < FILAS; f++) for (let c = 0; c < COLUMNAS; c++) if (grid[f][c] && grid[f][c].k === kc) lista.push([f, c]);
+  }
   return lista;
+}
+
+// Boost de la tienda: pone un poder en una gominola de color sin poder. Devuelve true si lo puso (si no, no se cobra)
+function colocarPoder(f, c, poder = "color") {
+  const g = grid[f] && grid[f][c];
+  if (!g || g.k < 0 || g.p || !PODERES[poder]) return false;
+  g.p = poder;
+  return true;
 }
 
 function juntar(cad) {
@@ -476,8 +520,11 @@ function celdaEn(ev) {
 }
 
 // Tolerancia del arrastre, en casillas medidas desde el centro de la gominola
-const RADIO_AGREGAR = 0.64;    // seleccionar: generosa (antes 0.42)
-const RADIO_RETROCEDER = 0.3;  // des-seleccionar: más precisa, hay que volver cerca del centro de la anterior
+const RADIO_AGREGAR = 0.64;    // seleccionar: generosa (antes 0.42). En casillas chicas (12×14 en celular) cubre casi toda la casilla
+const RADIO_RETROCEDER = 0.3;  // des-seleccionar: más precisa. Es el MÍNIMO en casillas; en tableros grandes sube (ver radioRetroceder)
+const PX_RETROCEDER = 11;      // pero nunca menos de ~11 px de radio: un dedo tiembla unos 8-10 px y con casillas de 25-30 px, 0.3 casillas (≈8 px) casi no se logra
+const TOPE_RETROCEDER = 0.4;   // y sin pasar de 0.4, para que quede margen entre «agregar» y «retroceder» y no parpadee en el borde
+const radioRetroceder = () => Math.min(TOPE_RETROCEDER, Math.max(RADIO_RETROCEDER, PX_RETROCEDER / tam)); // tam = px por casilla
 
 lienzo.addEventListener("pointerdown", (ev) => {
   if (estado !== "jugando" || cayendo()) return;
@@ -486,6 +533,7 @@ lienzo.addEventListener("pointerdown", (ev) => {
   if (grid[p.f][p.c].k === NEGRA) return; // las negras no se pueden arrastrar
   try { lienzo.setPointerCapture(ev.pointerId); } catch (e) {}
   cadena = [{ f: p.f, c: p.c }];
+  puntoPrevio = { clientX: ev.clientX, clientY: ev.clientY };
   tono(NOTAS[0], 0.08);
 });
 
@@ -498,16 +546,15 @@ function colorDeCadena() {
   return null;
 }
 
-lienzo.addEventListener("pointermove", (ev) => {
-  if (!cadena) return;
-  const p = celdaEn(ev);
-  if (!p) return;
+// Procesa UN punto del arrastre (casilla + distancia al centro): agrega, retrocede o ignora
+function procesarPunto(p) {
+  if (!cadena || !p) return;
   const ult = cadena[cadena.length - 1];
   if (p.f === ult.f && p.c === ult.c) return;
   // volver atrás quita la última: aquí SÍ hay que acercarse al centro de la casilla anterior (precisión alta)
   if (cadena.length > 1) {
     const ant = cadena[cadena.length - 2];
-    if (ant.f === p.f && ant.c === p.c) { if (p.d < RADIO_RETROCEDER) cadena.pop(); return; }
+    if (ant.f === p.f && ant.c === p.c) { if (p.d < radioRetroceder()) cadena.pop(); return; }
   }
   // agregar una gominola: basta con pasar cerca (casi toda la casilla cuenta; solo se excluyen las esquinas,
   // para no pillar por accidente una casilla en diagonal al cruzar por el borde)
@@ -520,16 +567,30 @@ lienzo.addEventListener("pointermove", (ev) => {
   if (kp !== kc) return; // solo se unen ositos del mismo color (los que tienen poder también)
   cadena.push({ f: p.f, c: p.c });
   tono(NOTAS[Math.min(cadena.length - 1, NOTAS.length - 1)], 0.08);
+}
+
+// El navegador entrega pocos «pointermove» si el dedo va rápido: con casillas de 25-30 px el dedo se salta casillas.
+// Por eso se revisa el camino recto entre el punto anterior y el nuevo, cada ~1/3 de casilla, en orden.
+let puntoPrevio = null;
+lienzo.addEventListener("pointermove", (ev) => {
+  if (!cadena) return;
+  const a = puntoPrevio || ev;
+  const dx = ev.clientX - a.clientX, dy = ev.clientY - a.clientY;
+  const pasos = Math.min(40, Math.max(1, Math.ceil(Math.hypot(dx, dy) / (tam / 3))));
+  for (let i = 1; i <= pasos && cadena; i++) {
+    procesarPunto(celdaEn({ clientX: a.clientX + (dx * i) / pasos, clientY: a.clientY + (dy * i) / pasos }));
+  }
+  puntoPrevio = { clientX: ev.clientX, clientY: ev.clientY };
 });
 
 function soltar() {
   if (cadena && estado === "jugando") {
     if (cadena.length >= MIN_CADENA) juntar(cadena); // tocar un osito con poder solo no hace nada
   }
-  cadena = null;
+  cadena = null; puntoPrevio = null;
 }
 lienzo.addEventListener("pointerup", soltar);
-lienzo.addEventListener("pointercancel", () => (cadena = null));
+lienzo.addEventListener("pointercancel", () => { cadena = null; puntoPrevio = null; });
 
 // ---------- Partida ----------
 function actualizarHud() {
@@ -554,7 +615,7 @@ function jugar(n) {
 function empezar() {
   partida++;
   puntos = puntosInicioNivel;
-  const par = modo === "libre" ? parametrosLibre(libre.t, libre.d, libre.ronda) : parametrosCampana(actual);
+  const par = modo === "libre" ? parametrosLibre(libre.t, libre.d, libre.ronda) : parametrosNivel(nivelDe(actual)); // la campaña usa el catálogo: tablero, dificultad y patrón de cada nivel
   configurarTablero(par.cols, par.filas); // el tablero puede cambiar de tamaño entre campaña y modo libre
   zonaIni = par.zona; zonaNva = par.zonaNueva; penaliza = par.penaliza;
   movsIni = par.movs;
@@ -564,7 +625,7 @@ function empezar() {
   textos = [];
   revisar = false;
   llenar();
-  colocarNegras(par.negras);
+  colocarNegras(par.negras, par.filasCompletas || 0); // par.filasCompletas lo da parametrosNivel (patrón «filas» del catálogo)
   estado = "jugando";
   menuBoton();
   ovl.classList.add("oculto");
@@ -588,8 +649,13 @@ function ganar() {
   }
   actualizarHud();
   const primera = actual >= nivel; // primera vez que se pasa: solo entonces suma puntos al perfil y desbloquea el siguiente
+  // Estrellas y monedas: las monedas se pagan por la PRIMERA vez y por estrellas nuevas (repetir sin mejorar no da nada)
+  const est = estrellasDe(movs, movsIni), previas = estrellasDeNivel(estrellas, actual);
+  const monedas = recompensa(nivelDe(actual), est, previas);
+  if (est > previas) estrellas = ponerEstrellas(estrellas, actual, est);
+  if (monedas) { ganarMonedas(cartera, idDisp, monedas); pintarMonedas(); }
   ovlTitulo.textContent = "¡Nivel " + actual + " superado!";
-  ovlTexto.textContent = ganados + " puntos" + (bono ? " (bono +" + bono + ")" : "") + (nuevoRecord ? " · ¡nuevo récord!" : "") + (primera ? "" : " · nivel repetido: no suma al perfil");
+  ovlTexto.textContent = ganados + " puntos" + (bono ? " (bono +" + bono + ")" : "") + (nuevoRecord ? " · ¡nuevo récord!" : "") + " · " + "★".repeat(est) + "☆".repeat(3 - est) + (monedas ? " · +" + monedas + " monedas" : "") + (primera ? "" : " · nivel repetido: no suma al perfil");
   ganoUltimo = true;
   pendiente = Math.min(actual + 1, TOTAL_NIVELES);
   ovlBtn.textContent = actual >= TOTAL_NIVELES ? "Repetir nivel " + actual : "Siguiente nivel";
@@ -766,13 +832,20 @@ function oso(x, y, r, col, esc, opc = {}) {
     ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     ctx.save();
     ctx.translate(bx, by);
-    if (opc.poder === "vertical") ctx.rotate(Math.PI / 2);
-    ctx.strokeStyle = col.o; ctx.lineWidth = r * 0.06;
-    ctx.beginPath();
-    ctx.moveTo(-a, 0); ctx.lineTo(a, 0);
-    ctx.moveTo(-a + h, -h); ctx.lineTo(-a, 0); ctx.lineTo(-a + h, h);
-    ctx.moveTo(a - h, -h); ctx.lineTo(a, 0); ctx.lineTo(a - h, h);
-    ctx.stroke();
+    if (opc.poder === "color") { // estrella de 5 puntas: rompe todo un color
+      ctx.fillStyle = col.o; ctx.strokeStyle = col.o; ctx.lineWidth = r * 0.04; ctx.lineJoin = "round";
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) { const rr = i % 2 ? br * 0.42 : br * 0.82, an = -Math.PI / 2 + (i * Math.PI) / 5; ctx.lineTo(Math.cos(an) * rr, Math.sin(an) * rr); }
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else {
+      if (opc.poder === "vertical") ctx.rotate(Math.PI / 2);
+      ctx.strokeStyle = col.o; ctx.lineWidth = r * 0.06;
+      ctx.beginPath();
+      ctx.moveTo(-a, 0); ctx.lineTo(a, 0);
+      ctx.moveTo(-a + h, -h); ctx.lineTo(-a, 0); ctx.lineTo(-a + h, h);
+      ctx.moveTo(a - h, -h); ctx.lineTo(a, 0); ctx.lineTo(a - h, h);
+      ctx.stroke();
+    }
     ctx.restore();
   }
   // boca
@@ -896,16 +969,19 @@ mostrarMenu();  // el juego empieza en el menú principal: Continuar · Modo lib
 actualizarHud();
 requestAnimationFrame((t) => { ultimo = t; bucle(t); });
 
-// Sincronizar con la cuenta: del récord y del nivel se queda el mayor
+// Sincronizar con la cuenta: del récord y del nivel se queda el mayor; las estrellas y la cartera tienen su propia regla
 import("../compartido/progreso.js").then((p) => {
   nube = p.conectar(ID, {
     clave: CLAVE_PROG,
-    fusionar: p.unirMaximos,
+    fusionar: unirProgresoGominolas, // números: el mayor · estrellas: la mayor de cada nivel · cartera: contadores por dispositivo
     alCambiar: (v) => {
       mejor = Math.max(mejor, Number(v.mejor) || 0);
       // «nivel» es solo el progreso (el nivel en juego es «actual»), así que se puede actualizar en cualquier momento
       nivel = Math.max(nivel, Number(v.nivel) || 1);
       tomarRecords(v);
+      estrellas = unirEstrellas(estrellas, v.est);
+      cartera = unirCarteras(cartera, v.cartera);
+      pintarMonedas();
       if (mapa.abierto()) mapa.refrescar();
       if (!pantMenu.hidden) document.getElementById("menuNivel").textContent = Math.min(nivel, TOTAL_NIVELES);
       if (!pantLibre.hidden) pintarLibre();

@@ -8,8 +8,11 @@
 export const NEGRA = -1;
 export const COLORES = 5;
 export const MIN_CADENA = 3;
-export const CADENA_HORIZONTAL = 5;
-export const CADENA_VERTICAL = 7;
+// Poderes que deja una cadena larga (en la última casilla, con el color de la cadena). Umbrales subidos de 5/7 a 7/9 para que salgan menos:
+export const CADENA_HORIZONTAL = 7; // 7 o 8 gominolas → poder horizontal (rompe toda la fila)
+export const CADENA_VERTICAL = 9;   // 9 o más → poder vertical (rompe toda la columna)
+// Poder «color»: NO lo deja ninguna cadena; se coloca desde la tienda (50 monedas, colocarPoder). Al incluirlo en una cadena rompe TODAS las gominolas de ese color.
+export const PODERES_VALIDOS = ["horizontal", "vertical", "color"];
 
 // ---------- Balance ----------
 export const TABLEROS = [
@@ -52,6 +55,32 @@ export function parametrosCampana(n, rng = Math.random) {
   const negras = fijo ? fijo.negras : negrasDelNivel(n, rng);
   const movs = fijo ? fijo.movs : movimientosDelNivel(negras, n);
   return { cols: 6, filas: 8, negras, movs, zona: 5, zonaNueva: 3, penaliza: 1 };
+}
+
+// --- Campaña con catálogo (compartido por los 22 600 niveles): el tablero y la dificultad los da catalogo-gominolas.js ---
+// Negras NUEVAS por jugada que no elimina ninguna negra = DIFICULTADES[dif].penaliza: fácil 1 · normal 2 · difícil 3.
+// Negras al empezar = fracción de la zona de abajo (igual en las tres dificultades: lo que cambia es el castigo por fallar y los movimientos).
+// Movimientos = negras × factor[dificultad][tablero] + extra. Los factores se calibran con el bot (node gominolas/bot-gominolas.mjs catalogo).
+// Los tipos de nivel (capas, contrarreloj, jefe…) todavía no cambian los números: se calibran como un nivel clásico.
+export const CAMPANA_NIVEL = {
+  dens: 0.36, escalaArea: 0.2, extra: 3,
+  // factor[dificultad][tablero]: calibrado con el estilo «casual» del bot (la persona típica) para que gane ≈ 90 % en Fácil, ≈ 70 % en Normal y ≈ 50 % en Difícil (con poderes a 7/9; si cambias los umbrales hay que recalibrar).
+  // Los tableros chicos necesitan MÁS holgura (pocas negras = más varianza); los grandes, algo menos. Si cambias densidad, extra o la lógica, vuelve a correr el bot.
+  factor: {
+    facil:   { "6x8": 2.2,  "8x10": 2.2,  "10x12": 2.0,  "12x14": 2.15 },
+    medio:   { "6x8": 1.9,  "8x10": 2.05, "10x12": 1.85, "12x14": 2.1 },
+    dificil: { "6x8": 1.75, "8x10": 1.8,  "10x12": 1.75, "12x14": 2.45 },
+  },
+};
+export function parametrosNivel(nv, rng = Math.random) {
+  const C = CAMPANA_NIVEL, t = nv.tablero, dif = DIFICULTADES[nv.dificultad];
+  const zona = zonaInicial(t.filas);
+  const escala = Math.pow(48 / (t.cols * t.filas), C.escalaArea);
+  const variacion = Math.floor(rng() * 3) - 1;
+  const negras = Math.max(4, Math.round(zona * t.cols * C.dens * escala) + variacion);
+  const movs = Math.round(negras * C.factor[dif.id][t.id]) + C.extra;
+  const filasCompletas = nv.patron === "filas" ? filasDelPatron(negras, t.cols) : 0; // patrón del nivel (lo da el catálogo)
+  return { cols: t.cols, filas: t.filas, negras, movs, zona, zonaNueva: zonaNueva(t.filas), penaliza: dif.penaliza, filasCompletas };
 }
 
 // --- Modo libre: rondas sin fin en el tablero y dificultad elegidos ---
@@ -151,20 +180,33 @@ export function contarNegras(p) {
   return n;
 }
 
-function colocarNegras(p, cant) {
-  const celdas = [];
-  for (let f = p.filas - 1; f >= Math.max(0, p.filas - p.zona); f--)
-    for (let c = 0; c < p.cols; c++) celdas.push([f, c]);
-  for (let i = celdas.length - 1; i > 0; i--) {
-    const j = Math.floor(p.rng() * (i + 1));
-    [celdas[i], celdas[j]] = [celdas[j], celdas[i]];
+// Patrón «filas completas»: cuántas filas enteras de negras lleva el nivel (el resto de las negras va al azar). Mismo total de negras que un nivel normal.
+export const filasDelPatron = (negras, cols) => Math.max(1, Math.min(3, Math.floor(negras / cols)));
+
+// Pone «cant» negras en la zona de abajo. Con filasCompletas > 0, esa cantidad de filas de la zona quedan TODAS negras (nunca dos pegadas)
+// y las negras que sobran se reparten al azar en el resto de la zona. El total siempre es «cant».
+function colocarNegras(p, cant, filasCompletas = 0) {
+  const desde = Math.max(0, p.filas - p.zona);
+  const mezclar = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(p.rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const filasNegras = [];
+  const k = Math.min(filasCompletas, Math.floor(cant / p.cols));
+  if (k > 0) {
+    const cand = [];
+    for (let f = p.filas - 1; f >= desde; f--) cand.push(f);
+    for (const f of mezclar(cand)) {
+      if (filasNegras.length >= k) break;
+      if (filasNegras.every((x) => Math.abs(x - f) > 1)) filasNegras.push(f);
+    }
+    for (const f of filasNegras) for (let c = 0; c < p.cols; c++) p.grid[f][c].k = NEGRA;
   }
-  celdas.slice(0, cant).forEach(([f, c]) => { p.grid[f][c].k = NEGRA; });
+  const celdas = [];
+  for (let f = p.filas - 1; f >= desde; f--) if (!filasNegras.includes(f)) for (let c = 0; c < p.cols; c++) celdas.push([f, c]);
+  mezclar(celdas).slice(0, cant - filasNegras.length * p.cols).forEach(([f, c]) => { p.grid[f][c].k = NEGRA; });
   let intentos = 0;
   while (!hayJugada(p) && intentos++ < 50) barajar(p);
 }
 
-// params: { cols, filas, negras, movs, zona, zonaNueva, penaliza }
+// params: { cols, filas, negras, movs, zona, zonaNueva, penaliza, filasCompletas (opcional) }
 export function crearPartida(params, rng = Math.random) {
   const p = { ...params, rng, movsIni: params.movs, grid: [], estado: "jugando", fallos: 0 };
   for (let f = 0; f < p.filas; f++) {
@@ -173,7 +215,7 @@ export function crearPartida(params, rng = Math.random) {
   }
   let i = 0;
   while (!hayJugada(p) && i++ < 50) barajar(p);
-  colocarNegras(p, params.negras);
+  colocarNegras(p, params.negras, params.filasCompletas || 0);
   return p;
 }
 
@@ -210,7 +252,19 @@ export function lineasDePoderes(p, cad, ult) {
   const tipos = new Set(cad.map(({ f, c }) => p.grid[f][c].p).filter(Boolean));
   if (tipos.has("horizontal")) for (let c = 0; c < p.cols; c++) lista.push([ult.f, c]);
   if (tipos.has("vertical")) for (let f = 0; f < p.filas; f++) lista.push([f, ult.c]);
+  if (tipos.has("color")) { // todas las gominolas del color de la cadena (las negras no tienen color)
+    const kc = p.grid[ult.f][ult.c].k;
+    for (let f = 0; f < p.filas; f++) for (let c = 0; c < p.cols; c++) if (p.grid[f][c] && p.grid[f][c].k === kc) lista.push([f, c]);
+  }
   return lista;
+}
+
+// Boost de la tienda: pone un poder en una gominola de color que no tenga poder. Devuelve true si lo puso (si no, no se cobra).
+export function colocarPoder(p, f, c, poder = "color") {
+  const g = p.grid[f] && p.grid[f][c];
+  if (!g || g.k < 0 || g.p || !PODERES_VALIDOS.includes(poder)) return false;
+  g.p = poder;
+  return true;
 }
 
 // Conjunto de celdas que se romperían (lista + negras pegadas, en cruz, a una gominola rota). No modifica nada.

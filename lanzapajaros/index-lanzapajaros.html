@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<!-- Ruta: lanzapajaros/index-lanzapajaros.html -->
+<html lang="es" class="inmersivo">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#d9a866">
+<title>Lanzapájaros</title>
+<link rel="stylesheet" href="../compartido/estilos.css">
+<link rel="stylesheet" href="../compartido/inmersivo.css">
+<script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+<style>
+  /* Juego 16:9 (el estándar trae 4:3) y lienzo transparente para que se vea la madera */
+  .inmersivo .marco { aspect-ratio: 16 / 9; width: min(100vw, calc(100vh * 16 / 9)); width: min(100vw, calc(100dvh * 16 / 9)); }
+  .inmersivo .lienzo { background: transparent; }
+  .niveles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 12px 0 4px; }
+  .niveles .b3d { --t: 40px; width: 100%; font-size: 15px; font-weight: 800; }
+  .pausa-panel p { margin: 0 0 12px; color: #d6d9df; }
+  .pausa-panel .b3d.txt { width: 100%; margin-bottom: 10px; }
+</style>
+</head>
+<body class="inmersivo">
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> Pausa</button>
+  </nav>
+
+  <div class="hud hud-der" aria-live="polite">
+    <span class="chip" id="chip-nivel"></span>
+    <span class="chip" id="chip-pajaros"></span>
+    <span class="chip" id="chip-cerdos"></span>
+  </div>
+
+  <div class="escena">
+    <div class="marco">
+      <canvas id="lienzo" class="lienzo" aria-label="Lanzapájaros"></canvas>
+      <p class="solo-lector">Arrastra el pájaro hacia atrás y suéltalo para lanzarlo contra los cerdos.</p>
+    </div>
+  </div>
+
+  <!-- Menú principal -->
+  <div class="pausa-fondo" id="menu">
+    <div class="pausa-panel">
+      <h2>🐦 Lanzapájaros</h2>
+      <p>Arrastra el pájaro hacia atrás, suelta y derriba a todos los cerdos.</p>
+      <button class="b3d txt b-verde" id="btn-continuar" type="button"></button>
+      <div class="niveles" id="niveles"></div>
+    </div>
+  </div>
+
+  <!-- Fin de nivel -->
+  <div class="pausa-fondo" id="fin" hidden>
+    <div class="pausa-panel">
+      <h2 id="fin-titulo"></h2>
+      <p id="fin-texto"></p>
+      <button class="b3d txt b-verde" id="fin-sig" type="button"><span class="b-ico">▶</span> Siguiente nivel</button>
+      <button class="b3d txt b-oro" id="fin-rep" type="button"><span class="b-ico">🔁</span> Repetir</button>
+      <button class="b3d txt b-gris" id="fin-menu" type="button"><span class="b-ico">☰</span> Menú principal</button>
+    </div>
+  </div>
+
+  <script type="module" src="juego-lanzapajaros.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>

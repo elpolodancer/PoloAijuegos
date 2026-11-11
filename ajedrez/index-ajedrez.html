@@ -5,17 +5,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Ajedrez</title>
-  <meta name="theme-color" content="#15161a" />
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
   <link rel="stylesheet" href="../compartido/estilos.css" />
   <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 30%, #2a2c33, #131417 75%); }
     body.inmersivo { touch-action: manipulation; }
-    .aj { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: calc(8px + env(safe-area-inset-top, 0px)) 10px calc(8px + env(safe-area-inset-bottom, 0px)); }
+    .aj { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; /* arriba 104 y abajo 66: zonas reservadas de 🎮 Juegos + ☰ y de 🌙 / ⛶ */ padding: calc(104px + env(safe-area-inset-top, 0px)) 10px calc(66px + env(safe-area-inset-bottom, 0px)); }
     .cab { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
     .fila { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center; }
-    #desc { width: 100%; max-width: 520px; text-align: center; color: var(--suave); font-size: .8rem; min-height: 1.3em; }
-    #estado { width: 100%; text-align: center; font-weight: 700; min-height: 1.5em; }
+    #desc { width: 100%; max-width: 520px; text-align: center; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); font-size: .8rem; min-height: 1.3em; }
+    #estado { width: 100%; text-align: center; font-weight: 700; min-height: 1.5em; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
     .zona-tab { position: relative; }
     #tablero { --t: 44px; display: grid; grid-template-columns: repeat(8, var(--t)); border-radius: 8px; overflow: hidden; box-shadow: 0 0 0 4px #3b2a1a, 0 8px 18px rgba(0,0,0,.55); user-select: none; -webkit-user-select: none; touch-action: manipulation; }
     .cas { position: relative; width: var(--t); height: var(--t); padding: 0; border: 0; border-radius: 0; display: grid; place-items: center; cursor: pointer; font-size: calc(var(--t) * .78); line-height: 1; font-family: "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols 2", "DejaVu Sans", sans-serif; }
@@ -38,20 +38,26 @@
     #promo .b3d { --t: 56px; font-size: 2rem; font-family: "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols 2", "DejaVu Sans", sans-serif; }
     #aviso { position: fixed; inset: 0; z-index: 12; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 20px; text-align: center; background: rgba(10, 10, 12, .85); }
     #aviso p { margin: 0; font-size: 1.1rem; font-weight: 700; max-width: 28ch; }
+    /* niveles del mapa: sin selector de dificultad ni de color; texto de enseñanza más grande */
+    .aj.en-nivel #niveles, .aj.en-nivel #bBlancas, .aj.en-nivel #bNegras { display: none; }
+    .aj.en-nivel #desc { font-size: .95rem; max-width: 560px; }
     @media (prefers-reduced-motion: no-preference) { .cas::before { transition: background .15s; } }
     /* Pantalla horizontal (PC, celular acostado): el tablero a la izquierda y los controles a la derecha */
     @media (min-aspect-ratio: 23/20) {
-      .aj { display: grid; grid-template-columns: auto 280px; grid-template-rows: auto 1fr auto; grid-template-areas: "tab cab" "tab estado" "tab acc"; align-content: center; justify-content: center; gap: 12px 22px; }
+      .aj { display: grid; grid-template-columns: auto 280px; grid-template-rows: auto 1fr auto; grid-template-areas: "tab cab" "tab estado" "tab acc"; align-content: center; justify-content: center; gap: 12px 22px; padding: calc(8px + env(safe-area-inset-top, 0px)) 64px calc(8px + env(safe-area-inset-bottom, 0px)) 128px; }
       .zona-tab { grid-area: tab; align-self: center; } .cab { grid-area: cab; } #estado { grid-area: estado; align-self: center; } .acc { grid-area: acc; }
       .cab .fila { justify-content: flex-start; }
     }
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>
-  <main class="aj">
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> Pausa</button>
+  </nav>
+  <main class="aj" hidden>
     <div class="cab">
       <div class="fila">
-        <a class="b3d chico b-gris" href="../" aria-label="Volver al portal"><span class="b-ico">←</span></a>
         <div class="fila" id="niveles" role="group" aria-label="Nivel"></div>
       </div>
       <div id="desc"></div>
@@ -76,6 +82,7 @@
     </div>
   </div>
   <script type="module" src="juego-ajedrez.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>
