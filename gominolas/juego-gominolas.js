@@ -1,7 +1,7 @@
 // Ruta: gominolas/juego-gominolas.js
 // «Conecta gominolas»: arrastra por gominolas iguales y juntas (3 o más) para juntarlas.
 // Niveles con límite de movimientos: hay que eliminar todas las gominolas negras de la parte baja.
-// Una negra se elimina cuando se rompe una gominola pegada a ella (también en diagonal).
+// Una negra se elimina cuando se rompe una gominola pegada a ella por arriba, abajo, izquierda o derecha (NO en diagonal).
 // Si un movimiento no elimina ninguna negra, aparece una nueva abajo.
 // Perfil y sesión: se cargan aparte para que el juego funcione aunque Firebase no esté disponible
 import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
@@ -34,20 +34,18 @@ let penaliza = 1;           // negras nuevas por jugada que no elimina ninguna: 
 const PUNTOS_NEGRA = 30;    // puntos por cada negra eliminada
 const BONO_MOVIMIENTO = 20; // puntos por cada movimiento que te sobre al ganar
 
-// Poderes: cadenas largas dejan un bloque especial en la última gominola.
-// Se usan tocándolos solos, o metiéndolos en una cadena (se activan en la última casilla seleccionada).
-// Si la cadena lleva los dos poderes (o dos poderes se juntan solos), se aplican ambos: fila + columna.
+// Poderes: una cadena larga deja un osito con poder en la última casilla. Ese osito CONSERVA EL COLOR de la cadena que lo creó
+// y solo se activa cuando lo incluyes en una cadena de ositos de ese mismo color (tocarlo solo no hace nada).
+// El poder se activa en la última casilla seleccionada. Si la cadena lleva los dos poderes, se aplican ambos: fila + columna.
 const CADENA_HORIZONTAL = 5; // 5 o 6 gominolas → poder horizontal (rompe toda la fila)
 const CADENA_VERTICAL = 7;   // 7 o más → poder vertical (rompe toda la columna)
 const PODERES = {
-  horizontal: { icono: "↔️", c1: "#ffe14d", c2: "#ff9d00" },
-  vertical: { icono: "↕️", c1: "#c9f2ff", c2: "#2aa8ff" },
+  horizontal: { icono: "↔️" },
+  vertical: { icono: "↕️" },
 };
 
 const NEGRA = -1;           // valor de «k» de una gominola negra
-const ESPECIAL = -2;        // valor de «k» de un bloque con poder (horizontal o vertical)
 const NEGRA_COL = { c: "#4b4560", o: "#1c1830" };
-const ESPECIAL_COL = { c: "#ffe45c", o: "#d9a400" };
 
 // Colores planos y alegres (el contorno «o» es una versión más oscura del mismo tono)
 const PALETA = [
@@ -60,7 +58,7 @@ const PALETA = [
 ];
 const NOTAS = [262, 294, 330, 392, 440, 523, 587, 659, 784, 880];
 
-const colorK = (k) => (k >= 0 ? PALETA[k] : k === NEGRA ? NEGRA_COL : ESPECIAL_COL);
+const colorK = (k) => (k >= 0 ? PALETA[k] : NEGRA_COL);
 
 // ---------- Elementos ----------
 const lienzo = document.getElementById("lienzo");
@@ -83,7 +81,7 @@ const ovlMapa = document.getElementById("ovlMapa");
 const rotNivel = document.getElementById("rotNivel");
 
 // ---------- Estado ----------
-let grid = [];          // grid[fila][col] = { k: color (o NEGRA / ESPECIAL), y: fila visual, v: velocidad, p: poder }
+let grid = [];          // grid[fila][col] = { k: color (o NEGRA), y: fila visual, v: velocidad, p: poder ("horizontal" | "vertical", solo en ositos con poder) }
 let estado = "inicio";  // inicio | jugando | fin
 let puntos = 0;
 let puntosInicioNivel = 0; // puntos con los que empezó el nivel actual (al reintentar se vuelve a ellos)
@@ -142,7 +140,7 @@ function abrirInfo() {
   const panel = document.createElement("div"); panel.className = "pausa-panel";
   const t = document.createElement("h2"); t.textContent = "ℹ️ Cómo se juega";
   const txt = document.createElement("p"); txt.style.cssText = "margin:0 0 12px;line-height:1.45;font-size:.92rem";
-  txt.textContent = "Arrastra por 3 o más gominolas iguales y juntas. Rompe las que rodean a las negras para eliminarlas: si en una jugada no eliminas ninguna, aparece otra. Cadenas de 5 crean un poder ↔️ (rompe una fila) y de 7 un poder ↕️ (rompe una columna): tócalos o inclúyelos en una cadena y se activan en la última casilla. Dos poderes juntos se aplican a la vez." + " Los niveles se desbloquean en orden: cada estado y cada país tiene 100. Al terminar un estado se desbloquea el siguiente y el agua del mapa sube." + " Modo libre: elige tablero y dificultad y juega rondas sin fin hasta quedarte sin movimientos. Si una jugada no elimina ninguna negra, aparece 1 nueva en Fácil, 2 en Medio y 3 en Difícil. No suma al perfil; solo guarda tu récord de rondas.";
+  txt.textContent = "Arrastra por 3 o más gominolas iguales y juntas. Rompe las gominolas que están pegadas a una negra (arriba, abajo, izquierda o derecha; en diagonal no cuenta) para eliminarla: si en una jugada no eliminas ninguna, aparece otra. Cadenas de 5 crean un osito con poder ↔️ (rompe una fila) y de 7 uno con poder ↕️ (rompe una columna). El osito con poder conserva su color y solo se activa cuando lo incluyes en una cadena de ositos de ese mismo color: se activa en la última casilla de la cadena. Si metes dos poderes en la misma cadena se aplican a la vez." + " Los niveles se desbloquean en orden: cada estado y cada país tiene 100. Al terminar un estado se desbloquea el siguiente y el agua del mapa sube." + " Modo libre: elige tablero y dificultad y juega rondas sin fin hasta quedarte sin movimientos. Si una jugada no elimina ninguna negra, aparece 1 nueva en Fácil, 2 en Medio y 3 en Difícil. No suma al perfil; solo guarda tu récord de rondas.";
   const ok = document.createElement("button"); ok.type = "button"; ok.className = "b3d txt b-verde"; ok.textContent = "Entendido";
   const cerrar = () => { fondo.remove(); };
   ok.addEventListener("click", cerrar); fondo.addEventListener("click", (e) => { if (e.target === fondo) cerrar(); });
@@ -274,7 +272,18 @@ function vecinos(f, c) {
   return r;
 }
 
-// ¿Existe algún grupo de MIN_CADENA o más gominolas iguales y juntas? (las negras y los poderes no cuentan)
+// Vecinos en cruz (arriba, abajo, izquierda, derecha): son los únicos que cuentan para eliminar negras.
+// Las cadenas de gominolas, en cambio, sí pueden ir en diagonal (usan «vecinos»).
+function vecinosCruz(f, c) {
+  const r = [];
+  if (f > 0) r.push([f - 1, c]);
+  if (f < FILAS - 1) r.push([f + 1, c]);
+  if (c > 0) r.push([f, c - 1]);
+  if (c < COLUMNAS - 1) r.push([f, c + 1]);
+  return r;
+}
+
+// ¿Existe algún grupo de MIN_CADENA o más gominolas iguales y juntas? (las negras no cuentan; los ositos con poder sí, como cualquier osito de su color)
 function hayJugada() {
   const visto = new Set();
   for (let f = 0; f < FILAS; f++)
@@ -300,10 +309,10 @@ function hayJugada() {
   return false;
 }
 
-// Revuelve los colores que ya hay hasta que haya jugada (las negras y los poderes se quedan donde están)
+// Revuelve los colores que ya hay hasta que haya jugada (las negras y los ositos con poder se quedan donde están, con su color)
 function barajar() {
   const ks = [];
-  grid.forEach((fila) => fila.forEach((g) => { if (g.k >= 0) ks.push(g.k); }));
+  grid.forEach((fila) => fila.forEach((g) => { if (g.k >= 0 && !g.p) ks.push(g.k); }));
   let intentos = 0;
   do {
     for (let i = ks.length - 1; i > 0; i--) {
@@ -311,10 +320,10 @@ function barajar() {
       [ks[i], ks[j]] = [ks[j], ks[i]];
     }
     let i = 0;
-    grid.forEach((fila) => fila.forEach((g) => { if (g.k >= 0) g.k = ks[i++]; }));
+    grid.forEach((fila) => fila.forEach((g) => { if (g.k >= 0 && !g.p) g.k = ks[i++]; }));
     intentos++;
   } while (!hayJugada() && intentos < 40);
-  if (!hayJugada()) grid.forEach((fila) => fila.forEach((g) => { if (g.k >= 0) g.k = azar(); }));
+  if (!hayJugada()) grid.forEach((fila) => fila.forEach((g) => { if (g.k >= 0 && !g.p) g.k = azar(); }));
 }
 
 function caer() {
@@ -365,7 +374,7 @@ function nuevaNegra() {
   const candidatas = [];
   const juntar = (desde, hasta) => {
     for (let f = desde; f >= hasta; f--)
-      for (let c = 0; c < COLUMNAS; c++) if (grid[f][c].k >= 0) candidatas.push([f, c]);
+      for (let c = 0; c < COLUMNAS; c++) if (grid[f][c].k >= 0 && !grid[f][c].p) candidatas.push([f, c]);
   };
   juntar(FILAS - 1, Math.max(0, FILAS - zonaNva));
   if (!candidatas.length) juntar(FILAS - zonaNva - 1, 0); // zona llena de negras: sube más
@@ -378,7 +387,7 @@ function nuevaNegra() {
 }
 
 // ---------- Jugada ----------
-// Rompe las celdas de la lista y también las negras que quedan pegadas a alguna gominola rota.
+// Rompe las celdas de la lista y también las negras que quedan pegadas (arriba, abajo, izquierda o derecha) a alguna gominola rota.
 // Devuelve cuántas normales y cuántas negras se quitaron.
 function romper(lista) {
   const quitar = new Set();
@@ -387,7 +396,7 @@ function romper(lista) {
   quitar.forEach((key) => {
     const f = Math.floor(key / 100), c = key % 100;
     if (grid[f][c].k === NEGRA) return;
-    for (const [nf, nc] of vecinos(f, c)) {
+    for (const [nf, nc] of vecinosCruz(f, c)) {
       const q = grid[nf][nc];
       if (q && q.k === NEGRA) negrasPegadas.add(nf * 100 + nc);
     }
@@ -438,31 +447,19 @@ function juntar(cad) {
   const ganancia = Math.round(n * PUNTOS_BASE + (n - MIN_CADENA) * (n - MIN_CADENA) * (PUNTOS_BASE / 2));
   puntos += ganancia;
   const ult = cad[cad.length - 1];
+  const colorCadena = grid[ult.f][ult.c].k; // antes de romper: el poder nuevo conserva este color
   const lineas = lineasDePoderes(cad, ult);
   const r = romper(cad.map(({ f, c }) => [f, c]).concat(lineas));
   const extra = Math.max(0, r.normales - n) * PUNTOS_BASE; // gominolas que rompieron las líneas de los poderes
   puntos += extra;
   textos.push({ x: (ult.c + 0.5) * tam, y: (ult.f + 0.5) * tam, vida: 0.9, txt: "+" + (ganancia + extra) });
-  // cadena larga: deja un poder en la última gominola
+  // cadena larga: deja un osito con poder (del mismo color) en la última casilla
   const poder = n >= CADENA_VERTICAL ? "vertical" : n >= CADENA_HORIZONTAL ? "horizontal" : null;
   if (poder) {
-    grid[ult.f][ult.c] = { k: ESPECIAL, p: poder, y: ult.f, v: 0 };
+    grid[ult.f][ult.c] = { k: colorCadena, p: poder, y: ult.f, v: 0 };
     textos.push({ x: tam * COLUMNAS / 2, y: tam * 0.8, vida: 1.1, txt: PODERES[poder].icono + " " + poder });
   }
   for (let i = 0; i < Math.min(n, 6); i++) setTimeout(() => tono(NOTAS[Math.min(i + 3, NOTAS.length - 1)], 0.15), i * 55);
-  cerrarJugada(r.negras);
-}
-
-// Tocar un bloque con poder solo: horizontal = toda su fila, vertical = toda su columna
-function usarPoder({ f, c }) {
-  const g = grid[f][c];
-  const lista = lineasDePoderes([{ f, c }], { f, c });
-  const x = (c + 0.5) * tam, y = (g.y + 0.5) * tam;
-  const r = romper(lista);
-  const ganancia = r.normales * PUNTOS_BASE;
-  puntos += ganancia;
-  textos.push({ x, y, vida: 0.9, txt: "+" + ganancia });
-  for (let i = 0; i < 6; i++) setTimeout(() => tono(NOTAS[Math.min(i + 3, NOTAS.length - 1)] * (g.p === "vertical" ? 1.5 : 0.5), 0.15), i * 45);
   cerrarJugada(r.negras);
 }
 
@@ -492,7 +489,7 @@ lienzo.addEventListener("pointerdown", (ev) => {
   tono(NOTAS[0], 0.08);
 });
 
-// Color de la primera gominola normal de la cadena (null si todavía solo lleva poderes)
+// Color de la cadena (el de su primera gominola)
 function colorDeCadena() {
   for (const q of cadena) {
     const k = grid[q.f][q.c].k;
@@ -520,16 +517,14 @@ lienzo.addEventListener("pointermove", (ev) => {
   const kp = grid[p.f][p.c].k;
   if (kp === NEGRA) return;
   const kc = colorDeCadena();
-  if (kp >= 0 && kc !== null && kp !== kc) return; // los poderes se pueden unir a cualquier cadena
+  if (kp !== kc) return; // solo se unen ositos del mismo color (los que tienen poder también)
   cadena.push({ f: p.f, c: p.c });
   tono(NOTAS[Math.min(cadena.length - 1, NOTAS.length - 1)], 0.08);
 });
 
 function soltar() {
   if (cadena && estado === "jugando") {
-    const soloPoderes = cadena.every((q) => grid[q.f][q.c].k === ESPECIAL);
-    if (cadena.length >= MIN_CADENA || (soloPoderes && cadena.length >= 2)) juntar(cadena);
-    else if (cadena.length === 1 && soloPoderes) usarPoder(cadena[0]);
+    if (cadena.length >= MIN_CADENA) juntar(cadena); // tocar un osito con poder solo no hace nada
   }
   cadena = null;
 }
@@ -701,6 +696,13 @@ function oso(x, y, r, col, esc, opc = {}) {
   ctx.translate(x, y);
   ctx.scale(esc, esc);
   ctx.lineJoin = "round"; ctx.lineCap = "round";
+  // aura brillante y que late (solo los ositos con poder)
+  if (opc.poder) {
+    const lat = 0.5 + 0.5 * Math.sin(t * 4.5);
+    ctx.fillStyle = "rgba(255,255,255," + (0.35 + 0.25 * lat).toFixed(2) + ")";
+    ctx.strokeStyle = "#ffd84d"; ctx.lineWidth = r * 0.08;
+    ctx.beginPath(); ctx.arc(0, 0, r * (1.04 + 0.04 * lat), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
   // sombra en el suelo
   ctx.fillStyle = "rgba(60,30,110,.20)";
   ctx.beginPath(); ctx.ellipse(0, r * 0.98, r * 0.78, r * 0.16, 0, 0, Math.PI * 2); ctx.fill();
@@ -757,6 +759,22 @@ function oso(x, y, r, col, esc, opc = {}) {
       ctx.beginPath(); ctx.moveTo(s * r * 0.5, ey - r * 0.4); ctx.lineTo(s * r * 0.12, ey - r * 0.26); ctx.stroke();
     }
   }
+  // medalla con flechas (abajo a la derecha): indica el poder del osito, en su color
+  if (opc.poder) {
+    const bx = r * 0.64, by = r * 0.64, br = r * 0.3, a = r * 0.17, h = r * 0.08;
+    ctx.fillStyle = "#fff"; ctx.strokeStyle = col.o; ctx.lineWidth = r * 0.07;
+    ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.save();
+    ctx.translate(bx, by);
+    if (opc.poder === "vertical") ctx.rotate(Math.PI / 2);
+    ctx.strokeStyle = col.o; ctx.lineWidth = r * 0.06;
+    ctx.beginPath();
+    ctx.moveTo(-a, 0); ctx.lineTo(a, 0);
+    ctx.moveTo(-a + h, -h); ctx.lineTo(-a, 0); ctx.lineTo(-a + h, h);
+    ctx.moveTo(a - h, -h); ctx.lineTo(a, 0); ctx.lineTo(a - h, h);
+    ctx.stroke();
+    ctx.restore();
+  }
   // boca
   ctx.strokeStyle = tinta; ctx.lineWidth = r * 0.07;
   if (feliz) {
@@ -772,26 +790,6 @@ function oso(x, y, r, col, esc, opc = {}) {
   ctx.restore();
 }
 
-// Bloque con poder (horizontal o vertical): disco brillante con su icono
-function bloquePoder(x, y, r, tipo, esc) {
-  const P = PODERES[tipo] || PODERES.horizontal;
-  const pulso = esc * (1 + Math.sin(performance.now() / 180) * 0.05);
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(pulso, pulso);
-  const gr = ctx.createRadialGradient(-r * 0.3, -r * 0.4, r * 0.1, 0, 0, r);
-  gr.addColorStop(0, "#ffffff");
-  gr.addColorStop(0.4, P.c1);
-  gr.addColorStop(1, P.c2);
-  ctx.fillStyle = gr; ctx.strokeStyle = "#fff"; ctx.lineWidth = r * 0.1;
-  ctx.beginPath(); ctx.arc(0, 0, r * 0.95, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  ctx.font = r * 1.1 + "px system-ui, sans-serif";
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillStyle = "#000";
-  ctx.fillText(P.icono, 0, r * 0.05);
-  ctx.restore();
-}
-
 function dibujar() {
   ctx.clearRect(0, 0, tam * COLUMNAS, tam * FILAS);
   // cuadrícula suave
@@ -804,7 +802,7 @@ function dibujar() {
   // línea que une la cadena
   if (cadena && cadena.length > 1) {
     const kc = colorDeCadena();
-    const col = kc === null ? ESPECIAL_COL : PALETA[kc];
+    const col = kc === null ? NEGRA_COL : PALETA[kc];
     ctx.strokeStyle = col.c; ctx.globalAlpha = 0.75;
     ctx.lineWidth = tam * 0.2; ctx.lineCap = "round"; ctx.lineJoin = "round";
     ctx.beginPath();
@@ -827,8 +825,7 @@ function dibujar() {
         ctx.beginPath(); ctx.arc(x, y, tam * 0.46, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       }
       if (g.k === NEGRA) oso(x, y, tam * 0.38, NEGRA_COL, 1, { negra: true, fase });
-      else if (g.k === ESPECIAL) bloquePoder(x, y, tam * 0.38, g.p, sel ? 1.14 : 1);
-      else oso(x, y, tam * 0.38, PALETA[g.k], sel ? 1.14 : 1, { sel, fase });
+      else oso(x, y, tam * 0.38, PALETA[g.k], sel ? 1.14 : 1, { sel, fase, poder: g.p });
     }
   // contador de la cadena sobre la última gominola
   if (cadena && cadena.length > 0 && (cadena.length > 1 || grid[cadena[0].f][cadena[0].c].k >= 0)) {

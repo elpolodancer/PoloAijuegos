@@ -3,10 +3,9 @@
 //  1) El BALANCE del juego vive aquí (tableros, dificultades, cuántas negras y movimientos por nivel/ronda):
 //     juego-gominolas.js lo importa, así el bot prueba exactamente los números que ve el jugador.
 //  2) El bot (bot-gominolas.mjs) juega miles de partidas con este motor, que copia las reglas de juego-gominolas.js
-//     (romper, caer, negra nueva por jugada fallida, poderes). Si cambias una regla allá, cámbiala aquí y vuelve a correr el bot.
+//     (romper, caer, negra nueva por jugada fallida, poderes: ositos de color con poder que solo se activan dentro de una cadena de su color). Si cambias una regla allá, cámbiala aquí y vuelve a correr el bot.
 
 export const NEGRA = -1;
-export const ESPECIAL = -2;
 export const COLORES = 5;
 export const MIN_CADENA = 3;
 export const CADENA_HORIZONTAL = 5;
@@ -96,6 +95,16 @@ export function vecinos(p, f, c) {
     }
   return r;
 }
+// Vecinos en cruz (arriba, abajo, izquierda, derecha): los únicos que cuentan para eliminar negras.
+// Las cadenas sí pueden ir en diagonal (usan «vecinos»).
+export function vecinosCruz(p, f, c) {
+  const r = [];
+  if (f > 0) r.push([f - 1, c]);
+  if (f < p.filas - 1) r.push([f + 1, c]);
+  if (c > 0) r.push([f, c - 1]);
+  if (c < p.cols - 1) r.push([f, c + 1]);
+  return r;
+}
 const azar = (p) => Math.floor(p.rng() * COLORES);
 
 export function hayJugada(p) {
@@ -122,7 +131,7 @@ export function hayJugada(p) {
 
 export function barajar(p) {
   const ks = [];
-  p.grid.forEach((fila) => fila.forEach((g) => { if (g.k >= 0) ks.push(g.k); }));
+  p.grid.forEach((fila) => fila.forEach((g) => { if (g.k >= 0 && !g.p) ks.push(g.k); })); // los ositos con poder no se revuelven
   let intentos = 0;
   do {
     for (let i = ks.length - 1; i > 0; i--) {
@@ -130,10 +139,10 @@ export function barajar(p) {
       [ks[i], ks[j]] = [ks[j], ks[i]];
     }
     let i = 0;
-    p.grid.forEach((fila) => fila.forEach((g) => { if (g.k >= 0) g.k = ks[i++]; }));
+    p.grid.forEach((fila) => fila.forEach((g) => { if (g.k >= 0 && !g.p) g.k = ks[i++]; }));
     intentos++;
   } while (!hayJugada(p) && intentos < 40);
-  if (!hayJugada(p)) p.grid.forEach((fila) => fila.forEach((g) => { if (g.k >= 0) g.k = azar(p); }));
+  if (!hayJugada(p)) p.grid.forEach((fila) => fila.forEach((g) => { if (g.k >= 0 && !g.p) g.k = azar(p); }));
 }
 
 export function contarNegras(p) {
@@ -185,7 +194,7 @@ function nuevaNegra(p) {
   const cand = [];
   const juntar = (desde, hasta) => {
     for (let f = desde; f >= hasta; f--)
-      for (let c = 0; c < p.cols; c++) if (p.grid[f][c].k >= 0) cand.push([f, c]);
+      for (let c = 0; c < p.cols; c++) if (p.grid[f][c].k >= 0 && !p.grid[f][c].p) cand.push([f, c]);
   };
   juntar(p.filas - 1, Math.max(0, p.filas - p.zonaNueva));
   if (!cand.length) juntar(p.filas - p.zonaNueva - 1, 0);
@@ -204,7 +213,7 @@ export function lineasDePoderes(p, cad, ult) {
   return lista;
 }
 
-// Conjunto de celdas que se romperían (lista + negras pegadas a una gominola rota). No modifica nada.
+// Conjunto de celdas que se romperían (lista + negras pegadas, en cruz, a una gominola rota). No modifica nada.
 export function conjuntoRoto(p, lista) {
   const quitar = new Set();
   lista.forEach(([f, c]) => { if (p.grid[f][c]) quitar.add(f * 100 + c); });
@@ -212,7 +221,7 @@ export function conjuntoRoto(p, lista) {
   quitar.forEach((key) => {
     const f = Math.floor(key / 100), c = key % 100;
     if (p.grid[f][c].k === NEGRA) return;
-    for (const [nf, nc] of vecinos(p, f, c)) if (p.grid[nf][nc].k === NEGRA) pegadas.push(nf * 100 + nc);
+    for (const [nf, nc] of vecinosCruz(p, f, c)) if (p.grid[nf][nc].k === NEGRA) pegadas.push(nf * 100 + nc);
   });
   pegadas.forEach((k) => quitar.add(k));
   return quitar;
@@ -238,11 +247,10 @@ function cerrarJugada(p, negrasQuitadas) {
   if (!hayJugada(p)) barajar(p);
 }
 
-// ¿La cadena es legal? (misma regla que el arrastre del juego)
+// ¿La cadena es legal? (misma regla que el arrastre del juego: 3 o más ositos del mismo color, vecinos y sin repetir;
+// un osito con poder es un osito de su color, y tocarlo solo no hace nada)
 export function cadenaValida(p, cad) {
-  if (!cad.length) return false;
-  const soloPoderes = cad.every((q) => p.grid[q.f][q.c].k === ESPECIAL);
-  if (!(cad.length >= MIN_CADENA || (soloPoderes && cad.length >= 2))) return false;
+  if (cad.length < MIN_CADENA) return false;
   let kc = null;
   const usados = new Set();
   for (let i = 0; i < cad.length; i++) {
@@ -250,23 +258,18 @@ export function cadenaValida(p, cad) {
     if (!g || g.k === NEGRA || usados.has(q.f * 100 + q.c)) return false;
     usados.add(q.f * 100 + q.c);
     if (i > 0 && Math.max(Math.abs(q.f - cad[i - 1].f), Math.abs(q.c - cad[i - 1].c)) !== 1) return false;
-    if (g.k >= 0) { if (kc === null) kc = g.k; else if (g.k !== kc) return false; }
+    if (kc === null) kc = g.k; else if (g.k !== kc) return false;
   }
   return true;
 }
 
 export function jugarCadena(p, cad) {
   const n = cad.length, ult = cad[n - 1];
+  const colorCadena = p.grid[ult.f][ult.c].k; // el poder nuevo conserva el color de la cadena
   const lineas = lineasDePoderes(p, cad, ult);
   const negras = romper(p, cad.map(({ f, c }) => [f, c]).concat(lineas));
   const poder = n >= CADENA_VERTICAL ? "vertical" : n >= CADENA_HORIZONTAL ? "horizontal" : null;
-  if (poder) p.grid[ult.f][ult.c] = { k: ESPECIAL, p: poder };
-  cerrarJugada(p, negras);
-  return negras;
-}
-
-export function usarPoder(p, celda) {
-  const negras = romper(p, lineasDePoderes(p, [celda], celda));
+  if (poder) p.grid[ult.f][ult.c] = { k: colorCadena, p: poder };
   cerrarJugada(p, negras);
   return negras;
 }

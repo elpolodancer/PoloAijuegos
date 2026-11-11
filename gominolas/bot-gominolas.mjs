@@ -13,8 +13,8 @@
 //   novato   de las cadenas que ve elige la mejor de solo 4 al azar (mira poco el tablero; se parece a una persona que está aprendiendo)
 //   azar     siempre una cadena cualquiera (el peor caso: alguien que no entiende dónde están las negras)
 import {
-  NEGRA, ESPECIAL, TABLEROS, DIFICULTADES, crearRng, crearPartida, vecinos, lineasDePoderes, conjuntoRoto,
-  jugarCadena, usarPoder, cadenaValida, parametrosLibre, parametrosCampana, contarNegras, CADENA_HORIZONTAL, CADENA_VERTICAL,
+  NEGRA, TABLEROS, DIFICULTADES, crearRng, crearPartida, vecinos, lineasDePoderes, conjuntoRoto,
+  jugarCadena, cadenaValida, parametrosLibre, parametrosCampana, contarNegras, CADENA_HORIZONTAL, CADENA_VERTICAL,
 } from "./logica-gominolas.js";
 
 // ---------- Búsqueda de jugadas ----------
@@ -32,11 +32,7 @@ function evaluar(p, cad) {
 // Reúne jugadas con búsqueda en profundidad con presupuesto de nodos
 function candidatas(p, rng, presupuesto = 1500, maxLen = 10) {
   const lista = [];
-  // 1) tocar un poder solo
-  for (let f = 0; f < p.filas; f++)
-    for (let c = 0; c < p.cols; c++)
-      if (p.grid[f][c].k === ESPECIAL) lista.push({ ...evaluar(p, [{ f, c }]), poder: true });
-  // 2) cadenas
+  // cadenas de ositos del mismo color (los que tienen poder son ositos de su color y lo activan al entrar en la cadena)
   const inicios = [];
   for (let f = 0; f < p.filas; f++) for (let c = 0; c < p.cols; c++) if (p.grid[f][c].k >= 0) inicios.push({ f, c });
   for (let i = inicios.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [inicios[i], inicios[j]] = [inicios[j], inicios[i]]; }
@@ -92,11 +88,8 @@ function jugarPartida(params, estilo, rng) {
   while (p.estado === "jugando") {
     const m = elegir(p, estilo, rng);
     if (!m) { atascos++; if (atascos > 5) break; continue; }
-    if (m.poder) usarPoder(p, m.cad[0]);
-    else {
-      if (!cadenaValida(p, m.cad)) throw new Error("el bot armó una cadena inválida");
-      jugarCadena(p, m.cad);
-    }
+    if (!cadenaValida(p, m.cad)) throw new Error("el bot armó una cadena inválida");
+    jugarCadena(p, m.cad);
   }
   return { gano: p.estado === "gano", movsUsados: params.movs - p.movs, fallos: p.fallos, negrasFin: contarNegras(p), atascos };
 }
