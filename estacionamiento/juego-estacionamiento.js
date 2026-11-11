@@ -1,5 +1,5 @@
 // Ruta: estacionamiento/juego-estacionamiento.js
-// Saca todos los autos de un estacionamiento cuadrado (vista isométrica). El tamaño cambia con cada nivel (de 10×10 a 50×50).
+// Saca todos los autos de un estacionamiento cuadrado (vista 2D desde arriba). El tamaño cambia con cada nivel (de 10×10 a 50×50).
 // - Cada auto avanza solo hacia donde apunta su flecha; si algo le estorba, no se mueve.
 // - Alrededor del estacionamiento hay una vía de un solo sentido (horario) con la salida en las 4 esquinas.
 // - Hay 22 600 niveles (3200 de México y 100 por cada país). Todos salen de niveles-estacionamiento.js: tamaño, autos y premio dependen solo del número
@@ -11,8 +11,10 @@ import { montarMapa } from "./mapa-estacionamiento.js";   // menú principal: M�
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
 
 let N = 25;                         // casillas por lado (cambia con cada nivel)
-const TW = 16, TH = 8;              // medio ancho / medio alto de una casilla (isométrico)
-const ZOOM_DETALLE = 0.75;          // con menos zoom que esto (tableros enormes de lejos) los autos se dibujan sin sombra, cabina ni luces: no se ven y cuestan mucho
+const CELL = 32;                    // lado de una casilla en píxeles con zoom 1 (vista 2D desde arriba)
+// Nivel de detalle según el tamaño de la casilla en pantalla (CELL × zoom): ≥14 px = auto completo (parabrisas, luces, flecha);
+// ≥6 px = cuerpo, techo y flecha; menos (tableros enormes de lejos) = solo un rectángulo de color, que no se nota y cuesta mucho menos.
+const PX_DETALLE = 14, PX_MEDIO = 6;
 const VEL = 16;                     // casillas por segundo al salir
 const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0]; // 0 arriba, 1 derecha, 2 abajo, 3 izquierda
 const ID_JUEGO = "estacionamiento";
@@ -287,7 +289,7 @@ function retirarAuto(c) {
 // Bomba: el primer toque coloca el cuadro de 5×5 (centrado en la casilla tocada, sin salirse del tablero); un toque dentro del cuadro la suelta
 function tocarBomba(p) {
   if (ganado) return;
-  const [gx, gy] = suelo(p.x, p.y, 0);
+  const [gx, gy] = suelo(p.x, p.y);
   const x = Math.floor(gx), y = Math.floor(gy);
   if (x < 0 || y < 0 || x >= N || y >= N) return;
   const z = zonaBomba;
@@ -377,11 +379,13 @@ function redim() {
   cw = r.width; ch = r.height;
   cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
 }
-const escalaAjustada = () => Math.min(cw / ((2 * N + 4) * TW + 30), ch / ((2 * N + 4) * TH + 70));
+const escalaAjustada = () => Math.max(0.05, Math.min((cw - 16) / ((N + 2) * CELL), (ch - 130) / ((N + 2) * CELL))); // cabe la vía completa; deja aire para los botones
 function ajustarCamara() {
   const s = escalaAjustada();
   camMin = s * 0.8; camMax = s * 7;
-  cam.s = s; cam.ox = cw / 2; cam.oy = ch / 2 - N * TH * s + 10;
+  cam.s = s;
+  cam.ox = cw / 2 - (N * CELL * s) / 2;
+  cam.oy = ch / 2 - (N * CELL * s) / 2 + 12; // un poco más abajo: arriba están los botones
   camTocada = false;
 }
 function zoom(f, mx, my) {
@@ -391,112 +395,177 @@ function zoom(f, mx, my) {
   cam.oy = my - (my - cam.oy) * k;
   cam.s = s2;
 }
-const P = (gx, gy, z) => [cam.ox + (gx - gy) * TW * cam.s, cam.oy + (gx + gy) * TH * cam.s - (z || 0) * cam.s];
-function suelo(sx, sy, z) {
-  const u = (sx - cam.ox) / (TW * cam.s), v = (sy + z * cam.s - cam.oy) / (TH * cam.s);
-  return [(u + v) / 2, (v - u) / 2];
+// Casilla (gx, gy) → píxeles de pantalla, y al revés (vista desde arriba: sin proyección)
+const P = (gx, gy) => [cam.ox + gx * CELL * cam.s, cam.oy + gy * CELL * cam.s];
+function suelo(sx, sy) {
+  const u = CELL * cam.s;
+  return [(sx - cam.ox) / u, (sy - cam.oy) / u];
 }
 
-// ----- Dibujo -----
-function poli(pts, fill, stroke) {
+// ----- Dibujo (vista 2D desde arriba) -----
+// Rectángulo redondeado (arcTo funciona en todos los navegadores; ctx.roundRect no)
+function rr(x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
   ctx.beginPath();
-  pts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
-  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-  if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
 }
-const rect = (x0, y0, x1, y1, z) => [P(x0, y0, z), P(x1, y0, z), P(x1, y1, z), P(x0, y1, z)];
 
 function dibujarSuelo() {
-  poli(rect(-1, -1, N + 1, N + 1), "#2a2e39");
-  poli(rect(0, 0, N, N), "#3c4254");
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = "rgba(255,255,255,.07)";
-  ctx.beginPath();
-  for (let i = 1; i < N; i++) {
-    let a = P(i, 0), b = P(i, N); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
-    a = P(0, i); b = P(N, i); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
-  }
-  ctx.stroke();
-  ctx.lineWidth = Math.max(1, 2 * cam.s);
-  poli(rect(0, 0, N, N), null, "#9aa3b8");
+  const u = CELL * cam.s;
+  // Vía: asfalto que rodea el tablero, con sombra suave sobre la madera
+  const [vx0, vy0] = P(-1, -1), [vx1, vy1] = P(N + 1, N + 1);
+  ctx.save();
+  if (u >= PX_MEDIO) { ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 5; }
+  rr(vx0, vy0, vx1 - vx0, vy1 - vy0, 0.9 * u);
+  ctx.fillStyle = "#5d6171";
+  ctx.fill();
+  ctx.restore();
 
-  // flechas de la vía (sentido horario)
-  ctx.fillStyle = "rgba(240,215,80,.55)";
-  const mf = 2 * TW * cam.s + 10; // margen: las flechas fuera de la pantalla no se dibujan
-  const flecha = (cx, cy, dx, dy) => {
-    const o = P(cx, cy);
-    if (o[0] < -mf || o[0] > cw + mf || o[1] < -mf || o[1] > ch + mf) return;
-    const px = -dy, py = dx;
-    poli([P(cx + dx * 0.3, cy + dy * 0.3), P(cx - dx * 0.2 + px * 0.25, cy - dy * 0.2 + py * 0.25), P(cx - dx * 0.2 - px * 0.25, cy - dy * 0.2 - py * 0.25)], "rgba(240,215,80,.55)");
-  };
-  for (let i = 2; i < N; i += 3) {
-    flecha(i + 0.5, -0.5, 1, 0);
-    flecha(N + 0.5, i + 0.5, 0, 1);
-    flecha(i + 0.5, N + 0.5, -1, 0);
-    flecha(-0.5, i + 0.5, 0, -1);
+  // Tablero: panel lavanda claro (como el piso de la referencia)
+  const [tx0, ty0] = P(0, 0), [tx1, ty1] = P(N, N);
+  rr(tx0, ty0, tx1 - tx0, ty1 - ty0, 0.25 * u);
+  const gr = ctx.createLinearGradient(0, ty0, 0, ty1);
+  gr.addColorStop(0, "#d6daec"); gr.addColorStop(1, "#bcc1da");
+  ctx.fillStyle = gr;
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, 0.07 * u);
+  ctx.strokeStyle = "#eef0fa";
+  ctx.stroke();
+
+  // Cuadrícula muy tenue (solo las líneas que se ven en pantalla, y solo si las casillas son grandes)
+  if (u >= 9) {
+    const g0 = clamp(Math.floor(-cam.ox / u), 1, N - 1), g1 = clamp(Math.ceil((cw - cam.ox) / u), 1, N - 1);
+    const h0 = clamp(Math.floor(-cam.oy / u), 1, N - 1), h1 = clamp(Math.ceil((ch - cam.oy) / u), 1, N - 1);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(100,108,160,.16)";
+    ctx.beginPath();
+    for (let i = g0; i <= g1; i++) { const a = P(i, 0), b = P(i, N); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+    for (let i = h0; i <= h1; i++) { const a = P(0, i), b = P(N, i); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+    ctx.stroke();
   }
-  // salidas en las esquinas
-  const fs = Math.max(4, Math.round(9 * cam.s)); // letrero «SALIDA» (la mitad de su tamaño anterior)
+
+  // Flechas de la vía (sentido horario): chevrones amarillos
+  if (u >= PX_MEDIO) {
+    ctx.strokeStyle = "rgba(255,214,70,.8)";
+    ctx.lineWidth = Math.max(1.5, 0.09 * u);
+    ctx.lineCap = "round";
+    const mf = 2 * u;
+    const chevron = (gx, gy, dx, dy) => {
+      const o = P(gx, gy);
+      if (o[0] < -mf || o[0] > cw + mf || o[1] < -mf || o[1] > ch + mf) return;
+      ctx.save();
+      ctx.translate(o[0], o[1]);
+      ctx.rotate(Math.atan2(dy, dx));
+      ctx.beginPath();
+      ctx.moveTo(-0.16 * u, -0.22 * u); ctx.lineTo(0.16 * u, 0); ctx.lineTo(-0.16 * u, 0.22 * u);
+      ctx.stroke();
+      ctx.restore();
+    };
+    for (let i = 2; i < N; i += 3) {
+      chevron(i + 0.5, -0.5, 1, 0);
+      chevron(N + 0.5, i + 0.5, 0, 1);
+      chevron(i + 0.5, N + 0.5, -1, 0);
+      chevron(-0.5, i + 0.5, 0, -1);
+    }
+    ctx.lineCap = "butt";
+  }
+
+  // Salidas en las 4 esquinas
+  const fs = Math.max(4, Math.round(0.2 * u));
   ctx.font = "bold " + fs + "px system-ui,sans-serif";
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   for (const [x, y] of [[-1, -1], [N, -1], [N, N], [-1, N]]) {
-    poli(rect(x, y, x + 1, y + 1), "rgba(46,204,113,.9)", "#1e8449");
-    const p = P(x + 0.5, y + 0.5, 1);
-    ctx.fillStyle = "#fff";
-    ctx.fillText("SALIDA", p[0], p[1]);
+    const [a, b] = P(x, y);
+    rr(a + 0.08 * u, b + 0.08 * u, 0.84 * u, 0.84 * u, 0.2 * u);
+    ctx.fillStyle = "#2ecc71"; ctx.fill();
+    ctx.lineWidth = Math.max(1, 0.05 * u); ctx.strokeStyle = "#1e8449"; ctx.stroke();
+    if (u >= PX_DETALLE) { ctx.fillStyle = "#fff"; ctx.fillText("SALIDA", a + 0.5 * u, b + 0.5 * u); }
   }
 }
 
-// Prisma con base rotada: lados visibles sombreados + tapa
-function prisma(cx, cy, dx, dy, l, w, z0, z1, lado, tapa) {
-  const px = -dy, py = dx;
-  const q = [
-    [cx + dx * l / 2 + px * w / 2, cy + dy * l / 2 + py * w / 2],
-    [cx + dx * l / 2 - px * w / 2, cy + dy * l / 2 - py * w / 2],
-    [cx - dx * l / 2 - px * w / 2, cy - dy * l / 2 - py * w / 2],
-    [cx - dx * l / 2 + px * w / 2, cy - dy * l / 2 + py * w / 2],
-  ];
-  for (let i = 0; i < 4; i++) {
-    const a = q[i], b = q[(i + 1) % 4];
-    const nx = (a[0] + b[0]) / 2 - cx, ny = (a[1] + b[1]) / 2 - cy;
-    if (nx + ny <= 0) continue; // cara que mira hacia atrás
-    const m = Math.hypot(nx, ny) || 1;
-    poli([P(a[0], a[1], z0), P(b[0], b[1], z0), P(b[0], b[1], z1), P(a[0], a[1], z1)], lado(nx / m, ny / m));
-  }
-  poli(q.map((p) => P(p[0], p[1], z1)), tapa);
-}
-
+// Vehículo visto desde arriba: grosor oscuro abajo, cuerpo de color, techo claro, parabrisas al frente y flecha blanca en el techo.
+// (cx, cy) = centro en casillas; (dx, dy) = hacia dónde mira (unitario); los autos largos (3) se ven como autobuses.
 function dibujarAuto(c, pose) {
   const { cx, cy, dx, dy, alfa } = pose || poseDe(c);
-  const L = c.len - 0.18, Wd = 0.72, ZB = 8, ZC = 13;
-  const simple = cam.s < ZOOM_DETALLE;
+  const u = CELL * cam.s;
+  const sx = cam.ox + cx * u, sy = cam.oy + cy * u;
+  const L = (c.len - 0.14) * u, W = 0.8 * u;
+  const det = u >= PX_DETALLE ? 2 : u >= PX_MEDIO ? 1 : 0;
+  const ang = Math.atan2(dy, dx);
+  const col = (f, sat) => "hsl(" + c.tono + "," + (sat || 76) + "%," + Math.min(93, c.luz * f).toFixed(1) + "%)";
   ctx.globalAlpha = alfa;
-  const sombra = (nx, ny) => 0;
-  // sombra en el suelo
-  if (!simple) prisma(cx + 0.05, cy + 0.05, dx, dy, L, Wd, 0, 0, sombra, "rgba(0,0,0,.28)");
-  const col = (f) => "hsl(" + c.tono + ",68%," + (c.luz * f).toFixed(1) + "%)";
-  const ladoCarro = (nx, ny) => col(0.8 + 0.14 * (ny - nx));
-  prisma(cx, cy, dx, dy, L, Wd, 1, ZB, ladoCarro, col(1.12));
-  // cabina
-  const sh = 0.08 * c.len;
-  if (!simple) prisma(cx - dx * sh, cy - dy * sh, dx, dy, L * 0.5, Wd * 0.82, ZB, ZC,
-    (nx, ny) => "hsl(200,30%," + (60 + 14 * (ny - nx)).toFixed(1) + "%)", col(1.2));
-  // flecha en el cofre
-  const qx = -dy, qy = dx, pcx = cx + dx * L * 0.34, pcy = cy + dy * L * 0.34;
-  poli([P(pcx + dx * 0.22, pcy + dy * 0.22, ZB), P(pcx - dx * 0.08 + qx * 0.17, pcy - dy * 0.08 + qy * 0.17, ZB), P(pcx - dx * 0.08 - qx * 0.17, pcy - dy * 0.08 - qy * 0.17, ZB)], "rgba(255,255,255,.92)");
-  // luces
-  const delante = dx + dy > 0;
-  const fx = cx + (delante ? dx : -dx) * L / 2, fy = cy + (delante ? dy : -dy) * L / 2;
-  ctx.fillStyle = delante ? "#fff6a8" : "#ff4d4d";
-  if (!simple) for (const sg of [-1, 1]) {
-    const p = P(fx + qx * sg * 0.24, fy + qy * sg * 0.24, 4.5);
-    ctx.beginPath(); ctx.arc(p[0], p[1], Math.max(1, 1.9 * cam.s), 0, Math.PI * 2); ctx.fill();
+
+  if (det === 0) { // de lejos: un rectángulo de color
+    ctx.save();
+    ctx.translate(sx, sy); ctx.rotate(ang);
+    ctx.fillStyle = col(1);
+    ctx.fillRect(-L / 2, -W / 2, L, W);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+    return;
   }
+
+  // Grosor: la misma silueta más oscura, un poco más abajo en la pantalla (no gira con el auto)
+  ctx.save();
+  ctx.translate(sx, sy + 0.09 * u); ctx.rotate(ang);
+  rr(-L / 2, -W / 2, L, W, 0.22 * u);
+  ctx.fillStyle = col(0.55, 70);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(sx, sy); ctx.rotate(ang);
+  // Cuerpo
+  rr(-L / 2, -W / 2, L, W, 0.22 * u);
+  ctx.fillStyle = col(1);
+  ctx.fill();
+  // Techo (más claro)
+  rr(-L / 2 + 0.1 * u, -W / 2 + 0.1 * u, L - 0.2 * u, W - 0.2 * u, 0.15 * u);
+  ctx.fillStyle = col(1.2, 72);
+  ctx.fill();
+
+  if (det === 2) {
+    // Parabrisas (al frente) y luneta (atrás)
+    rr(L / 2 - 0.44 * u, -W / 2 + 0.14 * u, 0.3 * u, W - 0.28 * u, 0.08 * u);
+    ctx.fillStyle = "rgba(232,246,255,.95)";
+    ctx.fill();
+    rr(-L / 2 + 0.14 * u, -W / 2 + 0.16 * u, 0.13 * u, W - 0.32 * u, 0.05 * u);
+    ctx.fillStyle = "rgba(40,60,95,.55)";
+    ctx.fill();
+    // Faros delanteros y luces traseras
+    ctx.fillStyle = "#fff3a0";
+    ctx.fillRect(L / 2 - 0.05 * u, -W / 2 + 0.05 * u, 0.05 * u, 0.15 * u);
+    ctx.fillRect(L / 2 - 0.05 * u, W / 2 - 0.2 * u, 0.05 * u, 0.15 * u);
+    ctx.fillStyle = "#ff4d4d";
+    ctx.fillRect(-L / 2, -W / 2 + 0.05 * u, 0.05 * u, 0.15 * u);
+    ctx.fillRect(-L / 2, W / 2 - 0.2 * u, 0.05 * u, 0.15 * u);
+  }
+
+  // Flecha blanca en el techo (apunta hacia donde sale el auto)
+  const A = (c.len >= 3 ? 0.95 : 0.7) * u, x0 = -0.04 * u, sw = 0.075 * u, hw = 0.22 * u, hb = x0 + A / 2 - 0.34 * u;
+  ctx.beginPath();
+  ctx.moveTo(x0 - A / 2, -sw); ctx.lineTo(hb, -sw); ctx.lineTo(hb, -hw); ctx.lineTo(x0 + A / 2, 0);
+  ctx.lineTo(hb, hw); ctx.lineTo(hb, sw); ctx.lineTo(x0 - A / 2, sw);
+  ctx.closePath();
+  ctx.fillStyle = "#fff";
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, 0.03 * u);
+  ctx.strokeStyle = "rgba(0,0,0,.28)";
+  ctx.lineJoin = "round";
+  ctx.stroke();
+
+  // Destello rojo cuando algo le estorba
   if (c.flash > 0) {
-    const m = [[cx + dx * L / 2 + qx * Wd / 2, cy + dy * L / 2 + qy * Wd / 2], [cx + dx * L / 2 - qx * Wd / 2, cy + dy * L / 2 - qy * Wd / 2], [cx - dx * L / 2 - qx * Wd / 2, cy - dy * L / 2 - qy * Wd / 2], [cx - dx * L / 2 + qx * Wd / 2, cy - dy * L / 2 + qy * Wd / 2]];
-    poli(m.map((p) => P(p[0], p[1], ZB + 0.2)), "rgba(255,50,50," + (0.6 * c.flash / 0.4).toFixed(2) + ")");
+    rr(-L / 2, -W / 2, L, W, 0.22 * u);
+    ctx.fillStyle = "rgba(255,50,50," + (0.6 * c.flash / 0.4).toFixed(2) + ")";
+    ctx.fill();
   }
+  ctx.restore();
   ctx.globalAlpha = 1;
 }
 
@@ -505,27 +574,27 @@ function dibujar() {
   ctx.clearRect(0, 0, cw, ch); // transparente: detrás se ve el fondo de madera (compartido/fondo-madera.js)
   ctx.lineJoin = "round";
   dibujarSuelo();
-  // Solo se dibujan los autos que caen dentro de la pantalla (con margen por su largo y su altura): al acercar un tablero de 50×50 son pocos
-  const lista = [];
+  const u = CELL * cam.s;
+  // Solo se dibujan los autos que caen dentro de la pantalla (con margen por su largo): al acercar un tablero de 50×50 son pocos
   for (const c of autos) {
     if (c.estado === 2) continue;
     const p = poseDe(c);
-    const sx = cam.ox + (p.cx - p.cy) * TW * cam.s, sy = cam.oy + (p.cx + p.cy) * TH * cam.s;
-    const mg = ((c.len + 2) * TW + 16) * cam.s;
+    const sx = cam.ox + p.cx * u, sy = cam.oy + p.cy * u, mg = (c.len + 1.5) * u;
     if (sx < -mg || sx > cw + mg || sy < -mg || sy > ch + mg) continue;
-    lista.push({ c, p });
+    dibujarAuto(c, p);
   }
-  lista.sort((a, b) => a.p.cx + a.p.cy - (b.p.cx + b.p.cy));
-  for (const it of lista) dibujarAuto(it.c, it.p);
   if (modoBomba && zonaBomba) { // vista previa de la zona que borrará la bomba
-    ctx.lineWidth = 2;
-    poli(rect(zonaBomba.x, zonaBomba.y, zonaBomba.x + LADO_BOMBA, zonaBomba.y + LADO_BOMBA, 0.3), "rgba(255,70,50,.28)", "rgba(255,110,70,.95)");
-    ctx.lineWidth = 1;
+    const [a, b] = P(zonaBomba.x, zonaBomba.y), [e, f] = P(zonaBomba.x + LADO_BOMBA, zonaBomba.y + LADO_BOMBA);
+    rr(a, b, e - a, f - b, 0.2 * u);
+    ctx.fillStyle = "rgba(255,70,50,.28)"; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,110,70,.95)"; ctx.stroke();
   }
   if (efectoBomba) { // destello que crece y se desvanece
     const f = efectoBomba.t / 0.5, g2 = (1 - f) * 1.2, e = efectoBomba;
+    const [a, b] = P(e.x - g2, e.y - g2), [a2, b2] = P(e.x + LADO_BOMBA + g2, e.y + LADO_BOMBA + g2);
     ctx.globalAlpha = f;
-    poli(rect(e.x - g2, e.y - g2, e.x + LADO_BOMBA + g2, e.y + LADO_BOMBA + g2, 0.5), "rgba(255,170,40,.8)");
+    rr(a, b, a2 - a, b2 - b, 0.3 * u);
+    ctx.fillStyle = "rgba(255,170,40,.8)"; ctx.fill();
     ctx.globalAlpha = 1;
   }
 }
@@ -641,12 +710,11 @@ function soltar(e) {
   if (eraUno && g && !g.moved && e.type === "pointerup") {
     const p = pos(e);
     if (modoBomba) { tocarBomba(p); return; }
-    for (const z of [6, 0]) {
-      const [gx, gy] = suelo(p.x, p.y, z);
-      const x = Math.floor(gx), y = Math.floor(gy);
-      if (x < 0 || y < 0 || x >= N || y >= N) continue;
+    const [gx, gy] = suelo(p.x, p.y);
+    const x = Math.floor(gx), y = Math.floor(gy);
+    if (x >= 0 && y >= 0 && x < N && y < N) {
       const id = occ[y * N + x];
-      if (id !== -1) { tocarAuto(autos[id]); break; }
+      if (id !== -1) tocarAuto(autos[id]);
     }
   }
 }
