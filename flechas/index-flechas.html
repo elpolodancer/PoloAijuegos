@@ -1,0 +1,109 @@
+<!doctype html>
+<!-- Ruta: flechas/index-flechas.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Flechas</title>
+  <meta name="theme-color" content="#d9a866" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <style>
+    [hidden] { display: none !important; }
+
+    /* Fondo: madera clara/oscura (compartido/fondo-madera.js); aquí no se pone fondo propio */
+    .zona { position: fixed; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: calc(58px + env(safe-area-inset-top, 0px)) 12px calc(64px + env(safe-area-inset-bottom, 0px)); }
+    .zona > section { width: 100%; max-width: 480px; margin: 0 auto; }
+
+    /* ----- Inicio ----- */
+    #menu { display: flex; flex-direction: column; gap: 14px; align-items: center; justify-content: center; min-height: calc(100dvh - 130px); }
+    #menuInfo { margin: 0 0 4px; text-align: center; font-weight: 700; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    #menu .b3d { width: 100%; max-width: 340px; --t: 56px; height: 56px; font-size: 17px; }
+    #dificultades { display: flex; flex-direction: column; gap: 14px; align-items: center; width: 100%; }
+
+    /* ----- Lista de niveles de una dificultad ----- */
+    #lista h2 { margin: 4px 0 14px; text-align: center; font-size: 1.3rem; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    .rejilla-niveles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding-bottom: 16px; }
+    .nv { --c1: #d5d9e0; --c2: #8b93a0; --c3: #4f5662; position: relative; aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; padding: 0; font: inherit; font-size: 1.05rem; font-weight: 800; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35); cursor: pointer;
+      background: linear-gradient(180deg, var(--c1) 0%, var(--c2) 55%, var(--c3) 140%); border: 2px solid var(--c3); border-radius: 13px;
+      box-shadow: 0 4px 0 var(--c3), 0 6px 8px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.55); transition: transform .07s, box-shadow .07s; touch-action: manipulation; }
+    .nv:active:not(.bloq) { transform: translateY(3px); box-shadow: 0 1px 0 var(--c3), inset 0 2px 0 rgba(255,255,255,.45); }
+    .nv.hecho { --c1: #b6f7a6; --c2: #3fcf4a; --c3: #1d7f2a; }
+    .nv.actual { --c1: #fff08c; --c2: #ffb020; --c3: #a85d00; box-shadow: 0 4px 0 var(--c3), 0 0 0 3px #fff, 0 6px 8px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.55); }
+    .nv.bloq { --c1: #5b5f68; --c2: #3d4048; --c3: #26282d; opacity: .55; cursor: default; box-shadow: 0 4px 0 var(--c3); }
+    .nv:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+
+    /* ----- Partida ----- */
+    #partida { position: fixed; inset: 0; }
+    #cab { position: absolute; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); text-align: center; line-height: 1.1; pointer-events: none; }
+    #tag { display: inline-block; padding: 2px 12px; font-size: 11px; font-weight: 800; letter-spacing: .04em; color: #fff; background: #8d9298; border-radius: 999px; white-space: nowrap; }
+    #titulo { display: block; margin-top: 2px; font-size: 20px; font-weight: 800; white-space: nowrap; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    #vidas { margin-top: 2px; font-size: 24px; letter-spacing: 4px; color: #c0272d; text-shadow: 0 2px 0 rgba(0,0,0,.3); }
+    #vidas .perdida { color: rgba(255,255,255,.92); }
+    #barra { position: absolute; top: calc(max(8px, env(safe-area-inset-top)) + 88px); left: 50%; transform: translateX(-50%); width: min(70vw, 360px); height: 6px; overflow: hidden; border-radius: 6px; background: rgba(0,0,0,.22); }
+    #barra i { display: block; width: 0; height: 100%; background: #3fcf4a; transition: width .2s; }
+    #area { position: absolute; left: 0; right: 0; top: calc(max(8px, env(safe-area-inset-top)) + 102px); bottom: calc(64px + env(safe-area-inset-bottom)); display: flex; align-items: center; justify-content: center; padding: 4px 10px; }
+    #tablero { padding: 8px; border-radius: 14px; background: #e3eeeb; box-shadow: 0 4px 0 rgba(0,0,0,.25), 0 8px 18px rgba(0,0,0,.3); }
+    #lienzo { display: block; touch-action: none; background: transparent; cursor: pointer; }
+    #cargando { position: absolute; margin: 0; font-weight: 800; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    /* Celular en horizontal: el encabezado va en una sola fila para dejarle alto al tablero */
+    @media (orientation: landscape) and (max-height: 520px) {
+      #cab { display: flex; align-items: center; gap: 10px; }
+      #titulo, #vidas { margin: 0; }
+      #titulo { font-size: 17px; }
+      #vidas { font-size: 20px; }
+      #barra { top: calc(max(8px, env(safe-area-inset-top)) + 38px); }
+      #area { top: calc(max(8px, env(safe-area-inset-top)) + 52px); bottom: max(8px, env(safe-area-inset-bottom)); }
+    }
+  </style>
+</head>
+<body class="inmersivo" data-pantalla-auto>
+  <!-- Navegación estándar: «🎮 Juegos» vuelve al portal; «☰» dice «Pausa» en partida y «Menú principal» en la lista de niveles -->
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> Pausa</button>
+  </nav>
+  <div class="hud hud-der" id="hudJuego" hidden>
+    <button class="b3d chico b-oro" id="pista" type="button" title="Pista" aria-label="Pista"><span class="b-ico">💡</span></button>
+    <button class="b3d chico b-rojo" id="reiniciar" type="button" title="Reiniciar nivel" aria-label="Reiniciar nivel"><span class="b-ico">🔄</span></button>
+  </div>
+
+  <main class="zona" id="zona">
+    <section id="menu">
+      <p id="menuInfo"></p>
+      <button class="b3d txt b-verde" id="continuar" type="button">▶ Continuar</button>
+      <div id="dificultades"></div>
+    </section>
+    <section id="lista" hidden>
+      <h2 id="listaTitulo"></h2>
+      <div class="rejilla-niveles" id="rejilla"></div>
+    </section>
+  </main>
+
+  <section id="partida" hidden>
+    <div id="cab">
+      <span id="tag"></span>
+      <b id="titulo"></b>
+      <div id="vidas" aria-live="polite"></div>
+    </div>
+    <div id="barra" role="progressbar" aria-label="Flechas sacadas"><i id="barraI"></i></div>
+    <div id="area">
+      <div id="tablero"><canvas id="lienzo" aria-label="Tablero de flechas"></canvas></div>
+      <p id="cargando" hidden>Generando nivel…</p>
+    </div>
+  </section>
+
+  <!-- Fin de partida (ganó / sin corazones): usa los estilos del menú de pausa estándar -->
+  <div class="pausa-fondo" id="fin" hidden role="dialog" aria-modal="true">
+    <div class="pausa-panel">
+      <h2 id="finTitulo"></h2>
+      <div class="pausa-opciones" id="finBotones"></div>
+    </div>
+  </div>
+
+  <script type="module" src="juego-flechas.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+</body>
+</html>
