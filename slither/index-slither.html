@@ -20,6 +20,7 @@
     .velo > :first-child { margin-top: auto; }
     .velo > :last-child { margin-bottom: auto; }
     .velo.activo { display: flex; }
+    body[data-estado="mapa"] .hud-der { display: none; }   /* en el mapa de niveles no se muestran Largo ni Récord */
     .velo h2 { margin: 0; font-size: 32px; }
     .velo p { margin: 0; max-width: 360px; line-height: 1.45; opacity: .92; }
     .velo input { font: inherit; font-size: 18px; padding: 10px 14px; width: 240px; text-align: center; color: #fff; background: #23252b; border: 2px solid #4a4e58; border-radius: 12px; -webkit-user-select: text; user-select: text; }
@@ -38,13 +39,26 @@
   </div>
   <button class="b3d grande b-oro btn-turbo" id="turbo" type="button" aria-label="Acelerar" title="Acelerar (mantén; barra espaciadora o clic)"><span class="b-ico">⚡</span></button>
 
-  <div id="inicio" class="velo activo">
+  <div id="inicio" class="velo">
     <h2>🐍 Slither</h2>
     <p>Guía tu serpiente, come las bolitas de colores para crecer y haz que otras serpientes choquen contra ti. Si tu cabeza toca el cuerpo de otra o la orilla del mapa, pierdes.</p>
-    <p>Al morir, tu serpiente se vuelve comida para los demás. Acelerar ⚡ te hace más rápido, pero gasta largo.</p>
+    <p>Al morir, tu serpiente se vuelve comida para los demás. Acelerar ⚡ te hace más rápido, pero gasta largo. Las bolitas <b>doradas</b> son raras y valen 10 veces más.</p>
     <p><b>Celular:</b> arrastra el dedo para girar; mantén ⚡ para acelerar.<br><b>Computadora:</b> mueve el mouse (clic sostenido o espacio = acelerar), o usa flechas/WASD.</p>
     <input id="nombre" maxlength="14" placeholder="Tu nombre" autocomplete="off" />
     <button class="b3d txt grande b-verde" id="jugar" type="button" style="--t:56px"><span class="b-ico">▶</span>&nbsp;Jugar</button>
+  </div>
+  <div id="pronto" class="velo">
+    <h2>🚧 Próximamente</h2>
+    <p>Los niveles de este mapa se están preparando: serán 100 por cada estado de México y por cada país (22 600 en total).</p>
+    <p>Mientras tanto puedes jugar el <b>♾️ Juego libre</b>.</p>
+    <button class="b3d txt grande b-gris" id="prontoVolver" type="button" style="--t:56px"><span class="b-ico">◀</span>&nbsp;Volver al mapa</button>
+  </div>
+  <div id="info" class="velo">
+    <h2>ℹ️ Cómo se juega</h2>
+    <p>Guía tu serpiente, come las bolitas de colores para crecer y haz que otras serpientes choquen contra ti. Si tu cabeza toca el cuerpo de otra o la orilla del mapa, pierdes.</p>
+    <p>Las bolitas <b>doradas</b> aparecen pocas veces y valen 10 veces más. Acelerar ⚡ te hace más rápido, pero gasta largo.</p>
+    <p><b>Celular:</b> arrastra el dedo para girar; mantén ⚡ para acelerar.<br><b>Computadora:</b> mueve el mouse (clic sostenido o espacio = acelerar), o usa flechas/WASD.</p>
+    <button class="b3d txt grande b-gris" id="infoVolver" type="button" style="--t:56px"><span class="b-ico">◀</span>&nbsp;Volver al mapa</button>
   </div>
   <div id="fin" class="velo">
     <h2>Te chocaron</h2>
