@@ -39,7 +39,7 @@ let t0 = 0, acum = 0, verificada = false, nivel = 0; // nivel 0 = modo libre
 const PISTA_MS = 15000; // segundos sin tocar nada antes de dar una pista
 let ultimaAccion = Date.now(), alertaMal = null, pista = null;
 // Barra superior: colecc = palo de cada serie terminada (en orden); mostradas = cuántas ya llegaron a la barra (las demás van volando)
-let colecc = [], mostradas = 0, fantasmas = [], animTimers = [], finAnim = 0, tb = tamBarra(56);
+let colecc = [], mostradas = 0, fantasmas = [], animTimers = [], finAnim = 0, tb = tamBarra(34, 48, 0);
 const btnMenu = $("btn-menu");
 
 function mostrar(p) {
@@ -148,19 +148,20 @@ function tramoValido(c, i) { return i >= e.ocultas[c] && e.cols[c].length - i <=
 // ---------- Barra superior del tablero: series terminadas (izquierda) y mazo de repartos (derecha) ----------
 const MS_VUELO = 520, MS_ESCALON = 35; // cada carta tarda MS_VUELO en llegar; salen una tras otra cada MS_ESCALON
 const contenido = (carta, w) => NOMBRE_RANGO[rango(carta)] + SIMB[palo(carta)] + '<span class="pl" style="font-size:' + w * 0.5 + 'px">' + SIMB[palo(carta)] + "</span>";
-// Cartas de la barra: alto = el de la barra menos un margen, proporción 1 : 1.4; las series se encimen (paso < ancho)
-function tamBarra(hb) {
-  const ch = hb - 10, cw = Math.round(ch / 1.4);
-  return { ch, cw, paso: Math.round(cw * 0.62), izq: 8, top: Math.round((hb - ch) / 2) };
+// Cartas de la fila superior: MISMO tamaño que las de la partida y mismos límites que las columnas (izq = borde izquierdo de la 1.ª columna).
+// Las series terminadas se encimen un poco (paso < ancho), de izquierda a derecha.
+function tamBarra(w, h, x0) {
+  return { cw: w, ch: h, paso: Math.round(w * 0.62), izq: x0, top: 0 };
 }
 // Medidas de la mesa. También ajusta el alto de la barra (según el tamaño de las cartas); la mesa se queda con el alto que sobra
 function medidas() {
   const m = $("mesa"), W = m.clientWidth, gap = Math.max(2, W * 0.008);
   const w = Math.max(24, Math.min(84, (W - gap * 9) / 10)), h = w * 1.4, x0 = Math.max(0, (W - (w * 10 + gap * 9)) / 2);
-  const hb = Math.round(Math.max(56, Math.min(84, h * 0.7))), barra = $("barra");
-  barra.style.height = hb + "px";
-  tb = tamBarra(hb);
-  barra.style.setProperty("--cw", tb.cw + "px"); barra.style.setProperty("--ch", tb.ch + "px");
+  const barra = $("barra");
+  barra.style.height = Math.round(h) + "px"; // la fila superior mide lo que una carta
+  tb = tamBarra(w, h, x0);
+  barra.style.setProperty("--cw", w + "px"); barra.style.setProperty("--ch", h + "px");
+  barra.style.setProperty("--x9", x0 + 9 * (w + gap) + "px"); // el mazo queda justo sobre la última columna
   return { W, H: m.clientHeight, gap, w, h, x0 };
 }
 // y de cada carta de una columna (misma cuenta que usa pintar)
@@ -177,7 +178,7 @@ function pintarBarra() {
   for (let i = 0; i < mostradas; i++) {
     const p = colecc[i], d = document.createElement("div");
     d.className = "carta pila" + (ROJO[p] ? " roja" : "");
-    d.style.cssText = "left:" + (tb.izq + i * tb.paso) + "px;top:" + tb.top + "px;width:" + tb.cw + "px;height:" + tb.ch + "px;font-size:" + Math.max(9, tb.cw * 0.36) + "px";
+    d.style.cssText = "left:" + (tb.izq + i * tb.paso) + "px;top:" + tb.top + "px;width:" + tb.cw + "px;height:" + tb.ch + "px;font-size:" + Math.max(10, tb.cw * 0.3) + "px";
     d.innerHTML = contenido(p * 13 + 12, tb.cw);
     caja.appendChild(d);
   }

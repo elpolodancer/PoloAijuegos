@@ -20,21 +20,21 @@
 .principales .b3d.txt { --t: 58px; font-size: 18px; min-width: 210px; }
 #aviso { min-height: 1.3em; font-weight: 700; }
 /* Mesa */
-/* Tablero = barra superior + mesa de columnas. La barra guarda las series terminadas (izquierda, se apilan de izq. a der.)
-   y el mazo de repartos (derecha, una carta boca abajo que es el botón de repartir). Su alto lo ajusta juego-spider.js (medidas). */
+/* Tablero = fila superior + mesa de columnas. La fila superior NO tiene fondo: son cartas como las de la partida, con los mismos límites
+   que las columnas (series terminadas desde el borde izquierdo de la 1.ª columna; el mazo, carta boca abajo, sobre la última columna).
+   Su alto y las medidas las ajusta juego-spider.js (medidas). */
 #tablero { position: absolute; left: 6px; right: 6px; top: 100px; bottom: 68px; display: flex; flex-direction: column; }
 @media (min-aspect-ratio: 1/1) { #tablero { left: 128px; top: 52px; } }
-#barra { position: relative; flex: none; height: 56px; margin-bottom: 6px; border-radius: 12px; background: rgba(20,22,26,.3); box-shadow: inset 0 0 0 1px rgba(0,0,0,.35), inset 0 2px 6px rgba(0,0,0,.45), 0 1px 0 rgba(255,255,255,.25); }
+#barra { position: relative; flex: none; height: 56px; margin-bottom: 6px; }
 #series { position: absolute; inset: 0; pointer-events: none; }
 #mesa { position: relative; flex: 1; min-height: 0; }
 .fantasma { pointer-events: none; transform-origin: 0 0; will-change: transform; }
-.mazo { position: absolute; right: 8px; top: calc((100% - var(--ch, 46px)) / 2); width: var(--cw, 33px); height: var(--ch, 46px); padding: 0; cursor: pointer; touch-action: manipulation;
-  background: repeating-linear-gradient(45deg, #2b4d9b 0 4px, #3b63c4 4px 8px); border: 1px solid #14285c; border-radius: 6px; box-shadow: inset 0 0 0 3px #f1f2f4, 0 2px 4px rgba(0,0,0,.5); }
-.mazo::after { content: ""; position: absolute; inset: -8px; } /* zona de toque más grande que la carta */
+.mazo { position: absolute; left: var(--x9, 0px); top: 0; width: var(--cw, 34px); height: var(--ch, 48px); padding: 0; cursor: pointer; touch-action: manipulation;
+  background: repeating-linear-gradient(45deg, #2b4d9b 0 4px, #3b63c4 4px 8px); border: 1px solid #14285c; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.4); } /* = una carta boca abajo de la partida */
 .mazo:active:not(:disabled) { transform: translateY(1px); }
 .mazo:disabled { opacity: .35; cursor: default; }
 .mazo:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
-.mazo-n { position: absolute; top: -8px; right: -8px; min-width: 20px; padding: 0 5px; font: 800 11px/16px system-ui, sans-serif; text-align: center; color: #fff; background: #1b1d22; border: 2px solid #fff; border-radius: 999px; }
+.mazo-n { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); min-width: 20px; padding: 0 5px; font: 800 11px/16px system-ui, sans-serif; text-align: center; color: #fff; background: #1b1d22; border: 2px solid #fff; border-radius: 999px; }
 .col { position: absolute; top: 0; bottom: 0; }
 .hueco { position: absolute; left: 0; top: 0; border: 2px dashed var(--txt-fondo-suave); border-radius: 6px; opacity: .55; }
 .carta { position: absolute; left: 0; display: flex; justify-content: flex-start; align-items: flex-start; padding: 2px 3px; font-weight: 800; line-height: 1; color: #1b1d22; background: linear-gradient(180deg, #fff, #ecebe6); border: 1px solid #555; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
