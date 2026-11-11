@@ -38,6 +38,8 @@ let t0 = 0, acum = 0, verificada = false, nivel = 0; // nivel 0 = modo libre
 // Avisos visuales: alertaMal = recuadro rojo (tramo bloqueado); pista = movimiento sugerido {tipo:"mover",de,desde,a} o {tipo:"repartir"}
 const PISTA_MS = 15000; // segundos sin tocar nada antes de dar una pista
 let ultimaAccion = Date.now(), alertaMal = null, pista = null;
+// Barra superior: colecc = palo de cada serie terminada (en orden); mostradas = cuántas ya llegaron a la barra (las demás van volando)
+let colecc = [], mostradas = 0, fantasmas = [], animTimers = [], finAnim = 0, tb = tamBarra(56);
 const btnMenu = $("btn-menu");
 
 function mostrar(p) {
@@ -103,12 +105,15 @@ function empezar(n = 0) {
   }
   historial = []; sel = null; fin = false; pausado = false; t0 = 0; acum = 0;
   alertaMal = null; pista = null; ultimaAccion = Date.now();
+  colecc = []; cancelarAnim();
   mostrar("juego");
 }
-function jugar(fn) {
+function jugar(fn, op) { // op = qué jugada es ({de,k,a} o {rep:true}); sirve para animar las series que se completen
   if (DIFICULTADES[e.dif - 1].deshacer) { historial.push(clonar(e)); if (historial.length > 300) historial.shift(); }
   if (!t0) t0 = Date.now();
+  const antes = clonar(e);
   fn(); sel = null; pintar();
+  if (e.hechos > antes.hechos && op) animarSeries(antes, op); // serie terminada: sus 13 cartas viajan a la barra
   if (ganada(e)) terminar();
 }
 function terminar() {
@@ -134,16 +139,117 @@ function terminar() {
     b.addEventListener("click", () => { f.remove(); fn(); });
     ops.appendChild(b);
   }
-  document.body.appendChild(f);
+  const espera = finAnim > Date.now() ? finAnim - Date.now() + 250 : 0; // deja terminar el viaje de la última serie
+  setTimeout(() => document.body.appendChild(f), espera);
 }
 
 // ---------- Dibujo ----------
 function tramoValido(c, i) { return i >= e.ocultas[c] && e.cols[c].length - i <= largoTramo(e, c); }
+// ---------- Barra superior del tablero: series terminadas (izquierda) y mazo de repartos (derecha) ----------
+const MS_VUELO = 520, MS_ESCALON = 35; // cada carta tarda MS_VUELO en llegar; salen una tras otra cada MS_ESCALON
+const contenido = (carta, w) => NOMBRE_RANGO[rango(carta)] + SIMB[palo(carta)] + '<span class="pl" style="font-size:' + w * 0.5 + 'px">' + SIMB[palo(carta)] + "</span>";
+// Cartas de la barra: alto = el de la barra menos un margen, proporción 1 : 1.4; las series se encimen (paso < ancho)
+function tamBarra(hb) {
+  const ch = hb - 10, cw = Math.round(ch / 1.4);
+  return { ch, cw, paso: Math.round(cw * 0.62), izq: 8, top: Math.round((hb - ch) / 2) };
+}
+// Medidas de la mesa. También ajusta el alto de la barra (según el tamaño de las cartas); la mesa se queda con el alto que sobra
+function medidas() {
+  const m = $("mesa"), W = m.clientWidth, gap = Math.max(2, W * 0.008);
+  const w = Math.max(24, Math.min(84, (W - gap * 9) / 10)), h = w * 1.4, x0 = Math.max(0, (W - (w * 10 + gap * 9)) / 2);
+  const hb = Math.round(Math.max(56, Math.min(84, h * 0.7))), barra = $("barra");
+  barra.style.height = hb + "px";
+  tb = tamBarra(hb);
+  barra.style.setProperty("--cw", tb.cw + "px"); barra.style.setProperty("--ch", tb.ch + "px");
+  return { W, H: m.clientHeight, gap, w, h, x0 };
+}
+// y de cada carta de una columna (misma cuenta que usa pintar)
+function posiciones(cartas, o, h, H) {
+  const total = h + o * 0.13 * h + Math.max(0, cartas.length - o - 1) * 0.3 * h;
+  const f = total > H ? Math.max(0.35, (H - h) / (total - h)) : 1;
+  const ys = []; let y = 0;
+  cartas.forEach((_, i) => { ys.push(y); y += (i < o ? 0.13 : 0.3) * h * f; });
+  return ys;
+}
+// Series ya terminadas: un montoncito por serie (muestra el K), de izquierda a derecha, cada uno encimado en el anterior
+function pintarBarra() {
+  const caja = $("series"); caja.replaceChildren();
+  for (let i = 0; i < mostradas; i++) {
+    const p = colecc[i], d = document.createElement("div");
+    d.className = "carta pila" + (ROJO[p] ? " roja" : "");
+    d.style.cssText = "left:" + (tb.izq + i * tb.paso) + "px;top:" + tb.top + "px;width:" + tb.cw + "px;height:" + tb.ch + "px;font-size:" + Math.max(9, tb.cw * 0.36) + "px";
+    d.innerHTML = contenido(p * 13 + 12, tb.cw);
+    caja.appendChild(d);
+  }
+}
+// Reconstruye lo que pasó en la jugada ANTES de que se quitara la serie (la lógica la quita al instante): devuelve, por cada serie
+// terminada, { c: columna, cartas: las 13 (K…A), todas: la columna completa, o: cuántas boca abajo }
+function seriesQuitadas(antes, op) {
+  const cols = antes.cols.map((c) => c.slice()), oc = antes.ocultas, r = [];
+  let revisar;
+  if (op.rep) { for (let c = 0; c < cols.length; c++) cols[c].push(antes.reparto[antes.rep * cols.length + c]); revisar = cols.map((_, c) => c); }
+  else { const t = cols[op.de].splice(cols[op.de].length - op.k, op.k); cols[op.a].push(...t); revisar = [op.a]; }
+  for (const c of revisar) {
+    const col = cols[c], n = col.length;
+    if (n < 13 || n - 13 < oc[c] || rango(col[n - 1]) !== 0) continue;
+    let ok = true;
+    for (let i = 1; i < 13 && ok; i++) ok = palo(col[n - 1 - i]) === palo(col[n - 1]) && rango(col[n - 1 - i]) === i;
+    if (ok) r.push({ c, cartas: col.slice(n - 13), todas: col, o: oc[c] });
+  }
+  return r;
+}
+// Detiene y limpia las animaciones en curso (al deshacer o empezar otra partida): las series ya cuentan como llegadas
+function cancelarAnim() {
+  animTimers.forEach(clearTimeout); animTimers = [];
+  fantasmas.forEach((g) => g.remove()); fantasmas = [];
+  finAnim = 0; mostradas = colecc.length; pintarBarra();
+}
+// Las 13 cartas de cada serie terminada salen de su columna, una tras otra (la A primero y el K al final), y se encimen en la barra
+// en el siguiente hueco de la izquierda. Con «reducir movimiento» (o sin animaciones del navegador) la serie aparece directo.
+function animarSeries(antes, op) {
+  const lista = seriesQuitadas(antes, op);
+  const quieto = !Element.prototype.animate || matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const { H, gap, w, h, x0 } = medidas(), letra = Math.max(10, w * 0.3);
+  const tablero = $("tablero"), m = $("mesa"), bo = $("barra");
+  let dur = 0;
+  lista.forEach((s, k) => {
+    const idx = colecc.length;
+    colecc.push(palo(s.cartas[0]));
+    if (quieto) return;
+    const n = s.todas.length, ys = posiciones(s.todas, s.o, h, H), x = m.offsetLeft + x0 + s.c * (w + gap);
+    const gs = s.cartas.map((carta, i) => { // i = 0 es el K
+      const g = document.createElement("div"), y = m.offsetTop + ys[n - 13 + i];
+      g.className = "carta fantasma" + (ROJO[palo(carta)] ? " roja" : "");
+      g.style.cssText = "left:" + x + "px;top:" + y + "px;width:" + w + "px;height:" + h + "px;font-size:" + letra + "px;z-index:" + (20 + i);
+      g.innerHTML = contenido(carta, w);
+      tablero.appendChild(g);
+      const hasta = "translate(" + (bo.offsetLeft + tb.izq + idx * tb.paso - x) + "px," + (bo.offsetTop + tb.top - y) + "px) scale(" + tb.cw / w + "," + tb.ch / h + ")";
+      g.animate([
+        { transform: "none", zIndex: 20 + i, offset: 0 },
+        { transform: "none", zIndex: 100 - i, offset: 0.01 }, // al despegar pasa por encima de las demás; el K, el último en salir, queda arriba
+        { transform: hasta, zIndex: 100 - i, offset: 1 },
+      ], { duration: MS_VUELO, delay: k * 450 + (12 - i) * MS_ESCALON, easing: "cubic-bezier(.35,.1,.25,1)", fill: "both" });
+      return g;
+    });
+    fantasmas.push(...gs);
+    const total = k * 450 + 12 * MS_ESCALON + MS_VUELO + 30;
+    dur = Math.max(dur, total);
+    animTimers.push(setTimeout(() => { // llegó: se quitan las cartas voladoras y el montoncito queda en la barra
+      gs.forEach((g) => g.remove()); fantasmas = fantasmas.filter((g) => !gs.includes(g));
+      mostradas = Math.min(colecc.length, mostradas + 1); pintarBarra();
+    }, total));
+  });
+  while (colecc.length < e.hechos) colecc.push(0); // por si la reconstrucción no halló alguna: que la cuenta siempre cuadre
+  if (quieto) mostradas = colecc.length;
+  else { finAnim = Math.max(finAnim, Date.now() + dur); animTimers.push(setTimeout(() => { mostradas = colecc.length; pintarBarra(); }, dur + 20)); }
+  pintarBarra();
+}
+
 function pintar() {
   if (!e) return;
   const m = $("mesa"); m.replaceChildren();
-  const W = m.clientWidth, H = m.clientHeight, gap = Math.max(2, W * 0.008);
-  const w = Math.max(24, Math.min(84, (W - gap * 9) / 10)), h = w * 1.4, x0 = Math.max(0, (W - (w * 10 + gap * 9)) / 2);
+  const { H, gap, w, h, x0 } = medidas(); // también deja listo el alto de la barra
+  pintarBarra();
   const letra = Math.max(10, w * 0.3);
   // Zonas con recuadro: el tramo bloqueado (rojo) o la pista (origen verde + destino verde punteado)
   const zonas = [];
@@ -170,7 +276,7 @@ function pintar() {
       const d = document.createElement("div"), oculta = i < o;
       d.className = "carta" + (oculta ? " dorso" : ROJO[palo(carta)] ? " roja" : "") + (sel && sel.c === c && i >= sel.i ? " sel" : "");
       d.dataset.i = i; d.style.top = y + "px"; d.style.width = w + "px"; d.style.height = h + "px"; d.style.fontSize = letra + "px";
-      if (!oculta) d.innerHTML = NOMBRE_RANGO[rango(carta)] + SIMB[palo(carta)] + '<span class="pl" style="font-size:' + w * 0.5 + 'px">' + SIMB[palo(carta)] + "</span>";
+      if (!oculta) d.innerHTML = contenido(carta, w);
       col.appendChild(d);
       y += (oculta ? 0.13 : 0.3) * h * f;
       // El recuadro llega hasta donde empieza la carta siguiente: lo que estorba (las cartas de abajo) queda SIN recuadro
@@ -235,7 +341,7 @@ function tocar(c, i) {
   if (sel) {
     if (sel.c !== c) {
       const k = e.cols[sel.c].length - sel.i;
-      if (puedeMover(e, sel.c, k, c)) { const de = sel.c; jugar(() => mover(e, de, k, c)); return; }
+      if (puedeMover(e, sel.c, k, c)) { const de = sel.c; jugar(() => mover(e, de, k, c), { de, k, a: c }); return; }
     } else if (i < 0 || i === sel.i) { sel = null; pintar(); return; }
     sel = null;
   }
@@ -248,9 +354,9 @@ $("b-repartir").addEventListener("click", () => {
   actividad();
   if (e.rep >= 5) return;
   if (!puedeRepartir(e)) { aviso("Llena las columnas vacías antes de repartir"); pintar(); return; }
-  jugar(() => repartir(e));
+  jugar(() => repartir(e), { rep: true });
 });
-$("b-deshacer").addEventListener("click", () => { if (fin || pausado || !historial.length) return; actividad(); e = historial.pop(); sel = null; pintar(); });
+$("b-deshacer").addEventListener("click", () => { if (fin || pausado || !historial.length) return; actividad(); cancelarAnim(); e = historial.pop(); colecc.length = Math.min(colecc.length, e.hechos); mostradas = colecc.length; sel = null; pintar(); });
 addEventListener("resize", () => { if (pantalla === "juego") pintar(); });
 setInterval(() => {
   if (pantalla !== "juego" || !e || fin || pausado) return;
