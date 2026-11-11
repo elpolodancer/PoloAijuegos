@@ -122,58 +122,49 @@ import("../compartido/jugador.js").then((m) => {
 btnEntrar.addEventListener("click", () => { if (entrarGoogle) entrarGoogle().catch((e) => { estado.textContent = e.message; }); });
 
 // ---- Sonido: piano sintetizado con Web Audio (sin archivos, funciona sin internet) ----
-// Cada nota suma varios armónicos que se apagan a distinta velocidad (los agudos primero), con dos cuerdas apenas desafinadas (el
-// «cuerpo» del piano), un golpe de martillo y un filtro que va cerrando el brillo. Todo pasa por una reverberación suave y un compresor.
+// Versión ligera para celulares modestos: UN oscilador por nota con una onda de armónicos precalculada, sin reverberación ni ruido de
+// martillo, notas más cortas y un máximo de notas sonando a la vez (si entra una más, la más antigua se apaga con un desvanecimiento).
 // Para afinar el sonido a tu gusto cambia estas constantes:
-const SON = { duracion: 2.4, volumen: 0.32, brillo: 7, reverb: 0.22, inarmonia: 0.0004 }; // duración base (s), volumen, brillo inicial (× la nota), cantidad de reverb, «metálico» de las cuerdas
-const ARMONICOS = [1, 0.6, 0.34, 0.2, 0.12, 0.07]; // fuerza de cada armónico (el primero es la nota base)
-let bus = null, ruido = null;
+const SON = { duracion: 1.4, volumen: 0.4, voces: 4 }; // duración base (s), volumen, notas simultáneas máximas
+const ARMONICOS = [1, 0.5, 0.25, 0.12]; // fuerza de cada armónico (el primero es la nota base)
+let bus = null, onda = null, vivas = [];
 function prepararAudio() {
-  if (audio) { if (audio.state === "suspended") audio.resume(); return; } // Safari/iOS lo dejan suspendido hasta el primer toque
-  audio = new AudioContext();
+  if (audio) { if (audio.state !== "running") audio.resume().catch(() => {}); return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) throw new Error("Este navegador no soporta Web Audio");
+  audio = new AC();
   const comp = audio.createDynamicsCompressor(); // evita que se sature cuando suenan varias notas juntas
   comp.threshold.value = -20; comp.knee.value = 24; comp.ratio.value = 4; comp.attack.value = 0.003; comp.release.value = 0.25;
   comp.connect(audio.destination);
   bus = audio.createGain(); bus.connect(comp);
-  // Reverberación: una «respuesta de sala» de ruido que se apaga sola
-  const n = Math.floor(audio.sampleRate * 1.8), imp = audio.createBuffer(2, n, audio.sampleRate);
-  for (let c = 0; c < 2; c++) { const d = imp.getChannelData(c); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3); }
-  const conv = audio.createConvolver(); conv.buffer = imp;
-  const mojado = audio.createGain(); mojado.gain.value = SON.reverb;
-  bus.connect(conv); conv.connect(mojado); mojado.connect(comp);
-  // Golpe seco del martillo (ruido de 40 ms)
-  const m = Math.floor(audio.sampleRate * 0.04);
-  ruido = audio.createBuffer(1, m, audio.sampleRate);
-  const r = ruido.getChannelData(0); for (let i = 0; i < m; i++) r[i] = (Math.random() * 2 - 1) * (1 - i / m);
+  // Una sola onda con todos los armónicos: 1 oscilador por nota en lugar de 12
+  const real = new Float32Array(ARMONICOS.length + 1), imag = new Float32Array(ARMONICOS.length + 1);
+  ARMONICOS.forEach((a, i) => { imag[i + 1] = a; });
+  onda = audio.createPeriodicWave(real, imag);
+  // Desbloqueo para Android/iOS: un sonido silencioso de 1 muestra
+  const s = audio.createBufferSource();
+  s.buffer = audio.createBuffer(1, 1, 22050);
+  s.connect(audio.destination); s.start(0);
+  if (audio.state !== "running") audio.resume().catch(() => {});
 }
 function sonarNota(f) {
   const t = audio.currentTime, vol = SON.volumen;
   const dur = SON.duracion * Math.min(1.5, Math.max(0.5, 1.6 - Math.log2(f / 130) * 0.25)); // los graves duran más que los agudos
-  const filtro = audio.createBiquadFilter(); // al inicio brilla y luego se va apagando, como un piano real
-  filtro.type = "lowpass"; filtro.Q.value = 0.5;
-  filtro.frequency.setValueAtTime(Math.min(f * SON.brillo, 10000), t);
-  filtro.frequency.exponentialRampToValueAtTime(Math.max(f * 2, 500), t + dur * 0.5);
-  const env = audio.createGain(); // ataque rápido, caída inicial y cola larga
-  env.gain.setValueAtTime(0.0001, t);
-  env.gain.linearRampToValueAtTime(vol, t + 0.005);
-  env.gain.exponentialRampToValueAtTime(vol * 0.4, t + 0.35);
-  env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  filtro.connect(env); env.connect(bus);
-  ARMONICOS.forEach((a, i) => {
-    const k = i + 1, fk = f * k * Math.sqrt(1 + SON.inarmonia * k * k); // las cuerdas reales no son perfectamente armónicas
-    if (fk > 12000) return;
-    for (const cents of [-3, 3]) { // dos cuerdas por nota, apenas desafinadas: da el «cuerpo» y un leve vibrato natural
-      const o = audio.createOscillator(), g = audio.createGain();
-      o.type = "sine"; o.frequency.value = fk; o.detune.value = cents;
-      g.gain.setValueAtTime(a / 2, t);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur / (1 + i * 0.6)); // los armónicos agudos se apagan antes
-      o.connect(g); g.connect(filtro);
-      o.start(t); o.stop(t + dur + 0.05);
-    }
-  });
-  const h = audio.createBufferSource(), bp = audio.createBiquadFilter(), gh = audio.createGain();
-  h.buffer = ruido; bp.type = "bandpass"; bp.frequency.value = Math.min(f * 3, 5000); bp.Q.value = 0.8; gh.gain.value = vol * 0.6;
-  h.connect(bp); bp.connect(gh); gh.connect(bus); h.start(t);
+  while (vivas.length >= SON.voces) { // demasiadas notas a la vez: se apaga la más antigua
+    const v = vivas.shift();
+    try { v.g.gain.cancelScheduledValues(t); v.g.gain.setTargetAtTime(0, t, 0.02); v.o.stop(t + 0.15); } catch (e) {}
+  }
+  const o = audio.createOscillator(), g = audio.createGain();
+  o.setPeriodicWave(onda); o.frequency.value = f;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.005);
+  g.gain.exponentialRampToValueAtTime(vol * 0.35, t + 0.3);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(bus);
+  o.start(t); o.stop(t + dur + 0.05);
+  const v = { o, g };
+  vivas.push(v);
+  o.onended = () => { g.disconnect(); const i = vivas.indexOf(v); if (i >= 0) vivas.splice(i, 1); };
 }
 function sonarError() { // golpe grave y corto al tocar la tecla equivocada
   try {
@@ -186,7 +177,11 @@ function sonarError() { // golpe grave y corto al tocar la tecla equivocada
   } catch (e) {}
 }
 function nota() {
-  try { prepararAudio(); sonarNota(melodia[puntos % melodia.length]); } catch (e) {} // al terminar la melodía, vuelve a empezar
+  try {
+    prepararAudio();
+    if (audio.state === "suspended") audio.resume().catch(() => {});
+    sonarNota(melodia[puntos % melodia.length]); // al terminar la melodía, vuelve a empezar
+  } catch (e) { console.warn("Piano: no se pudo sonar la nota", e); }
 }
 const columna = () => Math.floor(Math.random() * COLS);
 function empezar() {
@@ -330,6 +325,9 @@ const pausa = crearMenuPausa({
   ayudaSalir: "Pierdes los puntos de esta partida.",
 });
 document.addEventListener("visibilitychange", () => { if (document.hidden && vivo && !pausado) pausa.abrir(); }); // al cambiar de pestaña se pausa solo
+// Desbloqueo del audio con el primer gesto real (touchend/click/keydown sí cuentan en Android y iOS)
+const desbloquear = () => { try { prepararAudio(); } catch (e) { console.warn("Piano: audio", e); } };
+["touchend", "click", "keydown"].forEach((ev) => document.addEventListener(ev, desbloquear, { passive: true }));
 cv.addEventListener("pointerdown", tocar);
 jugar.addEventListener("click", empezar);
 mostrarMenu();
