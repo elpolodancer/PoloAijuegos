@@ -18,7 +18,7 @@
     .tiempo { flex: none; width: min(calc(100vw - 24px), 480px); height: 14px; background: rgba(0,0,0,.28); border: 2px solid #15171a; border-radius: 99px; overflow: hidden; }
     #barra { height: 100%; width: 100%; border-radius: 99px; background: linear-gradient(90deg, #ff7aa8, #ffd24d); transition: width .1s linear; }
     #barra.poco { background: #ff4d5e; }
-    .tablero { position: relative; flex: none; overflow: hidden; border-radius: 22px; background: linear-gradient(160deg, #6a3d9a, #3b2a73); box-shadow: 0 8px 0 #251a4d, 0 14px 22px rgba(0,0,0,.5); touch-action: none; user-select: none; -webkit-user-select: none;
+    .tablero { position: relative; flex: none; overflow: hidden; border-radius: 22px; background: linear-gradient(160deg, #e3d3fb, #bfa3ee); border: 3px solid #a98ae0; box-shadow: 0 8px 0 #8d6fcb, 0 14px 22px rgba(60,30,110,.35); touch-action: none; user-select: none; -webkit-user-select: none;
       /* --asp (columnas ÷ filas) y --maxw los pone juego-gominolas.js según el tablero (6×8 … 14×16) */
       width: min(calc(100vw - 24px), calc((100vh - 216px) * var(--asp, 0.75)), var(--maxw, 480px));
       width: min(calc(100vw - 24px), calc((100dvh - 216px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * var(--asp, 0.75)), var(--maxw, 480px)); }
@@ -68,9 +68,9 @@
     <h1 class="pant-titulo">🍬 Conecta gominolas</h1>
     <p class="pant-sub">Junta gominolas iguales para eliminar las negras.</p>
     <div class="pant-botones">
-      <button class="b3d txt grande b-verde" id="menuContinuar" type="button"><span class="b-ico">▶</span> Continuar · nivel&nbsp;<span id="menuNivel">1</span></button>
       <button class="b3d txt grande b-morado" id="menuLibre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
-      <button class="b3d txt grande b-azul" id="menuNiveles" type="button"><span class="b-ico">🗺️</span> Niveles</button>
+      <button class="b3d txt grande b-verde" id="menuContinuar" type="button"><span class="b-ico">▶</span> Continuar · nivel&nbsp;<span id="menuNivel">1</span></button>
+      <button class="b3d txt grande b-azul" id="menuNiveles" type="button"><span class="b-ico">🗺️</span> Mapa</button>
       <button class="b3d txt b-gris" id="menuInfo" type="button"><span class="b-ico">ℹ️</span> Info</button>
     </div>
   </section>
