@@ -45,23 +45,45 @@
     #estado:empty { display: none; }
     body.jugando .hud-der { display: none; } /* «Guardar puntos» no estorba durante la partida */
 
+    /* Menú principal: dos botones grandes (Niveles y Canciones) */
+    #inicio:not([hidden]) { display: flex; flex-direction: column; gap: 16px; align-items: stretch; width: 100%; }
+    #inicio .b3d { width: 100%; font-size: 22px; }
+    /* Pantalla de canciones */
     #menu:not([hidden]) { display: flex; flex-direction: column; gap: 12px; align-items: center; width: 100%; }
     #rejilla { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; width: 100%; }
-    .cuadro { position: relative; aspect-ratio: 1 / 1; min-width: 0; padding: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; color: #fff; font: inherit; cursor: pointer; border: 2px solid #15171a; border-radius: 15px; overflow: hidden;
+    .celda { position: relative; min-width: 0; }
+    .cuadro { position: relative; width: 100%; aspect-ratio: 1 / 1; min-width: 0; padding: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; color: #fff; font: inherit; cursor: pointer; border: 2px solid #15171a; border-radius: 15px; overflow: hidden;
       background: linear-gradient(135deg, var(--c1, #5a46c8), var(--c2, #2a2260)); box-shadow: 0 5px 0 #15171a, inset 0 2px 0 rgba(255,255,255,.3); margin-bottom: 5px; -webkit-tap-highlight-color: transparent; transition: transform .07s, box-shadow .07s; }
     .cuadro .nota { font-size: 1.8rem; line-height: 1; }
     .cuadro b { font-size: .8rem; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; text-shadow: 0 2px 0 rgba(0,0,0,.4); }
     .cuadro small { position: absolute; right: 8px; bottom: 4px; font-size: .75rem; font-weight: 700; text-shadow: 0 0 3px #000; }
     .cuadro:active { transform: translateY(4px); box-shadow: 0 1px 0 #15171a; }
     .cuadro:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+    /* Estrellita de favorita (☆ / ⭐) en la esquina de cada canción */
+    .fav { position: absolute; z-index: 1; top: 6px; right: 6px; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 19px; line-height: 1; color: #fff; cursor: pointer;
+      background: rgba(0,0,0,.42); border: 2px solid rgba(255,255,255,.75); border-radius: 50%; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    .fav.on { background: rgba(255,176,32,.55); border-color: #fff08c; }
+    .fav:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+    /* Filtros: tres botones en una fila (Con MIDI, Sin MIDI, Favoritas), cada uno con su cantidad debajo */
     .filtros { display: flex; gap: 8px; width: 100%; }
-    .filtros .b3d { flex: 1; min-width: 0; padding: 0 8px; font-size: 13px; }
+    .filtros .b3d { --t: 46px; flex: 1; min-width: 0; flex-direction: column; gap: 0; padding: 2px 4px; font-size: 12px; line-height: 1.15; }
+    .filtros .b3d small { font-size: 11px; font-weight: 700; opacity: .9; }
+    .vacio { margin: 0; padding: 10px 14px; color: #f1f2f4; font-size: .85rem; line-height: 1.35; background: linear-gradient(180deg, #3a3d45, #22242a); border: 2px solid #121316; border-radius: 16px; }
+    /* Récords del final de la partida: lo logrado en el minuto 1, 2 y 3 frente al récord anterior */
+    .records { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; }
+    .rec { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 8px 4px; color: #f1f2f4; background: linear-gradient(180deg, #3a3d45, #22242a); border: 2px solid #121316; border-radius: 14px; box-shadow: 0 4px 0 #0c0d0f, inset 0 2px 0 rgba(255,255,255,.15); }
+    .rec small { font-size: .72rem; color: #b0b4bd; }
+    .rec b { font-size: 1.6rem; line-height: 1.1; }
+    .rec span { font-size: .72rem; color: #b0b4bd; }
+    .rec.nuevo { border-color: #ffb020; } .rec.nuevo b, .rec.nuevo span { color: #fff08c; }
     .fila-fin { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    /* Aviso corto (por ejemplo «este nivel todavía no está listo»): por encima del mapa y de los botones fijos */
+    .aviso { position: fixed; z-index: 50; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: max-content; max-width: min(90vw, 340px); padding: 10px 16px; text-align: center; color: #f1f2f4; font-size: .9rem; line-height: 1.3; pointer-events: none;
+      background: linear-gradient(180deg, #3a3d45, #22242a); border: 2px solid #121316; border-radius: 16px; box-shadow: 0 4px 0 #0c0d0f, 0 8px 14px rgba(0,0,0,.4); }
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>
-  <!-- Navegación estándar (arriba a la izquierda): 🎮 Juegos siempre; ☰ Pausa solo durante la partida
-       (el menú de canciones ES el menú principal del juego, así que ahí no se muestra) -->
+  <!-- Navegación estándar (arriba a la izquierda): 🎮 Juegos siempre; ☰ fuera del menú principal (dice «Menú principal» o, en partida, «Pausa»: lo rotula juego-piano.js) -->
   <nav class="nav-juego" aria-label="Navegación">
     <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
     <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> Pausa</button>
@@ -77,18 +99,27 @@
       <canvas id="lienzo" class="lienzo" width="320" height="520" hidden aria-label="Piano: toca las teclas negras"></canvas>
       <div id="capa">
         <p id="estado"></p>
-        <div id="menu">
+        <!-- Menú principal: 1) Niveles (mapa estándar del portal) y 2) Canciones -->
+        <div id="inicio">
+          <button id="bNiveles" class="b3d txt grande b-azul" type="button"><span class="b-ico">🗺️</span> Niveles</button>
+          <button id="bCanciones" class="b3d txt grande b-morado" type="button"><span class="b-ico">🎵</span> Canciones</button>
+        </div>
+        <!-- Canciones: cualquiera se puede jugar; ☆ la guarda en favoritas -->
+        <div id="menu" hidden>
           <button id="modoAzar" class="b3d txt grande b-morado" type="button"><span class="b-ico">🎲</span> Modo aleatorio</button>
-          <!-- Filtros: canciones que vienen de un archivo .mid o que están escritas a mano (aparece cuando cargan las de MIDI) -->
-          <div id="filtros" class="filtros" hidden>
-            <button id="fMidi" class="b3d txt chico b-azul" type="button" aria-pressed="false"><span class="b-ico">🎼</span> Con MIDI (<span id="nMidi">0</span>)</button>
-            <button id="fSin" class="b3d txt chico b-azul" type="button" aria-pressed="false"><span class="b-ico">✍️</span> Sin MIDI (<span id="nSin">0</span>)</button>
+          <!-- Filtros: canciones con archivo .mid, escritas a mano o favoritas («Con» y «Sin» MIDI aparecen cuando cargan las de MIDI) -->
+          <div id="filtros" class="filtros">
+            <button id="fMidi" class="b3d txt chico b-azul" type="button" aria-pressed="false" hidden><span>🎼 Con MIDI</span><small id="nMidi">0</small></button>
+            <button id="fSin" class="b3d txt chico b-azul" type="button" aria-pressed="false" hidden><span>✍️ Sin MIDI</span><small id="nSin">0</small></button>
+            <button id="fFav" class="b3d txt chico b-oro" type="button" aria-pressed="false"><span>⭐ Favoritas</span><small id="nFav">0</small></button>
           </div>
           <div id="rejilla"></div>
+          <p id="vacio" class="vacio" hidden></p>
         </div>
+        <div id="records" class="records" hidden></div>
         <div class="fila-fin">
           <button id="jugar" class="b3d txt grande b-verde" type="button" hidden>Jugar otra vez</button>
-          <button id="alMenu" class="b3d txt grande b-gris" type="button" hidden>‹ Menú</button>
+          <button id="alMenu" class="b3d txt grande b-gris" type="button" hidden>‹ Volver</button>
         </div>
       </div>
     </div>
