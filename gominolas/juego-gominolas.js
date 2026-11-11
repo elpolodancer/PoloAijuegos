@@ -51,20 +51,22 @@ const PODERES = {
 };
 
 const NEGRA = -1;           // valor de «k» de una gominola negra
-const NEGRA_COL = { c: "#4b4560", o: "#1c1830" };
+const NEGRA_COL = { c: "#3d3a5e", l: "#6a6791", d: "#242240", o: "#16142b" };
 
-// Colores planos y alegres (el contorno «o» es una versión más oscura del mismo tono)
+// Colores de gelatina como la imagen de referencia: c = color, l = claro (brillos), d = oscuro (abajo), o = borde.
+// Cada color es un animalito distinto (ver trazoForma): 0 perrito rojo · 1 gatito rosa · 2 gatito amarillo · 3 perrito verde · 4 gatito azul · 5 osito morado.
 const PALETA = [
-  { c: "#ff7b9c", o: "#d94a72" }, // fresa
-  { c: "#ffb04a", o: "#e07f12" }, // naranja
-  { c: "#ffe45c", o: "#e0b400" }, // limón
-  { c: "#6fd86f", o: "#35a23a" }, // manzana
-  { c: "#5bb8ff", o: "#2a82d6" }, // arándano
-  { c: "#b88bff", o: "#8a55e0" }, // uva
+  { c: "#f2381f", l: "#ff7a55", d: "#c01a10", o: "#9e1209" }, // rojo
+  { c: "#ff5fd2", l: "#ffa6ec", d: "#d93bb0", o: "#b02490" }, // rosa
+  { c: "#ffd21f", l: "#fff07a", d: "#f0a400", o: "#c98200" }, // amarillo
+  { c: "#5ed22b", l: "#a6f26a", d: "#2fa31a", o: "#1f7d10" }, // verde
+  { c: "#27c3ff", l: "#8fe6ff", d: "#0a90e0", o: "#0a6fb5" }, // azul
+  { c: "#a86bff", l: "#d1abff", d: "#7a3fe0", o: "#5b27b0" }, // morado (solo si COLORES = 6)
 ];
 const NOTAS = [262, 294, 330, 392, 440, 523, 587, 659, 784, 880];
 
 const colorK = (k) => (k >= 0 ? PALETA[k] : NEGRA_COL);
+const cuerpos = new Map(); // cuerpos de gelatina ya dibujados (se vacía al cambiar el tamaño)
 
 // ---------- Elementos ----------
 const lienzo = document.getElementById("lienzo");
@@ -764,6 +766,7 @@ function ajustar() {
   lienzo.width = Math.round(w * dpr);
   lienzo.height = Math.round(tam * FILAS * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cuerpos.clear();
 }
 window.addEventListener("resize", ajustar);
 // Cambia el tamaño del tablero (columnas × filas): el CSS usa --asp (proporción) y --maxw (ancho máximo) para dimensionarlo
@@ -804,115 +807,190 @@ function dibujarCadenas(r, n) {
   if (n === 1) { cadena(-r * 0.85, r * 0.55, r * 0.85, -r * 0.55); candado(0, r * 0.12); }
   else { cadena(-r * 0.85, r * 0.55, r * 0.85, -r * 0.55); cadena(-r * 0.85, -r * 0.55, r * 0.85, r * 0.55); candado(-r * 0.46, r * 0.3); candado(r * 0.46, r * 0.3); }
 }
+// ---------- Gominolas de gelatina (como la imagen de referencia) ----------
+// Cada color es un animalito distinto: rojo = perrito de orejas caídas · rosa = gatito de orejas puntiagudas · amarillo = gatito redondo ·
+// verde = perrito con copete · azul = gatito cuadrado · morado = osito. Las negras son un cubo oscuro con UN ojo grande y el ceño fruncido.
+// El CUERPO (color, borde y brillo de gelatina) se dibuja una sola vez en un lienzo aparte y se reutiliza (cuerpos, se vacía en ajustar());
+// la CARA se dibuja en vivo porque parpadea y cambia al seleccionar la gominola.
+const elipse = (g, x, y, rx, ry, rot = 0) => { g.moveTo(x + rx * Math.cos(rot), y + rx * Math.sin(rot)); g.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); };
+const caja = (g, x0, y0, x1, y1, q) => { // rectángulo de esquinas redondas (roundRect no existe en navegadores viejos)
+  g.moveTo(x0 + q, y0); g.lineTo(x1 - q, y0); g.quadraticCurveTo(x1, y0, x1, y0 + q); g.lineTo(x1, y1 - q); g.quadraticCurveTo(x1, y1, x1 - q, y1);
+  g.lineTo(x0 + q, y1); g.quadraticCurveTo(x0, y1, x0, y1 - q); g.lineTo(x0, y0 + q); g.quadraticCurveTo(x0, y0, x0 + q, y0); g.closePath();
+};
+
+// Silueta de cada animalito (unidades de r). Varias formas en un solo trazo: se rellenan como una sola pieza.
+function trazoForma(g, k, r) {
+  g.beginPath();
+  const E = (x, y, rx, ry, rot) => elipse(g, x * r, y * r, rx * r, ry * r, rot || 0);
+  const T = (ax, ay, bx, by, cx, cy) => { // triángulo (oreja) siempre en el mismo sentido que las elipses, para que al rellenar no queden huecos en el solape
+    if ((bx - ax) * (cy - by) - (by - ay) * (cx - bx) < 0) { [bx, cx] = [cx, bx]; [by, cy] = [cy, by]; }
+    g.moveTo(ax * r, ay * r); g.lineTo(bx * r, by * r); g.lineTo(cx * r, cy * r); g.closePath();
+  };
+  if (k === NEGRA) caja(g, -0.84 * r, -0.78 * r, 0.84 * r, 0.82 * r, 0.4 * r);
+  else if (k === 0) { E(0, 0.02, 0.7, 0.74); E(-0.8, 0.12, 0.25, 0.5, 0.2); E(0.8, 0.12, 0.25, 0.5, -0.2); }                       // perrito rojo
+  else if (k === 1) { E(0, 0.14, 0.86, 0.68); T(-0.9, 0.0, -0.74, -0.86, -0.12, -0.5); T(0.9, 0.0, 0.74, -0.86, 0.12, -0.5); }   // gatito rosa
+  else if (k === 2) { E(0, 0.1, 0.9, 0.72); E(-0.62, -0.58, 0.24, 0.24); E(0.62, -0.58, 0.24, 0.24); }                          // gatito amarillo
+  else if (k === 3) { E(0, 0.06, 0.68, 0.7); E(-0.78, 0.16, 0.2, 0.36, 0.15); E(0.78, 0.16, 0.2, 0.36, -0.15); T(-0.14, -0.6, 0.06, -0.96, 0.26, -0.6); } // perrito verde
+  else if (k === 4) { caja(g, -0.84 * r, -0.6 * r, 0.84 * r, 0.86 * r, 0.3 * r); T(-0.86, -0.4, -0.74, -0.94, -0.26, -0.62); T(0.86, -0.4, 0.74, -0.94, 0.26, -0.62); } // gatito azul
+  else { E(0, 0.08, 0.82, 0.76); E(-0.58, -0.62, 0.26, 0.26); E(0.58, -0.62, 0.26, 0.26); }                                       // osito morado
+}
+
+// Cuerpo de gelatina ya pintado (borde oscuro + degradado + borde interior claro + brillos). Se guarda por color y tamaño.
+function cuerpoSprite(k, r, col) {
+  const dpr = window.devicePixelRatio || 1;
+  const clave = k + "|" + Math.round(r * dpr);
+  let s = cuerpos.get(clave);
+  if (s) return s;
+  const lado = Math.ceil(r * 2.6 * dpr);
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = lado;
+  const g = cv.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, lado / 2, lado / 2);
+  g.lineJoin = "round"; g.lineCap = "round";
+  trazoForma(g, k, r);
+  g.lineWidth = r * 0.1; g.strokeStyle = col.o; g.stroke();         // el borde se ve solo por fuera (el relleno tapa su mitad interior)
+  const gr = g.createLinearGradient(0, -r, 0, r);
+  gr.addColorStop(0, col.l); gr.addColorStop(0.5, col.c); gr.addColorStop(1, col.d);
+  g.fillStyle = gr; g.fill();
+  g.save(); g.clip();
+  const rim = g.createRadialGradient(0, 0, r * 0.45, 0, 0, r * 1.05); // borde interior claro = gelatina translúcida (con degradado, así no marca las uniones de orejas y cabeza)
+  rim.addColorStop(0, col.l + "00"); rim.addColorStop(1, col.l + "88");
+  g.fillStyle = rim; g.fill();
+  g.fillStyle = col.l; g.globalAlpha = 0.35;
+  g.beginPath(); g.ellipse(0, r * 0.64, r * 0.5, r * 0.13, 0, 0, Math.PI * 2); g.fill();            // luz que rebota abajo
+  g.fillStyle = "#fff"; g.globalAlpha = 0.55;
+  g.beginPath(); g.ellipse(-r * 0.34, -r * 0.33, r * 0.27, r * 0.11, -0.5, 0, Math.PI * 2); g.fill(); // brillo grande arriba a la izquierda
+  g.globalAlpha = 0.9;
+  g.beginPath(); g.ellipse(-r * 0.62, -r * 0.14, r * 0.06, r * 0.045, -0.9, 0, Math.PI * 2); g.fill(); // puntito de brillo
+  g.restore();
+  s = { cv, lado: lado / dpr };
+  cuerpos.set(clave, s);
+  return s;
+}
+
+// Cara en vivo. feliz = seleccionada (ojos en ^ y boca abierta); parpadea = ojos de puntito cerrados un instante
+function cara(k, r, col, feliz, parpadea) {
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  const tinta = col.o;
+  ctx.strokeStyle = tinta; ctx.fillStyle = tinta;
+  // ojo cerrado (‿ normal, ⌒ feliz)
+  const cerrado = (x, y, w) => { ctx.lineWidth = r * 0.075; ctx.beginPath(); if (feliz) ctx.arc(x, y + w * 0.5, w, Math.PI * 1.12, Math.PI * 1.88); else ctx.arc(x, y - w * 0.4, w, Math.PI * 0.12, Math.PI * 0.88); ctx.stroke(); };
+  const punto = (x, y) => {
+    if (feliz || parpadea) { cerrado(x, y, r * 0.1); return; }
+    ctx.fillStyle = tinta; ctx.beginPath(); ctx.arc(x, y, r * 0.085, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(x - r * 0.025, y - r * 0.03, r * 0.03, 0, Math.PI * 2); ctx.fill();
+  };
+  const hocico = (x, y, rx, ry) => { // óvalo claro con nariz, como el de los perritos de la imagen
+    ctx.globalAlpha = 0.6; ctx.fillStyle = col.l; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+    ctx.fillStyle = tinta; ctx.beginPath(); ctx.ellipse(x, y - ry * 0.35, rx * 0.42, ry * 0.36, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.8)"; ctx.beginPath(); ctx.ellipse(x - rx * 0.12, y - ry * 0.5, rx * 0.14, ry * 0.1, -0.4, 0, Math.PI * 2); ctx.fill();
+  };
+  const gatuno = (y) => { // nariz, boca en «w» y bigotes
+    ctx.fillStyle = tinta; ctx.beginPath(); ctx.ellipse(0, y, r * 0.065, r * 0.045, 0, 0, Math.PI * 2); ctx.fill();
+    if (!feliz) { ctx.lineWidth = r * 0.05; ctx.beginPath(); ctx.arc(-r * 0.07, y + r * 0.04, r * 0.07, Math.PI * 0.1, Math.PI * 0.9); ctx.arc(r * 0.07, y + r * 0.04, r * 0.07, Math.PI * 0.1, Math.PI * 0.9); ctx.stroke(); }
+    ctx.globalAlpha = 0.55; ctx.lineWidth = r * 0.035; ctx.beginPath();
+    for (const s of [-1, 1]) { ctx.moveTo(s * r * 0.52, y - r * 0.02); ctx.lineTo(s * r * 0.82, y - r * 0.08); ctx.moveTo(s * r * 0.52, y + r * 0.08); ctx.lineTo(s * r * 0.8, y + r * 0.13); }
+    ctx.stroke(); ctx.globalAlpha = 1;
+  };
+  let boca = 0.4;
+  if (k === 0) { punto(-r * 0.34, -r * 0.3); punto(r * 0.34, -r * 0.3); hocico(0, r * 0.14, r * 0.3, r * 0.22); boca = 0.5; }
+  else if (k === 1) { cerrado(-r * 0.36, r * 0.02, r * 0.13); cerrado(r * 0.36, r * 0.02, r * 0.13); gatuno(r * 0.16); boca = 0.38; }
+  else if (k === 2) { cerrado(-r * 0.36, r * 0.04, r * 0.14); cerrado(r * 0.36, r * 0.04, r * 0.14); gatuno(r * 0.18); boca = 0.4; }
+  else if (k === 3) { punto(-r * 0.3, -r * 0.22); punto(r * 0.3, -r * 0.22); hocico(0, r * 0.22, r * 0.32, r * 0.22); boca = 0.52; }
+  else if (k === 4) { cerrado(-r * 0.4, -r * 0.02, r * 0.14); cerrado(r * 0.4, -r * 0.02, r * 0.14); gatuno(r * 0.16); boca = 0.4; }
+  else { punto(-r * 0.32, -r * 0.12); punto(r * 0.32, -r * 0.12); hocico(0, r * 0.3, r * 0.26, r * 0.18); boca = 0.56; }
+  if (feliz) { // boca abierta
+    ctx.fillStyle = "#7a2748"; ctx.beginPath(); ctx.ellipse(0, r * boca, r * 0.14, r * 0.11, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#ff8fa8"; ctx.beginPath(); ctx.ellipse(0, r * (boca + 0.05), r * 0.08, r * 0.05, 0, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+// Gominola negra: un solo ojo grande y blanco que se mueve un poco, y el ceño fruncido
+function caraNegra(r, t, parpadea) {
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  const ey = -r * 0.14;
+  if (parpadea) {
+    ctx.strokeStyle = "#e9e6f7"; ctx.lineWidth = r * 0.08; ctx.beginPath(); ctx.moveTo(-r * 0.24, ey); ctx.lineTo(r * 0.24, ey); ctx.stroke();
+  } else {
+    ctx.fillStyle = "#fff"; ctx.strokeStyle = "#14122a"; ctx.lineWidth = r * 0.05;
+    ctx.beginPath(); ctx.ellipse(0, ey, r * 0.27, r * 0.31, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    const mx = Math.sin(t * 0.8) * r * 0.05;
+    ctx.fillStyle = "#1b1830"; ctx.beginPath(); ctx.arc(mx, ey + r * 0.03, r * 0.14, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(mx - r * 0.05, ey - r * 0.03, r * 0.05, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.strokeStyle = "#14122a"; ctx.lineWidth = r * 0.08;
+  ctx.beginPath(); ctx.arc(0, r * 0.7, r * 0.2, Math.PI * 1.2, Math.PI * 1.8); ctx.stroke();
+}
+
+// ----- Efectos de los boosts (detrás de la gominola) -----
+const RAYOS_FINOS = 16;     // rayitos delgados que giran como las manecillas del reloj
+const RAYOS_GRUESOS = 16;   // «rectangulitos» (4 veces más anchos) que giran al revés y sobresalen un poco de la gominola
+function efectosPoder(r, t) {
+  const halo = ctx.createRadialGradient(0, 0, r * 0.4, 0, 0, r * 1.18);
+  halo.addColorStop(0, "rgba(255,255,255,.9)"); halo.addColorStop(0.7, "rgba(255,255,255,.35)"); halo.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(0, 0, r * 1.18, 0, Math.PI * 2); ctx.fill();
+  // delgados: sentido de las manecillas (en el canvas, girar con ángulo positivo es hacia la derecha)
+  ctx.save(); ctx.rotate(t * 0.7);
+  ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.lineWidth = r * 0.035; ctx.beginPath();
+  for (let i = 0; i < RAYOS_FINOS; i++) {
+    const a = (i * Math.PI * 2) / RAYOS_FINOS, largo = i % 2 ? 1.08 : 1.17;
+    ctx.moveTo(Math.cos(a) * r * 0.5, Math.sin(a) * r * 0.5); ctx.lineTo(Math.cos(a) * r * largo, Math.sin(a) * r * largo);
+  }
+  ctx.stroke(); ctx.restore();
+  // gruesos: contra las manecillas, entre los delgados; nunca pasan de la casilla (el borde está a ≈1.19 r)
+  ctx.save(); ctx.rotate(-t * 0.9);
+  ctx.strokeStyle = "rgba(255,255,255,.9)"; ctx.lineWidth = r * 0.14; ctx.lineCap = "butt"; ctx.beginPath();
+  for (let i = 0; i < RAYOS_GRUESOS; i++) {
+    const a = ((i + 0.5) * Math.PI * 2) / RAYOS_GRUESOS;
+    ctx.moveTo(Math.cos(a) * r * 0.8, Math.sin(a) * r * 0.8); ctx.lineTo(Math.cos(a) * r * 1.1, Math.sin(a) * r * 1.1);
+  }
+  ctx.stroke(); ctx.restore();
+}
+// Picos de línea: el boost vertical los lleva arriba y abajo, el horizontal a los lados. Salen y vuelven al centro (brillo que sube y baja).
+// Se dibujan en una segunda pasada, ENCIMA de las gominolas vecinas, como en la imagen de referencia.
+function puntasPoder(x, y, r, poder, t) {
+  const ciclo = 0.5 + 0.5 * Math.sin(t * 3.4 - Math.PI / 2); // 0 → 1 → 0
+  const base = r * 0.7, L = r * (0.25 + 0.9 * ciclo), w = r * (0.14 + 0.16 * ciclo);
+  const punta = (largo, ancho, color) => { ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(base, 0); ctx.lineTo(base + largo * 0.5, -ancho); ctx.lineTo(base + largo, 0); ctx.lineTo(base + largo * 0.5, ancho); ctx.closePath(); ctx.fill(); };
+  ctx.save(); ctx.translate(x, y); ctx.lineJoin = "round";
+  for (const a of poder === "vertical" ? [-Math.PI / 2, Math.PI / 2] : [0, Math.PI]) {
+    ctx.save(); ctx.rotate(a);
+    punta(L * 1.08, w * 1.9, "rgba(60,225,110," + (0.3 + 0.3 * ciclo).toFixed(2) + ")"); // estela verde exterior
+    punta(L, w * 1.15, "rgba(80,235,120,.92)");                                              // verde
+    punta(L * 0.92, w * 0.5, "#fff");                                                        // centro blanco
+    ctx.restore();
+  }
+  ctx.restore();
+}
+// Boost de color: estrellita en una medallita (los de línea ya se reconocen por sus picos)
+function medallaEstrella(r, col) {
+  const bx = r * 0.64, by = r * 0.64, br = r * 0.3;
+  ctx.fillStyle = "#fff"; ctx.strokeStyle = col.o; ctx.lineWidth = r * 0.07;
+  ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.save(); ctx.translate(bx, by);
+  ctx.fillStyle = col.o; ctx.lineWidth = r * 0.04;
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) { const rr = i % 2 ? br * 0.42 : br * 0.82, an = -Math.PI / 2 + (i * Math.PI) / 5; ctx.lineTo(Math.cos(an) * rr, Math.sin(an) * rr); }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+
+// opc: { negra, sel, fase, capas, poder, k } · fase desfasa parpadeo y giros para que no vayan todas iguales
 function oso(x, y, r, col, esc, opc = {}) {
   const negra = !!opc.negra, feliz = !!opc.sel, fase = opc.fase || 0;
+  const k = negra ? NEGRA : (opc.k ?? PALETA.indexOf(col));
   const t = performance.now() / 1000 + fase;
   const parpadea = !feliz && t % 3.6 < 0.14;
-  const tinta = negra ? "#e9e6f7" : "#5a2d4a"; // color de la boca
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(esc, esc);
   ctx.lineJoin = "round"; ctx.lineCap = "round";
-  // aura brillante y que late (solo los ositos con poder)
-  if (opc.poder) {
-    const lat = 0.5 + 0.5 * Math.sin(t * 4.5);
-    ctx.fillStyle = "rgba(255,255,255," + (0.35 + 0.25 * lat).toFixed(2) + ")";
-    ctx.strokeStyle = "#ffd84d"; ctx.lineWidth = r * 0.08;
-    ctx.beginPath(); ctx.arc(0, 0, r * (1.04 + 0.04 * lat), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  }
-  // sombra en el suelo
-  ctx.fillStyle = "rgba(60,30,110,.20)";
-  ctx.beginPath(); ctx.ellipse(0, r * 0.98, r * 0.78, r * 0.16, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = col.c; ctx.strokeStyle = col.o; ctx.lineWidth = r * 0.07;
-  // piecitos
-  for (const s of [-1, 1]) {
-    ctx.beginPath(); ctx.ellipse(s * r * 0.45, r * 0.86, r * 0.26, r * 0.16, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  }
-  // orejitas redondas con el centro más claro
-  for (const s of [-1, 1]) {
-    ctx.fillStyle = col.c;
-    ctx.beginPath(); ctx.arc(s * r * 0.62, -r * 0.66, r * 0.3, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = negra ? "rgba(255,255,255,.18)" : "rgba(255,255,255,.5)";
-    ctx.beginPath(); ctx.arc(s * r * 0.62, -r * 0.66, r * 0.15, 0, Math.PI * 2); ctx.fill();
-  }
-  // cuerpo (un poco más ancho que alto, como gelatina)
-  ctx.fillStyle = col.c;
-  ctx.beginPath(); ctx.ellipse(0, r * 0.04, r * 0.96, r * 0.88, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  // luz suave arriba y brillito
-  ctx.fillStyle = "rgba(255,255,255,.22)";
-  ctx.beginPath(); ctx.ellipse(0, -r * 0.34, r * 0.72, r * 0.42, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,.85)";
-  ctx.beginPath(); ctx.ellipse(-r * 0.55, -r * 0.5, r * 0.13, r * 0.08, -0.7, 0, Math.PI * 2); ctx.fill();
-  // mejillas
-  if (!negra) {
-    ctx.fillStyle = "rgba(255,90,130,.42)";
-    for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(s * r * 0.58, r * 0.24, r * 0.14, r * 0.1, 0, 0, Math.PI * 2); ctx.fill(); }
-  }
-  // ojos grandes y blancos
-  const ey = -r * 0.1;
-  for (const s of [-1, 1]) {
-    const ex = s * r * 0.29;
-    if (parpadea || feliz) {
-      // ojo cerrado (línea) o feliz (arco hacia arriba)
-      ctx.strokeStyle = "#2b1a3a"; ctx.lineWidth = r * 0.075;
-      ctx.beginPath();
-      if (feliz) ctx.arc(ex, ey + r * 0.07, r * 0.13, Math.PI * 1.08, Math.PI * 1.92);
-      else { ctx.moveTo(ex - r * 0.13, ey + r * 0.03); ctx.lineTo(ex + r * 0.13, ey + r * 0.03); }
-      ctx.stroke();
-    } else {
-      ctx.fillStyle = "#fff"; ctx.strokeStyle = negra ? "#1c1830" : col.o; ctx.lineWidth = r * 0.04;
-      ctx.beginPath(); ctx.ellipse(ex, ey, r * 0.24, r * 0.28, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      const mx = Math.sin(t * 0.8) * r * 0.045 + (negra ? 0 : 0), my = r * 0.04 + Math.cos(t * 0.6) * r * 0.02;
-      ctx.fillStyle = "#2b1a3a";
-      ctx.beginPath(); ctx.arc(ex + mx, ey + my, r * 0.125, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#fff";
-      ctx.beginPath(); ctx.arc(ex + mx - r * 0.04, ey + my - r * 0.045, r * 0.045, 0, Math.PI * 2); ctx.fill();
-    }
-  }
-  // cejas de enojo en las negras
-  if (negra) {
-    ctx.strokeStyle = "#e9e6f7"; ctx.lineWidth = r * 0.08;
-    for (const s of [-1, 1]) {
-      ctx.beginPath(); ctx.moveTo(s * r * 0.5, ey - r * 0.4); ctx.lineTo(s * r * 0.12, ey - r * 0.26); ctx.stroke();
-    }
-  }
-  // negra con capas: una cadena con candado por cada capa que le falta romper (3 capas = 2 cadenas y 2 candados; 2 capas = 1 y 1; la última capa se ve sin cadenas)
-  if (negra && opc.capas > 1) dibujarCadenas(r, opc.capas - 1);
-  // medalla con flechas (abajo a la derecha): indica el poder del osito, en su color
-  if (opc.poder) {
-    const bx = r * 0.64, by = r * 0.64, br = r * 0.3, a = r * 0.17, h = r * 0.08;
-    ctx.fillStyle = "#fff"; ctx.strokeStyle = col.o; ctx.lineWidth = r * 0.07;
-    ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.save();
-    ctx.translate(bx, by);
-    if (opc.poder === "color") { // estrella de 5 puntas: rompe todo un color
-      ctx.fillStyle = col.o; ctx.strokeStyle = col.o; ctx.lineWidth = r * 0.04; ctx.lineJoin = "round";
-      ctx.beginPath();
-      for (let i = 0; i < 10; i++) { const rr = i % 2 ? br * 0.42 : br * 0.82, an = -Math.PI / 2 + (i * Math.PI) / 5; ctx.lineTo(Math.cos(an) * rr, Math.sin(an) * rr); }
-      ctx.closePath(); ctx.fill(); ctx.stroke();
-    } else {
-      if (opc.poder === "vertical") ctx.rotate(Math.PI / 2);
-      ctx.strokeStyle = col.o; ctx.lineWidth = r * 0.06;
-      ctx.beginPath();
-      ctx.moveTo(-a, 0); ctx.lineTo(a, 0);
-      ctx.moveTo(-a + h, -h); ctx.lineTo(-a, 0); ctx.lineTo(-a + h, h);
-      ctx.moveTo(a - h, -h); ctx.lineTo(a, 0); ctx.lineTo(a - h, h);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-  // boca
-  ctx.strokeStyle = tinta; ctx.lineWidth = r * 0.07;
-  if (feliz) {
-    ctx.fillStyle = "#7a2748";
-    ctx.beginPath(); ctx.ellipse(0, r * 0.42, r * 0.17, r * 0.14, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#ff8fa8";
-    ctx.beginPath(); ctx.ellipse(0, r * 0.47, r * 0.1, r * 0.06, 0, 0, Math.PI * 2); ctx.fill();
-  } else if (negra) {
-    ctx.beginPath(); ctx.arc(0, r * 0.6, r * 0.17, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
-  } else {
-    ctx.beginPath(); ctx.arc(0, r * 0.3, r * 0.17, Math.PI * 0.15, Math.PI * 0.85); ctx.stroke();
-  }
+  if (opc.poder) efectosPoder(r, t);
+  const s = cuerpoSprite(k, r, col);
+  ctx.drawImage(s.cv, -s.lado / 2, -s.lado / 2, s.lado, s.lado);
+  if (negra) caraNegra(r, t, parpadea); else cara(k, r, col, feliz, parpadea);
+  if (negra && opc.capas > 1) dibujarCadenas(r, opc.capas - 1); // una cadena con candado por cada capa que falta romper
+  if (opc.poder === "color") medallaEstrella(r, col);
   ctx.restore();
 }
 
@@ -925,6 +1003,7 @@ function dibujar() {
       if ((f + c) % 2) ctx.fillRect(c * tam, f * tam, tam, tam);
 
   const enCadena = new Set((cadena || []).map((q) => q.f * 100 + q.c));
+  const lineales = []; // boosts de línea: sus picos se dibujan al final, encima de las vecinas
   // línea que une la cadena
   if (cadena && cadena.length > 1) {
     const kc = colorDeCadena();
@@ -950,9 +1029,13 @@ function dibujar() {
         ctx.fillStyle = "rgba(255,255,255,.6)"; ctx.strokeStyle = "#7a4fd0"; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(x, y, tam * 0.46, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       }
-      if (g.k === NEGRA) oso(x, y, tam * 0.38, NEGRA_COL, 1, { negra: true, fase, capas: g.c });
-      else oso(x, y, tam * 0.38, PALETA[g.k], sel ? 1.14 : 1, { sel, fase, poder: g.p });
+      if (g.k === NEGRA) oso(x, y, tam * 0.42, NEGRA_COL, 1, { negra: true, fase, capas: g.c });
+      else {
+        oso(x, y, tam * 0.42, PALETA[g.k], sel ? 1.14 : 1, { sel, fase, poder: g.p, k: g.k });
+        if (g.p === "vertical" || g.p === "horizontal") lineales.push({ x, y, p: g.p, fase });
+      }
     }
+  for (const q of lineales) puntasPoder(q.x, q.y, tam * 0.42, q.p, performance.now() / 1000 + q.fase);
   // contador de la cadena sobre la última gominola
   if (cadena && cadena.length > 0 && (cadena.length > 1 || grid[cadena[0].f][cadena[0].c].k >= 0)) {
     const u = cadena[cadena.length - 1];
