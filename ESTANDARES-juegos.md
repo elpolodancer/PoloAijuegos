@@ -53,7 +53,7 @@ El menú de niveles **siempre es un mapa**:
 
 1. **México de cerca**, sobre fondo blanco, con la silueta del país. Cada estado terminado (**32 estados**, 100 niveles en Estacionamiento) hace **subir agua azul clara** dentro de la silueta, con oleaje (quieta con `prefers-reduced-motion`).
 2. Al terminar todos los de México aparece el **mapa del mundo** (**194 países**), con el mismo efecto de agua por país. Hasta entonces el jugador no sabe que existe.
-3. Cada estado o país es un punto: al tocarlo se ven sus niveles. Cuántos niveles tiene cada etapa lo decide cada juego (en Estacionamiento son 100).
+3. Cada estado o país es un punto: al tocarlo se ven sus niveles. Cuántos niveles tiene cada etapa lo decide cada juego (en Estacionamiento son 100; en Supermercado y Zuma, 10).
 4. Los niveles se abren en orden; se guarda «nivel más alto abierto» y «más alto terminado».
 
 **Menú de inicio** (el mapa es la pantalla principal) con estos botones, en este orden:
@@ -62,15 +62,17 @@ El menú de niveles **siempre es un mapa**:
 
 - **Juego libre / infinito:** tableros al azar sin fin, sin mapa ni niveles. Propuesta general: **no da monedas ni puntos** (como el modo libre de Deslizante) para que no se pueda repetir sin límite; guarda mejor marca y cantidad resuelta. En Estacionamiento todavía está por hacer (ver su README, sección 12).
 
-Código reutilizable (hoy en `estacionamiento/`):
+**Variante: juego con menú de inicio propio (Supermercado).** Si el juego ya tiene su menú (Nueva partida / Continuar / Niveles), el mapa NO es la pantalla principal: se abre con el botón «🗺️ Niveles». Dentro del mapa el ☰ dice «Menú principal» y vuelve a ese menú, y junto a «Continuar · nivel N» va un botón «♾️ Modo infinito» que hace lo mismo (es el equivalente de «Juego libre»). Un nivel es una partida aparte con sus propias metas y restricciones; el juego solo guarda cuántos niveles lleva terminados.
+
+Código reutilizable (ya está en `compartido/`, anotado en `ARCHIVOS` de `sw.js`):
 
 | Archivo | Qué es |
 |---|---|
-| `mapa-estacionamiento.js` | El mapa con agua. `montarMapa({ progreso, jugarNivel, alInfo, alCambiarVista })`. Sin Firebase ni red |
-| `etapas-estacionamiento.js` | Orden de los 32 estados y 194 países y cuentas de progreso |
-| `geografia-estacionamiento.js` | Contornos de México, continentes y lagos |
+| `compartido/mapa-niveles.js` | El mapa con agua. `montarMapa({ prefijo, etapas, progreso, jugarNivel, infoNivel, leyenda, botonesExtra, alInfo, avisoPrincipal, alCambiarVista })`. Sin Firebase ni red |
+| `compartido/etapas-mapa.js` | Orden de los 32 estados y 194 países y cuentas de progreso: `crearEtapas({ porEtapa, primeros })` |
+| `compartido/geografia-mapa.js` | Contornos de México, continentes y lagos |
 
-Para usarlos en otro juego conviene **moverlos a `compartido/`** (por ejemplo `compartido/mapa-niveles.js`, `etapas.js`, `geografia.js`) y que el juego solo indique cuántos niveles tiene cada etapa. Si se mueven, anotarlos en `ARCHIVOS` de `sw.js` y subir `VERSION`.
+El juego solo indica cuántos niveles tiene cada etapa (`porEtapa`), el progreso `{ max, hecho }` y qué hace `jugarNivel(n)`. Según `sw.js`, Estacionamiento todavía lista sus propias copias en `estacionamiento/` (`mapa-estacionamiento.js`, etc.).
 
 ### B) Juegos sin niveles (Rubik)
 
