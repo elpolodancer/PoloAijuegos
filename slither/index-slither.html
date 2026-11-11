@@ -1,0 +1,59 @@
+<!doctype html>
+<!-- Ruta: slither/index-slither.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Slither</title>
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    body.inmersivo { font-family: system-ui, sans-serif; color: #fff; touch-action: none; }
+    canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+    .nav-juego { z-index: 9; }
+    .hud-der { z-index: 7; }
+    .btn-turbo { position: fixed; z-index: 6; left: max(14px, env(safe-area-inset-left)); bottom: max(86px, calc(env(safe-area-inset-bottom) + 72px)); display: none; }
+    .btn-turbo.activo { display: inline-flex; }
+    .velo { position: fixed; inset: 0; z-index: 8; display: none; flex-direction: column; align-items: center; gap: 12px; padding: 60px 24px 24px; overflow-y: auto; text-align: center; background: rgba(8, 9, 12, .78); }
+    .velo > :first-child { margin-top: auto; }
+    .velo > :last-child { margin-bottom: auto; }
+    .velo.activo { display: flex; }
+    .velo h2 { margin: 0; font-size: 32px; }
+    .velo p { margin: 0; max-width: 360px; line-height: 1.45; opacity: .92; }
+    .velo input { font: inherit; font-size: 18px; padding: 10px 14px; width: 240px; text-align: center; color: #fff; background: #23252b; border: 2px solid #4a4e58; border-radius: 12px; -webkit-user-select: text; user-select: text; }
+    @media (max-height: 520px) { .velo { padding-top: 56px; gap: 8px; } .velo h2 { font-size: 24px; } .velo p { max-width: 560px; font-size: 14px; } }
+  </style>
+</head>
+<body class="inmersivo" data-pantalla-auto>
+  <canvas id="lienzo"></canvas>
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> <span id="txt-menu">Pausa</span></button>
+  </nav>
+  <div class="hud hud-der">
+    <span class="chip" id="largo"></span>
+    <span class="chip" id="record"></span>
+  </div>
+  <button class="b3d grande b-oro btn-turbo" id="turbo" type="button" aria-label="Acelerar" title="Acelerar (mantén; barra espaciadora o clic)"><span class="b-ico">⚡</span></button>
+
+  <div id="inicio" class="velo activo">
+    <h2>🐍 Slither</h2>
+    <p>Guía tu serpiente, come las bolitas de colores para crecer y haz que otras serpientes choquen contra ti. Si tu cabeza toca el cuerpo de otra o la orilla del mapa, pierdes.</p>
+    <p>Al morir, tu serpiente se vuelve comida para los demás. Acelerar ⚡ te hace más rápido, pero gasta largo.</p>
+    <p><b>Celular:</b> arrastra el dedo para girar; mantén ⚡ para acelerar.<br><b>Computadora:</b> mueve el mouse (clic sostenido o espacio = acelerar), o usa flechas/WASD.</p>
+    <input id="nombre" maxlength="14" placeholder="Tu nombre" autocomplete="off" />
+    <button class="b3d txt grande b-verde" id="jugar" type="button" style="--t:56px"><span class="b-ico">▶</span>&nbsp;Jugar</button>
+  </div>
+  <div id="fin" class="velo">
+    <h2>Te chocaron</h2>
+    <p id="finTexto"></p>
+    <button class="b3d txt grande b-verde" id="otra" type="button" style="--t:56px"><span class="b-ico">🔄</span>&nbsp;Jugar otra vez</button>
+  </div>
+
+  <script type="module" src="juego-slither.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
