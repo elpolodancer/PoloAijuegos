@@ -39,6 +39,7 @@ let t0 = 0, acum = 0, verificada = false, nivel = 0; // nivel 0 = modo libre
 const PISTA_MS = 15000; // segundos sin tocar nada antes de dar una pista
 let ultimaAccion = Date.now(), alertaMal = null, pista = null;
 // Barra superior: colecc = palo de cada serie terminada (en orden); mostradas = cuántas ya llegaron a la barra (las demás van volando)
+let vistos = new Set(); // posiciones por las que ya pasó la partida (para no sugerir volver a ellas)
 let colecc = [], mostradas = 0, fantasmas = [], animTimers = [], finAnim = 0, tb = tamBarra(34, 48, 0);
 const btnMenu = $("btn-menu");
 
@@ -105,14 +106,14 @@ function empezar(n = 0) {
   }
   historial = []; sel = null; fin = false; pausado = false; t0 = 0; acum = 0;
   alertaMal = null; pista = null; ultimaAccion = Date.now();
-  colecc = []; cancelarAnim();
+  colecc = []; cancelarAnim(); vistos = new Set([clave(e)]);
   mostrar("juego");
 }
 function jugar(fn, op) { // op = qué jugada es ({de,k,a} o {rep:true}); sirve para animar las series que se completen
   if (DIFICULTADES[e.dif - 1].deshacer) { historial.push(clonar(e)); if (historial.length > 300) historial.shift(); }
   if (!t0) t0 = Date.now();
   const antes = clonar(e);
-  fn(); sel = null; pintar();
+  fn(); sel = null; vistos.add(clave(e)); pintar();
   if (e.hechos > antes.hechos && op) animarSeries(antes, op); // serie terminada: sus 13 cartas viajan a la barra
   if (ganada(e)) terminar();
 }
@@ -146,7 +147,12 @@ function terminar() {
 // ---------- Dibujo ----------
 function tramoValido(c, i) { return i >= e.ocultas[c] && e.cols[c].length - i <= largoTramo(e, c); }
 // ---------- Barra superior del tablero: series terminadas (izquierda) y mazo de repartos (derecha) ----------
-const MS_VUELO = 520, MS_ESCALON = 35; // cada carta tarda MS_VUELO en llegar; salen una tras otra cada MS_ESCALON
+// Línea de tiempo de una serie terminada (ms). El brillo dura TODO el tiempo:
+//  1) SALTO de todas las cartas a la vez · 2) OLA «de piano»: salta una por una de la A (la última) al K (la primera)
+//  3) TRASLADO: flotan una por una hasta su lugar de la fila de arriba · 4) SALTO al llegar. Luego se apaga el brillo.
+const T_SALTO = 500, T_PASO = 25, T_HOP = 200, T_TRASLADO = 900, T_SALIDA = 70, T_LLEGADA = 500;
+const T_OLA = 12 * T_PASO + T_HOP; // 500: lo que tarda la ola de la A al K
+const T_TOTAL = T_SALTO + T_OLA + 12 * T_SALIDA + T_TRASLADO + T_LLEGADA; // 3240
 const contenido = (carta, w) => NOMBRE_RANGO[rango(carta)] + SIMB[palo(carta)] + '<span class="pl" style="font-size:' + w * 0.5 + 'px">' + SIMB[palo(carta)] + "</span>";
 // Cartas de la fila superior: MISMO tamaño que las de la partida y mismos límites que las columnas (izq = borde izquierdo de la 1.ª columna).
 // Las series terminadas se encimen un poco (paso < ancho), de izquierda a derecha.
@@ -201,12 +207,62 @@ function seriesQuitadas(antes, op) {
 }
 // Detiene y limpia las animaciones en curso (al deshacer o empezar otra partida): las series ya cuentan como llegadas
 function cancelarAnim() {
-  animTimers.forEach(clearTimeout); animTimers = [];
+  animTimers.forEach((t) => { clearTimeout(t); clearInterval(t); }); animTimers = [];
   fantasmas.forEach((g) => g.remove()); fantasmas = [];
+  $("tablero").querySelectorAll(".chispa").forEach((c) => c.remove());
   finAnim = 0; mostradas = colecc.length; pintarBarra();
 }
-// Las 13 cartas de cada serie terminada salen de su columna, una tras otra (la A primero y el K al final), y se encimen en la barra
-// en el siguiente hueco de la izquierda. Con «reducir movimiento» (o sin animaciones del navegador) la serie aparece directo.
+// Todos los movimientos de UNA carta de la serie en una sola animación (i = 0 es el K … 12 es la A). dx, dy = hasta dónde viaja.
+function fotogramas(i, dx, dy, h) {
+  const jh = h * 0.35, wh = h * 0.18, arco = h * 0.5, z0 = 20 + i, z1 = 100 - i; // z1: al despegar pasa por encima; el K (último) queda arriba
+  const tf = (x, y, r, s) => "translate(" + x + "px," + y + "px) rotate(" + r + "deg) scale(" + s + ")";
+  const sube = "cubic-bezier(.2,.7,.4,1)", baja = "cubic-bezier(.6,0,.9,.5)";
+  const f = [];
+  const k = (t, transform, zIndex, easing = "linear") => f.push({ offset: Math.min(1, t / T_TOTAL), transform, zIndex, easing });
+  k(0, tf(0, 0, 0, 1), z0, sube);                                  // 1) salto de todas
+  k(T_SALTO * 0.4, tf(0, -jh, 0, 1.06), z0, baja);
+  k(T_SALTO, tf(0, 0, 0, 1), z0);
+  const w0 = T_SALTO + (12 - i) * T_PASO;                          // 2) ola de piano: la A primero, el K al final
+  k(w0, tf(0, 0, 0, 1), z0, sube);
+  k(w0 + T_HOP * 0.45, tf(0, -wh, i % 2 ? 4 : -4, 1.08), z0, baja);
+  k(w0 + T_HOP, tf(0, 0, 0, 1), z0);
+  const td = T_SALTO + T_OLA + (12 - i) * T_SALIDA;                // 3) traslado una por una (la A sale primero)
+  const tl = T_SALTO + T_OLA + 12 * T_SALIDA + T_TRASLADO;         //    todas han llegado cuando llega el K
+  k(td, tf(0, 0, 0, 1), z0);
+  k(td + 1, tf(0, 0, 0, 1), z1);
+  for (let q = 1; q <= 8; q++) {                                   // arranca y frena despacio, con un arco hacia arriba a media vuelta
+    const u = q / 8, s = u * u * (3 - 2 * u), b = 4 * s * (1 - s);
+    k(td + u * T_TRASLADO, tf(dx * s, dy * s - arco * b, 0, 1 + 0.05 * b), z1);
+  }
+  k(tl, tf(dx, dy, 0, 1), z1, sube);                               // 4) salto al llegar (la fila entera)
+  k(tl + T_LLEGADA * 0.4, tf(dx, dy - jh, 0, 1.06), z1, baja);
+  k(T_TOTAL, tf(dx, dy, 0, 1), z1);
+  return f;
+}
+// Una chispa de brillo en (x, y) del tablero: sube, gira, se encoge y se desvanece
+function chispa(tablero, x, y) {
+  const p = document.createElement("div"), t = 5 + Math.random() * 8;
+  p.className = "chispa" + (Math.random() < 0.5 ? " estrella" : "");
+  p.style.cssText = "left:" + (x - t / 2) + "px;top:" + (y - t / 2) + "px;width:" + t + "px;height:" + t + "px";
+  tablero.appendChild(p);
+  const dx = (Math.random() - 0.5) * 36, dy = -(8 + Math.random() * 30), giro = (Math.random() - 0.5) * 240;
+  const a = p.animate([
+    { transform: "translate(0,0) rotate(0deg) scale(1)", opacity: 1 },
+    { transform: "translate(" + dx + "px," + dy + "px) rotate(" + giro + "deg) scale(.2)", opacity: 0 },
+  ], { duration: 500 + Math.random() * 450, easing: "ease-out", fill: "forwards" });
+  a.onfinish = () => p.remove();
+}
+// Suelta chispas desde donde están ahora las cartas (quietas o en pleno vuelo): así dejan estela al viajar
+function chispear(gs) {
+  const tablero = $("tablero"), tr = tablero.getBoundingClientRect();
+  for (let q = 0; q < 3; q++) {
+    const r = gs[(Math.random() * gs.length) | 0].getBoundingClientRect();
+    chispa(tablero, r.left - tr.left + Math.random() * r.width, r.top - tr.top + Math.random() * r.height);
+  }
+}
+// Al terminar una serie sus 13 cartas se iluminan (trazo + chispas durante todo el efecto), saltan, hacen la ola de piano y viajan
+// flotando, una por una, a su lugar de la fila de arriba (de izquierda a derecha), donde vuelven a saltar. Con «reducir movimiento»
+// (o sin animaciones del navegador) la serie aparece directo.
 function animarSeries(antes, op) {
   const lista = seriesQuitadas(antes, op);
   const quieto = !Element.prototype.animate || matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -220,22 +276,23 @@ function animarSeries(antes, op) {
     const n = s.todas.length, ys = posiciones(s.todas, s.o, h, H), x = m.offsetLeft + x0 + s.c * (w + gap);
     const gs = s.cartas.map((carta, i) => { // i = 0 es el K
       const g = document.createElement("div"), y = m.offsetTop + ys[n - 13 + i];
-      g.className = "carta fantasma" + (ROJO[palo(carta)] ? " roja" : "");
+      g.className = "carta fantasma brillo" + (ROJO[palo(carta)] ? " roja" : "");
       g.style.cssText = "left:" + x + "px;top:" + y + "px;width:" + w + "px;height:" + h + "px;font-size:" + letra + "px;z-index:" + (20 + i);
       g.innerHTML = contenido(carta, w);
       tablero.appendChild(g);
-      const hasta = "translate(" + (bo.offsetLeft + tb.izq + idx * tb.paso - x) + "px," + (bo.offsetTop + tb.top - y) + "px) scale(" + tb.cw / w + "," + tb.ch / h + ")";
-      g.animate([
-        { transform: "none", zIndex: 20 + i, offset: 0 },
-        { transform: "none", zIndex: 100 - i, offset: 0.01 }, // al despegar pasa por encima de las demás; el K, el último en salir, queda arriba
-        { transform: hasta, zIndex: 100 - i, offset: 1 },
-      ], { duration: MS_VUELO, delay: k * 450 + (12 - i) * MS_ESCALON, easing: "cubic-bezier(.35,.1,.25,1)", fill: "both" });
+      const dx = bo.offsetLeft + tb.izq + idx * tb.paso - x, dy = bo.offsetTop + tb.top - y;
+      g.animate(fotogramas(i, dx, dy, h), { duration: T_TOTAL, delay: k * 450, fill: "both" });
       return g;
     });
     fantasmas.push(...gs);
-    const total = k * 450 + 12 * MS_ESCALON + MS_VUELO + 30;
+    const total = k * 450 + T_TOTAL;
     dur = Math.max(dur, total);
-    animTimers.push(setTimeout(() => { // llegó: se quitan las cartas voladoras y el montoncito queda en la barra
+    animTimers.push(setTimeout(() => { // chispas durante todo el efecto
+      const t = setInterval(() => chispear(gs), 55);
+      animTimers.push(t, setTimeout(() => clearInterval(t), T_TOTAL));
+    }, k * 450));
+    animTimers.push(setTimeout(() => gs.forEach((g) => g.classList.add("apagando")), total - 300)); // el brillo se apaga al final
+    animTimers.push(setTimeout(() => { // llegó: se quitan las cartas voladoras y el montoncito queda en la fila
       gs.forEach((g) => g.remove()); fantasmas = fantasmas.filter((g) => !gs.includes(g));
       mostradas = Math.min(colecc.length, mostradas + 1); pintarBarra();
     }, total));
@@ -317,13 +374,28 @@ function marcarBloqueo(c, i) {
   marcarBloqueo.id = setTimeout(() => { alertaMal = null; if (pantalla === "juego") pintar(); }, 1300);
 }
 
-// Pista tras 15 s sin tocar nada. Orden: 1) un movimiento que sirve (quita serie, destapa, junta mismo palo),
+// Huella de una posición (no depende del orden de las columnas): sirve para saber si una jugada nos regresa a algo que ya pasó
+function clave(x) {
+  return x.cols.map((c, i) => x.ocultas[i] + ":" + c.join(",")).sort().join("|") + "#" + x.rep + "," + x.hechos;
+}
+// ¿Mover el tramo de la columna j.de a la j.a es un BUCLE (no avanza nada)? Pasa cuando el tramo ya está sobre una carta que le sirve
+// (p. ej. 10-9-8-7-6 ya sobre una J) y se pasa a otra J igual: solo vale la pena si junta el palo o arma una escalera más larga.
+// n = estado después de la jugada. (Las que quitan serie, destapan una carta o vacían la columna siempre avanzan.)
+function esBucle(e, j, n) {
+  if (n.hechos > e.hechos || j.rev || j.vacia) return false;
+  const col = e.cols[j.de], base = col[col.length - j.k], x = col[col.length - j.k - 1];
+  if (x === undefined || rango(x) !== rango(base) + 1) return false; // estaba sobre una carta que NO le correspondía: acomodarla sí mejora
+  return !(largoTramo(n, j.a) > Math.max(largoTramo(e, j.de), largoTramo(e, j.a)));
+}
+
+// Pista tras 15 s sin tocar nada. Se ignoran los bucles (esBucle) y las jugadas que regresan a una posición ya vista. Orden: 1) un movimiento que sirve (quita serie, destapa, junta mismo palo),
 // 2) si no hay, parpadea «Repartir» en amarillo oscuro, 3) si tampoco se puede repartir, un movimiento menor (p. ej. a columna vacía).
 function calcularPista() {
   ultimaAccion = Date.now(); // si no hay nada que sugerir, vuelve a intentarlo en 15 s
   let mejor = null, pm = 0, otra = null, po = 0;
   for (const j of jugadas(e)) {
     const n = clonar(e); mover(n, j.de, j.k, j.a);
+    if (vistos.has(clave(n)) || esBucle(e, j, n)) continue; // bucle: no se sugiere
     const util = n.hechos > e.hechos || j.rev || j.mismo;
     const p = (n.hechos > e.hechos ? 1000 : 0) + (j.rev ? 200 : 0) + (j.mismo ? 40 + j.k : 0) + (j.vacia ? 5 : 1);
     if (util) { if (p > pm) { pm = p; mejor = j; } }
@@ -331,7 +403,7 @@ function calcularPista() {
   }
   const j = mejor || (puedeRepartir(e) ? null : otra);
   if (j) { pista = { tipo: "mover", de: j.de, desde: e.cols[j.de].length - j.k, a: j.a }; aviso("💡 Pista: mira el recuadro verde"); }
-  else if (puedeRepartir(e)) { pista = { tipo: "repartir" }; aviso("🃏 Ya no hay movimientos útiles: toca Repartir"); }
+  else if (puedeRepartir(e)) { pista = { tipo: "repartir" }; aviso("🃏 Solo quedan movimientos que dan vueltas: toca Repartir"); }
   else { aviso(e.rep < 5 ? "Llena las columnas vacías para poder repartir" : "Ya no hay movimientos posibles"); return; }
   pintar();
 }
