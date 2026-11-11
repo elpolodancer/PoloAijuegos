@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<!-- Ruta: dos/index-dos.html -->
+<html lang="es" class="inmersivo">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#d9a866">
+<title>Dos</title>
+<link rel="stylesheet" href="../compartido/estilos.css">
+<link rel="stylesheet" href="../compartido/inmersivo.css">
+<script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+<style>
+  .inmersivo .marco { aspect-ratio: 16 / 9; width: min(100vw, calc(100vh * 16 / 9)); width: min(100vw, calc(100dvh * 16 / 9)); }
+  .inmersivo .lienzo { background: transparent; }
+  /* Letra escrita a mano (fuentes del sistema, funciona sin internet) */
+  .firma { font-family: "Segoe Script", "Bradley Hand", "Lucida Handwriting", "Brush Script MT", "Comic Sans MS", cursive; font-weight: 700; }
+  .pausa-panel h2.firma { font-size: 3.4rem; line-height: 1; margin: 0 0 8px; letter-spacing: 1px; }
+  .pausa-panel p { margin: 0 0 12px; color: #d6d9df; font-size: .92rem; line-height: 1.35; }
+  .pausa-panel .b3d.txt { width: 100%; margin-bottom: 10px; }
+  .chip.alerta { color: #fff; background: linear-gradient(180deg, #ff7b6e, #d6291a); border-color: #6e130b; box-shadow: 0 3px 0 #6e130b, inset 0 2px 0 rgba(255,255,255,.35); }
+  /* Inventario de 15 espacios, abajo al centro (entre 🌙 y ⛶) */
+  #inv { position: fixed; z-index: 5; left: 50%; bottom: max(10px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; gap: 3px; padding: 4px;
+    background: rgba(30,32,37,.82); border: 2px solid #15171a; border-radius: 12px; box-shadow: 0 3px 0 #15171a; }
+  #inv[hidden] { display: none; }
+  #inv .ranura { width: clamp(22px, 4.3vw, 38px); aspect-ratio: 1; padding: 0; background: #3a3d45; border: 1px solid #15171a; border-radius: 6px; cursor: pointer; touch-action: manipulation; }
+  #inv .ranura:focus-visible { outline: 2px solid #fff; }
+  #inv canvas { display: block; width: 100%; height: 100%; pointer-events: none; }
+  #btn-recoger { position: fixed; z-index: 5; right: max(10px, env(safe-area-inset-right)); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 62px); --t: 54px; }
+  #btn-cerrar { position: fixed; z-index: 5; left: 50%; transform: translateX(-50%); bottom: calc(max(10px, env(safe-area-inset-bottom)) + clamp(40px, 5.8vw, 54px)); }
+  #btn-cerrar:active:not(:disabled) { transform: translateX(-50%) translateY(4px); }
+  #btn-recoger[hidden], #btn-cerrar[hidden] { display: none; }
+</style>
+</head>
+<body class="inmersivo">
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> Pausa</button>
+  </nav>
+
+  <div class="hud hud-der" aria-live="off">
+    <span class="chip" id="chip-piso"></span>
+    <span class="chip" id="chip-mochila"></span>
+    <span class="chip" id="chip-tiempo"></span>
+  </div>
+
+  <div class="escena">
+    <div class="marco">
+      <canvas id="lienzo" class="lienzo" aria-label="Casa de dos pisos"></canvas>
+      <p class="solo-lector">Mueve al superviviente con las flechas o WASD (o arrastrando el dedo), recoge objetos con E o con el botón Recoger y llega al búnker antes de que se acaben los 2 minutos.</p>
+    </div>
+  </div>
+
+  <button class="b3d txt b-rojo" id="btn-cerrar" type="button" hidden><span class="b-ico">🔒</span> Cerrar la puerta del búnker</button>
+  <button class="b3d txt b-verde" id="btn-recoger" type="button" hidden><span class="b-ico">✋</span> Recoger</button>
+  <div id="inv" role="group" aria-label="Inventario (toca un objeto para soltarlo)" hidden></div>
+
+  <div class="pausa-fondo" id="menu">
+    <div class="pausa-panel">
+      <h2 class="firma">Dos</h2>
+      <p>Tienes <b>2 minutos</b> para recoger lo que puedas en la casa de dos pisos. Cabe poco: <b>15 espacios</b>. Cuando el tiempo llegue a cero, solo vives si estás dentro del búnker.</p>
+      <p>Muévete con flechas/WASD o arrastrando el dedo. Recoge con <b>E</b> o el botón. Toca un objeto del inventario para soltarlo.</p>
+      <button class="b3d txt b-verde" id="btn-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
+      <p id="record"></p>
+    </div>
+  </div>
+
+  <div class="pausa-fondo" id="fin" hidden>
+    <div class="pausa-panel">
+      <h2 id="fin-titulo"></h2>
+      <p id="fin-texto"></p>
+      <button class="b3d txt b-verde" id="fin-otra" type="button"><span class="b-ico">🔁</span> Jugar otra vez</button>
+      <button class="b3d txt b-gris" id="fin-menu" type="button"><span class="b-ico">☰</span> Menú principal</button>
+    </div>
+  </div>
+
+  <script type="module" src="juego-dos.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
