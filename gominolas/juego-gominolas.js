@@ -33,6 +33,7 @@ const CLAVE_PROG = "gominolas_progreso"; // { mejor, nivel } juntos, para sincro
 let zonaIni = 5;            // filas de abajo donde nacen las negras al empezar (depende de la altura del tablero)
 let zonaNva = 3;            // filas de abajo donde aparece la negra extra cuando no eliminas ninguna
 let penaliza = 1;           // negras nuevas por jugada que no elimina ninguna: campaña 1; libre fácil 1, medio 2, difícil 3
+const PUNTOS_CAPA = 10;     // puntos por cada capa (candado) que se rompe en una negra con capas
 const PUNTOS_NEGRA = 30;    // puntos por cada negra eliminada
 const BONO_MOVIMIENTO = 20; // puntos por cada movimiento que te sobre al ganar
 
@@ -163,6 +164,7 @@ function abrirInfo() {
   const t = document.createElement("h2"); t.textContent = "ℹ️ Cómo se juega";
   const txt = document.createElement("p"); txt.style.cssText = "margin:0 0 12px;line-height:1.45;font-size:.92rem";
   txt.textContent = "Arrastra por 3 o más gominolas iguales y juntas. Rompe las gominolas que están pegadas a una negra (arriba, abajo, izquierda o derecha; en diagonal no cuenta) para eliminarla: si en una jugada no eliminas ninguna, aparece otra. Cadenas de 5 crean un osito con poder ↔️ (rompe una fila) y de 7 uno con poder ↕️ (rompe una columna). El osito con poder conserva su color y solo se activa cuando lo incluyes en una cadena de ositos de ese mismo color: se activa en la última casilla de la cadena. Si metes dos poderes en la misma cadena se aplican a la vez." + " Los niveles se desbloquean en orden: cada estado y cada país tiene 100. Al terminar un estado se desbloquea el siguiente y el agua del mapa sube." + " Modo libre: elige tablero y dificultad y juega rondas sin fin hasta quedarte sin movimientos. Si una jugada no elimina ninguna negra, aparece 1 nueva en Fácil, 2 en Medio y 3 en Difícil. No suma al perfil; solo guarda tu récord de rondas.";
+  txt.textContent += " Si una negra tiene cadenas y candados, necesita una jugada por cada candado: cada vez que la toques con una gominola rota pierde uno.";
   const ok = document.createElement("button"); ok.type = "button"; ok.className = "b3d txt b-verde"; ok.textContent = "Entendido";
   const cerrar = () => { fondo.remove(); };
   ok.addEventListener("click", cerrar); fondo.addEventListener("click", (e) => { if (e.target === fondo) cerrar(); });
@@ -373,7 +375,7 @@ function cayendo() {
 
 // Convierte en negras «cant» gominolas de las filas de abajo. Con filasCompletas > 0, esa cantidad de filas de la zona quedan TODAS negras
 // (nunca dos pegadas) y las que sobran van al azar en el resto de la zona. El total siempre es «cant». (Misma regla que logica-gominolas.js)
-function colocarNegras(cant, filasCompletas = 0) {
+function colocarNegras(cant, filasCompletas = 0, capas = null) {
   const desde = Math.max(0, FILAS - zonaIni);
   const mezclar = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const filasNegras = [];
@@ -390,6 +392,15 @@ function colocarNegras(cant, filasCompletas = 0) {
   const celdas = [];
   for (let f = FILAS - 1; f >= desde; f--) if (!filasNegras.includes(f)) for (let c = 0; c < COLUMNAS; c++) celdas.push([f, c]);
   mezclar(celdas).slice(0, cant - filasNegras.length * COLUMNAS).forEach(([f, c]) => { grid[f][c].k = NEGRA; });
+  // Capas (niveles de tipo «capas»): una parte de las negras lleva 2 capas (1 candado) y otra 3 capas (2 candados). Misma regla que logica-gominolas.js
+  if (capas) {
+    const negras = [];
+    for (let f = 0; f < FILAS; f++) for (let c = 0; c < COLUMNAS; c++) if (grid[f][c].k === NEGRA) negras.push(grid[f][c]);
+    mezclar(negras);
+    const n3 = Math.round(negras.length * capas.tres), n2 = Math.round(negras.length * capas.dos);
+    negras.slice(0, n3).forEach((g) => { g.c = 3; });
+    negras.slice(n3, n3 + n2).forEach((g) => { g.c = 2; });
+  }
   let intentos = 0;
   while (!hayJugada() && intentos++ < 50) barajar();
 }
@@ -414,13 +425,14 @@ function nuevaNegra() {
   const [f, c] = candidatas[Math.floor(Math.random() * candidatas.length)];
   const g = grid[f][c];
   g.k = NEGRA;
+  delete g.c; // las negras nuevas no llevan capas
   textos.push({ x: (c + 0.5) * tam, y: (g.y + 0.5) * tam, vida: 0.9, txt: "+⚫" });
   tono(110, 0.25);
 }
 
 // ---------- Jugada ----------
 // Rompe las celdas de la lista y también las negras que quedan pegadas (arriba, abajo, izquierda o derecha) a alguna gominola rota.
-// Devuelve cuántas normales y cuántas negras se quitaron.
+// Devuelve cuántas normales y cuántas negras se quitaron, y cuántas capas (candados) se rompieron.
 function romper(lista) {
   const quitar = new Set();
   lista.forEach(([f, c]) => { if (grid[f][c]) quitar.add(f * 100 + c); });
@@ -435,11 +447,22 @@ function romper(lista) {
   });
   negrasPegadas.forEach((key) => quitar.add(key));
 
-  let normales = 0, negras = 0;
+  let normales = 0, negras = 0, golpes = 0;
   quitar.forEach((key) => {
     const f = Math.floor(key / 100), c = key % 100;
     const g = grid[f][c];
     const x = (c + 0.5) * tam, y = (g.y + 0.5) * tam;
+    // Negra con capas: pierde UNA capa (un candado) por jugada y se queda en su lugar (aunque la toquen varias gominolas rotas)
+    if (g.k === NEGRA && g.c > 1) {
+      g.c--; golpes++;
+      puntos += PUNTOS_CAPA;
+      for (let i = 0; i < 5; i++) {
+        const a = Math.random() * Math.PI * 2, s = 30 + Math.random() * 80;
+        particulas.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 30, vida: 0.4 + Math.random() * 0.2, k: NEGRA });
+      }
+      textos.push({ x, y, vida: 0.9, txt: g.c > 1 ? "🔓" : "⛓️💥" });
+      return;
+    }
     for (let i = 0; i < 6; i++) {
       const a = Math.random() * Math.PI * 2, s = 40 + Math.random() * 120;
       particulas.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 40, vida: 0.5 + Math.random() * 0.3, k: g.k });
@@ -451,7 +474,7 @@ function romper(lista) {
     } else normales++;
     grid[f][c] = null;
   });
-  return { normales, negras };
+  return { normales, negras, golpes };
 }
 
 // Cierra la jugada: gasta un movimiento, hace caer, revisa si ganaste/perdiste y pone la negra extra si hace falta
@@ -504,7 +527,7 @@ function juntar(cad) {
     textos.push({ x: tam * COLUMNAS / 2, y: tam * 0.8, vida: 1.1, txt: PODERES[poder].icono + " " + poder });
   }
   for (let i = 0; i < Math.min(n, 6); i++) setTimeout(() => tono(NOTAS[Math.min(i + 3, NOTAS.length - 1)], 0.15), i * 55);
-  cerrarJugada(r.negras);
+  cerrarJugada(r.negras + r.golpes); // una capa rota también cuenta como avance: no sale negra nueva
 }
 
 // ---------- Entrada ----------
@@ -625,7 +648,8 @@ function empezar() {
   textos = [];
   revisar = false;
   llenar();
-  colocarNegras(par.negras, par.filasCompletas || 0); // par.filasCompletas lo da parametrosNivel (patrón «filas» del catálogo)
+  colocarNegras(par.negras, par.filasCompletas || 0, par.capas || null); // filasCompletas y capas las da parametrosNivel (patrón y tipo del catálogo)
+  if (par.capas) textos.push({ x: tam * COLUMNAS / 2, y: tam * 1.2, vida: 2.2, txt: "⛓️ Negras con candados" });
   estado = "jugando";
   menuBoton();
   ovl.classList.add("oculto");
@@ -753,6 +777,33 @@ function configurarTablero(c, f) {
 // Personaje de gominola, estilo caricatura infantil: cuerpo blandito de color plano, ojos grandes y blancos con pupila,
 // mejillas rosadas y sonrisa. Parpadea de vez en cuando; al seleccionarla (opc.sel) se pone feliz con la boca abierta;
 // las negras (opc.negra) tienen cara de enojadas. opc.fase desfasa el parpadeo para que no parpadeen todas a la vez.
+// Cadenas con candado sobre una negra. n = 1: una cadena en diagonal con su candado; n = 2: dos cadenas cruzadas, cada una con su candado.
+function dibujarCadenas(r, n) {
+  const cadena = (x1, y1, x2, y2) => {
+    const eslabones = 6;
+    for (let i = 0; i <= eslabones; i++) {
+      const t = i / eslabones, cx = x1 + (x2 - x1) * t, cy = y1 + (y2 - y1) * t;
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.atan2(y2 - y1, x2 - x1) + (i % 2 ? Math.PI / 2 : 0));
+      ctx.strokeStyle = "#1c1830"; ctx.lineWidth = r * 0.2;
+      ctx.beginPath(); ctx.ellipse(0, 0, r * 0.2, r * 0.1, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = "#cfd3dc"; ctx.lineWidth = r * 0.1;
+      ctx.beginPath(); ctx.ellipse(0, 0, r * 0.2, r * 0.1, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+  };
+  const candado = (x, y) => {
+    ctx.save(); ctx.translate(x, y);
+    ctx.strokeStyle = "#8b93a0"; ctx.lineWidth = r * 0.11; // arco
+    ctx.beginPath(); ctx.arc(0, -r * 0.1, r * 0.17, Math.PI, 0); ctx.stroke();
+    ctx.fillStyle = "#ffc928"; ctx.strokeStyle = "#a86a00"; ctx.lineWidth = r * 0.06; // cuerpo dorado
+    ctx.beginPath(); ctx.rect(-r * 0.24, -r * 0.1, r * 0.48, r * 0.38); ctx.fill(); ctx.stroke(); // rect (roundRect no existe en navegadores viejos)
+    ctx.fillStyle = "#6b4400"; // ojo de la cerradura
+    ctx.beginPath(); ctx.arc(0, r * 0.07, r * 0.06, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  };
+  if (n === 1) { cadena(-r * 0.85, r * 0.55, r * 0.85, -r * 0.55); candado(0, r * 0.12); }
+  else { cadena(-r * 0.85, r * 0.55, r * 0.85, -r * 0.55); cadena(-r * 0.85, -r * 0.55, r * 0.85, r * 0.55); candado(-r * 0.46, r * 0.3); candado(r * 0.46, r * 0.3); }
+}
 function oso(x, y, r, col, esc, opc = {}) {
   const negra = !!opc.negra, feliz = !!opc.sel, fase = opc.fase || 0;
   const t = performance.now() / 1000 + fase;
@@ -825,6 +876,8 @@ function oso(x, y, r, col, esc, opc = {}) {
       ctx.beginPath(); ctx.moveTo(s * r * 0.5, ey - r * 0.4); ctx.lineTo(s * r * 0.12, ey - r * 0.26); ctx.stroke();
     }
   }
+  // negra con capas: una cadena con candado por cada capa que le falta romper (3 capas = 2 cadenas y 2 candados; 2 capas = 1 y 1; la última capa se ve sin cadenas)
+  if (negra && opc.capas > 1) dibujarCadenas(r, opc.capas - 1);
   // medalla con flechas (abajo a la derecha): indica el poder del osito, en su color
   if (opc.poder) {
     const bx = r * 0.64, by = r * 0.64, br = r * 0.3, a = r * 0.17, h = r * 0.08;
@@ -897,7 +950,7 @@ function dibujar() {
         ctx.fillStyle = "rgba(255,255,255,.6)"; ctx.strokeStyle = "#7a4fd0"; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(x, y, tam * 0.46, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       }
-      if (g.k === NEGRA) oso(x, y, tam * 0.38, NEGRA_COL, 1, { negra: true, fase });
+      if (g.k === NEGRA) oso(x, y, tam * 0.38, NEGRA_COL, 1, { negra: true, fase, capas: g.c });
       else oso(x, y, tam * 0.38, PALETA[g.k], sel ? 1.14 : 1, { sel, fase, poder: g.p });
     }
   // contador de la cadena sobre la última gominola

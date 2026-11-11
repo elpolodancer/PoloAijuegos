@@ -1,0 +1,100 @@
+<!doctype html>
+<!-- Ruta: saltanubes/index-saltanubes.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Saltanubes</title>
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    html.inmersivo { --fondo-juego: #d9a866; }
+    html.inmersivo.oscura { --fondo-juego: #1d2024; }
+    body.inmersivo { background: transparent; }
+    #escena { position: absolute; inset: 0; }
+    #lienzo { display: block; width: 100%; height: 100%; background: transparent; touch-action: none; user-select: none; -webkit-user-select: none; }
+    .hud-der { flex-direction: column; align-items: flex-end; gap: 6px; }
+    /* Pantallas (menú, tienda, ajustes, fin): usan la ventana .pausa-panel de inmersivo.css */
+    .pantalla { position: fixed; inset: 0; z-index: 7; display: flex; padding: 16px; overflow-y: auto; touch-action: pan-y; }
+    .pantalla[hidden] { display: none; }
+    .pausa-panel h2 { font-size: 1.7rem; }
+    .dato { margin: 0 0 12px; color: #b0b4bd; font-size: .9rem; }
+    .dato b { color: #f1f2f4; }
+    .item { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; padding: 12px; text-align: left; background: rgba(0,0,0,.25); border: 1px solid #3b3e46; border-radius: 14px; }
+    .item p { margin: 0; font-size: .85rem; line-height: 1.3; color: #d8dbe2; }
+    .item .b3d { width: 100%; }
+    #msg { position: fixed; z-index: 9; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: max-content; max-width: 92vw; padding: 6px 14px; text-align: center; color: #f1f2f4; background: rgba(10,10,12,.85); border-radius: 16px; font-size: .9rem; pointer-events: none; opacity: 0; transition: opacity .2s; }
+    #msg.ver { opacity: 1; }
+    @media (prefers-reduced-motion: reduce) { #msg { transition: none; } }
+  </style>
+</head>
+<body class="inmersivo" data-pantalla-auto>
+  <main id="escena"><canvas id="lienzo" class="lienzo"></canvas></main>
+  <div id="msg" role="status" aria-live="polite"></div>
+
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> Pausa</button>
+  </nav>
+
+  <!-- Marcadores de la partida (arriba a la derecha) -->
+  <div class="hud hud-der" id="hud" hidden>
+    <span class="chip"><small>Altura</small><b id="alt">0</b></span>
+    <span class="chip chip-monedas"><span class="moneda"></span><b id="mon">0</b></span>
+  </div>
+
+  <section class="pantalla" id="p-menu">
+    <div class="pausa-panel">
+      <h2>☁️ Saltanubes</h2>
+      <p class="dato">Mejor altura: <b id="m-mejor">0</b> · Monedas: <b id="m-mon">0</b></p>
+      <div class="pausa-opciones">
+        <button class="b3d txt b-verde" id="b-jugar" type="button"><span class="b-ico">▶</span><span>Jugar</span></button>
+        <button class="b3d txt b-oro" id="b-tienda" type="button"><span class="b-ico">🛍️</span><span>Tienda</span></button>
+        <button class="b3d txt b-gris" id="b-ajustes" type="button"><span class="b-ico">⚙️</span><span>Ajustes</span></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="pantalla" id="p-tienda" hidden>
+    <div class="pausa-panel">
+      <h2>🛍️ Tienda</h2>
+      <p class="dato">Tus monedas: <span class="chip chip-monedas" style="height:28px;vertical-align:middle"><span class="moneda"></span><b id="t-saldo">0</b></span></p>
+      <div class="item">
+        <b>🚀 Cohete</b>
+        <p>Al comprarlo empieza a aparecer en el mapa. Si lo tomas, subes 20 plataformas sin esfuerzo (y ningún monstruo te toca).</p>
+        <button class="b3d txt b-oro" id="comprar-cohete" type="button"></button>
+      </div>
+      <div class="pausa-opciones"><button class="b3d txt b-gris" id="t-volver" type="button"><span class="b-ico">←</span><span>Volver</span></button></div>
+    </div>
+  </section>
+
+  <section class="pantalla" id="p-ajustes" hidden>
+    <div class="pausa-panel">
+      <h2>⚙️ Ajustes</h2>
+      <div class="pausa-opciones">
+        <button class="b3d txt b-azul" id="a-sonido" type="button"></button>
+        <button class="b3d txt b-azul" id="a-vibrar" type="button"></button>
+        <button class="b3d txt b-rojo" id="a-borrar" type="button"></button>
+        <button class="b3d txt b-gris" id="a-volver" type="button"><span class="b-ico">←</span><span>Volver</span></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="pantalla" id="p-fin" hidden>
+    <div class="pausa-panel">
+      <h2 id="f-titulo">¡Te caíste!</h2>
+      <p class="dato" id="f-texto"></p>
+      <div class="pausa-opciones">
+        <button class="b3d txt b-verde" id="f-otra" type="button"><span class="b-ico">🔄</span><span>Jugar otra vez</span></button>
+        <button class="b3d txt b-gris" id="f-menu" type="button"><span class="b-ico">🏠</span><span>Menú</span></button>
+      </div>
+    </div>
+  </section>
+
+  <script type="module" src="juego-saltanubes.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+</body>
+</html>

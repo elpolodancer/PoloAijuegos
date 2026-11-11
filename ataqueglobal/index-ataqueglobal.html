@@ -1,0 +1,98 @@
+<!doctype html>
+<!-- Ruta: ataqueglobal/index-ataqueglobal.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Ataque Global</title>
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    body.inmersivo { font-family: system-ui, sans-serif; touch-action: none; }
+
+    /* El mundo: lienzo a pantalla completa con su propio fondo de espacio (excepción justificada al fondo de madera: es el cielo del planeta) */
+    #mundo { position: fixed; inset: 0; z-index: 1; width: 100%; height: 100%; display: block; touch-action: none; background: #030918; }
+    .nav-juego { z-index: 9; }
+    .hud-der { z-index: 7; }
+
+    /* Menú principal sobre la madera */
+    #menu { position: fixed; inset: 0; z-index: 5; max-width: none; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+      padding: 76px 20px 76px; overflow-y: auto; text-align: center; color: var(--txt-fondo, #4a2a10); touch-action: pan-y; }
+    #menu > :first-child { margin-top: auto; }
+    #menu > :last-child { margin-bottom: auto; }
+    #menu h1 { margin: 0; font-size: clamp(32px, 7vw, 52px); line-height: 1.05; text-shadow: var(--sombra-txt, 0 2px 0 rgba(255,240,210,.6)); }
+    #menu .lema { margin: 0; max-width: 420px; color: var(--txt-fondo-suave, #6b4423); font-size: 15px; line-height: 1.35; }
+    #menu h2 { margin: 10px 0 0; font-size: 20px; text-shadow: var(--sombra-txt, 0 2px 0 rgba(255,240,210,.6)); }
+    .fila { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+    .fila .b3d.txt { --t: 56px; min-width: 120px; font-size: 17px; }
+    #btn-niveles { --t: 60px; min-width: 260px; font-size: 19px; margin-top: 8px; }
+    @media (max-height: 520px) { #menu { padding: 56px 16px 20px; gap: 8px; } #menu h1 { font-size: 30px; } #menu .lema { display: none; } .fila .b3d.txt { --t: 46px; } #btn-niveles { --t: 48px; } }
+
+    /* Controles de zoom (derecha, a media altura: las esquinas son de los botones fijos) */
+    #zoom { position: fixed; z-index: 5; top: 50%; right: max(10px, env(safe-area-inset-right)); transform: translateY(-50%); display: flex; flex-direction: column; gap: 6px; }
+    #zoom .b3d { --t: 40px; font-size: 20px; font-weight: 800; margin-bottom: 5px; }
+
+    /* Ficha del país seleccionado (abajo al centro, sin tapar 🌙 ni ⛶) */
+    #ficha { position: fixed; z-index: 5; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); max-width: calc(100vw - 150px); display: flex; align-items: center; gap: 12px;
+      padding: 10px 18px; color: #f1f2f4; background: linear-gradient(180deg, #3a3d45, #22242a); border: 2px solid #121316; border-radius: 16px;
+      box-shadow: 0 5px 0 #0c0d0f, 0 10px 20px rgba(0,0,0,.5), inset 0 2px 0 rgba(255,255,255,.15); pointer-events: none; }
+    #ficha .bandera { font-size: 30px; line-height: 1; }
+    #ficha b { display: block; font-size: 18px; }
+    #ficha small { color: #b0b4bd; font-size: 12px; }
+
+    .velo { position: fixed; inset: 0; z-index: 8; display: none; flex-direction: column; align-items: center; gap: 12px; padding: 60px 24px 24px; overflow-y: auto; text-align: center; color: #fff; background: rgba(8, 9, 12, .82); }
+    .velo > :first-child { margin-top: auto; }
+    .velo > :last-child { margin-bottom: auto; }
+    .velo.activo { display: flex; }
+    .velo h2 { margin: 0; font-size: 28px; }
+    .velo p { margin: 0; max-width: 380px; line-height: 1.45; opacity: .92; }
+  </style>
+</head>
+<body class="inmersivo" data-pantalla-auto>
+  <canvas id="mundo" hidden></canvas>
+
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> <span id="txt-menu">Pausa</span></button>
+  </nav>
+
+  <div class="hud hud-der" id="hud" hidden>
+    <span class="chip" id="chip-modo"></span>
+  </div>
+
+  <div id="zoom" hidden>
+    <button class="b3d chico b-gris" id="z-mas" type="button" aria-label="Acercar" title="Acercar (+)"><span class="b-ico">+</span></button>
+    <button class="b3d chico b-gris" id="z-menos" type="button" aria-label="Alejar" title="Alejar (−)"><span class="b-ico">−</span></button>
+    <button class="b3d chico b-azul" id="z-todo" type="button" aria-label="Ver todo el mundo" title="Ver todo el mundo (0)"><span class="b-ico">🌍</span></button>
+  </div>
+
+  <div id="ficha" hidden aria-live="polite">
+    <span class="bandera" id="ficha-bandera"></span>
+    <span><b id="ficha-nombre"></b><small id="ficha-sub">Toca otra vez para soltarlo</small></span>
+  </div>
+
+  <main id="menu">
+    <h1>🌍 Ataque Global</h1>
+    <p class="lema">Expande tu territorio, investiga y lanza tus misiles antes de que lo hagan contigo.</p>
+    <h2>Partida libre</h2>
+    <div class="fila">
+      <button class="b3d txt b-verde" id="btn-facil" type="button"><span class="b-ico">🙂</span>&nbsp;Fácil</button>
+      <button class="b3d txt b-azul" id="btn-normal" type="button"><span class="b-ico">😐</span>&nbsp;Normal</button>
+      <button class="b3d txt b-rojo" id="btn-dificil" type="button"><span class="b-ico">😠</span>&nbsp;Difícil</button>
+    </div>
+    <button class="b3d txt b-oro" id="btn-niveles" type="button"><span class="b-ico">🗺️</span>&nbsp;Niveles</button>
+  </main>
+
+  <div id="velo" class="velo" role="dialog" aria-modal="true" aria-labelledby="velo-titulo">
+    <h2 id="velo-titulo"></h2>
+    <p id="velo-texto"></p>
+    <button class="b3d txt grande b-azul" id="velo-cerrar" type="button" style="--t:52px"><span class="b-ico">←</span>&nbsp;Volver</button>
+  </div>
+
+  <script type="module" src="juego-ataqueglobal.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+# Ataque Global (`ataqueglobal/`)
+
+Juego de guerra de misiles sobre el mapa del mundo, inspirado en *First Strike*. Id de puntos: `ataqueglobal`. Sigue los estándares de `ESTANDARES-juegos.md` (botones fijos, madera clara/oscura en los menús, mapa de niveles estándar).
+
+> El nombre y la carpeta son provisionales: si quieres otro, se cambia en `juegos.js`, `sw.js`, la carpeta y los nombres de archivo.
+
+## 1. Estado actual (fase 1)
+
+Hecho: menú principal, el mundo con zoom y países seleccionables, y el mapa de niveles estándar.
+**Todavía no hay partida.** Fácil / Normal / Difícil solo abren el mundo (la dificultad se guarda en la variable `dificultad`, sin efecto), y los niveles muestran un aviso «se están preparando».
+
+| Archivo | Qué es |
+|---|---|
+| `index-ataqueglobal.html` | Página: menú principal, lienzo del mundo, controles de zoom, ficha del país, aviso de niveles |
+| `juego-ataqueglobal.js` | Pantallas (menú → mundo / niveles), menú de pausa, mapa de niveles (`montarMapa`) |
+| `mapa-ataqueglobal.js` | El mundo: dibujo, zoom, gestos, selección, capas de conquista y destrucción |
+| `paises-ataqueglobal.js` | **Generado.** Contornos de los 194 territorios (ver sección 2) |
+| `herramientas/generar-paises.mjs` | Genera `paises-ataqueglobal.js` sin internet (aproximado) |
+| `herramientas/geojson-a-paises.mjs` | Lo regenera con fronteras reales desde un GeoJSON de Natural Earth |
+
+Reutiliza de `compartido/`: `mapa-niveles.js`, `etapas-mapa.js`, `geografia-mapa.js`, `menu-pausa.js`, `fondo-madera.js`, `inmersivo.css`, `estilos.css`.
+No usa Firebase todavía (no hay puntos ni progreso en la nube).
+
+## 2. Los países del mundo
+
+- **194 territorios** = los 194 de `etapas-mapa.js` (195 con México, que ahí son sus 32 estados) **con Israel y Palestina unidos en uno solo llamado «Palestina/Israel»** (id `IL`; el id `PS` no existe en el mapa). México sí aparece como país (`MX`).
+- Groenlandia se pinta como parte de Dinamarca; Taiwán, de China; Puerto Rico, de EE. UU.
+- Los países diminutos o isleños (Vaticano, Mónaco, Malta, Singapur, Maldivas, islas del Pacífico…) salen como **marcadores**: un círculo con tamaño mínimo en pantalla para poder tocarlos.
+- **Los contornos son aproximados**: se generaron con `herramientas/generar-paises.mjs` (reparte la tierra de `geografia-mapa.js` entre puntos semilla de cada país). Sirven para ver y elegir países, pero las fronteras no son las reales. Para el juego final conviene cambiarlas por Natural Earth (dominio público): bajar `ne_110m_admin_0_countries.geojson` y correr `node ataqueglobal/herramientas/geojson-a-paises.mjs archivo.geojson`.
+- Para ver o corregir un país aproximado: editar sus semillas en `SEMILLAS` de `generar-paises.mjs` y volver a generar.
+- ⚠️ El mapa de niveles estándar (`etapas-mapa.js`) todavía lista **Israel** y **Palestina** como dos países y usa los nombres de `Intl`. Al preparar los niveles hay que decidir si se agrega a `etapas-mapa.js` un nombre especial (sin romper otros juegos) o si este juego trae su propia lista (193 países → 22 500 niveles).
+
+## 3. Pantallas
+
+1. **Menú principal** (madera): título, «Partida libre» con **Fácil · Normal · Difícil**, y **🗺️ Niveles**. Sin ☰ (estándar).
+2. **Partida libre**: el mundo a pantalla completa. ☰ = «Pausa» (Continuar / Ver todo el mundo / Salir). Arriba a la derecha, un chip con el modo.
+3. **Niveles**: mapa estándar (32 estados de México → al terminarlos, 194 países). ☰ = «Menú principal».
+
+El mundo pinta su **propio fondo de espacio** (excepción al fondo de madera: es el cielo del planeta); los botones fijos de las esquinas se respetan. El zoom va a media altura del borde derecho para no ocupar las esquinas.
+
+### Controles del mundo
+Rueda / pellizco / botones **+ − 🌍** (o teclas `+ - 0`) para el zoom; arrastrar para recorrer; tocar un país lo selecciona (y su nombre aparece en la ficha de abajo); tocar el mismo país o el mar lo suelta. En celular vertical se empieza más cerca (África y Europa) y **🌍** muestra todo el mundo.
+
+## 4. Aspecto del mundo (especificación visual)
+
+- **Fondo del universo:** azul muy oscuro (`#030918`) con estrellas tenues.
+- **Planeta:** azul oscuro con degradado, y alrededor una **aurora azul claro del tamaño de la capa de ozono** que respira suavemente: parece un escudo planetario (quieta con `prefers-reduced-motion`).
+- **Países:** todos azul oscuro; solo se distinguen por un **trazo fino de un color propio** (estable por país, calculado a partir de su código).
+- **País conquistado (aliado):** no se repinta: se coloca **encima una capa del mismo contorno, medio transparente, del color del jugador** (alpha 0.4), para conservar la oscuridad de fondo. `mundo.setDueno(iso, color)` ya la dibuja.
+- **País destruido:** deja de ser tuyo; se pinta **negro con pequeñas grietas rojas** y a su alrededor queda **una mancha carbonizada**, poca pero visible, que cae un poco encima de los países vecinos. `mundo.setDestruido(iso, true)` ya lo dibuja (versión simple: se afinará con tus capturas de referencia).
+- Esa mancha tiene un efecto de juego importante: engaña. Si el bot de resistencia ×4 (sección 8) pierde su primer país con 2 misiles, la zona negra hace pensar que «ya explotó todo», pero sus extensiones siguen vivas.
+- 📸 **Pendiente:** adjuntar capturas del juego original de una zona destruida (grietas y mancha) para igualar el aspecto.
+
+## 5. Reglas de la partida (plan)
+
+Todo esto está **planeado, no hecho**. Los tiempos y números son los que definiste; los marcados con ❓ están en la sección 9.
+
+### 5.1 Territorios y regiones de guerra
+- Cada **región de guerra** (en el código; el jugador no ve ese texto) es un bando: el jugador o un bot. Empieza con **2 o 3 países** y se **expande a países vecinos que estén vacíos** (sin dueño). México, por ejemplo, se comportaría como un bot individual que poco a poco toma los países que lo rodean.
+- **Expandir a otro país tarda 25 s.** Mientras un país hace la expansión **no puede construir misiles ni investigar**.
+- Si un país **es destruido, deja de ser tuyo**: hay que volver a expandirse hacia él (otros 25 s).
+- Las regiones se definirán más adelante (lista pendiente del autor). Se necesita el **grafo de vecindad** entre países (fase 2 del plan).
+
+### 5.2 Arsenal de misiles (por país)
+| Nivel | Nombre | Alcance | Notas |
+|---|---|---|---|
+| 1 | Misil de crucero | corto | Se construye en **5 s**. Es el único al inicio |
+| 2 | Balístico de medio alcance | **50 %** del mundo | **3 cabezas** para un ataque localizado. Se desbloquea investigando |
+| 3 | Balístico intercontinental | **66 %** ❓ | Se desbloquea investigando |
+
+- **Capacidad:** cada país guarda al inicio **2 misiles de nivel 1**. Se mejora el almacenaje (ver investigaciones y ❓).
+- **Daño:** un país se destruye con **2 misiles** que caen en el centro; si el misil cae en el **borde** hacen falta **3**. Los bots tontos a veces apuntan mal y caen en el borde.
+- **Resistencia a la radiación:** +50 % de puntos de impacto por país.
+
+### 5.3 Investigación
+Un país puede investigar desde el inicio (y queda ocupado mientras lo hace). **Cada mejora dura 1 minuto**, salvo las superarmas (3 min). Inician 4 disponibles:
+
+| # | Mejora | Requiere | Efecto |
+|---|---|---|---|
+| 1 | **Eficiencia defensiva mejorada** | — | −20 % tiempos de construcción y espera; se construyen **2 misiles de crucero a la vez** |
+| 2 | **Tecnología de misiles mejorada** | — | Desbloquea el misil de **nivel 2** |
+| 3 | **Inteligencia mejorada** | — | Quita la **niebla de guerra**; **aviso justo antes de una detonación** en uno de tus países |
+| 4 | **Infraestructura mejorada** | — | **−50 % tiempo de conquista** de países nuevos; **+50 % puntos de impacto** por país |
+| 5 | **Eficiencia defensiva superior** | 1 | −20 % más de tiempos; el **SDA** (defensa) se activa solo si un misil sobrevuela un país aliado ❓ |
+| 6 | **Tecnología de misiles superior** | 2 | Desbloquea el misil de **nivel 3** intercontinental |
+| 7 | **Inteligencia superior** | 3 | **Espionaje:** ver si un país está bloqueado. **Cálculo avanzado:** ver el punto de impacto de cada misil (avisa y tarda **5 s** en caer) |
+| 8 | **Resiliencia suprema** | 4 | Nueva base de misiles: capacidad por país a **4**, y luego a **5** ❓ |
+| 9 | **Primera superarma elegida** | 5 y 7 | Se puede investigar la primera de las 2 superarmas elegidas al inicio (**3 min**) |
+| 10 | **Segunda superarma elegida** | 6 y 8 | Igual con la segunda (**3 min**) |
+
+Es probable que se termine un nivel antes de completar muchas mejoras: está previsto así.
+
+### 5.4 Superarmas
+- Existen **18 superarmas**; al **iniciar una partida se eligen 2**.
+- Sin avance, solo hay **4 disponibles** (las más básicas, igualmente fuertes). El resto se desbloquea con el progreso.
+- Su poder y la lista completa están **pendientes** (el autor las definirá).
+
+### 5.5 Apuntar
+Botón **Apuntar**: marca todos los misiles y permite **recorrer el mundo** para elegir una zona. Pide **confirmación**; si se toca **lejos de la zona de confirmación, se cancela**. Al confirmar, **solo salen los misiles cuyo alcance llega** hasta allá.
+
+### 5.6 Diplomacia
+- Botón **Diplomacia**: pedir una **tregua** a un bot. Solo se puede pedir **si nunca lo has atacado** (aunque él te haya atacado a ti). Con la tregua deja de atacarte.
+- El jugador **puede romperla cuando quiera**, porque la victoria es cuando **todos se han rendido**.
+- Los bots también hacen treguas entre sí y algunos se enfocan en varios enemigos.
+- Un bot puede **rendirse** aunque le queden un par de países.
+
+### 5.7 Bots
+- En partidas iniciales hay **2 o 3 bots** que crean misiles y avanzan, **a propósito lentos**: en fácil no deben expandirse sin parar.
+- Al reunir unos **10 misiles de nivel 1**, atacan al rival más cercano.
+- Los bots tontos a veces lanzan **un solo misil** al azar y a veces apuntan al borde.
+
+## 6. Dificultades
+
+El menú muestra por ahora 3; el plan es de **5**.
+
+| Dificultad | Países al inicio | Rivales |
+|---|---|---|
+| Fácil | **3** propios | 2–3 bots, lentos y torpes |
+| Normal | por definir | por definir |
+| Difícil | **1** propio | Rivales con **3–4** países, bots más hábiles, a veces lanzan un misil suelto |
+| Muy difícil | por definir | Rivales con 4–5 países ya aliados desde el inicio |
+| Extremo | por definir | Hasta **8 bots**; algunos con varios enemigos, otros con treguas entre sí |
+
+## 7. Niveles
+
+- **22 600 niveles** (el «más de 22 000» del diseño): **100 por cada estado de México (32)** y **100 por cada país (194)**.
+- Los niveles son **fijos**: siempre el mismo país inicial, los mismos rivales y las mismas regiones, pero se **generan con aleatoriedad determinista** (una semilla por número de nivel), de modo que son idénticos para todos los jugadores y no hace falta guardarlos a mano.
+- Cada nivel define: país con el que inicias, regiones rivales y sus países, dificultad, y si trae el bot oculto de la sección 8.
+- La estructura de progreso es la del mapa estándar: `{ max, hecho }` en `localStorage` (`ataqueglobal_progreso_v1`), por ahora sin sincronizar con la cuenta.
+- Qué relación tiene el estado/país de cada etapa con el nivel (¿solo agrupa, o condiciona el país inicial?) está en ❓.
+
+## 8. El bot oculto de resistencia ×4
+
+- Nadie sabe cuál es: **solo su país inicial** (su «capital») resiste **4 veces** lo normal (2 misiles → 8). **Sus extensiones son normales.**
+- Prefiere **países muy pequeños** para esconderse y tiende a nacer en **Palestina/Israel** (y países parecidos de tamaño).
+- Se **expande** como un bot de alto nivel.
+- No es tan raro: aparece en unos **5 000 de los 22 600 niveles** (≈ 22 %). Se decide al generar el nivel (es fijo).
+- Trampa buscada: tras destruir lo que parece su capital con 2 misiles, la mancha negra hace creer que todo explotó, pero el bot sigue vivo en otras zonas.
+
+## 9. Por aclarar (dudas que encontré al escribir esto)
+
+1. **Alcance del misil de nivel 3:** dice «66 %» y también «capaz de llegar a cualquier lugar del mundo». ¿Es 66 % o 100 %?
+2. **Capacidad por país:** se habló de mejorar hasta **8** misiles, pero *Resiliencia suprema* da **4** y luego **5** (máximo). ¿La capacidad máxima es 5 u 8? ¿Hay otras mejoras de almacenaje (de pago) aparte de la investigación?
+3. **«4 % más de resistencia»:** entendí **×4** (4 veces). Confírmalo.
+4. **SDA:** supongo que es el sistema de defensa aérea que derriba misiles que sobrevuelan un país aliado. ¿Es así, y con qué probabilidad / límite funciona?
+5. **«Resiliencia suprema»** aparece con dos frases (capacidad 4 y luego máximo 5): ¿son dos niveles de la misma mejora?
+6. **Tiempos** de construcción de los misiles de nivel 2 y 3, y de cada superarma al usarse.
+7. **Relación etapa ↔ nivel:** el estado o país del mapa de niveles, ¿solo agrupa 100 niveles o define el país inicial?
+8. **Dificultad dentro de los niveles:** ¿sube con el número de nivel (de Fácil a Extremo) o cada nivel trae la suya?
+9. **Palestina/Israel en la lista de niveles** (ver sección 2).
+10. **Sistema monetario, regiones de guerra, las 18 superarmas y sus efectos:** pendientes (ya avisaste que los pasarás).
+
+## 10. Orden recomendado de desarrollo
+
+Para no construirlo «de pies a cabeza», cada fase se puede probar sola:
+
+1. ✅ **Mundo y menús** (hecho).
+2. **Datos del mapa:** fronteras reales (Natural Earth), **grafo de vecindad** (qué países se tocan; para islas, los más cercanos), punto central de cada país y un «radio» (para distinguir centro y borde). Todo lo demás depende de esto.
+3. **Motor de la partida, sin enemigos:** reloj propio con pausa, país propio, **expandir** (25 s) con su barra de progreso, panel del país seleccionado con sus acciones (Expandir / Misiles / Investigar). Aquí se pinta ya la capa de conquista.
+4. **Misiles y destrucción:** construir (5 s, capacidad 2), **Apuntar → confirmar/cancelar**, vuelo animado, impacto, 2 misiles (3 en el borde), país destruido con grietas y mancha. Con un país «de práctica» inmóvil.
+5. **Un solo bot fácil:** expande despacio, junta ~10 misiles, ataca al más cercano; **niebla de guerra**; victoria y derrota.
+6. **Investigación:** las 4 mejoras iniciales, luego las superiores; ocupar el país 1 min.
+7. **Diplomacia, rendición y varios bots**, y los **5 niveles de dificultad** (propios/rivales/velocidad/puntería).
+8. **Superarmas:** pantalla de elección de 2 (4 disponibles al inicio) y su investigación de 3 min. Empezar por 2 o 3 y sumar el resto.
+9. **Niveles fijos:** generador con semilla (22 600), el bot oculto ×4, progreso `{ max, hecho }`, y después **monedas/puntos** (`encolarPuntos`) y sincronización con la cuenta (`progreso.js`).
+10. **Pulido:** igualar el aspecto de destrucción con tus capturas, sonido, tutorial, balance de números y rendimiento en celulares.
+
+## 11. Para pegar en el README principal
+
+**Fila para «Mapa de archivos»:**
+
+| `ataqueglobal/index-ataqueglobal.html`, `juego-ataqueglobal.js`, `mapa-ataqueglobal.js`, `paises-ataqueglobal.js`, `herramientas/*.mjs`, `README-ataqueglobal.md` | Juego «Ataque Global» (id `ataqueglobal`), estilo First Strike. Fase 1: menú principal (Partida libre Fácil/Normal/Difícil + Niveles), mundo en `<canvas>` con zoom, gestos y países seleccionables (194 territorios; Israel y Palestina unidos como «Palestina/Israel»), capas de conquista y destrucción ya dibujadas, y el mapa de niveles estándar (`compartido/mapa-niveles.js`). `paises-ataqueglobal.js` es GENERADO (contornos aproximados) por `herramientas/generar-paises.mjs`; `geojson-a-paises.mjs` lo cambia por fronteras reales. Plan completo en `README-ataqueglobal.md` |
+
+**Nota para «Estado»:**
+
+- Ataque Global (11 nov 2026, `sw.js` `VERSION` = 151): fase 1 hecha y probada en Chromium (menú, partida libre, zoom con rueda, selección de países, pausa, mapa de niveles, celular vertical). NO hay partida todavía. Pendiente: imagen de tarjeta (`imagenes/ataqueglobal.webp`), fronteras reales, grafo de vecindad y todo lo del plan (sección 10). La pantalla no se ha probado en un celular real (gestos de pellizco, rendimiento).

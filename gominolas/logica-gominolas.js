@@ -72,15 +72,20 @@ export const CAMPANA_NIVEL = {
     dificil: { "6x8": 1.75, "8x10": 1.8,  "10x12": 1.75, "12x14": 2.45 },
   },
 };
+// Niveles de tipo «capas»: parte de las negras necesita 2 o 3 jugadas para quitarse. Cada golpe extra pesa «pesoGolpe» negras al calcular los movimientos
+// (calibrado con el bot: node gominolas/bot-gominolas.mjs catalogo --tipo capas).
+export const CAPAS = { dos: 0.30, tres: 0.10, pesoGolpe: 0.65 };
 export function parametrosNivel(nv, rng = Math.random) {
   const C = CAMPANA_NIVEL, t = nv.tablero, dif = DIFICULTADES[nv.dificultad];
   const zona = zonaInicial(t.filas);
   const escala = Math.pow(48 / (t.cols * t.filas), C.escalaArea);
   const variacion = Math.floor(rng() * 3) - 1;
   const negras = Math.max(4, Math.round(zona * t.cols * C.dens * escala) + variacion);
-  const movs = Math.round(negras * C.factor[dif.id][t.id]) + C.extra;
+  const capas = nv.tipo === "capas" ? { dos: CAPAS.dos, tres: CAPAS.tres } : null;
+  const golpesExtra = capas ? Math.round(negras * capas.dos) + 2 * Math.round(negras * capas.tres) : 0;
+  const movs = Math.round((negras + CAPAS.pesoGolpe * golpesExtra) * C.factor[dif.id][t.id]) + C.extra;
   const filasCompletas = nv.patron === "filas" ? filasDelPatron(negras, t.cols) : 0; // patrón del nivel (lo da el catálogo)
-  return { cols: t.cols, filas: t.filas, negras, movs, zona, zonaNueva: zonaNueva(t.filas), penaliza: dif.penaliza, filasCompletas };
+  return { cols: t.cols, filas: t.filas, negras, movs, zona, zonaNueva: zonaNueva(t.filas), penaliza: dif.penaliza, filasCompletas, capas };
 }
 
 // --- Modo libre: rondas sin fin en el tablero y dificultad elegidos ---
@@ -202,11 +207,20 @@ function colocarNegras(p, cant, filasCompletas = 0) {
   const celdas = [];
   for (let f = p.filas - 1; f >= desde; f--) if (!filasNegras.includes(f)) for (let c = 0; c < p.cols; c++) celdas.push([f, c]);
   mezclar(celdas).slice(0, cant - filasNegras.length * p.cols).forEach(([f, c]) => { p.grid[f][c].k = NEGRA; });
+  // Capas (niveles de tipo «capas»): una parte de las negras lleva 2 capas (1 candado) y otra 3 capas (2 candados). Se ven como cadenas con candado.
+  if (p.capas) {
+    const negras = [];
+    for (let f = 0; f < p.filas; f++) for (let c = 0; c < p.cols; c++) if (p.grid[f][c].k === NEGRA) negras.push(p.grid[f][c]);
+    mezclar(negras);
+    const n3 = Math.round(negras.length * p.capas.tres), n2 = Math.round(negras.length * p.capas.dos);
+    negras.slice(0, n3).forEach((g) => { g.c = 3; });
+    negras.slice(n3, n3 + n2).forEach((g) => { g.c = 2; });
+  }
   let intentos = 0;
   while (!hayJugada(p) && intentos++ < 50) barajar(p);
 }
 
-// params: { cols, filas, negras, movs, zona, zonaNueva, penaliza, filasCompletas (opcional) }
+// params: { cols, filas, negras, movs, zona, zonaNueva, penaliza, filasCompletas (opcional), capas: { dos, tres } (opcional) }
 export function crearPartida(params, rng = Math.random) {
   const p = { ...params, rng, movsIni: params.movs, grid: [], estado: "jugando", fallos: 0 };
   for (let f = 0; f < p.filas; f++) {
@@ -244,6 +258,7 @@ function nuevaNegra(p) {
   const [f, c] = cand[Math.floor(p.rng() * cand.length)];
   p.grid[f][c].k = NEGRA;
   delete p.grid[f][c].p;
+  delete p.grid[f][c].c; // las negras que salen por jugada fallida no llevan capas
 }
 
 // Celdas que rompen los poderes de la cadena (fila y/o columna de la última casilla)
@@ -281,22 +296,29 @@ export function conjuntoRoto(p, lista) {
   return quitar;
 }
 
+// Rompe las celdas de la lista (y las negras pegadas). Una negra CON CAPAS (g.c > 1) no se quita: pierde UNA capa (un candado) por jugada,
+// aunque la toquen varias gominolas rotas a la vez. Devuelve { negras: negras que se quitaron del todo, golpes: capas que se rompieron }.
 function romper(p, lista) {
   const quitar = conjuntoRoto(p, lista);
-  let negras = 0;
+  let negras = 0, golpes = 0;
   quitar.forEach((key) => {
     const f = Math.floor(key / 100), c = key % 100;
-    if (p.grid[f][c].k === NEGRA) negras++;
+    const g = p.grid[f][c];
+    if (g.k === NEGRA) {
+      if (g.c > 1) { g.c--; golpes++; return; }
+      negras++;
+    }
     p.grid[f][c] = null;
   });
-  return negras;
+  return { negras, golpes };
 }
 
-function cerrarJugada(p, negrasQuitadas) {
+// «avance» = negras quitadas + capas rotas: si hubo alguno, la jugada no se castiga con negras nuevas
+function cerrarJugada(p, avance) {
   p.movs--;
   caer(p);
   if (contarNegras(p) === 0) { p.estado = "gano"; return; }
-  if (!negrasQuitadas) { p.fallos++; for (let i = 0; i < p.penaliza; i++) nuevaNegra(p); }
+  if (!avance) { p.fallos++; for (let i = 0; i < p.penaliza; i++) nuevaNegra(p); }
   if (p.movs <= 0) { p.estado = "perdio"; return; }
   if (!hayJugada(p)) barajar(p);
 }
@@ -321,9 +343,10 @@ export function jugarCadena(p, cad) {
   const n = cad.length, ult = cad[n - 1];
   const colorCadena = p.grid[ult.f][ult.c].k; // el poder nuevo conserva el color de la cadena
   const lineas = lineasDePoderes(p, cad, ult);
-  const negras = romper(p, cad.map(({ f, c }) => [f, c]).concat(lineas));
+  const rot = romper(p, cad.map(({ f, c }) => [f, c]).concat(lineas));
+  const negras = rot.negras;
   const poder = n >= CADENA_VERTICAL ? "vertical" : n >= CADENA_HORIZONTAL ? "horizontal" : null;
   if (poder) p.grid[ult.f][ult.c] = { k: colorCadena, p: poder };
-  cerrarJugada(p, negras);
+  cerrarJugada(p, negras + rot.golpes);
   return negras;
 }

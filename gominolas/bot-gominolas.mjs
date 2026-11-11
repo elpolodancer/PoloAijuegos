@@ -5,7 +5,7 @@
 //   node gominolas/bot-gominolas.mjs campana --n 60   (solo los niveles de campaña antiguos, 6×8)
 //   node gominolas/bot-gominolas.mjs poderes --n 100  (cuántos poderes salen: horizontal/vertical por partida, en cuántas partidas sale alguno y en qué % de jugadas había una región tan grande como para hacerlo)
 //   node gominolas/bot-gominolas.mjs estrellas --n 200 --umbrales 0.25,0.5  (de las partidas ganadas, qué % saca 1, 2 o 3 estrellas según los movimientos que sobran)
-//   (catalogo y poderes aceptan --patron filas para probar niveles con filas completas de negras)
+//   (catalogo, poderes y estrellas aceptan --patron filas y --tipo capas para probar esos niveles)
 //   node gominolas/bot-gominolas.mjs catalogo --n 40  (campaña con catálogo: % de victorias por tablero y dificultad, y el factor de movimientos que daría cada meta)
 //   opciones: --n N  --rondas R (tope de rondas del modo libre, 30)  --semilla S  --tablero 8x10  --dif medio
 //             --estilos experto,casual,novato,azar   (cuáles jugadores probar; por omisión experto,novato,azar)
@@ -26,11 +26,11 @@ function evaluar(p, cad) {
   const ult = cad[cad.length - 1];
   const lista = cad.map(({ f, c }) => [f, c]).concat(lineasDePoderes(p, cad, ult));
   const roto = conjuntoRoto(p, lista);
-  let negras = 0;
-  roto.forEach((key) => { if (p.grid[Math.floor(key / 100)][key % 100].k === NEGRA) negras++; });
+  let negras = 0, valor = 0; // valor: una negra que se quita vale 100; un golpe a una negra con capas vale 60
+  roto.forEach((key) => { const g = p.grid[Math.floor(key / 100)][key % 100]; if (g.k === NEGRA) { negras++; valor += g.c > 1 ? 60 : 100; } });
   const n = cad.length;
   const bonoPoder = n >= CADENA_VERTICAL ? 3 : n >= CADENA_HORIZONTAL ? 1.5 : 0; // crear un poder vale como 1–3 negras
-  return { cad: cad.slice(), negras, score: negras * 100 + bonoPoder * 100 + roto.size };
+  return { cad: cad.slice(), negras, score: valor + bonoPoder * 100 + roto.size };
 }
 
 // Reúne jugadas con búsqueda en profundidad con presupuesto de nodos
@@ -125,6 +125,7 @@ const MAXR = Number(val("rondas", 30));
 const SEMILLA = Number(val("semilla", 1));
 const soloTablero = val("tablero", null);
 const soloDif = val("dif", null);
+const TIPO = val("tipo", "clasico"); // --tipo capas: prueba los niveles con negras con capas
 const PATRON = val("patron", "azar"); // --patron filas: los niveles de catalogo/poderes empiezan con filas completas de negras
 const ESTILOS = val("estilos", "experto,novato,azar").split(",");
 const FIJAS = val("fijas", null); // --fijas 1,10,20,30: juega rondas sueltas (no carreras); sirve para calibrar rápido
@@ -211,7 +212,7 @@ function catalogo() {
   const dificultades = soloDif ? [soloDif] : ["facil", "medio", "dificil"];
   const tableros = TABLEROS.filter((t) => ["6x8", "8x10", "10x12", "12x14"].includes(t.id) && (!soloTablero || t.id === soloTablero));
   const QS = val("qs", "0.5,0.8,0.95").split(",").map(Number); // porcentajes de victoria para los que se calcula el factor
-  console.log("\n=== CAMPAÑA CON CATÁLOGO · patrón «" + PATRON + "»: % de victorias con los números actuales (CAMPANA_NIVEL) (" + N + " partidas por celda) ===");
+  console.log("\n=== CAMPAÑA CON CATÁLOGO · patrón «" + PATRON + "» · tipo «" + TIPO + "»: % de victorias con los números actuales (CAMPANA_NIVEL) (" + N + " partidas por celda) ===");
   console.log("densidad " + CAMPANA_NIVEL.dens + " · extra " + CAMPANA_NIVEL.extra);
   console.log("«f» (en el orden de --qs " + QS.join("/") + ") = factor de movimientos con el que ese estilo ganaría el 50/80/95 % de las partidas (movs = negras × factor + " + CAMPANA_NIVEL.extra + ")");
   for (const dId of dificultades) {
@@ -221,7 +222,7 @@ function catalogo() {
         const nn = estilo === "azar" ? Math.max(10, Math.round(N / 2)) : N;
         let gan = 0, usados = 0, ej; const factores = [];
         for (let i = 0; i < nn; i++) {
-          const par = parametrosNivel({ tablero: t, dificultad: dId, patron: PATRON }, rng); ej = par;
+          const par = parametrosNivel({ tablero: t, dificultad: dId, patron: PATRON, tipo: TIPO }, rng); ej = par;
           const r = jugarPartida({ ...par, movs: 400 }, estilo, rng);
           const T = r.gano ? r.movsUsados : Infinity;
           if (T <= par.movs) gan++;
@@ -246,7 +247,7 @@ function poderes() {
     const rng = crearRng(SEMILLA * 9091 + t.cols * 19 + DIFICULTADES[dId].penaliza * 5 + estilo.length);
     let h = 0, v = 0, con = 0, jug = 0, h7 = 0, h9 = 0;
     for (let i = 0; i < N; i++) {
-      const par = parametrosNivel({ tablero: t, dificultad: dId, patron: PATRON }, rng);
+      const par = parametrosNivel({ tablero: t, dificultad: dId, patron: PATRON, tipo: TIPO }, rng);
       const x = jugarPartida({ ...par, movs: 400 }, estilo, rng);
       h += x.hor; v += x.ver; jug += x.jugadas; h7 += x.hay7; h9 += x.hay9; if (x.hor + x.ver > 0) con++;
     }
@@ -265,7 +266,7 @@ function estrellas() {
     const rng = crearRng(SEMILLA * 5557 + t.cols * 23 + DIFICULTADES[dId].penaliza * 11 + estilo.length);
     let gan = 0, e1 = 0, e2 = 0, e3 = 0;
     for (let i = 0; i < N; i++) {
-      const par = parametrosNivel({ tablero: t, dificultad: dId, patron: PATRON }, rng);
+      const par = parametrosNivel({ tablero: t, dificultad: dId, patron: PATRON, tipo: TIPO }, rng);
       const r = jugarPartida({ ...par, movs: 400 }, estilo, rng);
       if (!r.gano || r.movsUsados > par.movs) continue;
       gan++;
