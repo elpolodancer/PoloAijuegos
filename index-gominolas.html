@@ -1,0 +1,110 @@
+<!doctype html>
+<!-- Ruta: gominolas/index-gominolas.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Conecta gominolas</title>
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    /* Columna: marcadores + barra de movimientos + tablero 6×8. Arriba a la izquierda va «🎮 Juegos» + «☰» (≈120×92): se deja ese espacio. */
+    .inmersivo .escena { flex-direction: column; gap: 8px; padding: calc(100px + env(safe-area-inset-top, 0px)) 0 calc(8px + env(safe-area-inset-bottom, 0px)); }
+    .panel-info { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: none; }
+    .fila-chips { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; width: min(100vw, 520px); padding: 0 8px; }
+    .fila-chips .chip { height: 30px; padding: 0 10px; font-size: 13px; }
+    .tiempo { flex: none; width: min(calc(100vw - 24px), 480px); height: 14px; background: rgba(0,0,0,.28); border: 2px solid #15171a; border-radius: 99px; overflow: hidden; }
+    #barra { height: 100%; width: 100%; border-radius: 99px; background: linear-gradient(90deg, #ff7aa8, #ffd24d); transition: width .1s linear; }
+    #barra.poco { background: #ff4d5e; }
+    .tablero { position: relative; flex: none; overflow: hidden; border-radius: 22px; background: linear-gradient(160deg, #e3d3fb, #bfa3ee); border: 3px solid #a98ae0; box-shadow: 0 8px 0 #8d6fcb, 0 14px 22px rgba(60,30,110,.35); touch-action: none; user-select: none; -webkit-user-select: none;
+      /* --asp (columnas ÷ filas) y --maxw los pone juego-gominolas.js según el tablero (6×8 … 14×16) */
+      width: min(calc(100vw - 24px), calc((100vh - 216px) * var(--asp, 0.75)), var(--maxw, 480px));
+      width: min(calc(100vw - 24px), calc((100dvh - 216px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * var(--asp, 0.75)), var(--maxw, 480px)); }
+    canvas { display: block; width: 100%; touch-action: none; }
+    .hud-der { z-index: 7; } /* el botón de entrar queda por encima del mapa */
+    .ovl { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; justify-content: safe center; gap: 12px; padding: 24px; text-align: center; background: rgba(10,10,12,.84); color: #fff; overflow-y: auto; }
+    .ovl.oculto { display: none; }
+    .ovl h2 { margin: 0; font-size: 1.7rem; }
+    /* Menú principal y modo libre: pantallas sobre la madera (textos con --txt-fondo, que cambia solo con la madera clara/oscura).
+       Dejan libres las esquinas reservadas: arriba-izq. (🎮 Juegos + ☰), abajo-izq. (🌙) y abajo-der. (⛶). */
+    .pantalla { position: fixed; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; justify-content: safe center; gap: 14px; overflow-y: auto; text-align: center;
+      padding: calc(104px + env(safe-area-inset-top, 0px)) 16px calc(70px + env(safe-area-inset-bottom, 0px)); color: var(--txt-fondo, #4a2a10); }
+    .pantalla[hidden] { display: none; }
+    .pant-titulo { margin: 0; font-size: clamp(1.8rem, 6vw, 2.6rem); line-height: 1.1; text-shadow: var(--sombra-txt, none); }
+    .pant-sub, .pant-nota { margin: 0; max-width: 40ch; font-size: .95rem; line-height: 1.4; color: var(--txt-fondo-suave, #6b4423); text-shadow: var(--sombra-txt, none); }
+    .pant-botones { display: flex; flex-direction: column; align-items: stretch; gap: 10px; width: min(100%, 320px); margin-top: 6px; }
+    .pant-botones .b3d { width: 100%; }
+    .pant-botones .b3d.grande { font-size: 18px; }
+    .pant-botones .b-ico, .pant-fila .b-ico { margin-right: 8px; }
+    .pant-fila .b3d.txt { padding: 0 16px; }
+    .pant-grupo { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .pant-rot { font-weight: 800; font-size: .95rem; text-shadow: var(--sombra-txt, none); }
+    .pant-fila { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 8px; }
+    .pant-fila .b3d { --t: 44px; }
+    .pant-record { margin: 0; font-weight: 800; text-shadow: var(--sombra-txt, none); }
+    .ovl p { margin: 0; max-width: 34ch; font-size: .9rem; line-height: 1.45; color: #e3e5ea; }
+    /* Horizontal con poco alto: el tablero ocupa toda la altura y los marcadores pasan a una columna a la derecha (bajo el botón de entrar) */
+    @media (orientation: landscape) and (max-height: 640px) {
+      .inmersivo .escena { padding: calc(8px + env(safe-area-inset-top, 0px)) 0 calc(8px + env(safe-area-inset-bottom, 0px)); }
+      .panel-info { position: fixed; z-index: 5; top: calc(56px + env(safe-area-inset-top, 0px)); right: max(10px, env(safe-area-inset-right)); align-items: stretch; width: 112px; }
+      .fila-chips { flex-direction: column; flex-wrap: nowrap; align-items: stretch; width: 100%; padding: 0; }
+      .fila-chips .chip { justify-content: space-between; }
+      .tiempo { width: 100%; }
+      .tablero { width: calc((100vh - 24px) * var(--asp, 0.75)); width: calc((100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * var(--asp, 0.75)); }
+    }
+  </style>
+</head>
+<body class="inmersivo" data-pantalla-auto>
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> <span id="txt-menu">Pausa</span></button>
+  </nav>
+  <div class="hud hud-der">
+    <button class="b3d chico txt b-azul" id="entrar" type="button" title="Entrar con Google para guardar puntos" hidden>👤 Entrar con Google</button>
+  </div>
+  <section class="pantalla" id="pantMenu" aria-label="Menú principal" hidden>
+    <h1 class="pant-titulo">🍬 Conecta gominolas</h1>
+    <p class="pant-sub">Junta gominolas iguales para eliminar las negras.</p>
+    <div class="pant-botones">
+      <button class="b3d txt grande b-morado" id="menuLibre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
+      <button class="b3d txt grande b-verde" id="menuContinuar" type="button"><span class="b-ico">▶</span> Continuar · nivel&nbsp;<span id="menuNivel">1</span></button>
+      <button class="b3d txt grande b-azul" id="menuNiveles" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+      <button class="b3d txt b-gris" id="menuInfo" type="button"><span class="b-ico">ℹ️</span> Info</button>
+    </div>
+  </section>
+  <section class="pantalla" id="pantLibre" aria-label="Modo libre" hidden>
+    <h2 class="pant-titulo">♾️ Modo libre</h2>
+    <p class="pant-sub">Rondas sin fin. Elige el tablero y la dificultad.</p>
+    <div class="pant-grupo"><span class="pant-rot">Tablero</span><div class="pant-fila" id="libreTableros"></div></div>
+    <div class="pant-grupo"><span class="pant-rot">Dificultad</span><div class="pant-fila" id="libreDifs"></div></div>
+    <p class="pant-nota" id="libreAyuda"></p>
+    <p class="pant-record" id="libreRecord"></p>
+    <button class="b3d txt grande b-verde" id="libreJugar" type="button"><span class="b-ico">▶</span> Jugar</button>
+  </section>
+  <div class="escena">
+    <div class="panel-info">
+      <div class="fila-chips">
+        <span class="chip"><small>Puntos</small><b id="pts">0</b></span>
+        <span class="chip"><small>Movs</small><b id="movs">0</b></span>
+        <span class="chip"><small>Negras</small><b id="negras">0</b></span>
+        <span class="chip"><small id="rotNivel">Nivel</small><b id="nivel">1</b></span>
+      </div>
+      <div class="tiempo" title="Movimientos que quedan"><div id="barra"></div></div>
+    </div>
+    <div class="tablero">
+      <canvas id="lienzo"></canvas>
+      <div class="ovl oculto" id="ovl">
+        <h2 id="ovlTitulo"></h2>
+        <p id="ovlTexto"></p>
+        <button class="b3d txt grande b-verde" id="ovlBtn" type="button">Jugar</button>
+        <button class="b3d txt b-azul" id="ovlMapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="juego-gominolas.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
