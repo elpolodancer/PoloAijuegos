@@ -8,14 +8,15 @@ import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de p
 import { crearMenuPausa } from "../compartido/menu-pausa.js"; // menú de pausa estándar (☰)
 import { montarMapa } from "../compartido/mapa-niveles.js";   // menú principal ESTÁNDAR: México con agua, mundo y listas de niveles
 import { crearEtapas } from "../compartido/etapas-mapa.js";   // 32 estados + 194 países
+import { TABLEROS, DIFICULTADES, parametrosLibre, parametrosCampana } from "./logica-gominolas.js"; // balance: tableros, dificultades, negras y movimientos (el bot de pruebas usa los mismos números)
 let nube = null; // se llena al cargar compartido/progreso.js (abajo del todo)
 let entrar = async () => { throw new Error("Sesión no disponible sin conexión"); };
 
 const ID = "gominolas"; // el mismo id de juegos.js (colección de puntos en Firestore)
 
 // ---------- Ajustes (cámbialos a gusto) ----------
-const COLUMNAS = 6;
-const FILAS = 8;
+let COLUMNAS = 6;           // cambian con el tablero: campaña 6×8; modo libre 6×8, 8×10, 10×12, 12×14 o 14×16 (ver TABLEROS en logica-gominolas.js)
+let FILAS = 8;
 const COLORES = 5;          // de 3 a 6
 const MIN_CADENA = 3;       // mínimo de gominolas para juntar
 const PUNTOS_BASE = 10;     // por gominola; las cadenas largas dan bono
@@ -25,28 +26,12 @@ const CLAVE_MEJOR = "gominolas_mejor";
 const CLAVE_NIVEL = "gominolas_nivel";
 const CLAVE_PROG = "gominolas_progreso"; // { mejor, nivel } juntos, para sincronizarlos con la cuenta (antes: las dos claves de arriba)
 
-// Gominolas negras
-const NEGRAS_MIN = 10;      // negras por nivel: entre NEGRAS_MIN y NEGRAS_MAX
-const NEGRAS_MAX = 18;
-const NEGRAS_CADA = 2;      // cada cuántos niveles sube en 1 la cantidad base de negras (luego se le suma -1, 0 o +1 al azar)
-const ZONA_INICIAL = 5;     // filas de abajo donde nacen las negras al empezar el nivel
-const ZONA_NUEVA = 3;       // filas de abajo donde aparece la negra extra cuando no eliminas ninguna
+// Gominolas negras. Cuántas hay, cuántos movimientos se dan y cuántas negras nuevas salen por jugada fallida se calculan en
+// logica-gominolas.js (campaña: parametrosCampana; modo libre: parametrosLibre según tablero y dificultad).
+let zonaIni = 5;            // filas de abajo donde nacen las negras al empezar (depende de la altura del tablero)
+let zonaNva = 3;            // filas de abajo donde aparece la negra extra cuando no eliminas ninguna
+let penaliza = 1;           // negras nuevas por jugada que no elimina ninguna: campaña 1; libre fácil 1, medio 2, difícil 3
 const PUNTOS_NEGRA = 30;    // puntos por cada negra eliminada
-
-// Niveles con valores fijos (las negras siempre nacen repartidas al azar en la zona baja).
-// Del nivel siguiente al último de esta lista en adelante se generan con la fórmula de abajo.
-const NIVELES = [
-  { negras: 12, movs: 25 }, // nivel 1
-  { negras: 14, movs: 22 }, // nivel 2
-  { negras: 16, movs: 20 }, // nivel 3
-  { negras: 19, movs: 19 }, // nivel 4
-];
-
-// Movimientos por nivel: negras × factor + extra (el factor baja con cada nivel, así se va poniendo más difícil)
-const MOVS_FACTOR = 1.2;
-const MOVS_BAJA = 0.03;
-const MOVS_FACTOR_MIN = 0.7;
-const MOVS_EXTRA = 3;
 const BONO_MOVIMIENTO = 20; // puntos por cada movimiento que te sobre al ganar
 
 // Poderes: cadenas largas dejan un bloque especial en la última gominola.
@@ -89,6 +74,12 @@ const ovlTitulo = document.getElementById("ovlTitulo");
 const ovlTexto = document.getElementById("ovlTexto");
 const ovlBtn = document.getElementById("ovlBtn");
 const btnEntrar = document.getElementById("entrar");
+const escena = document.querySelector(".escena");
+const tableroEl = document.querySelector(".tablero");
+const pantMenu = document.getElementById("pantMenu");     // menú principal: Continuar · Modo libre · Niveles
+const pantLibre = document.getElementById("pantLibre");   // modo libre: elegir tablero y dificultad
+const ovlMapa = document.getElementById("ovlMapa");
+const rotNivel = document.getElementById("rotNivel");
 
 // ---------- Estado ----------
 let grid = [];          // grid[fila][col] = { k: color (o NEGRA / ESPECIAL), y: fila visual, v: velocidad, p: poder }
@@ -110,15 +101,21 @@ let tam = 50;           // tamaño de celda en px CSS
 let ultimo = 0;
 let partida = 0;        // número de intento: evita que un aviso tardío del perfil se pegue al texto de otra pantalla
 let usuario = null;     // sesión de Google (null si no ha entrado)
+let modo = "campana";   // "campana" (mapa de niveles) | "libre" (rondas sin fin)
+let libre = { t: TABLEROS[0], d: DIFICULTADES.facil, ronda: 1 }; // lo elegido en el modo libre y la ronda en juego
+let recordsLibre = {};  // { "l_6x8_facil": rondas superadas (récord) }; viaja con el progreso a la cuenta (se une con el máximo)
+const CLAVE_SEL = "gominolas_libre_sel";
 
 try { mejor = parseInt(localStorage.getItem(CLAVE_MEJOR), 10) || 0; } catch (e) {}
 try { nivel = parseInt(localStorage.getItem(CLAVE_NIVEL), 10) || 1; } catch (e) {}
-try { const p = JSON.parse(localStorage.getItem(CLAVE_PROG)); if (p) { mejor = Math.max(mejor, Number(p.mejor) || 0); nivel = Math.max(nivel, Number(p.nivel) || 1); } } catch (e) {}
+const tomarRecords = (p) => { for (const k in p || {}) if (k.startsWith("l_")) recordsLibre[k] = Math.max(Number(p[k]) || 0, recordsLibre[k] || 0); };
+try { const p = JSON.parse(localStorage.getItem(CLAVE_PROG)); if (p) { mejor = Math.max(mejor, Number(p.mejor) || 0); nivel = Math.max(nivel, Number(p.nivel) || 1); tomarRecords(p); } } catch (e) {}
+try { const [t, d] = (localStorage.getItem(CLAVE_SEL) || "").split("|"); libre.t = TABLEROS.find((x) => x.id === t) || libre.t; libre.d = DIFICULTADES[d] || libre.d; } catch (e) {}
 function guardarProg() {
-  try { localStorage.setItem(CLAVE_PROG, JSON.stringify({ mejor, nivel })); } catch (e) {}
+  try { localStorage.setItem(CLAVE_PROG, JSON.stringify({ mejor, nivel, ...recordsLibre })); } catch (e) {}
   if (nube) nube.guardado();
 }
-if (mejor || nivel > 1) guardarProg(); // pasa lo de las claves de antes a la nueva
+if (mejor || nivel > 1 || Object.keys(recordsLibre).length) guardarProg(); // pasa lo de las claves de antes a la nueva
 
 // ---------- Mapa de niveles (menú principal), botón «☰» y menú de pausa ----------
 // 100 niveles por estado de México (32) y por país (194): 22 600 en total. Los niveles se abren en orden.
@@ -128,14 +125,14 @@ const ETAPAS = crearEtapas({ porEtapa: NIVELES_POR_ETAPA });
 const TOTAL_NIVELES = ETAPAS.total;
 const btnMenu = document.getElementById("btn-menu");
 
-// «☰» (estándar): en el mapa principal NO se muestra; en el resto del mapa y en las pantallas de resultado dice «Menú principal»;
-// dentro de una partida dice «Pausa» y abre el menú de pausa.
+// «☰» (estándar): en el menú principal del juego NO se muestra; en el resto de pantallas (niveles, modo libre, resultados) dice
+// «Menú principal» y vuelve a él; dentro de una partida dice «Pausa» y abre el menú de pausa.
 function menuBoton() {
-  const enMapa = mapa.abierto();
-  btnMenu.hidden = enMapa && mapa.esPrincipal();
-  const enPartida = !enMapa && estado === "jugando";
+  const enMenu = !pantMenu.hidden;
+  const enPartida = !enMenu && pantLibre.hidden && !mapa.abierto() && estado === "jugando";
+  btnMenu.hidden = enMenu;
   document.getElementById("txt-menu").textContent = enPartida ? "Pausa" : "Menú principal";
-  btnMenu.title = enPartida ? "Pausa" : "Volver al mapa principal";
+  btnMenu.title = enPartida ? "Pausa" : "Volver al menú principal";
 }
 // Ventana «Info» del mapa (usa los estilos .pausa-* de compartido/inmersivo.css)
 function abrirInfo() {
@@ -144,7 +141,7 @@ function abrirInfo() {
   const panel = document.createElement("div"); panel.className = "pausa-panel";
   const t = document.createElement("h2"); t.textContent = "ℹ️ Cómo se juega";
   const txt = document.createElement("p"); txt.style.cssText = "margin:0 0 12px;line-height:1.45;font-size:.92rem";
-  txt.textContent = "Arrastra por 3 o más gominolas iguales y juntas. Rompe las que rodean a las negras para eliminarlas: si en una jugada no eliminas ninguna, aparece otra. Cadenas de 5 crean un poder ↔️ (rompe una fila) y de 7 un poder ↕️ (rompe una columna): tócalos o inclúyelos en una cadena y se activan en la última casilla. Dos poderes juntos se aplican a la vez." + " Los niveles se desbloquean en orden: cada estado y cada país tiene 100. Al terminar un estado se desbloquea el siguiente y el agua del mapa sube.";
+  txt.textContent = "Arrastra por 3 o más gominolas iguales y juntas. Rompe las que rodean a las negras para eliminarlas: si en una jugada no eliminas ninguna, aparece otra. Cadenas de 5 crean un poder ↔️ (rompe una fila) y de 7 un poder ↕️ (rompe una columna): tócalos o inclúyelos en una cadena y se activan en la última casilla. Dos poderes juntos se aplican a la vez." + " Los niveles se desbloquean en orden: cada estado y cada país tiene 100. Al terminar un estado se desbloquea el siguiente y el agua del mapa sube." + " Modo libre: elige tablero y dificultad y juega rondas sin fin hasta quedarte sin movimientos. Si una jugada no elimina ninguna negra, aparece 1 nueva en Fácil, 2 en Medio y 3 en Difícil. No suma al perfil; solo guarda tu récord de rondas.";
   const ok = document.createElement("button"); ok.type = "button"; ok.className = "b3d txt b-verde"; ok.textContent = "Entendido";
   const cerrar = () => { fondo.remove(); };
   ok.addEventListener("click", cerrar); fondo.addEventListener("click", (e) => { if (e.target === fondo) cerrar(); });
@@ -158,23 +155,80 @@ const mapa = montarMapa({
   jugarNivel: (n) => { mapa.cerrar(); puntosInicioNivel = 0; jugar(n); },
   alInfo: abrirInfo,
   alCambiarVista: () => menuBoton(),
+  botonesExtra: [{ icono: "♾️", texto: "Modo libre", clase: "b-morado", fn: () => { mapa.cerrar(); mostrarLibre(); } }], // estándar: junto a «Continuar»
 });
 function abrirMapa(aguaSube) {
   estado = "inicio"; cadena = null;
   ovl.classList.add("oculto");
+  pantMenu.hidden = true; pantLibre.hidden = true; escena.hidden = true;
   mapa.abrir(Math.min(nivel, TOTAL_NIVELES), !!aguaSube);
   menuBoton();
 }
-crearMenuPausa({
+// Menú de pausa. En el modo libre no hay «Reiniciar» (sería repetir la ronda sin costo): solo Continuar o Salir
+const opcionesPausa = {
   boton: btnMenu,
-  puedeAbrir: () => estado === "jugando" && !mapa.abierto(),
+  puedeAbrir: () => estado === "jugando" && !mapa.abierto() && pantMenu.hidden && pantLibre.hidden,
   alAbrir: () => { cadena = null; },
-  extras: () => [{ icono: "🔄", texto: "Reiniciar nivel", clase: "b-azul", ayuda: "Vuelves a empezar este nivel con tus puntos de antes.", alElegir: () => empezar() }],
+  extras: () => (modo === "libre" ? [] : [{ icono: "🔄", texto: "Reiniciar nivel", clase: "b-azul", ayuda: "Vuelves a empezar este nivel con tus puntos de antes.", alElegir: () => empezar() }]),
   textoSalir: "Salir al mapa",
-  alSalir: () => abrirMapa(false),
-  ayudaSalir: "Se pierde lo avanzado en este nivel.",
-});
-btnMenu.addEventListener("click", () => { if (mapa.abierto()) mapa.principal(); else if (estado === "fin") { ovl.classList.add("oculto"); mapa.abrir(); menuBoton(); } });
+  alSalir: () => (modo === "libre" ? mostrarLibre() : abrirMapa(false)),
+  ayudaSalir: () => (modo === "libre" ? "La partida termina; se guarda cuántas rondas superaste." : "Se pierde lo avanzado en este nivel."),
+};
+crearMenuPausa(opcionesPausa);
+// Fuera de una partida (mapa, modo libre, resultados) el ☰ dice «Menú principal» y vuelve al menú del juego
+btnMenu.addEventListener("click", () => { if (mapa.abierto() || !pantLibre.hidden || estado !== "jugando") mostrarMenu(); });
+
+// ---------- Menú principal y modo libre ----------
+const claveLibre = () => "l_" + libre.t.id + "_" + libre.d.id;
+function mostrarMenu() {
+  estado = "inicio"; cadena = null;
+  ovl.classList.add("oculto");
+  if (mapa.abierto()) mapa.cerrar();
+  pantLibre.hidden = true; escena.hidden = true; pantMenu.hidden = false;
+  document.getElementById("menuNivel").textContent = Math.min(nivel, TOTAL_NIVELES);
+  menuBoton();
+}
+function botonOpcion(texto, on, fn) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "b3d txt " + (on ? "b-oro on" : "b-gris");
+  b.textContent = texto;
+  b.setAttribute("aria-pressed", String(on));
+  b.addEventListener("click", fn);
+  return b;
+}
+function pintarLibre() {
+  const bt = document.getElementById("libreTableros"), bd = document.getElementById("libreDifs");
+  bt.replaceChildren(); bd.replaceChildren();
+  for (const t of TABLEROS) bt.appendChild(botonOpcion(t.id.replace("x", "×"), t === libre.t, () => { libre.t = t; pintarLibre(); }));
+  for (const d of Object.values(DIFICULTADES)) bd.appendChild(botonOpcion(d.icono + " " + d.nombre, d === libre.d, () => { libre.d = d; pintarLibre(); }));
+  const n = libre.d.penaliza;
+  document.getElementById("libreAyuda").textContent = "Si una jugada no elimina ninguna negra, aparece" + (n === 1 ? " 1 negra nueva." : "n " + n + " negras nuevas.");
+  const rec = recordsLibre[claveLibre()] || 0;
+  document.getElementById("libreRecord").textContent = rec ? "🏆 Récord: " + rec + (rec === 1 ? " ronda" : " rondas") : "Aún sin récord en esta combinación";
+  try { localStorage.setItem(CLAVE_SEL, libre.t.id + "|" + libre.d.id); } catch (e) {}
+}
+function mostrarLibre() {
+  estado = "inicio"; cadena = null;
+  ovl.classList.add("oculto");
+  if (mapa.abierto()) mapa.cerrar();
+  pantMenu.hidden = true; escena.hidden = true; pantLibre.hidden = false;
+  pintarLibre();
+  menuBoton();
+}
+function jugarLibre(ronda) {
+  modo = "libre";
+  libre.ronda = ronda;
+  if (ronda === 1) puntosInicioNivel = 0;
+  opcionesPausa.textoSalir = "Salir a elegir tablero";
+  pantMenu.hidden = true; pantLibre.hidden = true; escena.hidden = false;
+  empezar();
+}
+document.getElementById("menuContinuar").addEventListener("click", () => { puntosInicioNivel = 0; jugar(Math.min(nivel, TOTAL_NIVELES)); });
+document.getElementById("menuLibre").addEventListener("click", mostrarLibre);
+document.getElementById("menuNiveles").addEventListener("click", () => abrirMapa(false));
+document.getElementById("menuInfo").addEventListener("click", abrirInfo);
+document.getElementById("libreJugar").addEventListener("click", () => jugarLibre(1));
 
 // ---------- Sonido ----------
 let ac = null;
@@ -282,22 +336,12 @@ function cayendo() {
   return false;
 }
 
-// ---------- Niveles (se generan al azar) ----------
-function negrasDelNivel(n) {
-  const base = NEGRAS_MIN + Math.floor((n - 1) / NEGRAS_CADA);
-  const variacion = Math.floor(Math.random() * 3) - 1; // -1, 0 o +1
-  return Math.max(NEGRAS_MIN, Math.min(NEGRAS_MAX, base + variacion));
-}
-
-function movimientosDelNivel(negras, n) {
-  const factor = Math.max(MOVS_FACTOR_MIN, MOVS_FACTOR - (n - 1) * MOVS_BAJA);
-  return Math.round(negras * factor) + MOVS_EXTRA;
-}
+// ---------- Niveles: cuántas negras y movimientos se calculan en logica-gominolas.js ----------
 
 // Convierte en negras «cant» gominolas al azar de las filas de abajo
 function colocarNegras(cant) {
   const celdas = [];
-  for (let f = FILAS - 1; f >= Math.max(0, FILAS - ZONA_INICIAL); f--)
+  for (let f = FILAS - 1; f >= Math.max(0, FILAS - zonaIni); f--)
     for (let c = 0; c < COLUMNAS; c++) celdas.push([f, c]);
   for (let i = celdas.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -322,8 +366,8 @@ function nuevaNegra() {
     for (let f = desde; f >= hasta; f--)
       for (let c = 0; c < COLUMNAS; c++) if (grid[f][c].k >= 0) candidatas.push([f, c]);
   };
-  juntar(FILAS - 1, Math.max(0, FILAS - ZONA_NUEVA));
-  if (!candidatas.length) juntar(FILAS - ZONA_NUEVA - 1, 0); // zona llena de negras: sube más
+  juntar(FILAS - 1, Math.max(0, FILAS - zonaNva));
+  if (!candidatas.length) juntar(FILAS - zonaNva - 1, 0); // zona llena de negras: sube más
   if (!candidatas.length) return;
   const [f, c] = candidatas[Math.floor(Math.random() * candidatas.length)];
   const g = grid[f][c];
@@ -373,7 +417,7 @@ function cerrarJugada(negrasQuitadas) {
   movs--;
   caer();
   if (contarNegras() === 0) { actualizarHud(); ganar(); return; }
-  if (!negrasQuitadas) nuevaNegra();
+  if (!negrasQuitadas) for (let i = 0; i < penaliza; i++) nuevaNegra(); // jugada sin negras: salen 1, 2 o 3 nuevas según la dificultad
   actualizarHud();
   if (movs <= 0) perder();
 }
@@ -488,7 +532,8 @@ function actualizarHud() {
   elPts.textContent = puntos;
   elMovs.textContent = Math.max(0, movs);
   elNegras.textContent = contarNegras();
-  elNivel.textContent = actual;
+  elNivel.textContent = modo === "libre" ? libre.ronda : actual;
+  rotNivel.textContent = modo === "libre" ? "Ronda" : "Nivel";
   elBarra.style.width = Math.max(0, (movs / movsIni) * 100) + "%";
   elBarra.classList.toggle("poco", movs <= 3);
 }
@@ -496,22 +541,26 @@ function actualizarHud() {
 // Empieza el nivel n (el que se elige en el mapa o el siguiente tras ganar)
 function jugar(n) {
   actual = Math.max(1, Math.min(TOTAL_NIVELES, Math.floor(Number(n)) || 1));
+  modo = "campana";
+  opcionesPausa.textoSalir = "Salir al mapa";
+  pantMenu.hidden = true; pantLibre.hidden = true; escena.hidden = false;
   empezar();
 }
 
 function empezar() {
   partida++;
   puntos = puntosInicioNivel;
-  const fijo = NIVELES[actual - 1];
-  const n = fijo ? fijo.negras : negrasDelNivel(actual);
-  movsIni = fijo ? fijo.movs : movimientosDelNivel(n, actual);
+  const par = modo === "libre" ? parametrosLibre(libre.t, libre.d, libre.ronda) : parametrosCampana(actual);
+  configurarTablero(par.cols, par.filas); // el tablero puede cambiar de tamaño entre campaña y modo libre
+  zonaIni = par.zona; zonaNva = par.zonaNueva; penaliza = par.penaliza;
+  movsIni = par.movs;
   movs = movsIni;
   cadena = null;
   particulas = [];
   textos = [];
   revisar = false;
   llenar();
-  colocarNegras(n);
+  colocarNegras(par.negras);
   estado = "jugando";
   menuBoton();
   ovl.classList.add("oculto");
@@ -525,6 +574,8 @@ function ganar() {
   menuBoton();
   const bono = movs * BONO_MOVIMIENTO;
   puntos += bono;
+  rotularOvl();
+  if (modo === "libre") { ganarLibre(bono); return; }
   const ganados = puntos - puntosInicioNivel;
   let nuevoRecord = false;
   if (puntos > mejor) {
@@ -546,10 +597,41 @@ function ganar() {
   if (primera) enviarPuntos(ganados);
 }
 
+// Rotula «🗺️ Mapa» (campaña) o «⚙️ Cambiar tablero» (modo libre) en la pantalla de resultado
+function rotularOvl() {
+  ovlMapa.innerHTML = modo === "libre" ? '<span class="b-ico">⚙️</span> Cambiar tablero' : '<span class="b-ico">🗺️</span> Mapa';
+}
+// Modo libre: sin puntos al perfil; solo el récord de rondas superadas de esta combinación de tablero y dificultad
+function ganarLibre(bono) {
+  const ganados = puntos - puntosInicioNivel;
+  const hechas = libre.ronda, k = claveLibre();
+  let nuevoRecord = false;
+  if (hechas > (recordsLibre[k] || 0)) { recordsLibre[k] = hechas; nuevoRecord = true; guardarProg(); }
+  actualizarHud();
+  ovlTitulo.textContent = "¡Ronda " + hechas + " superada!";
+  ovlTexto.textContent = ganados + " puntos" + (bono ? " (bono +" + bono + ")" : "") + (nuevoRecord ? " · ¡nuevo récord!" : "") + " · el modo libre no suma al perfil";
+  ganoUltimo = false;
+  pendiente = hechas + 1;
+  ovlBtn.textContent = "Siguiente ronda";
+  puntosInicioNivel = puntos;
+  setTimeout(() => ovl.classList.remove("oculto"), 700);
+}
+
 function perder() {
   estado = "fin";
   cadena = null;
   menuBoton();
+  rotularOvl();
+  if (modo === "libre") {
+    const sup = libre.ronda - 1;
+    ovlTitulo.textContent = "¡Sin movimientos!";
+    ovlTexto.textContent = "Superaste " + sup + (sup === 1 ? " ronda" : " rondas") + " · quedaron " + contarNegras() + " negras · récord: " + (recordsLibre[claveLibre()] || 0);
+    ganoUltimo = false;
+    pendiente = 1;
+    ovlBtn.textContent = "Jugar otra vez";
+    setTimeout(() => ovl.classList.remove("oculto"), 700);
+    return;
+  }
   ovlTitulo.textContent = "¡Sin movimientos!";
   ovlTexto.textContent = "Quedaron " + contarNegras() + " gominolas negras.";
   ganoUltimo = false;
@@ -575,9 +657,9 @@ async function enviarPuntos(pts) {
   if (mia === partida) ovlTexto.textContent += faltan === 0 ? " · +" + sumar + " al perfil ✓" : " · +" + sumar + " anotados: se enviarán a tu perfil cuando tengas internet y hayas entrado con Google";
 }
 
-ovlBtn.addEventListener("click", () => jugar(pendiente));
+ovlBtn.addEventListener("click", () => { if (modo === "libre") jugarLibre(pendiente); else jugar(pendiente); });
 // «🗺️ Mapa»: vuelve al mapa; si se terminó un estado o país, el agua sube al llegar
-document.getElementById("ovlMapa").addEventListener("click", () => abrirMapa(ganoUltimo && actual % NIVELES_POR_ETAPA === 0 && actual >= nivel - 1));
+ovlMapa.addEventListener("click", () => { if (modo === "libre") mostrarLibre(); else abrirMapa(ganoUltimo && actual % NIVELES_POR_ETAPA === 0 && actual >= nivel - 1); });
 
 // ---------- Dibujo ----------
 function ajustar() {
@@ -590,6 +672,13 @@ function ajustar() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 window.addEventListener("resize", ajustar);
+// Cambia el tamaño del tablero (columnas × filas): el CSS usa --asp (proporción) y --maxw (ancho máximo) para dimensionarlo
+function configurarTablero(c, f) {
+  COLUMNAS = c; FILAS = f;
+  tableroEl.style.setProperty("--asp", c / f);
+  tableroEl.style.setProperty("--maxw", Math.max(480, c * 46) + "px");
+  ajustar();
+}
 
 function oso(x, y, r, col, esc, ojo = "#2b1a3a") {
   ctx.save();
@@ -742,11 +831,10 @@ function bucle(ahora) {
 }
 
 // Arranque: tablero de fondo y pantalla de inicio
-ajustar();
+configurarTablero(6, 8);
 llenar();
-colocarNegras(NEGRAS_MIN);
-mapa.abrir();   // el juego empieza en el mapa (México de cerca)
-menuBoton();
+colocarNegras(10);
+mostrarMenu();  // el juego empieza en el menú principal: Continuar · Modo libre · Niveles
 actualizarHud();
 requestAnimationFrame((t) => { ultimo = t; bucle(t); });
 
@@ -759,7 +847,10 @@ import("../compartido/progreso.js").then((p) => {
       mejor = Math.max(mejor, Number(v.mejor) || 0);
       // «nivel» es solo el progreso (el nivel en juego es «actual»), así que se puede actualizar en cualquier momento
       nivel = Math.max(nivel, Number(v.nivel) || 1);
+      tomarRecords(v);
       if (mapa.abierto()) mapa.refrescar();
+      if (!pantMenu.hidden) document.getElementById("menuNivel").textContent = Math.min(nivel, TOTAL_NIVELES);
+      if (!pantLibre.hidden) pintarLibre();
       actualizarHud();
     },
   });
