@@ -14,6 +14,8 @@ export const AJUSTES = {
   tanda: 5,          // cubos aleatorios que hay que TENER para poder sortear: con 5 o más se abre el botón Sortear (se gastan todos los cubos de 5 en 5) y el jugador
                      // elige cuántos usa y cuándo. También es la meta que el bot de backtracking comprueba al armar
                      // el tablero inicial (que el jugador PUEDA juntar esos 20 cubos)
+  maxLineasCombo: 5, // líneas (paredes) al azar que da un combo como máximo: combo 1 = 1, 2 = 2, 3 = 3, 4 = 4, 5 en adelante = 5
+  monedasPorLineaCombo: 1, // monedas que se guardan por cada línea de combo que no se pudo poner porque la hoja ya no tiene espacio seguro
   radioCombo: 2,     // combo: cerrar cuadros seguidos (sin romper la cadena) a esta distancia o menos (2 = en un área de 2 cuadros alrededor) del anterior
   maxInicial: 0.6,   // al empezar, como máximo esta fracción de la hoja se llena con el sorteo automático (hojas chicas)
   costoPared: 1,     // poner una pared a mano
@@ -164,18 +166,27 @@ export function cercaDe(t, a, b, radio = AJUSTES.radioCombo) {
   if (a < 0) return false;
   return Math.abs(Math.floor(a / t.n) - Math.floor(b / t.n)) <= radio && Math.abs((a % t.n) - (b % t.n)) <= radio;
 }
-// Pone UNA pared suelta en un lugar al azar de la hoja (sin dueño y sin premio; si cierra algún cuadro por casualidad, sus paredes se gastan).
-// Devuelve true si logró ponerla (false si la hoja ya no tiene paredes libres).
+// ¿Se puede poner esta pared SIN cerrar ningún cuadro? Es segura si no existe y ningún cuadro vecino tiene ya 3 paredes
+// (con 3, esta pared sería la cuarta y lo cerraría).
+function paredSegura(t, tipo, r, c) {
+  if (hayPared(t, tipo, r, c)) return false;
+  return vecinosDePared(t, tipo, r, c).every((k) => t.cnt[k] !== 3);
+}
+// Pone UNA pared suelta en un lugar al azar de la hoja (sin dueño y sin premio) que NUNCA cierra un cuadro.
+// Devuelve true si logró ponerla, o false si no queda ningún lugar seguro (hoja muy llena): entonces el combo no puede poner esa línea.
 export function paredSuelta(t, rng = Math.random) {
   const n = t.n, nH = (n + 1) * n, total = nH + n * (n + 1);
-  for (let i = 0; i < 40; i++) { // lo normal: una pared libre al primer o segundo intento (sin recorrer toda la hoja)
-    const id = Math.floor(rng() * total);
-    if (id < nH ? t.H[id] : t.V[id - nH]) continue;
-    const c = id < nH ? ponerPared(t, "H", Math.floor(id / n), id % n) : ponerPared(t, "V", Math.floor((id - nH) / (n + 1)), (id - nH) % (n + 1));
-    for (const q of c || []) gastarParedes(t, q);
-    return true;
+  const deId = (id) => (id < nH ? ["H", Math.floor(id / n), id % n] : ["V", Math.floor((id - nH) / (n + 1)), (id - nH) % (n + 1)]);
+  for (let i = 0; i < 40; i++) { // lo normal: un lugar seguro al primer o segundo intento (sin recorrer toda la hoja)
+    const [tipo, r, c] = deId(Math.floor(rng() * total));
+    if (paredSegura(t, tipo, r, c)) { ponerPared(t, tipo, r, c); return true; } // segura = no cierra nada, no hay que gastar paredes
   }
-  return sortearParedes(t, 1, rng) === 1; // hoja casi llena: busca entre las que quedan
+  const seguras = []; // hoja casi llena: busca entre todas las paredes libres cuáles son seguras
+  for (let id = 0; id < total; id++) { const [tipo, r, c] = deId(id); if (paredSegura(t, tipo, r, c)) seguras.push(id); }
+  if (!seguras.length) return false;
+  const [tipo, r, c] = deId(seguras[Math.floor(rng() * seguras.length)]);
+  ponerPared(t, tipo, r, c);
+  return true;
 }
 
 export const completo = (t) => t.cuadros === t.n * t.n;

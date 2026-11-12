@@ -6,7 +6,7 @@
 import { crearEtapas } from "../compartido/etapas-mapa.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
-import { AJUSTES, BONOS_SORTEO, cuadrosDeSorteo, cubosParaCuadros, cubosASortear, vecinosDePared, DIFICULTADES, PUNTOS_INICIO, ponerPared, premiarCierre, canjearCubos, puedeJugar, puedeSortear, hayPared, sortearModo, sortearParedes, paredSuelta, cercaDe, PAREDES_POR_CUADRO, crearTablero, completo, clonarTablero, metasDeTiempo, monedasDe, unirCartera } from "./logica-polocubos.js";
+import { AJUSTES, BONOS_SORTEO, cuadrosDeSorteo, cubosParaCuadros, cubosASortear, vecinosDePared, DIFICULTADES, PUNTOS_INICIO, ponerPared, premiarCierre, paredesPropias, canjearCubos, puedeJugar, puedeSortear, hayPared, sortearModo, sortearParedes, paredSuelta, cercaDe, PAREDES_POR_CUADRO, crearTablero, completo, clonarTablero, metasDeTiempo, monedasDe, unirCartera } from "./logica-polocubos.js";
 import { jugadaBot } from "./ia-polocubos.js";
 import { generarInicio } from "./patrones-polocubos.js";
 
@@ -305,19 +305,28 @@ function poner(a, tipo, r, c) {
   const cerrados = ponerPared(t, tipo, r, c, a);
   ultima = a === 2 ? { tipo, r, c } : null;
   if (!cerrados.length) { j.c = 0; return false; } // una pared que no cierra nada rompe la cadena
+  // Combo: solo cuenta un cuadro cerrado con UNA sola pared tuya (se mide ANTES de premiarCierre, que gasta las paredes), seguido (sin romper la cadena)
+  // y a radioCombo cuadros o menos del anterior. El 1.º no da nada; el 2.º es el combo 1 (1 línea al azar), el 3.º el combo 2 (2 líneas)...
+  // hasta el combo 5 (5 líneas); del 6.º en adelante siguen siendo 5. Las líneas nunca cierran un cuadro; si ya no hay lugar seguro, la línea se guarda como moneda.
+  const unaPared = cerrados.map((k) => paredesPropias(t, k, a) <= 1);
   const { puntos, cubos } = premiarCierre(t, cerrados, a);
-  // Combo: cuadros cerrados seguidos (sin romper la cadena) y cerca uno del otro (radioCombo). El 1.º no da nada; del 2.º en adelante, cada cuadro pone 1 pared suelta al azar en la hoja
-  let paredes = 0;
-  for (const k of cerrados) {
-    j.combo = j.c > 0 && cercaDe(t, j.ult, k) ? j.combo + 1 : 1;
+  let paredes = 0, sinLugar = 0, nivel = 0;
+  cerrados.forEach((k, i) => {
+    j.combo = !unaPared[i] ? 0 : j.c > 0 && cercaDe(t, j.ult, k) ? j.combo + 1 : 1; // con 2 o más paredes propias el combo se rompe
     j.ult = k; j.c++; t.dueno[k] = a; j.cu++;
-    if (j.combo >= 2 && paredSuelta(t)) paredes++;
-  }
+    if (j.combo >= 2) {
+      nivel = j.combo - 1;
+      for (let x = Math.min(nivel, AJUSTES.maxLineasCombo); x > 0; x--) { if (paredSuelta(t)) paredes++; else sinLugar++; }
+    }
+  });
   j.p += puntos; j.a += cubos;
+  const monedasCombo = sinLugar && a === 1 && !op.bot ? sinLugar * AJUSTES.monedasPorLineaCombo : 0; // el bot no gana monedas; contra el bot tampoco (igual que las metas)
+  if (monedasCombo) { cartera.g += monedasCombo; guardarCartera(); }
   const partes = [];
   if (puntos) partes.push("+" + puntos + (puntos === 1 ? " punto" : " puntos"));
   if (cubos) partes.push("+" + cubos + (cubos === 1 ? " cubo 🎲" : " cubos 🎲"));
-  if (paredes) partes.push("🔥 combo ×" + j.combo + ": +" + paredes + (paredes === 1 ? " pared al azar" : " paredes al azar"));
+  if (paredes) partes.push("🔥 combo ×" + nivel + ": +" + paredes + (paredes === 1 ? " pared al azar" : " paredes al azar"));
+  if (monedasCombo) partes.push("🪙 hoja llena: combo guardado como +" + monedasCombo + (monedasCombo === 1 ? " moneda" : " monedas"));
   aviso((a === 2 ? "🤖 " : "") + partes.join(" · ") + (j.c > 1 ? " · cadena ×" + j.c : ""));
   return true;
 }
