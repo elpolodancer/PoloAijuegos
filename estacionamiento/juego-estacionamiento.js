@@ -1,7 +1,7 @@
 // Ruta: estacionamiento/juego-estacionamiento.js
 // Saca todos los autos de un estacionamiento cuadrado (vista 2D desde arriba). El tamaño cambia con cada nivel (de 10×10 a 50×50).
 // - Cada auto avanza solo hacia donde apunta su flecha; si algo le estorba, no se mueve.
-// - Alrededor del estacionamiento hay una vía de un solo sentido (horario) con la salida en las 4 esquinas.
+// - Al tocarlo, el auto sale en línea recta por su flecha, cruza la orilla del tablero y se desvanece (sin vía ni giros: nunca estorba a otros).
 // - Hay 22 600 niveles (3200 de México y 100 por cada país). Todos salen de niveles-estacionamiento.js: tamaño, autos y premio dependen solo del número
 //   de nivel, y siempre tienen solución (cada auto se coloca con su camino libre respecto a los ya colocados).
 
@@ -210,7 +210,7 @@ function celdasDe(c) {
   return r;
 }
 
-// ----- Salida: camino libre, vía ocupada, animación -----
+// ----- Salida: camino libre y animación -----
 function caminoLibre(c) {
   const [hx, hy] = cabeza(c);
   let x = hx + DX[c.dir], y = hy + DY[c.dir];
@@ -221,52 +221,15 @@ function caminoLibre(c) {
   return true;
 }
 
-// Datos de la ruta de un auto: de su casilla a la vía y por la vía (horario) hasta la esquina de salida
+// Ruta de un auto: línea recta desde su casilla, por donde apunta su flecha, hasta salir del tablero. No hay vía ni giros,
+// así que un auto que sale nunca bloquea a los demás (todos pueden tocarse sin esperar).
 function planear(c) {
   const [hx, hy] = cabeza(c);
   const d = c.dir;
-  const n = d === 0 ? hy + 1 : d === 1 ? N - hx : d === 2 ? N - hy : hx + 1; // casillas hasta la vía
-  const entrada = [hx + DX[d] * n, hy + DY[d] * n];
-  let s0, esquinaS, sd, esquina;
-  const V = N + 1; // largo de cada lado de la vía
-  if (d === 0) { s0 = hx + 1; esquinaS = V; sd = [1, 0]; esquina = [N + 0.5, -0.5]; }
-  else if (d === 1) { s0 = V + (hy + 1); esquinaS = 2 * V; sd = [0, 1]; esquina = [N + 0.5, N + 0.5]; }
-  else if (d === 2) { s0 = 2 * V + (N - hx); esquinaS = 3 * V; sd = [-1, 0]; esquina = [-0.5, N + 0.5]; }
-  else { s0 = 3 * V + (N - hy); esquinaS = 4 * V; sd = [0, -1]; esquina = [-0.5, -0.5]; }
-  const P0 = [hx + 0.5, hy + 0.5];
-  const P1 = [entrada[0] + 0.5, entrada[1] + 0.5];
-  const ext = c.len + 6;
-  const P3 = [esquina[0] + sd[0] * ext, esquina[1] + sd[1] * ext];
-  const pts = [P0, P1, esquina, P3];
-  const acum = [0];
-  for (let i = 1; i < pts.length; i++) acum.push(acum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
-  const enEsquina = n + (esquinaS - s0);
-  return { n, s0, corner: esquinaS, pts, acum, nLib: n + c.len, enEsquina, tFin: enEsquina + c.len + 4 };
-}
-
-// Tramo de la vía que ocupa un auto en el instante tAbs (null si no está en la vía)
-function cobertura(c, tAbs) {
-  const t = (tAbs - c.t0) * VEL;
-  if (t < c.n) return null;
-  const head = c.s0 + (t - c.n);
-  if (head - c.len + 0.5 >= c.corner + 0.5) return null;
-  const lo = Math.max(c.s0 - 0.5, head - c.len + 0.5);
-  const hi = Math.min(head, c.corner) + 0.5;
-  return [lo, hi];
-}
-function viaOcupada(nuevo) {
-  const ini = nuevo.t0 + nuevo.n / VEL;
-  const fin = nuevo.t0 + (nuevo.n + (nuevo.corner - nuevo.s0) + nuevo.len) / VEL;
-  for (let t = ini; t <= fin; t += 0.04) {
-    const a = cobertura(nuevo, t);
-    if (!a) continue;
-    for (const o of autos) {
-      if (o.estado !== 1) continue;
-      const b = cobertura(o, t);
-      if (b && a[0] < b[1] - 0.05 && b[0] < a[1] - 0.05) return true;
-    }
-  }
-  return false;
+  const n = d === 0 ? hy + 1 : d === 1 ? N - hx : d === 2 ? N - hy : hx + 1; // casillas hasta la orilla del tablero
+  const largo = n + c.len + 6;
+  const pts = [[hx + 0.5, hy + 0.5], [hx + 0.5 + DX[d] * largo, hy + 0.5 + DY[d] * largo]];
+  return { n, pts, acum: [0, largo], nLib: n + c.len, enBorde: n, tFin: n + c.len + 4 };
 }
 
 // Boost «Quitar un auto»: gasta un uso (o 30 monedas) y el auto desaparece; sus casillas quedan libres
@@ -320,20 +283,14 @@ function tocarAuto(c) {
     return;
   }
   const plan = planear(c);
-  const cand = Object.assign({ len: c.len, t0: T }, plan);
-  if (viaOcupada(cand)) {
-    c.bump = 0.35; c.flash = 0.4;
-    aviso("La vía de salida está ocupada, espera un momento");
-    return;
-  }
   // Su hitbox desaparece AL INSTANTE: las casillas quedan libres en cuanto se toca, aunque el auto siga animándose hacia la salida.
-  // Así se puede tocar de inmediato a los autos que estorbaba (la vía de salida sigue protegida por viaOcupada).
+  // Así se puede tocar de inmediato a los autos que estorbaba.
   Object.assign(c, plan, { estado: 1, t0: T, liberado: true });
   celdasDe(c).forEach(([x, y]) => { if (occ[y * N + x] === c.id) occ[y * N + x] = -1; });
   movs++;
 }
 
-// ----- Posición de un auto: cabeza y cola siguen la ruta, así gira en las curvas -----
+// ----- Posición de un auto: cabeza y cola siguen la ruta (recta) -----
 function puntoEn(c, d) {
   const pts = c.pts, ac = c.acum;
   if (d <= 0) {
@@ -354,7 +311,7 @@ function poseDe(c) {
     const t = (T - c.t0) * VEL;
     cab = puntoEn(c, t);
     col = puntoEn(c, t - (c.len - 1));
-    alfa = 1 - clamp((t - c.enEsquina - 1) / (c.len + 2), 0, 1);
+    alfa = 1 - clamp((t - c.enBorde - 1) / (c.len + 2), 0, 1);
   } else {
     const [hx, hy] = cabeza(c);
     cab = [hx + 0.5, hy + 0.5];
@@ -380,7 +337,7 @@ function redim() {
   cw = r.width; ch = r.height;
   cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
 }
-const escalaAjustada = () => Math.max(0.05, Math.min((cw - 16) / ((N + 2) * CELL), (ch - 130) / ((N + 2) * CELL))); // cabe la vía completa; deja aire para los botones
+const escalaAjustada = () => Math.max(0.05, Math.min((cw - 16) / ((N + 1) * CELL), (ch - 130) / ((N + 1) * CELL))); // cabe el tablero completo; deja aire para los botones
 function ajustarCamara() {
   const s = escalaAjustada();
   camMin = s * 0.8; camMax = s * 7;
@@ -418,22 +375,16 @@ function rr(x, y, w, h, r) {
 
 function dibujarSuelo() {
   const u = CELL * cam.s;
-  // Vía: asfalto que rodea el tablero, con sombra suave sobre la madera
-  const [vx0, vy0] = P(-1, -1), [vx1, vy1] = P(N + 1, N + 1);
-  ctx.save();
-  if (u >= PX_MEDIO) { ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 5; }
-  rr(vx0, vy0, vx1 - vx0, vy1 - vy0, 0.9 * u);
-  ctx.fillStyle = "#5d6171";
-  ctx.fill();
-  ctx.restore();
-
   // Tablero: panel lavanda claro (como el piso de la referencia)
   const [tx0, ty0] = P(0, 0), [tx1, ty1] = P(N, N);
+  ctx.save();
+  if (u >= PX_MEDIO) { ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 5; }
   rr(tx0, ty0, tx1 - tx0, ty1 - ty0, 0.25 * u);
   const gr = ctx.createLinearGradient(0, ty0, 0, ty1);
   gr.addColorStop(0, "#d6daec"); gr.addColorStop(1, "#bcc1da");
   ctx.fillStyle = gr;
   ctx.fill();
+  ctx.restore();
   ctx.lineWidth = Math.max(1, 0.07 * u);
   ctx.strokeStyle = "#eef0fa";
   ctx.stroke();
@@ -449,44 +400,6 @@ function dibujarSuelo() {
     for (let i = h0; i <= h1; i++) { const a = P(0, i), b = P(N, i); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
     ctx.stroke();
   }
-
-  // Flechas de la vía (sentido horario): chevrones amarillos
-  if (u >= PX_MEDIO) {
-    ctx.strokeStyle = "rgba(255,214,70,.8)";
-    ctx.lineWidth = Math.max(1.5, 0.09 * u);
-    ctx.lineCap = "round";
-    const mf = 2 * u;
-    const chevron = (gx, gy, dx, dy) => {
-      const o = P(gx, gy);
-      if (o[0] < -mf || o[0] > cw + mf || o[1] < -mf || o[1] > ch + mf) return;
-      ctx.save();
-      ctx.translate(o[0], o[1]);
-      ctx.rotate(Math.atan2(dy, dx));
-      ctx.beginPath();
-      ctx.moveTo(-0.16 * u, -0.22 * u); ctx.lineTo(0.16 * u, 0); ctx.lineTo(-0.16 * u, 0.22 * u);
-      ctx.stroke();
-      ctx.restore();
-    };
-    for (let i = 2; i < N; i += 3) {
-      chevron(i + 0.5, -0.5, 1, 0);
-      chevron(N + 0.5, i + 0.5, 0, 1);
-      chevron(i + 0.5, N + 0.5, -1, 0);
-      chevron(-0.5, i + 0.5, 0, -1);
-    }
-    ctx.lineCap = "butt";
-  }
-
-  // Salidas en las 4 esquinas
-  const fs = Math.max(4, Math.round(0.2 * u));
-  ctx.font = "bold " + fs + "px system-ui,sans-serif";
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  for (const [x, y] of [[-1, -1], [N, -1], [N, N], [-1, N]]) {
-    const [a, b] = P(x, y);
-    rr(a + 0.08 * u, b + 0.08 * u, 0.84 * u, 0.84 * u, 0.2 * u);
-    ctx.fillStyle = "#2ecc71"; ctx.fill();
-    ctx.lineWidth = Math.max(1, 0.05 * u); ctx.strokeStyle = "#1e8449"; ctx.stroke();
-    if (u >= PX_DETALLE) { ctx.fillStyle = "#fff"; ctx.fillText("SALIDA", a + 0.5 * u, b + 0.5 * u); }
-  }
 }
 
 // Pared inferior de un auto. La vista es desde arriba, un poco inclinada hacia el jugador: del auto se ve el techo y SOLO la pared que mira hacia
@@ -495,7 +408,7 @@ function dibujarSuelo() {
 // c = el auto (largo 2 = coche, 3 = autobús); (sx, sy) = centro del techo en pantalla; (dx, dy) = hacia dónde mira el auto; L × W = largo y ancho del techo en píxeles.
 function dibujarPared(c, sx, sy, dx, dy, L, W, u, det, col) {
   const H = ALTO_PARED * u, ang = Math.atan2(dy, dx);
-  // 1) Silueta: el contorno del techo repetido hacia abajo, sin huecos y con cualquier ángulo (los autos giran en las curvas de la vía)
+  // 1) Silueta: el contorno del techo repetido hacia abajo, sin huecos y con cualquier ángulo
   ctx.fillStyle = col(0.74, 72);
   for (let k = 1; k <= 4; k++) {
     ctx.save();
@@ -838,8 +751,8 @@ function botonMenu() {
 // ----- Ventana «Info»: cómo se juega (usa los estilos .pausa-* de compartido/inmersivo.css) -----
 const TEXTO_INFO = [
   ["🚗 Objetivo", "Saca todos los autos del estacionamiento. Ganas cuando no queda ninguno."],
-  ["👆 Cómo sacar un auto", "Toca un auto y avanzará hacia donde apunta su flecha hasta salir por las esquinas, dando la vuelta por la vía que rodea el tablero."],
-  ["🚧 Si algo le estorba", "Un auto no puede salir si otro está en su camino: saca primero al que estorba. Si la vía de salida está ocupada, espera un instante y vuelve a tocarlo. En cuanto tocas un auto, ya no estorba: puedes tocar los demás de inmediato."],
+  ["👆 Cómo sacar un auto", "Toca un auto y avanzará en línea recta hacia donde apunta su flecha hasta salir del tablero."],
+  ["🚧 Si algo le estorba", "Un auto no puede salir si otro está en su camino: saca primero al que estorba. En cuanto tocas un auto, ya no estorba: puedes tocar los demás de inmediato."],
   ["🔍 Mover la vista", "Arrastra para mover el tablero y pellizca (o usa la rueda del ratón) para acercar o alejar."],
   ["💰 Monedas", "Ganas monedas la primera vez que terminas un nivel; mientras más grande el tablero, más monedas."],
   ["💥 Boosts", "Quitar un auto (30 monedas): toca el botón y luego el auto que quieres quitar. Paquete ×3 (50 monedas): te da 3 usos de quitar un auto. Bomba (100 monedas): elige una zona de 5×5 casillas y borra todos los autos que haya ahí."],
