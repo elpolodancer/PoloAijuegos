@@ -5,7 +5,7 @@
 import { crearEtapas } from "../compartido/etapas-mapa.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
-import { AJUSTES, DIFICULTADES, PUNTOS_INICIO, crearTablero, ponerPared, premiarCierre, hayPared, sortear, completo } from "./logica-polocubos.js";
+import { AJUSTES, DIFICULTADES, PUNTOS_INICIO, crearTablero, ponerPared, premiarCierre, canjearCubos, puedeJugar, hayPared, sortear, completo } from "./logica-polocubos.js";
 import { jugadaBot } from "./ia-polocubos.js";
 
 const $ = (id) => document.getElementById(id);
@@ -16,7 +16,7 @@ const ZOOM_MIN_TOQUE = 8;                      // con menos zoom (px por cuadro)
 
 let pantalla = "menu", dif = null, t = null;
 const J = [null, { p: 0, a: 0, c: 0, cu: 0 }, { p: 0, a: 0, c: 0, cu: 0 }]; // 1 = tú, 2 = bot: puntos (paredes), cubos aleatorios, cadena y cuadros cerrados a mano
-const puede = (x) => J[x].p >= AJUSTES.costoPared || J[x].a >= 1; // ¿tiene con qué jugar? (una pared o un sorteo)
+const puede = (x) => puedeJugar(J[x]); // ¿tiene con qué jugar? (una línea, o 5 cubos para cambiar por una)
 let turno = 1, maxPuntos = 0, cantidad = 20, terminado = false, pausado = false, tBot = 0, ultima = null;
 let op = { pi: AJUSTES.puntosInicio, bot: false };
 try { const g = JSON.parse(localStorage.getItem(CLAVE_OPC)); if (g && PUNTOS_INICIO.includes(g.pi)) op = { pi: g.pi, bot: !!g.bot }; } catch (e) {}
@@ -199,6 +199,8 @@ $("b-sortear").addEventListener("click", () => {
 function revisar(terminaTurno, a) {
   const auto = autoSortear(a); // al llegar a 100 puntos se colocan solos al azar
   if (auto) aviso((a === 2 ? "🤖 " : "") + "🎲 " + AJUSTES.autoSorteo + " puntos → " + auto + (auto === 1 ? " cuadro" : " cuadros") + " al azar");
+  for (const x of op.bot ? [1, 2] : [1]) // sin líneas: 5 cubos aleatorios se cambian solos por 1 línea
+    if (canjearCubos(J[x])) aviso((x === 2 ? "🤖 " : "") + "🎲 " + AJUSTES.cubosPorLinea + " cubos → 1 línea");
   if (J[1].p > maxPuntos) maxPuntos = J[1].p;
   if (completo(t) || (op.bot ? !puede(1) && !puede(2) : !puede(1))) return terminar();
   if (op.bot) {
@@ -235,8 +237,8 @@ function terminar() {
     $("fin-titulo").textContent = "¡Hoja completa! 🎉";
     $("fin-texto").textContent = `Cerraste los ${total} cuadros y terminaste con ${fmt(J[1].p)} puntos.`;
   } else {
-    $("fin-titulo").textContent = "Sin puntos";
-    $("fin-texto").textContent = `Cerraste ${fmt(t.cuadros)} de ${total} cuadros. Tu máximo fue de ${fmt(maxPuntos)} puntos.`;
+    $("fin-titulo").textContent = "Sin líneas";
+    $("fin-texto").textContent = `Te quedaste sin líneas y sin ${AJUSTES.cubosPorLinea} cubos para cambiar por una, así que ya no puedes hacer más cubos. Cerraste ${fmt(t.cuadros)} de ${total} cuadros.`;
   }
   $("fin").hidden = false;
 }

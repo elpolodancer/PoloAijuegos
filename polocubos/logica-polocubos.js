@@ -9,12 +9,13 @@
 export const AJUSTES = {
   puntosInicio: 100, // puntos por defecto al empezar (el jugador puede elegir entre PUNTOS_INICIO). Al empezar se colocan solos
                      // en cuadros al azar (sorteo) y el jugador se queda con puntosJugar
-  puntosJugar: 2,    // puntos con los que se juega al empezar (el resto de puntosInicio se sortea automáticamente)
+  puntosJugar: 15,   // puntos (líneas) con los que se juega al empezar (el resto de puntosInicio se sortea automáticamente)
   autoSorteo: 100,   // cada vez que alguien junta esta cantidad, se gasta sola en sortear cuadros al azar
   maxInicial: 0.6,   // al empezar, como máximo esta fracción de la hoja se llena con el sorteo automático (hojas chicas)
   costoPared: 1,     // poner una pared a mano
   costoSorteo: 2,    // puntos que vale un cuadro sorteado AUTOMÁTICAMENTE (los puntos se convierten solos en cuadros al azar)
   premioCuadro: 2,   // puntos que da cerrar un cuadro poniendo 2 o más paredes tuyas (con 3 o 4 paredes tuyas también son 2: te cuesta más de lo que paga)
+  cubosPorLinea: 5,  // si te quedas sin líneas, cada 5 cubos aleatorios se cambian solos por 1 línea
   cubosPorUnaPared: 1, // cerrar un cuadro poniendo UNA sola pared: ganas 1 «cubo aleatorio» (se coloca con el botón Sortear) y recuperas esa pared
 };
 export const PUNTOS_INICIO = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
@@ -101,6 +102,19 @@ export function sortear(t, cantidad, rng = Math.random) {
 }
 
 export const completo = (t) => t.cuadros === t.n * t.n;
+
+// ----- Quedarse sin líneas -----
+// Quedarse sin líneas NO termina la partida: si tiene cubos suficientes, se cambian por una línea. El jugador queda sin forma
+// de seguir (y la partida acaba para él) solo cuando no tiene ni una línea ni cubos para cambiar por una: sin líneas no puede
+// cerrar cuadros con una pared y por tanto no puede hacer más cubos aleatorios.
+// «j» = { p: puntos/líneas, a: cubos aleatorios }
+export const puedeJugar = (j) => j.p >= AJUSTES.costoPared || j.a >= AJUSTES.cubosPorLinea;
+// Si j se quedó sin líneas y tiene cubos para cambiar, cambia 5 cubos por 1 línea. Devuelve true si hizo el cambio.
+export function canjearCubos(j) {
+  if (j.p >= AJUSTES.costoPared || j.a < AJUSTES.cubosPorLinea) return false;
+  j.a -= AJUSTES.cubosPorLinea; j.p += AJUSTES.costoPared;
+  return true;
+}
 
 // ----- Premios por cerrar cuadros a mano -----
 // Se cuenta cuántas de las 4 paredes del cuadro puso quien lo cierra (y siguen «vigentes»):
