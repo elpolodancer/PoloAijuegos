@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#d9a866">
+  <title>Conecta los puntos</title>
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <link rel="stylesheet" href="../compartido/estilos.css">
+  <link rel="stylesheet" href="../compartido/inmersivo.css">
+  <style>
+    /* Pantallas del menú: van sobre la madera; los textos sueltos usan --txt-fondo (cambian solos con el modo oscuro) */
+    .pantalla { position: fixed; inset: 0; z-index: 4; display: flex; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y;
+      padding: max(12px, env(safe-area-inset-top)) 140px 70px; color: var(--txt-fondo); text-align: center; }
+    @media (max-aspect-ratio: 1/1) { .pantalla { padding: calc(104px + env(safe-area-inset-top)) 12px 70px; } }
+    .caja { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(100%, 420px); margin: auto; }
+    .caja h1, .caja h2 { margin: 0; font-size: 1.7rem; line-height: 1.15; text-shadow: var(--sombra-txt); }
+    .sub { margin: 0; font-size: .9rem; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
+    .et { margin: 6px 0 0; font-weight: 800; text-shadow: var(--sombra-txt); }
+    .botones { display: flex; flex-direction: column; gap: 12px; width: 100%; margin-top: 6px; }
+    .botones .b3d.txt { width: 100%; }
+    .fila { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+    .fila .b3d.txt { --t: 46px; }
+    .aviso { position: fixed; z-index: 9; left: 50%; bottom: max(70px, calc(env(safe-area-inset-bottom) + 60px)); transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px);
+      padding: 8px 16px; text-align: center; color: #f1f2f4; background: rgba(10,10,12,.85); border: 2px solid #121316; border-radius: 16px; box-shadow: 0 4px 0 #0c0d0f; pointer-events: none; }
+  </style>
+</head>
+<body class="inmersivo">
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Menú principal" hidden><span class="b-ico">☰</span> Menú principal</button>
+  </nav>
+
+  <!-- Menú principal -->
+  <div class="pantalla" id="p-menu">
+    <div class="caja">
+      <h1>🔗 Conecta los puntos</h1>
+      <p class="sub">Une las parejas del mismo color sin que las líneas se crucen</p>
+      <div class="botones">
+        <button class="b3d txt grande b-verde" id="b-libre" type="button"><span class="b-ico">♾️</span> Partida libre</button>
+        <button class="b3d txt grande b-azul" id="b-niveles" type="button"><span class="b-ico">🧩</span> Niveles</button>
+        <button class="b3d txt grande b-oro" id="b-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Partida libre: dificultad y tamaño -->
+  <div class="pantalla" id="p-libre" hidden>
+    <div class="caja">
+      <h2>♾️ Partida libre</h2>
+      <p class="et">Dificultad</p>
+      <div class="fila" id="dif" role="group" aria-label="Dificultad"></div>
+      <p class="et">Tamaño del tablero</p>
+      <div class="fila" id="tam" role="group" aria-label="Tamaño del tablero"></div>
+      <p class="sub" id="resumen" aria-live="polite"></p>
+      <button class="b3d txt grande b-verde" id="b-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
+    </div>
+  </div>
+
+  <!-- Niveles (todavía sin niveles) -->
+  <div class="pantalla" id="p-niveles" hidden>
+    <div class="caja">
+      <h2>🧩 Niveles</h2>
+      <p class="sub">Todavía no hay niveles. Cuando los haya, aquí podrás elegirlos.</p>
+      <div class="botones"><button class="b3d txt b-oro" id="b-ver-mapa" type="button"><span class="b-ico">🗺️</span> Ver el mapa</button></div>
+    </div>
+  </div>
+
+  <div class="aviso" id="aviso" role="status" hidden></div>
+
+  <script type="module" src="juego-conectar.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
