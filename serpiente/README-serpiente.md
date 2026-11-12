@@ -1,0 +1,7 @@
+## 1) Fila nueva para la tabla «Mapa de archivos» (pégala junto a las filas de los demás juegos)
+
+| `serpiente/index-serpiente.html`, `serpiente/juego-serpiente.js`, `serpiente/README-serpiente.md` | Juego «Serpiente» (id de puntos `serpiente`): el clásico Snake. POR AHORA solo el menú principal estándar del inmersivo (♾️ Partida libre · 🪜 Niveles · 🗺️ Mapa · 🚪 Salir). `juego-serpiente.js` define `DIFICULTADES` (5) y `TABLEROS` (6×10, 8×12, 10×14, 12×16, 14×18, 16×20 columnas×filas), guarda la elección en `localStorage` (`serpiente_ajustes_v1`, `{ dif, tam }`) y monta el mapa estándar (`compartido/mapa-niveles.js`, 100 niveles por etapa = 22 600) con el progreso en `serpiente_progreso_v1` (`{ max, hecho }`). Sin Firebase para abrir; `progreso.js` se carga aparte solo para enviar puntos pendientes |
+
+## 2) Nota para la sección «Estado»
+
+- Serpiente (12 nov 2026, `sw.js` `VERSION` = 164): hecho el menú principal estándar con Partida libre (5 dificultades y 6 tableros), Niveles y Mapa (22 600 niveles por crear; al tocar un nivel avisa «🚧 Los niveles todavía no están creados»). La pantalla NO se ha probado en navegador/celular. Pendiente: la jugabilidad (movimiento, comida, choques, velocidad por dificultad), menú de pausa (`compartido/menu-pausa.js`), puntos y récord por tablero y dificultad sincronizados con `conectar()`, los niveles del mapa, imagen de tarjeta (`imagenes/serpiente.webp`, y anotarla en `ARCHIVOS` de `sw.js`) y quitar «serpiente» de `EN_DESARROLLO` al terminar.

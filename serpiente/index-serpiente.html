@@ -1,0 +1,75 @@
+<!doctype html>
+<!-- Ruta: serpiente/index-serpiente.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Serpiente</title>
+  <meta name="theme-color" content="#d9a866" />
+  <link rel="manifest" href="../manifest.webmanifest" />
+  <link rel="icon" href="../iconos/icono-192.png" />
+  <link rel="apple-touch-icon" href="../iconos/icono-180.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <style>
+    /* Pantallas del menú: ocupan toda la ventana, se desplazan si no caben y dejan libres las esquinas reservadas */
+    .pantalla { position: fixed; inset: 0; z-index: 4; display: flex; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; color: var(--txt-fondo);
+      padding: calc(104px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) calc(70px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+    .pantalla[hidden] { display: none; }
+    .caja { width: min(100%, 380px); margin: auto; display: flex; flex-direction: column; gap: 12px; text-align: center; }
+    .caja h1 { margin: 0 0 4px; font-size: clamp(2rem, 9vw, 2.8rem); line-height: 1.05; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    .caja h2 { margin: 0; font-size: 1.5rem; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    .caja h3 { margin: 6px 0 0; font-size: 1rem; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
+    .sub { margin: 0; font-size: .9rem; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
+    .caja .b3d.txt { width: 100%; margin-bottom: 5px; }
+    .caja .b3d.grande { font-size: 20px; }
+    .fila { display: grid; gap: 10px; }
+    .fila.tam { grid-template-columns: 1fr 1fr; }
+    .fila .b3d { width: 100%; margin: 0 0 5px; }
+    .b3d small { display: block; font-size: 11px; font-weight: 600; opacity: .9; }
+    .b3d.dos { flex-direction: column; gap: 1px; height: 58px; }
+    #aviso { position: fixed; z-index: 120; left: 50%; bottom: calc(70px + env(safe-area-inset-bottom)); transform: translateX(-50%); max-width: min(92vw, 420px); padding: 10px 16px; text-align: center; font-weight: 800; font-size: .95rem;
+      color: #f1f2f4; background: rgba(10,10,12,.88); border: 2px solid #121316; border-radius: 16px; box-shadow: 0 4px 0 #0c0d0f, 0 8px 16px rgba(0,0,0,.4); pointer-events: none; }
+    #aviso[hidden] { display: none; }
+  </style>
+</head>
+<body class="inmersivo">
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Menú principal" hidden><span class="b-ico">☰</span> Menú principal</button>
+  </nav>
+
+  <!-- Menú principal estándar: Partida libre · Niveles · Mapa · Salir -->
+  <main class="pantalla" id="pantalla-menu">
+    <div class="caja">
+      <h1>🐍 Serpiente</h1>
+      <p class="sub">Come bolitas y crece sin chocar</p>
+      <button class="b3d txt grande b-verde" id="btn-libre" type="button"><span class="b-ico">♾️</span> Partida libre</button>
+      <button class="b3d txt grande b-azul" id="btn-niveles" type="button"><span class="b-ico">🪜</span> Niveles</button>
+      <button class="b3d txt grande b-azul" id="btn-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+      <a class="b3d txt grande b-rojo" href="../"><span class="b-ico">🚪</span> Salir</a>
+    </div>
+  </main>
+
+  <!-- Partida libre: dificultad y tamaño del tablero -->
+  <section class="pantalla" id="pantalla-libre" hidden aria-labelledby="titulo-libre">
+    <div class="caja">
+      <h2 id="titulo-libre">♾️ Partida libre</h2>
+      <h3>Dificultad</h3>
+      <div class="fila" id="lista-dif"></div>
+      <h3>Tablero (columnas × filas)</h3>
+      <div class="fila tam" id="lista-tam"></div>
+      <button class="b3d txt grande b-verde" id="btn-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
+    </div>
+  </section>
+
+  <div id="aviso" role="status" aria-live="polite" hidden></div>
+
+  <script type="module" src="juego-serpiente.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>

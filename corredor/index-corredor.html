@@ -22,6 +22,13 @@
     #velo p { margin: 0; max-width: 320px; font-size: .9rem; line-height: 1.45; }
     #estado { min-height: 1.2em; }
     .ayuda { color: var(--suave); }
+    #tienda { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; background: rgba(10,10,12,.95); overflow-y: auto; }
+    #tienda h2 { margin: 0; font-size: 1.3rem; }
+    #lista-mejoras { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+    .mejora { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 6px 8px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; text-align: left; }
+    .mej-ico { font-size: 1.5rem; }
+    .mejora b { display: block; font-size: .85rem; }
+    .mejora small { display: block; color: var(--suave); font-size: .7rem; line-height: 1.3; }
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>
@@ -31,9 +38,18 @@
       <div id="velo">
         <h2>🏃 Corredor</h2>
         <p id="estado">Flechas o A/D: cambiar de carril · ↑, W o espacio: saltar · ↓ o S: agacharte. En el celular, desliza el dedo hacia donde quieras ir.</p>
-        <p class="ayuda">Salta las barreras naranjas, agáchate bajo las barras amarillas y cambia de carril para esquivar los trenes. Un golpe te hace tropezar; si chocas otra vez en 2,5 segundos, te atrapan. Junta monedas y el imán 🧲 para atraerlas.</p>
+        <p class="ayuda">Salta las barreras naranjas, agáchate bajo las barras amarillas y cambia de carril para esquivar los trenes. Un golpe te hace tropezar; si chocas otra vez en 2,5 segundos, te atrapan. Junta monedas y poderes (imán, jetpack, botas, súper salto, monedas x2 y puntos x3). Doble toque (o tecla E) saca tu patineta 🛹: aguanta un golpe extra. Gasta tus monedas en ⬆️ Mejoras.</p>
+        <p id="rec" class="ayuda"></p>
+        <span class="chip chip-monedas"><span class="moneda"></span><span id="bill">0</span></span>
         <button id="jugar" class="b3d txt grande b-verde" type="button">Jugar</button>
+        <button id="btn-mejoras" class="b3d txt chico b-oro" type="button">⬆️ Mejoras</button>
         <button id="entrar" class="b3d txt chico b-azul" type="button" title="Entrar con Google para guardar puntos" hidden>👤 Entrar con Google</button>
+      </div>
+      <div id="tienda" hidden>
+        <h2>⬆️ Mejoras</h2>
+        <span class="chip chip-monedas"><span class="moneda"></span><span id="bill2">0</span></span>
+        <div id="lista-mejoras"></div>
+        <button id="cerrar-tienda" class="b3d txt chico b-gris" type="button">Volver</button>
       </div>
     </div>
   </div>
