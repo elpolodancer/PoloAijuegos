@@ -1,6 +1,6 @@
 // Ruta: ataqueglobal/juego-ataqueglobal.js
 // Ataque Global (id de puntos «ataqueglobal»): guerra de misiles sobre el mapa del mundo. Plan completo en README-ataqueglobal.md.
-// ESTADO ACTUAL (fase 1): menú principal, el mundo con zoom y países seleccionables, y el mapa de niveles estándar.
+// ESTADO ACTUAL (fase 1): menú principal, el mundo como GLOBO 3D con giro, zoom y países seleccionables, y el mapa de niveles estándar.
 // Todavía NO hay partida: Fácil/Normal/Difícil solo abren el mundo (la dificultad queda guardada en «dificultad»), y los niveles muestran un aviso.
 import { crearEtapas } from "../compartido/etapas-mapa.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
@@ -75,6 +75,7 @@ $("velo-cerrar").addEventListener("click", () => velo.classList.remove("activo")
 // ---------- Cambio de pantallas ----------
 function ver(p) {
   pantalla = p;
+  document.body.dataset.pantalla = p; // el CSS usa esto para pedir el celular en horizontal
   menu.hidden = p !== "menu";
   lienzo.hidden = p !== "mundo";
   hud.hidden = p !== "mundo";
@@ -85,12 +86,22 @@ function ver(p) {
   btnMenu.title = p === "mundo" ? "Pausa" : "Volver al menú principal";
 }
 function mostrarMenu() {
+  soltarHorizontal();
   mapa.cerrar();
   velo.classList.remove("activo");
   mundo.seleccionar(null);
   ver("menu");
 }
+// El mundo se juega con el celular en horizontal: se intenta pantalla completa + bloqueo (Android lo permite; iPhone no, ahí solo sale el aviso «gira tu celular»)
+async function pedirHorizontal() {
+  try {
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+    if (screen.orientation && screen.orientation.lock) await screen.orientation.lock("landscape");
+  } catch (e) {}
+}
+function soltarHorizontal() { try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) {} }
 function abrirPartidaLibre(d) {
+  pedirHorizontal();
   dificultad = d;
   chipModo.textContent = "Partida libre · " + DIFICULTADES[d];
   ver("mundo");

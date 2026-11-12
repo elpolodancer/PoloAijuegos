@@ -42,6 +42,14 @@
     #ficha b { display: block; font-size: 18px; }
     #ficha small { color: #b0b4bd; font-size: 12px; }
 
+    /* Aviso «gira tu celular»: el mundo se juega en horizontal */
+    #girar { position: fixed; inset: 0; z-index: 12; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; color: #fff; background: #02030a; }
+    #girar .tel { font-size: 64px; animation: girar-tel 2.4s ease-in-out infinite; }
+    @keyframes girar-tel { 0%, 20% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+    #girar p { margin: 0; max-width: 320px; line-height: 1.4; }
+    @media (prefers-reduced-motion: reduce) { #girar .tel { animation: none; } }
+    @media (orientation: portrait) { body[data-pantalla="mundo"] #girar { display: flex; } }
+
     .velo { position: fixed; inset: 0; z-index: 8; display: none; flex-direction: column; align-items: center; gap: 12px; padding: 60px 24px 24px; overflow-y: auto; text-align: center; color: #fff; background: rgba(8, 9, 12, .82); }
     .velo > :first-child { margin-top: auto; }
     .velo > :last-child { margin-bottom: auto; }
@@ -84,6 +92,8 @@
     </div>
     <button class="b3d txt b-oro" id="btn-niveles" type="button"><span class="b-ico">🗺️</span>&nbsp;Niveles</button>
   </main>
+
+  <div id="girar" role="alert"><div class="tel">📱</div><p><b>Gira tu celular</b><br>El mundo se juega en horizontal.</p></div>
 
   <div id="velo" class="velo" role="dialog" aria-modal="true" aria-labelledby="velo-titulo">
     <h2 id="velo-titulo"></h2>
