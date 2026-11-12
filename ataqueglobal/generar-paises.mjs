@@ -28,8 +28,8 @@ const EXTRA = [
 
 // ---------- Semillas: país → lista de «lon,lat» o «lon,lat,sello» (el sello fuerza las celdas en ese radio, para enclaves) ----------
 const SEMILLAS = `
-CA -128,56.5 -118,54 -108,54.5 -97,54 -86,51.5 -77,50.5 -68,50 -102,64 -120,66 -136,64 -70,62 -76,68 -110,71 -56,48.5 -58,54
-US -121,44.4 -111,44.4 -101,44.4 -91,44.4 -82,42 -73.5,44.2 -69,45.4 -119,36 -109,36 -99,33.5 -90,33.5 -83,33 -80,36.5 -76,39 -81,28 -149,64.5 -156,67.5 -135,58.5 -158,59
+CA1 -127,55.5 -122,51.5 CA2 -114.5,54.5 -112,50.5 CA3 -106,54 -106,50.5 CA4 -98,54.5 -98,50 -97,57.5 CA5 -86,51.5 -80,48 CA6 -77,50.5 -70,52 -70,62 CA7 -65.5,46.2 -63,45 -56,48.5 -58,54 CA8 -136,64 -123,66 -113,62 CA9 -100,64 -90,69 -76,68 -110,71
+US1 -121,44.4 -111,44.4 -149,64.5 -156,67.5 -135,58.5 -158,59 US2 -119,36 -109,36 US3 -101,44.4 -91,44.4 -99,33.5 -90,33.5 US4 -83,33 -80,36.5 -81,28 US5 -82,42 -73.5,44.2 -69,45.4 -76,39
 GT -90.5,15.3 BZ -88.6,17.3,0.6 SV -88.9,13.7,0.7 HN -86.6,14.9 NI -85.2,12.9 CR -84.2,10.0 PA -80.0,8.6
 CU -78,21.9 -82.3,22.5 -75.5,20.4 HT -73.0,19.0 DO -70.4,18.9
 CO -74.5,5.5 -72.5,2.5 -75.5,2.8 VE -66,8.4 -62.5,6.0 GY -58.8,5.0 SR -55.8,4.0
@@ -50,7 +50,7 @@ EE 25.5,58.7 LV 25,56.9 LT 23.9,55.3 PL 19.5,52.0 21,50.3 CZ 15.5,49.8 SK 19.5,4
 HR 16,45.4 15.6,44.3 BA 17.9,44.2 RS 20.8,44.0 ME 19.3,42.7 MK 21.7,41.6 AL 20.0,41.1 GR 22.0,39.5 22.8,38.0 25,35.2
 BG 25.3,42.8 RO 25,45.8 27,45 MD 28.6,47.2 UA 31,49.2 35,48 24.5,49.0 33,46 BY 28,53.5
 TR 30,39.0 36,39.0 41.5,39.0 27.5,41.0 GE 43.5,42.2 AM 44.8,40.2 AZ 47.8,40.4
-RU 36,56 41,60.5 33,64 46,67 46,52 40,46.5 55,56 60,62 65,66 60,52.5 75,60 80,66 85,56 90,70 100,58 105,53 110,66 120,60 130,50 130,64 140,60 150,64 160,60 170,66 135,72 105,72 80,72 125,70 150,69 143,50.5 56,73 90,53 70,71 95,75
+RU1 36,56 46,52 RU2 41,60.5 33,64 46,67 56,73 RU3 40,46.5 47,45 RU4 55,56 60,62 65,66 60,52.5 75,60 80,66 70,71 80,72 RU5 85,56 90,70 100,58 105,53 110,66 105,72 90,53 95,75 RU6 120,60 125,70 130,64 135,72 140,60 RU7 130,50 143,50.5 150,64 150,69 160,60 170,66
 KZ 52,49 63,50 75,48.5 55,45 67,45 82,48 UZ 62,41.5 67.5,40.2 TM 59,39.5 55,38.5 TJ 71,38.5 KG 75,41.5
 AF 65.5,33.5 68.5,35.5 PK 68,28 72,31 IN 77,27 80,22 75,19 78,13 85,21 73.5,24 94,26.5 77,32.5
 NP 84,28.2 BT 90.4,27.4,0.5 BD 90,24 LK 80.7,7.7
@@ -70,8 +70,40 @@ ML -3,17 -6.5,13 MR -10.5,20.5 -8,17 SN -14.8,14.5 GW -15,12.0,0.5 GN -11.2,10.5
 AO 17.5,-12 ZM 27.5,-14 MW 34.2,-13 MZ 35.5,-16 34,-22 ZW 30,-19.5 BW 23.5,-22 NA 17.5,-20.5 17.5,-26 ZA 24,-29 28.5,-26 22,-32.5 LS 28.2,-29.6,1.3 SZ 31.4,-26.5,0.8 MG 46.8,-19
 AU 122,-25 134,-24 142,-22 148,-26 135,-32 146,-37 115,-30 146.8,-42 NZ 175.5,-38.5 170.5,-44
 MX -102,23
-US -66.3,18.2
+US4 -66.3,18.2
 `;
+
+// ---------- Divisiones internas ----------
+// Los países muy grandes se parten en territorios independientes (cada uno con su propio id, dueño, color y selección), para que el mapa
+// no se sienta tan grande y un bot pueda nacer o expandirse en solo una parte. Sus semillas están arriba en SEMILLAS (códigos US1…, CA1…, RU1…).
+// pais = código del país entero (de ahí salen la bandera y el nombre); nombre = lo que dice la ficha; corto = rótulo sobre el mapa;
+// centro (opcional) = punto [lon, lat] dentro de la parte que debe tomarse como principal cuando el territorio tiene partes separadas (Alaska).
+// Estados Unidos (5): Alaska va con el Noroeste y Puerto Rico con el Sureste. Canadá (9). Rusia (7).
+const DIVISIONES = {
+  US1: { pais: "US", nombre: "Estados Unidos · Noroeste", corto: "EE. UU. Noroeste", centro: [-114, 46.5] }, // centro = punto que cuenta como «su centro» (etiqueta, Centrar, visión): sin él sería Alaska, la parte más ancha
+  US2: { pais: "US", nombre: "Estados Unidos · Suroeste", corto: "EE. UU. Suroeste" },
+  US3: { pais: "US", nombre: "Estados Unidos · Centro", corto: "EE. UU. Centro" },
+  US4: { pais: "US", nombre: "Estados Unidos · Sureste", corto: "EE. UU. Sureste" },
+  US5: { pais: "US", nombre: "Estados Unidos · Noreste", corto: "EE. UU. Noreste" },
+  CA1: { pais: "CA", nombre: "Canadá · Columbia Británica", corto: "Columbia Británica" },
+  CA2: { pais: "CA", nombre: "Canadá · Alberta", corto: "Alberta" },
+  CA3: { pais: "CA", nombre: "Canadá · Saskatchewan", corto: "Saskatchewan" },
+  CA4: { pais: "CA", nombre: "Canadá · Manitoba", corto: "Manitoba" },
+  CA5: { pais: "CA", nombre: "Canadá · Ontario", corto: "Ontario" },
+  CA6: { pais: "CA", nombre: "Canadá · Quebec", corto: "Quebec" },
+  CA7: { pais: "CA", nombre: "Canadá · Provincias Atlánticas", corto: "Atlántico" },
+  CA8: { pais: "CA", nombre: "Canadá · Yukón y Territorios del Noroeste", corto: "Yukón y T. del Noroeste" },
+  CA9: { pais: "CA", nombre: "Canadá · Nunavut", corto: "Nunavut" },
+  RU1: { pais: "RU", nombre: "Rusia · Centro", corto: "Rusia Centro" },
+  RU2: { pais: "RU", nombre: "Rusia · Norte", corto: "Rusia Norte" },
+  RU3: { pais: "RU", nombre: "Rusia · Sur y Cáucaso", corto: "Rusia Sur" },
+  RU4: { pais: "RU", nombre: "Rusia · Urales y Siberia Occidental", corto: "Siberia Occidental" },
+  RU5: { pais: "RU", nombre: "Rusia · Siberia Central", corto: "Siberia Central" },
+  RU6: { pais: "RU", nombre: "Rusia · Siberia Oriental", corto: "Siberia Oriental" },
+  RU7: { pais: "RU", nombre: "Rusia · Extremo Oriente", corto: "Extremo Oriente" },
+};
+const DIVIDIDOS = {}; // país entero → sus divisiones (US → [US1…US5])
+for (const [id, d] of Object.entries(DIVISIONES)) (DIVIDIDOS[d.pais] ||= []).push(id);
 
 // Países-marcador: [iso, lon, lat, radio en grados] (diminutos o isleños; se pintan como un círculo encima)
 const MARCADORES = [
@@ -116,7 +148,7 @@ const idDe = (iso) => { let i = codigos.indexOf(iso); if (i < 0) { codigos.push(
 {
   let iso = null;
   for (const t of SEMILLAS.trim().split(/\s+/)) {
-    if (/^[A-Z]{2}$/.test(t)) { iso = t; continue; }
+    if (/^[A-Z]{2}\d?$/.test(t)) { iso = t; continue; }
     const [lon, lat, sello] = t.split(",").map(Number);
     semillas.push({ id: idDe(iso), lon, lat, sello: sello || 0, k: Math.cos((lat * Math.PI) / 180) });
   }
@@ -244,15 +276,21 @@ for (const [iso, lon, lat, rad] of MARCADORES) {
 // Fuera de la lista: territorios sin dueño no deben aparecer
 const faltan = [];
 const PAISES_BASE = ("US CA GT BZ SV HN NI CR PA CU JM HT DO BS BB AG DM GD KN LC VC TT CO VE GY SR EC PE BR BO PY CL AR UY ES PT FR AD MC IT SM VA MT DE AT CH LI BE NL LU GB IE IS NO SE FI DK EE LV LT PL CZ SK HU SI HR BA RS ME MK AL GR CY BG RO MD UA BY RU MA DZ TN LY EG SD SS ER DJ ET SO KE UG TZ RW BI CD CG GA GQ CM CF TD NE NG BJ TG GH CI BF ML MR SN GM GW GN SL LR CV ST AO ZM MW MZ ZW BW NA ZA LS SZ MG MU SC KM TR GE AM AZ KZ UZ TM KG TJ AF PK IN NP BT BD LK MV CN MN KP KR JP VN LA KH TH MM MY SG BN ID TL PH IR IQ SY LB IL PS JO SA YE OM AE QA BH KW AU NZ PG FJ SB VU WS TO TV KI NR MH FM PW").split(" ");
-for (const iso of [...PAISES_BASE, "MX"]) if (!quitar.has(iso) && !salida[iso]) faltan.push(iso);
+for (const iso of [...PAISES_BASE, "MX"]) {
+  if (DIVIDIDOS[iso]) { for (const d of DIVIDIDOS[iso]) if (!salida[d]) faltan.push(d); continue; } // un país dividido existe solo como sus divisiones
+  if (!quitar.has(iso) && !salida[iso]) faltan.push(iso);
+}
 for (const iso of quitar) delete salida[iso];
 
 const nombres = { IL: "Palestina/Israel", MX: "México" };
+for (const [id, d] of Object.entries(DIVISIONES)) nombres[id] = d.nombre;
 let js = "// Ruta: ataqueglobal/paises-ataqueglobal.js\n// GENERADO por ataqueglobal/herramientas/generar-paises.mjs — no se edita a mano (se vuelve a generar).\n";
 js += "// Contornos APROXIMADOS (decorativos) de los países del mundo. Cada país: { r: [anillo, …], m: 1 si es marcador }.\n";
 js += "// Cada anillo es una lista plana [lon, lat, lon, lat, …]. Los anillos de un país se rellenan con la regla par-impar (así los huecos, como Lesoto dentro de Sudáfrica, quedan vacíos).\n";
 js += "// «IL» es el territorio «Palestina/Israel» (el id «PS» no existe aquí). Para mapas con fronteras reales: herramientas/geojson-a-paises.mjs.\n";
 js += "export const NOMBRES_ESPECIALES = " + JSON.stringify(nombres) + ";\n";
+js += "// Países divididos en territorios independientes (ver DIVISIONES en generar-paises.mjs): «US», «CA» y «RU» no existen; existen US1…US5, CA1…CA9 y RU1…RU7.\n";
+js += "export const DIVISIONES = " + JSON.stringify(DIVISIONES) + ";\n";
 js += "export const LIMITES = { lon0: -180, lon1: 180, lat0: " + LAT0 + ", lat1: " + LAT1 + " };\n";
 js += "export const PAISES = {\n";
 for (const iso of Object.keys(salida).sort()) js += "  " + iso + ": " + JSON.stringify(salida[iso]) + ",\n";

@@ -7,6 +7,7 @@ import { crearEtapas } from "../compartido/etapas-mapa.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
 import { crearMundo, nombreTerritorio, banderaTerritorio } from "./mapa-ataqueglobal.js";
+// EE. UU. (US1–US5), Canadá (CA1–CA9) y Rusia (RU1–RU7) son varios territorios cada uno: ver DIVISIONES en paises-ataqueglobal.js.
 
 const ID = "ataqueglobal";
 const CLAVE_PROGRESO = "ataqueglobal_progreso_v1"; // { max: nivel más alto abierto, hecho: nivel más alto terminado }
@@ -23,8 +24,8 @@ const COLOR_JUGADOR = "#fff23a";
 const BOTS_MIN = 1, BOTS_MAX = 15, BOTS_INICIAL = 3, CLAVE_BOTS = "ataqueglobal_bots";
 const COLORES_BOTS = ["#ff3b30", "#ff8a1f", "#a24dff", "#ff5fb0", "#2f7bff", "#f4f4f4", "#19e0c0", "#b3173f", "#8fd8ff", "#e11bd6", "#b5702f", "#9aa7b4", "#1d84c9", "#ff9a9a", "#d9a0ff"];
 // PROVISIONAL: país inicial de cada bot (de los más cercanos a México a los más lejanos) mientras no existan los niveles y el grafo de vecindad.
-// Sobran 3 por si el jugador empieza en uno de ellos.
-const PAISES_BOTS = ["US", "CU", "CO", "CA", "BR", "AR", "ES", "EG", "NG", "ZA", "RU", "IN", "CN", "JP", "AU", "FR", "DE", "PE"];
+// Sobran 3 por si el jugador empieza en uno de ellos. EE. UU., Canadá y Rusia entran con UNA de sus divisiones (un bot nace en una sola parte del país).
+const PAISES_BOTS = ["US2", "CU", "CO", "CA5", "BR", "AR", "ES", "EG", "NG", "ZA", "RU1", "IN", "CN", "JP", "AU", "FR", "DE", "PE"];
 // PROVISIONAL: país con el que se empieza mientras no existan los niveles ni el grafo de vecindad (fácil = 3 países propios, difícil = 1; ver README).
 const PAISES_INICIALES = { facil: ["MX"], normal: ["MX"], dificil: ["MX"] };
 

@@ -4,8 +4,10 @@
 //   1) Descarga ne_110m_admin_0_countries.geojson (naturalearthdata.com, dominio público) y déjalo, por ejemplo, en ataqueglobal/herramientas/.
 //   2) node ataqueglobal/herramientas/geojson-a-paises.mjs ruta/al/archivo.geojson
 // Los países que el GeoJSON no traiga (Mónaco, Malta, islas del Pacífico…) se conservan del archivo actual como marcadores.
+// ⚠️ Estados Unidos, Canadá y Rusia están partidos en divisiones (US1…, CA1…, RU1…): el GeoJSON NO las reemplaza (siguen con su dibujo aproximado)
+//    hasta que se recorten las fronteras reales con las divisiones. Las demás sí quedan con frontera real.
 import { readFileSync, writeFileSync } from "node:fs";
-import { PAISES as ACTUAL, NOMBRES_ESPECIALES, LIMITES } from "../paises-ataqueglobal.js";
+import { PAISES as ACTUAL, NOMBRES_ESPECIALES, LIMITES, DIVISIONES } from "../paises-ataqueglobal.js";
 
 const entrada = process.argv[2];
 if (!entrada) { console.error("Uso: node geojson-a-paises.mjs archivo.geojson"); process.exit(1); }
@@ -49,6 +51,7 @@ let js = "// Ruta: ataqueglobal/paises-ataqueglobal.js\n// GENERADO por ataquegl
 js += "// Cada país: { r: [anillo, …], m: 1 si es marcador }. Cada anillo es una lista plana [lon, lat, lon, lat, …] (relleno par-impar).\n";
 js += "// «IL» es el territorio «Palestina/Israel».\n";
 js += "export const NOMBRES_ESPECIALES = " + JSON.stringify(NOMBRES_ESPECIALES) + ";\n";
+js += "export const DIVISIONES = " + JSON.stringify(DIVISIONES) + ";\n";
 js += "export const LIMITES = " + JSON.stringify(LIMITES) + ";\nexport const PAISES = {\n";
 for (const iso of Object.keys(salida).sort()) js += "  " + iso + ": " + JSON.stringify(salida[iso]) + ",\n";
 js += "};\n";

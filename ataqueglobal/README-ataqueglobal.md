@@ -23,11 +23,19 @@ No usa Firebase todavía (no hay puntos ni progreso en la nube).
 
 ## 2. Los países del mundo
 
-- **194 territorios** = los 194 de `etapas-mapa.js` (195 con México, que ahí son sus 32 estados) **con Israel y Palestina unidos en uno solo llamado «Palestina/Israel»** (id `IL`; el id `PS` no existe en el mapa). México sí aparece como país (`MX`).
+- **212 territorios** (194 países, con EE. UU., Canadá y Rusia contados como 21 divisiones; ver abajo) = los 194 de `etapas-mapa.js` (195 con México, que ahí son sus 32 estados) **con Israel y Palestina unidos en uno solo llamado «Palestina/Israel»** (id `IL`; el id `PS` no existe en el mapa). México sí aparece como país (`MX`).
 - Groenlandia se pinta como parte de Dinamarca; Taiwán, de China; Puerto Rico, de EE. UU.
 - Los países diminutos o isleños (Vaticano, Mónaco, Malta, Singapur, Maldivas, islas del Pacífico…) salen como **marcadores**: un círculo con tamaño mínimo en pantalla para poder tocarlos.
 - **Los contornos son aproximados**: se generaron con `herramientas/generar-paises.mjs` (reparte la tierra de `geografia-mapa.js` entre puntos semilla de cada país). Sirven para ver y elegir países, pero las fronteras no son las reales. Para el juego final conviene cambiarlas por Natural Earth (dominio público): bajar `ne_110m_admin_0_countries.geojson` y correr `node ataqueglobal/herramientas/geojson-a-paises.mjs archivo.geojson`.
 - Para ver o corregir un país aproximado: editar sus semillas en `SEMILLAS` de `generar-paises.mjs` y volver a generar.
+- **Países divididos (EE. UU., Canadá y Rusia).** Para que no se sientan enormes, estos tres NO existen como un solo territorio: cada uno está partido en **divisiones independientes**, con su propio id, dueño, color, selección, niebla y destrucción. Un bot puede nacer en una sola división y expandirse a las vecinas. Total: **212 territorios** (194 − 3 + 21).
+  - **Estados Unidos (5):** `US1` Noroeste (con Alaska), `US2` Suroeste, `US3` Centro, `US4` Sureste (con Puerto Rico), `US5` Noreste.
+  - **Canadá (9):** `CA1` Columbia Británica, `CA2` Alberta, `CA3` Saskatchewan, `CA4` Manitoba, `CA5` Ontario, `CA6` Quebec, `CA7` Provincias Atlánticas, `CA8` Yukón y Territorios del Noroeste, `CA9` Nunavut.
+  - **Rusia (7):** `RU1` Centro, `RU2` Norte, `RU3` Sur y Cáucaso, `RU4` Urales y Siberia Occidental, `RU5` Siberia Central, `RU6` Siberia Oriental, `RU7` Extremo Oriente.
+  - Se definen en `DIVISIONES` de `generar-paises.mjs` (id → `{ pais, nombre, corto, centro? }`) y sus semillas en `SEMILLAS` (códigos `US1`, `CA1`…). Para cambiar cuántas hay o dónde cortan, se editan ahí y se vuelve a generar. `centro` (solo `US1`) fija qué parte es «la principal» cuando hay partes separadas (Alaska).
+  - En el código: `etiquetaTerritorio(id)` (rótulo corto del mapa), `paisDe(id)` («US3» → «US»; de ahí sale la bandera) y `divisionesDe("CA")` → `["CA1",…,"CA9"]`. Para el grafo de vecindad, cada división cuenta como un territorio más (las divisiones de un mismo país son vecinas entre sí).
+  - El mapa de niveles estándar (`etapas-mapa.js`) NO cambia: sigue con EE. UU., Canadá y Rusia como un país cada uno.
+  - ⚠️ `geojson-a-paises.mjs` (fronteras reales) todavía no parte las fronteras reales de estos tres países: los deja con su dibujo aproximado dividido. Pendiente recortarlos con las divisiones.
 - ⚠️ El mapa de niveles estándar (`etapas-mapa.js`) todavía lista **Israel** y **Palestina** como dos países y usa los nombres de `Intl`. Al preparar los niveles hay que decidir si se agrega a `etapas-mapa.js` un nombre especial (sin romper otros juegos) o si este juego trae su propia lista (193 países → 22 500 niveles).
 
 ## 3. Pantallas

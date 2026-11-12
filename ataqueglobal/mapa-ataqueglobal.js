@@ -14,13 +14,22 @@
 //   mundo.centrarEn("MX") → centra la cámara en el país y lo acerca. mundo.setDueno("MX", "#fff23a", true): 3.er parámetro = es del jugador (trazo brillante con resplandor).
 //   mundo.setDueno("US", "#ff3b30") → país de un bot: se tiñe fuerte de su color y lleva un trazo de ese color.
 //   mundo.setDueno("MX", "#ffb020"); mundo.setDestruido("BR", true); mundo.limpiarEstados(); mundo.paises();
-import { PAISES, NOMBRES_ESPECIALES } from "./paises-ataqueglobal.js";
+import { PAISES, NOMBRES_ESPECIALES, DIVISIONES } from "./paises-ataqueglobal.js";
 import { nombrePais } from "../compartido/etapas-mapa.js";
 
+// Estados Unidos, Canadá y Rusia NO existen como un solo territorio: están partidos en divisiones independientes (ids US1…US5, CA1…CA9, RU1…RU7;
+// ver DIVISIONES en paises-ataqueglobal.js). Cada división se comporta como un país más (dueño, selección, niebla, destrucción).
 export const nombreTerritorio = (iso) => NOMBRES_ESPECIALES[iso] || nombrePais(iso);
+// Rótulo corto que se pinta sobre el mapa (la ficha usa el nombre completo)
+export const etiquetaTerritorio = (iso) => (DIVISIONES[iso] && DIVISIONES[iso].corto) || nombreTerritorio(iso);
+// País entero al que pertenece un territorio (una división de EE. UU. → "US"; cualquier otro → él mismo)
+export const paisDe = (iso) => (DIVISIONES[iso] ? DIVISIONES[iso].pais : iso);
+// Divisiones de un país entero: divisionesDe("CA") → ["CA1", …, "CA9"]; si no está dividido → [iso]
+export const divisionesDe = (pais) => { const l = Object.keys(DIVISIONES).filter((k) => DIVISIONES[k].pais === pais); return l.length ? l : [pais]; };
 // «IL» es Palestina/Israel: lleva las dos banderas. Las banderas emoji se ven como letras en algunos sistemas (Windows).
 export const banderaTerritorio = (iso) => {
   const f = (c) => String.fromCodePoint(...[...c].map((x) => 0x1f1e6 + x.charCodeAt(0) - 65));
+  iso = paisDe(iso); // una división lleva la bandera de su país
   return iso === "IL" ? f("PS") + f("IL") : f(iso);
 };
 
@@ -86,13 +95,17 @@ for (const iso of Object.keys(PAISES)) {
   const d = PAISES[iso];
   const orig = d.r.map((f) => Float32Array.from(f));
   let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, mayor = null, areaMayor = -1;
+  const partes = []; // cada anillo con su ancho y alto (para poder elegir el principal por un punto «centro»)
   for (const a of orig) {
     let ax0 = 1e9, ax1 = -1e9, ay0 = 1e9, ay1 = -1e9;
     for (let i = 0; i < a.length; i += 2) { ax0 = Math.min(ax0, a[i]); ax1 = Math.max(ax1, a[i]); ay0 = Math.min(ay0, a[i + 1]); ay1 = Math.max(ay1, a[i + 1]); }
     x0 = Math.min(x0, ax0); x1 = Math.max(x1, ax1); y0 = Math.min(y0, ay0); y1 = Math.max(y1, ay1);
     const ar = (ax1 - ax0) * (ay1 - ay0);
-    if (ar > areaMayor) { areaMayor = ar; mayor = { a, w: ax1 - ax0, h: ay1 - ay0 }; }
+    partes.push({ a, w: ax1 - ax0, h: ay1 - ay0 });
+    if (ar > areaMayor) { areaMayor = ar; mayor = partes[partes.length - 1]; }
   }
+  const fijo = DIVISIONES[iso] && DIVISIONES[iso].centro; // división con partes separadas (Alaska): la parte principal es la que contiene este punto
+  if (fijo) { const p = partes.find((q) => dentro(q.a, fijo[0], fijo[1])); if (p) mayor = p; }
   const [cx, cy, area] = centroide(mayor.a);
   const cv = vec(cx, cy);
   let ang = 0; // radio angular del país (para saber si está del lado oculto sin proyectarlo)
@@ -385,7 +398,7 @@ export function crearMundo({ lienzo, alSeleccionar, giroAuto = false } = {}) {
       if (q[0] < -80 || q[0] > W + 80 || q[1] < -20 || q[1] > H + 20) continue;
       const tam = acotar(Math.round(grande / 9), 11, 19);
       ctx.font = "700 " + tam + "px system-ui, sans-serif";
-      const nombre = nombreTerritorio(p.iso), clave = p.iso + tam;
+      const nombre = etiquetaTerritorio(p.iso), clave = p.iso + tam;
       let tw = anchoTexto.get(clave); if (tw == null) { tw = ctx.measureText(nombre).width; anchoTexto.set(clave, tw); }
       if (!forzado && !p.micro && (tw + 8 > grande || p.hh * RAD * R * q[2] < tam + 4)) continue;
       const ty = q[1] + (p.micro ? -(Math.max(p.radio * RAD * R, 4) + 10) : 0);
