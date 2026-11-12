@@ -59,7 +59,7 @@
   <!-- Menú principal estándar: Modo libre · Niveles · Mapa · Salir -->
   <main class="pantalla" id="menu">
     <h1>📓 Polocubos</h1>
-    <p>Cierra cuadritos de tu libreta: cada pared cuesta 1 punto. Cierra un cuadro con 1 pared y ganas 1 cubo 🎲 (y recuperas tu punto); si una sola pared cierra 2 cuadros a la vez, ganas 3 cubos; con 2 o más paredes solo recuperas 1 punto (pierdes el resto). Con 20 cubos o más puedes sortear cuadros al azar, y si sorteas más rinden más: 30 cubos = 50 cuadros, 40 = 80 y 50 = 120. Si te quedas sin puntos, 3 cubos se cambian solos por 1 punto, las veces que haga falta.</p>
+    <p>Cierra cuadritos de tu libreta: cada pared cuesta 1 punto. Cierra un cuadro con 1 pared y ganas 1 cubo 🎲 (y recuperas tu punto); si una sola pared cierra 2 cuadros a la vez, ganas 3 cubos; con 2 o más paredes solo recuperas 1 punto (pierdes el resto). Con 5 cubos o más puedes sortear (se gastan todos de 5 en 5) y cuantos más cubos juntes, más rinden: 5 cubos = 10 cuadros, 10 = 20, 20 = 40, 30 = 60, 40 = 90 y 50 = 120. Si te quedas sin puntos, 3 cubos se cambian solos por 1 punto, las veces que haga falta.</p>
     <div class="col">
       <button class="b3d txt grande b-verde" id="b-libre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
       <button class="b3d txt grande b-azul" id="b-niveles" type="button"><span class="b-ico">🪜</span> Niveles</button>
@@ -94,7 +94,7 @@
         <p><b>Con 2 o más paredes tuyas:</b> solo recuperas 1 línea, así que pierdes las demás. Cuando el cuadro se cierra, sus paredes ya no cuentan para otros cuadros.</p>
         <p>Si cierras un cuadro sigues jugando y la cadena sube; una pared que no cierra nada rompe la cadena.</p>
         <h3>🎲 Cubos aleatorios</h3>
-        <p>Se ganan cerrando cuadros con una sola pared. Con 20 o más puedes sortear: se ponen cuadros cerrados al azar en la hoja. Si sorteas más, rinden más: 20 cubos = 20 cuadros, 30 = 50, 40 = 80 y 50 = 120.</p>
+        <p>Se ganan cerrando cuadros con una sola pared. Con 5 o más puedes sortear: se ponen cuadros al azar en la hoja y el botón gasta todos tus cubos de 5 en 5 (los que sobren de menos de 5 se quedan). Cuantos más cubos juntes, más rinden: 5 cubos = 10 cuadros, 10 = 20, 20 = 40, 30 = 60, 40 = 90 y 50 = 120. El contador 🎲 Cubos sobre el botón dice cuántos tienes.</p>
         <p>Si te quedas sin líneas, cada 3 cubos se cambian solos por 1 línea, las veces que haga falta.</p>
         <h3>🔥 Combos</h3>
         <p>Si cierras cuadros seguidos (sin romper la cadena) y cerca uno del otro (a 2 cuadros o menos), haces un combo. El primer cuadro no da nada; del segundo en adelante, cada cuadro pone 1 pared suelta al azar en la hoja (solo una pared, no un cuadro entero). Una pared que cierra 2 cuadros a la vez cuenta como 2 del combo. Si cierras uno lejos, el combo empieza de nuevo.</p>
@@ -106,7 +106,7 @@
         <p>No hay límite de tiempo: el reloj solo cuenta. Si completas la hoja a tiempo ganas monedas por cada meta 🥇🥈🥉 (una sola vez cada una).</p>
         <p>↩️ Deshacer: 10 gratis por partida. Después, 30 monedas te dan 10 más.</p>
         <h3>🎨 Colores y zoom</h3>
-        <p>Verde: cuadros que cerraste tú. Naranja: los del bot. Azul: sorteados. Acércate (＋ o pellizcar) para poner paredes: toca el lado de un cuadro.</p>
+        <p>Verde: cuadros que cerraste tú. Naranja: los del bot. Azul: sorteados. Acércate (pellizca con dos dedos o usa la rueda del ratón) para poner paredes: toca el lado de un cuadro.</p>
       </div>
       <div class="pausa-opciones"><button class="b3d txt b-verde" id="info-cerrar" type="button"><span class="b-ico">✔</span> <span>Entendido</span></button></div>
     </div>
@@ -126,20 +126,9 @@
       <span class="chip chip-monedas" id="c-monedas"></span>
       <span class="chip" id="c-tiempo"></span>
     </div>
-    <div class="zoom">
-      <button class="b3d chico b-gris" id="z-mas" type="button" aria-label="Acercar"><span class="b-ico">＋</span></button>
-      <button class="b3d chico b-gris" id="z-menos" type="button" aria-label="Alejar"><span class="b-ico">－</span></button>
-      <button class="b3d chico b-gris" id="z-ajustar" type="button" aria-label="Ver toda la hoja"><span class="b-ico">⤢</span></button>
-    </div>
     <div class="panel">
       <div class="fila">
-        <button class="b3d chico txt b-gris" data-paso="-50" type="button">−50</button>
-        <button class="b3d chico txt b-gris" data-paso="-10" type="button">−10</button>
-        <button class="b3d chico txt b-gris" data-paso="-1" type="button">−1</button>
-        <span class="chip"><small>Sortear</small><b id="c-cant">20</b></span>
-        <button class="b3d chico txt b-gris" data-paso="1" type="button">+1</button>
-        <button class="b3d chico txt b-gris" data-paso="10" type="button">+10</button>
-        <button class="b3d chico txt b-gris" data-paso="50" type="button">+50</button>
+        <span class="chip"><small>Cubos 🎲</small><b id="c-cant">0</b></span>
       </div>
       <div class="fila">
         <button class="b3d txt b-oro" id="b-sortear" type="button"><span class="b-ico">🎲</span> <span id="t-sortear">Sortear</span></button>

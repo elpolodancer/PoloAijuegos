@@ -6,7 +6,7 @@
 import { crearEtapas } from "../compartido/etapas-mapa.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
-import { AJUSTES, BONOS_SORTEO, cuadrosDeSorteo, cubosParaCuadros, vecinosDePared, DIFICULTADES, PUNTOS_INICIO, ponerPared, premiarCierre, canjearCubos, puedeJugar, puedeSortear, hayPared, sortearModo, sortearParedes, paredSuelta, cercaDe, PAREDES_POR_CUADRO, crearTablero, completo, clonarTablero, metasDeTiempo, monedasDe, unirCartera } from "./logica-polocubos.js";
+import { AJUSTES, BONOS_SORTEO, cuadrosDeSorteo, cubosParaCuadros, cubosASortear, vecinosDePared, DIFICULTADES, PUNTOS_INICIO, ponerPared, premiarCierre, canjearCubos, puedeJugar, puedeSortear, hayPared, sortearModo, sortearParedes, paredSuelta, cercaDe, PAREDES_POR_CUADRO, crearTablero, completo, clonarTablero, metasDeTiempo, monedasDe, unirCartera } from "./logica-polocubos.js";
 import { jugadaBot } from "./ia-polocubos.js";
 import { generarInicio } from "./patrones-polocubos.js";
 
@@ -273,32 +273,28 @@ const maxSortear = () => Math.max(0, Math.min(J[1].a, t.n * t.n - t.cuadros)); /
 function pintarHud() {
   const listo = puedeSortear(J[1]); // ¿ya tienes 50 cubos o más? entonces el botón Sortear está abierto
   if (listo && !listoAntes && !terminado) {
-    cantidad = AJUSTES.tanda;
-    aviso("🎲 ¡Ya tienes " + AJUSTES.tanda + " cubos! Ya puedes sortear · " + BONOS_SORTEO.map((b) => b.cubos + " cubos = " + b.cuadros + " cuadros").reverse().join(" · "));
+    aviso("🎲 ¡Ya tienes " + AJUSTES.tanda + " cubos! Ya puedes sortear · " + BONOS_SORTEO.map((b) => b.cubos + " = " + b.cuadros).reverse().join(" · "));
     parpadear("b-sortear", "c-azar");
   }
   listoAntes = listo;
-  cantidad = Math.max(0, Math.min(cantidad, maxSortear()));
-  if (cantidad === 0 && maxSortear() > 0) cantidad = 1;
+  cantidad = cubosASortear(J[1].a); // el sorteo gasta todos los cubos de 5 en 5
   const chip = (id, txt) => ($(id).innerHTML = txt); // chip vacío = oculto
   chip("c-pts", `<small>${op.bot ? "Tú · puntos" : "Puntos"}</small>${fmt(J[1].p)}`);
-  chip("c-azar", `<small>🎲 Cubos</small>${fmt(J[1].a)}${listo ? " ✓" : "/" + AJUSTES.tanda}`); // «/50» = cubos que necesitas para poder sortear
+  chip("c-azar", `<small>🎲 Cubos</small>${fmt(J[1].a)}${listo ? " ✓" : "/" + AJUSTES.tanda}`); // «/5» = cubos que necesitas para poder sortear
   chip("c-monedas", '<span class="moneda"></span>' + fmt(monedas()));
   chip("c-bot", op.bot ? `<small>🤖 Bot</small>${fmt(J[2].p)} · 🎲${fmt(J[2].a)}` : "");
   chip("c-cuadros", `<small>Cuadros</small>${fmt(t.cuadros)}/${fmt(t.n * t.n)}`);
   $("c-cadena").textContent = terminado ? "" : op.bot && turno === 2 ? "🤖 Turno del bot"
     : J[1].c > 1 ? "🔗 Cadena ×" + J[1].c : op.bot ? "Tu turno" : "";
-  $("c-cant").textContent = cantidad;
-  const cuadrosHoy = Math.min(cuadrosDeSorteo(cantidad), t.n * t.n - t.cuadros); // cuadros que pondría el sorteo (con el bono)
-  $("t-sortear").textContent = listo ? "Sortear (−" + cantidad + (cantidad === 1 ? " cubo" : " cubos") + " → " + fmt(cuadrosHoy) + (cuadrosHoy === 1 ? " cuadro)" : " cuadros)") : "Sortear (faltan " + (AJUSTES.tanda - J[1].a) + " cubos)";
-  $("b-sortear").disabled = terminado || turno !== 1 || cantidad < 1 || !listo;
+  $("c-cant").textContent = fmt(J[1].a); // cubos aleatorios que tiene el jugador
+  $("t-sortear").textContent = "Sortear";
+  $("b-sortear").disabled = terminado || turno !== 1 || !listo;
   const q = quedan(); // sin deshacer, el botón es el boost
   $("t-deshacer").textContent = q > 0 ? "Deshacer (" + q + ")" : "Boost +" + AJUSTES.boostDeshacer + " · " + AJUSTES.costoBoost + " monedas";
   $("b-deshacer").disabled = terminado || turno !== 1 || (q > 0 && !historial.length);
   pintarTiempo();
   pedirDibujo();
 }
-for (const b of document.querySelectorAll("[data-paso]")) b.addEventListener("click", () => { cantidad += Number(b.dataset.paso); if (cantidad < 1) cantidad = 1; pintarHud(); });
 
 // Pared puesta por «a» (1 = tú, 2 = bot): cuesta 1 punto. Si cierra cuadros, el premio depende de cuántas paredes de ese cuadro puso él (premiarCierre):
 //   1 pared → +1 cubo aleatorio y recupera su punto · 2 o más → +2 puntos. Las paredes de un cuadro cerrado ya no cuentan para los vecinos.
@@ -334,10 +330,10 @@ function jugarPared(tipo, r, c) {
 }
 
 $("b-sortear").addEventListener("click", () => {
-  if (terminado || turno !== 1 || cantidad < 1) return;
+  if (terminado || turno !== 1) return;
   if (!puedeSortear(J[1])) { aviso("🎲 Necesitas " + AJUSTES.tanda + " cubos para sortear (tienes " + fmt(J[1].a) + ")"); return; }
   guardarPaso();
-  const usar = Math.min(cantidad, J[1].a), pedidos = cuadrosDeSorteo(usar); // el bono: 30 cubos → 60 cuadros, 40 → 80, 50 → 120
+  const usar = cubosASortear(J[1].a), pedidos = cuadrosDeSorteo(usar); // todos los cubos de 5 en 5: 5 → 10 cuadros, 10 → 20, 20 → 40, 30 → 60, 40 → 90, 50 → 120
   const antes = marcaCaida();
   const hechos = sortearModo(t, pedidos, op.sorteo);
   const gasto = hechos < pedidos ? cubosParaCuadros(hechos, usar) : usar;      // si la hoja ya no tiene tantos cuadros libres, no se gastan cubos de más
@@ -373,8 +369,9 @@ function pasoBot() {
   if (!m) { revisar(true, 2); return; } // no puede jugar (sin puntos y sin 50 cubos)
   if (m.accion === "sortear") {
     const antes = marcaCaida();
-    const hechos = sortearModo(t, m.cantidad, op.sorteo);
-    J[2].a -= hechos; ultima = null;
+    const usar = cubosASortear(Math.min(m.cantidad, J[2].a)), pedidos = cuadrosDeSorteo(usar);
+    const hechos = sortearModo(t, pedidos, op.sorteo);
+    J[2].a -= hechos < pedidos ? cubosParaCuadros(hechos, usar) : usar; ultima = null;
     animarCaida(antes);
     aviso("🤖 sorteó " + hechos + (hechos === 1 ? " cuadro" : " cuadros"));
     revisar(true, 2);
@@ -566,9 +563,6 @@ function zoomEn(px, py, f) {
   limitar(); pedirDibujo();
 }
 const centro = () => [cv.clientWidth / 2, cv.clientHeight / 2];
-$("z-mas").addEventListener("click", () => zoomEn(...centro(), 1.5));
-$("z-menos").addEventListener("click", () => zoomEn(...centro(), 1 / 1.5));
-$("z-ajustar").addEventListener("click", ajustarVista);
 cv.addEventListener("wheel", (e) => { e.preventDefault(); zoomEn(e.clientX, e.clientY, e.deltaY < 0 ? 1.15 : 1 / 1.15); }, { passive: false });
 addEventListener("resize", () => { if (pantalla === "partida") { ajustarLienzo(); ajustarVista(); } });
 

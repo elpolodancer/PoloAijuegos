@@ -11,7 +11,7 @@ export const AJUSTES = {
                      // en cuadros al azar (sorteo) y el jugador se queda con puntosJugar
   puntosJugar: 15,   // puntos con los que se juega al empezar (el resto de puntosInicio se sortea automáticamente)
   autoSorteo: 100,   // cada vez que alguien junta esta cantidad, se gasta sola en sortear cuadros al azar
-  tanda: 20,         // cubos aleatorios que hay que TENER para poder sortear: con 20 o más se abre el botón Sortear y el jugador
+  tanda: 5,          // cubos aleatorios que hay que TENER para poder sortear: con 5 o más se abre el botón Sortear (se gastan todos los cubos de 5 en 5) y el jugador
                      // elige cuántos usa y cuándo. También es la meta que el bot de backtracking comprueba al armar
                      // el tablero inicial (que el jugador PUEDA juntar esos 20 cubos)
   radioCombo: 2,     // combo: cerrar cuadros seguidos (sin romper la cadena) a esta distancia o menos (2 = en un área de 2 cuadros alrededor) del anterior
@@ -29,19 +29,21 @@ export const AJUSTES = {
   maxHistorial: 30,    // jugadas que se guardan para poder deshacer (las más viejas se olvidan)
 };
 // ----- Bono al sortear -----
-// Sortear 20 cubos pone 20 cuadros (1 por cubo). Pero si el jugador sortea más de una vez, los cubos rinden más:
-//   30 cubos → 50 cuadros · 40 cubos → 80 cuadros · 50 cubos → 120 cuadros
-// Con cantidades mayores se arma por bloques, de más grande a más chico (p. ej. 100 cubos = 2 bloques de 50 = 240 cuadros;
-// 35 cubos = un bloque de 30 + 5 sueltos = 55 cuadros). Lo que sobra de los bloques vale 1 cuadro por cubo.
-export const BONOS_SORTEO = [{ cubos: 50, cuadros: 120 }, { cubos: 40, cuadros: 80 }, { cubos: 30, cuadros: 50 }]; // de mayor a menor
+// El botón Sortear se abre con 5 cubos o más y gasta todos los cubos de 5 en 5 (lo que sobre de menos de 5 se queda). Cada tanto de cubos rinde:
+//   5 cubos → 10 cuadros · 10 → 20 · 20 → 40 · 30 → 60 · 40 → 90 · 50 → 120
+// Con más cubos se arma por bloques, de más grande a más chico (p. ej. 100 cubos = 2 bloques de 50 = 240 cuadros; 35 cubos = 30 + 5 = 60 + 10 = 70).
+export const BONOS_SORTEO = [{ cubos: 50, cuadros: 120 }, { cubos: 40, cuadros: 90 }, { cubos: 30, cuadros: 60 }, { cubos: 20, cuadros: 40 }, { cubos: 10, cuadros: 20 }, { cubos: 5, cuadros: 10 }]; // de mayor a menor
 export function cuadrosDeSorteo(cubos) {
   let resto = Math.max(0, Math.floor(Number(cubos) || 0)), total = 0;
   for (const b of BONOS_SORTEO) { const veces = Math.floor(resto / b.cubos); total += veces * b.cuadros; resto -= veces * b.cubos; }
-  return total + resto;
+  return total; // los cubos que sobran (menos de 5) no se gastan
 }
+// Cubos que gasta un sorteo con «cubos» cubos: todos de 5 en 5
+export const cubosASortear = (cubos) => Math.floor(Math.max(0, Number(cubos) || 0) / AJUSTES.tanda) * AJUSTES.tanda;
 // Menos cubos con los que se llegan a «cuadros» cuadros (para devolver cubos si la hoja ya no tiene tantos cuadros libres)
 export function cubosParaCuadros(cuadros, maxCubos) {
-  for (let c = 1; c <= maxCubos; c++) if (cuadrosDeSorteo(c) >= cuadros) return c;
+  if (cuadros <= 0) return 0;
+  for (let c = AJUSTES.tanda; c <= maxCubos; c += AJUSTES.tanda) if (cuadrosDeSorteo(c) >= cuadros) return c;
   return maxCubos;
 }
 
@@ -199,7 +201,7 @@ export function cerrarCuadros(t, cerrado) {
   }
 }
 
-// Sortear a mano solo se puede a partir de AJUSTES.tanda (20) cubos aleatorios. Después el jugador elige cuántos usa y cuándo.
+// Sortear a mano solo se puede a partir de AJUSTES.tanda (5) cubos aleatorios; se gastan todos de 5 en 5.
 export const puedeSortear = (j) => j.a >= AJUSTES.tanda;
 
 // ----- Quedarse sin puntos -----
