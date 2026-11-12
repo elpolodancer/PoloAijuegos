@@ -1,0 +1,110 @@
+<!doctype html>
+<!-- Ruta: polocubos/index-polocubos.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Polocubos</title>
+  <meta name="theme-color" content="#d9a866" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <style>
+    /* Pantallas de menú: columna centrada sobre la madera, fuera de las zonas reservadas de las esquinas */
+    .pantalla { position: fixed; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 14px; overflow-y: auto;
+      padding: calc(104px + env(safe-area-inset-top)) 16px calc(70px + env(safe-area-inset-bottom)); text-align: center; }
+    .pantalla[hidden] { display: none; }
+    .pantalla > :first-child { margin-top: auto; }
+    .pantalla > :last-child { margin-bottom: auto; }
+    .opc { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .opc h3 { margin: 0; font-size: 1rem; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    .opc .fila .b3d.chico.txt { padding: 0 12px; }
+    .pantalla h1, .pantalla h2 { margin: 0; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    .pantalla h1 { font-size: clamp(2rem, 9vw, 3.2rem); }
+    .pantalla p { margin: 0; max-width: 340px; font-size: .95rem; line-height: 1.35; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
+    .col { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 6px; }
+    .col .b3d { width: min(320px, 86vw); }
+
+    /* Partida */
+    #partida { position: fixed; inset: 0; z-index: 1; }
+    #partida[hidden] { display: none; }
+    #tablero { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+    .hud-der { flex-direction: column; align-items: flex-end; gap: 6px; }
+    .zoom { position: fixed; z-index: 5; right: max(8px, env(safe-area-inset-right)); top: calc(110px + env(safe-area-inset-top)); display: flex; flex-direction: column; gap: 2px; }
+    .panel { position: fixed; z-index: 5; left: 50%; transform: translateX(-50%); bottom: max(14px, env(safe-area-inset-bottom)); width: calc(100vw - 140px); max-width: 420px;
+      display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .fila { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+    .panel .b3d.chico.txt { --t: 40px; padding: 0 10px; }
+    #aviso { position: fixed; z-index: 30; left: 50%; top: calc(14px + env(safe-area-inset-top)); transform: translateX(-50%); max-width: 90vw; padding: 8px 16px; font-weight: 800; text-align: center;
+      color: #fff; background: rgba(10, 10, 12, .85); border: 2px solid #121316; border-radius: 999px; pointer-events: none; }
+    #aviso[hidden] { display: none; }
+  </style>
+</head>
+<body class="inmersivo">
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" hidden><span class="b-ico">☰</span> <span class="t">Pausa</span></button>
+  </nav>
+
+  <!-- Menú principal estándar: Modo libre · Niveles · Mapa · Salir -->
+  <main class="pantalla" id="menu">
+    <h1>📓 Polocubos</h1>
+    <p>Cierra cuadritos de tu libreta: cada pared cuesta, cada cuadro cerrado paga, y en cadena paga más.</p>
+    <div class="col">
+      <button class="b3d txt grande b-verde" id="b-libre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
+      <button class="b3d txt grande b-azul" id="b-niveles" type="button"><span class="b-ico">🪜</span> Niveles</button>
+      <button class="b3d txt grande b-azul" id="b-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+      <a class="b3d txt grande b-rojo" href="../"><span class="b-ico">🚪</span> Salir</a>
+    </div>
+  </main>
+
+  <!-- Modo libre: 5 dificultades -->
+  <section class="pantalla" id="libre" hidden>
+    <h2>♾️ Modo libre</h2>
+    <p>Elige con cuántos puntos empiezas y contra quién juegas. Al tocar un tamaño de hoja empieza la partida.</p>
+    <div class="opc"><h3>Puntos para empezar</h3><div class="fila" id="o-puntos"></div></div>
+    <div class="opc"><h3>Cómo jugar</h3><div class="fila" id="o-modo"></div></div>
+    <div class="opc"><h3>Tamaño de la hoja</h3></div>
+    <div class="col" id="dificultades"></div>
+  </section>
+
+  <!-- Partida -->
+  <section id="partida" hidden>
+    <canvas id="tablero" aria-label="Hoja cuadriculada: toca un lado de un cuadro para poner una pared"></canvas>
+    <div class="hud hud-der">
+      <span class="chip" id="c-pts"></span>
+      <span class="chip" id="c-bot"></span>
+      <span class="chip" id="c-cuadros"></span>
+      <span class="chip" id="c-cadena"></span>
+    </div>
+    <div class="zoom">
+      <button class="b3d chico b-gris" id="z-mas" type="button" aria-label="Acercar"><span class="b-ico">＋</span></button>
+      <button class="b3d chico b-gris" id="z-menos" type="button" aria-label="Alejar"><span class="b-ico">－</span></button>
+      <button class="b3d chico b-gris" id="z-ajustar" type="button" aria-label="Ver toda la hoja"><span class="b-ico">⤢</span></button>
+    </div>
+    <div class="panel">
+      <div class="fila">
+        <button class="b3d chico txt b-gris" data-paso="-50" type="button">−50</button>
+        <button class="b3d chico txt b-gris" data-paso="-10" type="button">−10</button>
+        <button class="b3d chico txt b-gris" data-paso="-1" type="button">−1</button>
+        <span class="chip"><small>Sortear</small><b id="c-cant">20</b></span>
+        <button class="b3d chico txt b-gris" data-paso="1" type="button">+1</button>
+        <button class="b3d chico txt b-gris" data-paso="10" type="button">+10</button>
+        <button class="b3d chico txt b-gris" data-paso="50" type="button">+50</button>
+      </div>
+      <button class="b3d txt b-oro" id="b-sortear" type="button"><span class="b-ico">🎲</span> <span id="t-sortear">Sortear</span></button>
+    </div>
+    <div class="sobre-tablero" id="fin" hidden>
+      <div class="sobre-texto"><h2 id="fin-titulo"></h2><div id="fin-texto"></div></div>
+      <button class="b3d txt grande b-verde" id="fin-otra" type="button">Jugar de nuevo</button>
+      <div class="sobre-fila"><button class="b3d txt b-gris" id="fin-menu" type="button">Menú principal</button></div>
+    </div>
+  </section>
+
+  <div id="aviso" role="status" hidden></div>
+
+  <script type="module" src="juego-polocubos.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
