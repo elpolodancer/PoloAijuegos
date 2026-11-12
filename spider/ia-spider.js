@@ -104,18 +104,19 @@ export function comprobar(e0, solucion) {
   }
   return ganada(e);
 }
-// Ajustes medidos por dificultad (ver verificar-spider.mjs): 1-2 palos resuelven casi siempre; 3 a medias; 4 solo algunos repartos
-export const AJUSTES = { 1: {}, 2: {}, 3: { ancho: 14, reinicios: 10 }, 4: { ancho: 3, reinicios: 60 }, 5: { ancho: 3, reinicios: 60 } };
-// Reparto (dificultad, semilla) con solución comprobada, o { resuelto:false } si el presupuesto no alcanzó
-export function verificar(dif, semilla, opciones) {
-  const e = nuevaPartida(dif, semilla), r = resolver(e, { ...(AJUSTES[dif] || {}), ...opciones });
-  return { dif, semilla, ...r, resuelto: r.resuelto && comprobar(e, r.solucion) };
+// Ajustes medidos por CANTIDAD DE PALOS (ver verificar-spider.mjs): 1 palo resuelve ~93 %, 2 palos ~78 %, 3 palos ~25 %, 4 palos casi nunca
+export const AJUSTES = { 1: {}, 2: {}, 3: { ancho: 14, reinicios: 10 }, 4: { ancho: 3, reinicios: 60 } };
+// Reparto (palos, semilla) con solución comprobada, o { resuelto:false } si el presupuesto no alcanzó.
+// «nodos» = lo que le costó al bot: sirve de medida de dificultad del reparto (más nodos = más difícil).
+export function verificar(palos, semilla, opciones) {
+  const e = nuevaPartida(palos, semilla), r = resolver(e, { ...(AJUSTES[palos] || {}), ...opciones });
+  return { palos, semilla, ...r, resuelto: r.resuelto && comprobar(e, r.solucion) };
 }
 // Prueba semillas consecutivas hasta hallar un reparto con solución. Devuelve { semilla, estado, nodos } o null
-export function generarVerificada(dif, semilla, { intentos = 5, ...opciones } = {}) {
+export function generarVerificada(palos, semilla, { intentos = 5, ...opciones } = {}) {
   for (let i = 0; i < intentos; i++) {
-    const r = verificar(dif, semilla + i, opciones);
-    if (r.resuelto) return { semilla: semilla + i, estado: nuevaPartida(dif, semilla + i), nodos: r.nodos, solucion: r.solucion };
+    const r = verificar(palos, semilla + i, opciones);
+    if (r.resuelto) return { semilla: semilla + i, estado: nuevaPartida(palos, semilla + i), nodos: r.nodos, solucion: r.solucion };
   }
   return null;
 }

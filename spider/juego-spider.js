@@ -1,15 +1,17 @@
 // Ruta: spider/juego-spider.js
 // Solitario Spider: menú principal (♾️ Modo libre · 🎯 Niveles · 🗺️ Mapa), partida y mapa estándar de México/mundo.
 // Niveles: por ahora 5 (niveles-spider.js, dificultad Fácil); el mapa está montado con 10 por etapa y los que faltan salen bloqueados.
-import { DIFICULTADES, nuevaPartida, clonar, largoTramo, puedeMover, mover, puedeRepartir, repartir, ganada, jugadas, palo, rango, SERIES } from "./logica-spider.js";
+import { DIFICULTADES, PALOS, nuevaPartida, clonar, largoTramo, puedeMover, mover, puedeRepartir, repartir, ganada, jugadas, palo, rango, SERIES } from "./logica-spider.js";
 import { generarVerificada } from "./ia-spider.js";
 import { NIVELES } from "./niveles-spider.js";
+import { elegirDelBanco, cuantos } from "./banco-spider.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
 import { crearEtapas } from "../compartido/etapas-mapa.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
 
 const $ = (id) => document.getElementById(id);
-const CLAVE = "spider_progreso_v1"; // { niv:{max,hecho}, mejor:{"1":segundos…}, ganadas, t }
+const CLAVE = "spider_progreso_v1"; // { niv:{max,hecho}, mejor:{"palos-dif":segundos…}, opc:{palos,dif}, ganadas, t }
+const llave = (p, d) => p + "-" + d; // clave del mejor tiempo: un récord por cada combinación de palos y dificultad
 const SIMB = ["♠", "♥", "♣", "♦"], ROJO = [false, true, false, true];
 const NOMBRE_RANGO = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 
@@ -28,12 +30,13 @@ function fusionar(a, b) { // gana el mayor avance y el menor tiempo de cada difi
   const mejor = { ...(b.mejor || {}) };
   for (const k in a.mejor || {}) mejor[k] = mejor[k] ? Math.min(mejor[k], a.mejor[k]) : a.mejor[k];
   const na = a.niv || {}, nb = b.niv || {};
-  return { niv: { max: Math.max(na.max || 1, nb.max || 1), hecho: Math.max(na.hecho || 0, nb.hecho || 0) }, mejor, ganadas: Math.max(a.ganadas || 0, b.ganadas || 0), t: Math.max(a.t || 0, b.t || 0) };
+  const opc = (a.t || 0) >= (b.t || 0) ? a.opc || b.opc : b.opc || a.opc; // la última combinación elegida
+  return { niv: { max: Math.max(na.max || 1, nb.max || 1), hecho: Math.max(na.hecho || 0, nb.hecho || 0) }, mejor, opc, ganadas: Math.max(a.ganadas || 0, b.ganadas || 0), t: Math.max(a.t || 0, b.t || 0) };
 }
 import("../compartido/progreso.js").then((m) => { nube = m.conectar("spider", { clave: CLAVE, fusionar, alCambiar: (u) => { prog = { ...prog, ...u }; pintarMenu(); } }); }).catch(() => {});
 
 // ---------- Pantallas ----------
-let pantalla = "menu", dif = 1, e = null, historial = [], sel = null, fin = false, pausado = false;
+let pantalla = "menu", pal = 1, dif = 1, recientes = [], e = null, historial = [], sel = null, fin = false, pausado = false;
 let t0 = 0, acum = 0, verificada = false, nivel = 0; // nivel 0 = modo libre
 // Avisos visuales: alertaMal = recuadro rojo (tramo bloqueado); pista = movimiento sugerido {tipo:"mover",de,desde,a} o {tipo:"repartir"}
 const PISTA_MS = 15000; // segundos sin tocar nada antes de dar una pista
@@ -42,6 +45,7 @@ let ultimaAccion = Date.now(), alertaMal = null, pista = null;
 let vistos = new Set(); // posiciones por las que ya pasó la partida (para no sugerir volver a ellas)
 let colecc = [], mostradas = 0, fantasmas = [], animTimers = [], finAnim = 0, tb = tamBarra(34, 48, 0);
 const btnMenu = $("btn-menu");
+if (prog.opc) { pal = PALOS.includes(prog.opc.palos) ? prog.opc.palos : 1; dif = DIFICULTADES[prog.opc.dif - 1] ? prog.opc.dif : 1; }
 
 function mostrar(p) {
   pantalla = p;
@@ -58,18 +62,29 @@ function aviso(txt) {
 }
 
 // ---------- Menú ----------
+const SIMBOLOS_PALOS = ["♠", "♠♥", "♠♥♣", "♠♥♣♦"];
+function elegir(que, v) { if (que === "pal") pal = v; else dif = v; prog.opc = { palos: pal, dif }; guardar(); pintarMenu(); }
 function pintarMenu() {
+  const cp = $("palos"); cp.replaceChildren();
+  for (const p of PALOS) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "b3d txt b-gris" + (p === pal ? " on" : "");
+    b.innerHTML = "<span>" + p + (p === 1 ? " palo " : " palos ") + SIMBOLOS_PALOS[p - 1] + "</span>";
+    b.addEventListener("click", () => elegir("pal", p));
+    cp.appendChild(b);
+  }
   const caja = $("dificultades"); caja.replaceChildren();
   for (const d of DIFICULTADES) {
     const b = document.createElement("button");
     b.type = "button"; b.className = "b3d txt b-gris" + (d.id === dif ? " on" : "");
     b.innerHTML = '<span class="b-ico">' + d.ico + "</span> " + d.nombre;
-    b.addEventListener("click", () => { dif = d.id; pintarMenu(); });
+    b.addEventListener("click", () => elegir("dif", d.id));
     caja.appendChild(b);
   }
-  const d = DIFICULTADES[dif - 1];
-  $("desc-dif").textContent = d.palos + (d.palos === 1 ? " palo" : " palos") + (d.deshacer ? " · con deshacer" : " · SIN deshacer");
-  const m = prog.mejor[dif];
+  const d = DIFICULTADES[dif - 1], n = cuantos(pal, dif);
+  $("desc-dif").textContent = pal + (pal === 1 ? " palo" : " palos") + " · reparto " + d.nombre + (d.deshacer ? " · con deshacer" : " · SIN deshacer") +
+    (n ? " · " + n + " repartos con solución comprobada" : " · todavía sin repartos comprobados: se buscará uno al momento");
+  const m = prog.mejor[llave(pal, dif)];
   $("mejores").textContent = m ? "Mejor tiempo: " + formato(m) : "";
 }
 $("b-libre").addEventListener("click", () => empezar());
@@ -96,13 +111,21 @@ function empezar(n = 0) {
   nivel = n;
   if (n) { // nivel fijo: mismo reparto para todos, ya comprobado con el bot
     const N = NIVELES[n - 1];
-    verificada = true; e = nuevaPartida(N.dif, N.semilla);
+    verificada = true; e = nuevaPartida(N.palos, N.semilla, N.dif);
   } else {
-    const base = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
-    // El bot intenta hallar un reparto con solución comprobada (poco tiempo; si no, queda «al azar»)
-    const v = generarVerificada(dif, base, { intentos: dif <= 2 ? 4 : 3, maxMs: dif <= 2 ? 350 : 250, maxNodos: 60000 });
-    verificada = !!v;
-    e = v ? v.estado : nuevaPartida(dif, base);
+    // 1) Del banco: repartos que el bot YA resolvió, de la dificultad elegida (más nodos del bot = más difícil)
+    const r = elegirDelBanco(pal, dif, Math.random, recientes);
+    if (r) {
+      verificada = true; e = nuevaPartida(pal, r.semilla, dif);
+      recientes.push(r.semilla); if (recientes.length > 12) recientes.shift();
+      if (r.dif !== dif) setTimeout(() => aviso("Pocos repartos de esa dificultad con " + pal + (pal === 1 ? " palo" : " palos") + ": toca uno " + DIFICULTADES[r.dif - 1].nombre), 300);
+    } else {
+      // 2) Sin banco para esa combinación: el bot busca uno al momento (poco tiempo; si no halla, queda «al azar»)
+      const base = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
+      const v = generarVerificada(pal, base, { intentos: pal <= 2 ? 4 : 3, maxMs: pal <= 2 ? 350 : 250, maxNodos: 60000 });
+      verificada = !!v;
+      e = nuevaPartida(pal, v ? v.semilla : base, dif);
+    }
   }
   historial = []; sel = null; fin = false; pausado = false; t0 = 0; acum = 0;
   alertaMal = null; pista = null; ultimaAccion = Date.now();
@@ -125,7 +148,8 @@ function terminar() {
     prog.niv.max = Math.min(NIVELES.length, Math.max(prog.niv.max, nivel + 1));
   } else {
     prog.ganadas++;
-    if (!prog.mejor[e.dif] || s < prog.mejor[e.dif]) prog.mejor[e.dif] = s;
+    const k = llave(e.palos, e.dif);
+    if (!prog.mejor[k] || s < prog.mejor[k]) prog.mejor[k] = s;
   }
   guardar();
   const f = document.createElement("div");

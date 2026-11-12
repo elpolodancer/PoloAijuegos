@@ -2,17 +2,21 @@
 // Lógica pura del Solitario Spider (sin DOM, sin Firebase): la usan el juego (juego-spider.js) y el bot (ia-spider.js).
 // Carta = número 0..51 → palo = floor(c/13), rango = c%13 (0 = A … 12 = K). Se juega con 104 cartas (8 series de 13).
 // Estado e = { cols:[10 listas, la última carta es la de arriba], ocultas:[cuántas cartas boca abajo tiene cada columna (las de abajo)],
-//              reparto:[50 cartas del mazo], rep:(repartos hechos 0..5), hechos:(series K..A quitadas 0..8), movs, palos, dif, semilla }
+//              reparto:[50 cartas del mazo], rep:(repartos hechos 0..5), hechos:(series K..A quitadas 0..8), movs, palos (1..4), dif (1..5), semilla }
+// PALOS y DIFICULTAD son cosas distintas: el reparto depende solo de (palos, semilla); la dificultad dice qué tan complicado es el reparto
+// (lo mide el bot: banco-spider.js) y si hay deshacer.
 
 export const NUM_COL = 10, SERIES = 8;
-// 5 dificultades. 3 palos = series 3+3+2 (8 no se divide entre 3). Maestro = como Experto pero sin deshacer.
+// 5 dificultades (con cualquier cantidad de palos). Maestro = el reparto más difícil y sin deshacer.
 export const DIFICULTADES = [
-  { id: 1, nombre: "Fácil", ico: "🟢", palos: 1, deshacer: true },
-  { id: 2, nombre: "Normal", ico: "🔵", palos: 2, deshacer: true },
-  { id: 3, nombre: "Difícil", ico: "🟣", palos: 3, deshacer: true },
-  { id: 4, nombre: "Experto", ico: "🟠", palos: 4, deshacer: true },
-  { id: 5, nombre: "Maestro", ico: "🔴", palos: 4, deshacer: false },
+  { id: 1, nombre: "Fácil", ico: "🟢", deshacer: true },
+  { id: 2, nombre: "Normal", ico: "🔵", deshacer: true },
+  { id: 3, nombre: "Difícil", ico: "🟣", deshacer: true },
+  { id: 4, nombre: "Experto", ico: "🟠", deshacer: true },
+  { id: 5, nombre: "Maestro", ico: "🔴", deshacer: false },
 ];
+// Cantidad de palos de la baraja: 1 (solo ♠), 2 (♠♥), 3 (♠♥♣; series 3+3+2, porque 8 no se divide entre 3) o 4
+export const PALOS = [1, 2, 3, 4];
 export const palo = (c) => (c / 13) | 0;
 export const rango = (c) => c % 13;
 
@@ -22,15 +26,18 @@ export function aleatorio(semilla) {
   return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 
-export function nuevaPartida(dif, semilla) {
+// El mismo (palos, semilla) da SIEMPRE el mismo reparto, sea cual sea la dificultad. (Antes era nuevaPartida(dif, semilla) con dif = palos:
+// para 1 a 4 da exactamente los mismos repartos, así que los niveles ya publicados no cambian.)
+export function nuevaPartida(palos, semilla, dif = 1) {
+  palos = Math.min(4, Math.max(1, Math.floor(palos) || 1));
   const d = DIFICULTADES[dif - 1] || DIFICULTADES[0];
   const mazo = [];
-  for (let k = 0; k < SERIES; k++) for (let r = 0; r < 13; r++) mazo.push((k % d.palos) * 13 + r);
+  for (let k = 0; k < SERIES; k++) for (let r = 0; r < 13; r++) mazo.push((k % palos) * 13 + r);
   const rnd = aleatorio(semilla);
   for (let i = mazo.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [mazo[i], mazo[j]] = [mazo[j], mazo[i]]; }
   const cols = Array.from({ length: NUM_COL }, () => []);
   for (let i = 0; i < 54; i++) cols[i % NUM_COL].push(mazo[i]);
-  return { cols, ocultas: cols.map((c) => c.length - 1), reparto: mazo.slice(54), rep: 0, hechos: 0, movs: 0, palos: d.palos, dif: d.id, semilla };
+  return { cols, ocultas: cols.map((c) => c.length - 1), reparto: mazo.slice(54), rep: 0, hechos: 0, movs: 0, palos, dif: d.id, semilla };
 }
 
 export const clonar = (e) => ({ ...e, cols: e.cols.map((c) => c.slice()), ocultas: e.ocultas.slice() });
