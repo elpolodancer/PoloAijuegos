@@ -217,7 +217,7 @@ function empezar(d) {
   clearTimeout(tBot);
   dif = d;
   // Los puntos elegidos se colocan solos como cuadros cerrados (2 puntos por cuadro) y cada jugador se queda con puntosJugar.
-  // En hojas chicas se limita para no llenarlas desde el principio. No van del todo al azar: se arman «peines» con pasillos de
+  // En hojas chicas se limita para no llenarlas desde el principio. Van al azar (95 % o más); solo un 5 % o menos se arma en «peines» con pasillos de
   // cuadros a una pared de cerrarse (patrones-polocubos.js), y un bot de backtracking comprueba que se puedan juntar los 50 cubos para poder sortear.
   const inicial = Math.min(Math.floor(op.pi / AJUSTES.costoSorteo), Math.floor(d.n * d.n * AJUSTES.maxInicial));
   const g = generarInicio(d.n, inicial, { lineas: AJUSTES.puntosJugar });

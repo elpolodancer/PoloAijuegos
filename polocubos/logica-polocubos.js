@@ -20,6 +20,7 @@ export const AJUSTES = {
   premioCuadro: 2,   // puntos que da cerrar un cuadro poniendo 2 o más paredes tuyas (con 3 o 4 paredes tuyas también son 2: te cuesta más de lo que paga)
   cubosPorLinea: 5,  // si te quedas sin líneas, cada 5 cubos aleatorios se cambian solos por 1 línea
   cubosPorUnaPared: 1, // cerrar un cuadro poniendo UNA sola pared: ganas 1 «cubo aleatorio» (se coloca con el botón Sortear) y recuperas esa pared
+  maxPatron: 0.05,     // fracción MÁXIMA de los cuadros iniciales que van en patrones (peines); el resto (95 % o más) se sortea 100 % al azar
   deshacerGratis: 10,  // jugadas que se pueden deshacer gratis en cada partida (nivel)
   boostDeshacer: 10,   // cuántos deshacer da un boost
   costoBoost: 30,      // monedas que cuesta un boost
