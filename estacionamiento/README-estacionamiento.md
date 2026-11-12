@@ -174,3 +174,10 @@ Hoy el juego abre directo en el mapa de México y ahí solo hay **▶ Continuar 
 - **Por decidir (propuesta entre paréntesis):** ¿qué tamaños se ofrecen (los que ya abriste por el mapa, o todos)? ¿da monedas y puntos? (propuesta: **no**, como el modo libre de Deslizante, para que no se puedan repetir sin límite). ¿se guarda algo? (propuesta: mejor marca y cantidad de tableros resueltos por tamaño).
 - **Menú ☰ en el modo libre:** «Pausa» con Continuar / Reiniciar tablero / «Salir al mapa».
 - Los boosts (quitar auto, paquete ×3, bomba) siguen funcionando con las monedas que ya tiene el jugador.
+
+## 13. Autos con pared inferior y fin de nivel sobre el tablero
+
+- **Autos con volumen.** Cada auto se dibuja con su techo y, debajo, **solo la pared que mira hacia abajo en la pantalla** (`dibujarPared` en `juego-estacionamiento.js`): si el auto apunta a la derecha o a la izquierda se ve su **costado** (ventanas y llantas, con el frente hacia donde apunta); si apunta hacia abajo, su **frente** (parabrisas, faros, parrilla); si apunta hacia arriba, su **parte de atrás** (luneta, luces, placa). Los autobuses (largo 3) llevan 4 ventanas y 3 llantas. En las curvas de la vía la pared sigue al auto con cualquier ángulo. Las proporciones están en `ALTO_PARED` y `SUBE_TECHO`. Con casillas chicas (menos de 14 px) la pared va lisa y de lejos es una franja oscura; el detalle completo solo se dibuja al acercar.
+- **Orden de dibujo.** Los autos visibles se ordenan por su borde de abajo (`dibujar()`): el de más abajo tapa la pared del de arriba. Los toques siguen usando la casilla del suelo.
+- **Fin de nivel.** La ventana de victoria usa el estándar `.sobre-tablero` (ver `ESTANDARES-juegos.md`, sección 6): «Siguiente nivel ▶» aparece **encima del cuadro del tablero** (`colocarVictoria()`), sin velo oscuro, y sigue al tablero si se mueve o acerca la vista.
+

@@ -63,9 +63,7 @@
     #msg { position: fixed; z-index: 6; left: 50%; top: calc(158px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); width: max-content; max-width: 92vw; padding: 6px 14px; text-align: center; color: #f1f2f4; background: rgba(10,10,12,.82); border: 1px solid var(--borde); border-radius: 16px; font-size: .9rem; pointer-events: none; opacity: 0; transition: opacity .2s; }
     #msg.ver { opacity: 1; }
 
-    #victoria { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; text-align: center; color: #f1f2f4; background: rgba(10,10,12,.82); }
-    #victoria[hidden] { display: none; }
-    #victoria h2 { margin: 0; font-size: 1.6rem; }
+    /* Fin de nivel: estándar «sobre el tablero» (.sobre-tablero en compartido/inmersivo.css); juego-estacionamiento.js lo coloca encima del tablero */
     @media (max-aspect-ratio: 1/1) { #msg { top: calc(220px + env(safe-area-inset-top, 0px)); } }
     @media (prefers-reduced-motion: reduce) { #msg { transition: none; } }
   </style>
@@ -96,12 +94,16 @@
   </div>
   <div class="hud hud-abajo" id="boosts"></div>
 
-  <div id="victoria" hidden>
-    <h2 id="vtitulo">¡Nivel completado!</h2>
-    <div id="vtexto"></div>
-    <button class="b3d txt b-verde" id="siguiente" type="button">Siguiente nivel ▶</button>
-    <button class="b3d txt b-gris" id="repetir" type="button">Repetir nivel</button>
-    <button class="b3d txt b-azul" id="al-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+  <div id="victoria" class="sobre-tablero" hidden>
+    <div class="sobre-texto">
+      <h2 id="vtitulo">¡Nivel completado!</h2>
+      <div id="vtexto"></div>
+    </div>
+    <button class="b3d txt grande b-verde" id="siguiente" type="button">Siguiente nivel ▶</button>
+    <div class="sobre-fila">
+      <button class="b3d txt b-gris" id="repetir" type="button">Repetir nivel</button>
+      <button class="b3d txt b-azul" id="al-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+    </div>
   </div>
 
   <script type="module" src="juego-estacionamiento.js"></script>

@@ -16,6 +16,7 @@ const CELL = 32;                    // lado de una casilla en píxeles con zoom 
 // ≥6 px = cuerpo, techo y flecha; menos (tableros enormes de lejos) = solo un rectángulo de color, que no se nota y cuesta mucho menos.
 const PX_DETALLE = 14, PX_MEDIO = 6;
 const VEL = 16;                     // casillas por segundo al salir
+const ALTO_PARED = 0.26, SUBE_TECHO = 0.05; // pared inferior visible de cada auto y cuánto sube el techo respecto a su casilla (en casillas)
 const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0]; // 0 arriba, 1 derecha, 2 abajo, 3 izquierda
 const ID_JUEGO = "estacionamiento";
 const CLAVE = "estacionamiento-progreso";
@@ -488,7 +489,65 @@ function dibujarSuelo() {
   }
 }
 
-// Vehículo visto desde arriba: grosor oscuro abajo, cuerpo de color, techo claro, parabrisas al frente y flecha blanca en el techo.
+// Pared inferior de un auto. La vista es desde arriba, un poco inclinada hacia el jugador: del auto se ve el techo y SOLO la pared que mira hacia
+// abajo en la pantalla. Si el auto apunta a la derecha o a la izquierda esa pared es su costado (ventanas y llantas, con el frente hacia donde apunta);
+// si apunta hacia abajo es su frente (parabrisas, faros, parrilla) y si apunta hacia arriba es su parte de atrás (luneta, luces, placa).
+// c = el auto (largo 2 = coche, 3 = autobús); (sx, sy) = centro del techo en pantalla; (dx, dy) = hacia dónde mira el auto; L × W = largo y ancho del techo en píxeles.
+function dibujarPared(c, sx, sy, dx, dy, L, W, u, det, col) {
+  const H = ALTO_PARED * u, ang = Math.atan2(dy, dx);
+  // 1) Silueta: el contorno del techo repetido hacia abajo, sin huecos y con cualquier ángulo (los autos giran en las curvas de la vía)
+  ctx.fillStyle = col(0.74, 72);
+  for (let k = 1; k <= 4; k++) {
+    ctx.save();
+    ctx.translate(sx, sy + (H * k) / 4); ctx.rotate(ang);
+    rr(-L / 2, -W / 2, L, W, 0.22 * u);
+    ctx.fill();
+    ctx.restore();
+  }
+  if (det < 2) return; // con casillas chicas no hay espacio para detalles
+  // 2) Detalles: cada cara del auto que mira hacia abajo en la pantalla (a lo más dos, en las curvas)
+  const hl = L / 2, hw = W / 2, nx = -dy, ny = dx; // (nx, ny) = lado derecho del auto
+  const caras = [
+    { v: dy, cx: sx + dx * hl, cy: sy + dy * hl, tx: -dy, ty: dx, w: W, tipo: "frente" },
+    { v: -dy, cx: sx - dx * hl, cy: sy - dy * hl, tx: -dy, ty: dx, w: W, tipo: "atras" },
+    { v: ny, cx: sx + nx * hw, cy: sy + ny * hw, tx: dx, ty: dy, w: L, tipo: "lado" },
+    { v: -ny, cx: sx - nx * hw, cy: sy - ny * hw, tx: dx, ty: dy, w: L, tipo: "lado" },
+  ].filter((f) => f.v > 0.3).sort((a, b) => a.v - b.v);
+  const cuadro = (a, b, w, h, r, color) => { rr(a, b, w, h, r); ctx.fillStyle = color; ctx.fill(); };
+  for (const f of caras) {
+    let { tx, ty } = f;
+    if (tx < 0) { tx = -tx; ty = -ty; } // la cara se dibuja de izquierda a derecha en pantalla
+    ctx.save();
+    // Sistema de la cara: a = a lo largo de su borde, b = hacia abajo desde el borde del techo (0 = techo, H = suelo)
+    ctx.transform(tx, ty, 0, 1, f.cx - (tx * f.w) / 2, f.cy - (ty * f.w) / 2);
+    const w = f.w;
+    const llanta = (a, b, r) => { ctx.beginPath(); ctx.arc(a, b, r, 0, Math.PI * 2); ctx.fillStyle = "#1d1f26"; ctx.fill();
+      ctx.beginPath(); ctx.arc(a, b, r * 0.45, 0, Math.PI * 2); ctx.fillStyle = "#9aa0ad"; ctx.fill(); };
+    if (f.tipo === "lado") {
+      if (dx * tx + dy * ty < 0) { ctx.translate(w, 0); ctx.scale(-1, 1); } // el frente queda a la derecha; si no, se voltea
+      const nv = c.len >= 3 ? 4 : 2, x0 = 0.28 * u, x1 = w - 0.3 * u, g = 0.05 * u, vw = (x1 - x0 - g * (nv - 1)) / nv;
+      for (let i = 0; i < nv; i++) cuadro(x0 + i * (vw + g), 0.06 * H, vw, 0.36 * H, 0.04 * u, "rgba(222,242,255,.96)");
+            llanta(0.42 * u, 0.66 * H, 0.08 * u);
+      llanta(w - 0.42 * u, 0.66 * H, 0.08 * u);
+      if (c.len >= 3) llanta(w / 2, 0.66 * H, 0.08 * u);
+      cuadro(w - 0.07 * u, 0.5 * H, 0.07 * u, 0.25 * H, 0.02 * u, "#fff3a0"); // faro
+      cuadro(0, 0.5 * H, 0.06 * u, 0.25 * H, 0.02 * u, "#ff4d4d");             // luz trasera
+    } else {
+      const frente = f.tipo === "frente";
+      cuadro(0.1 * u, 0.06 * H, w - 0.2 * u, 0.38 * H, 0.05 * u, frente ? "rgba(222,242,255,.97)" : "rgba(40,60,95,.8)"); // parabrisas / luneta
+      const luz = frente ? "#fff3a0" : "#ff4d4d";
+      cuadro(0.12 * u, 0.52 * H, 0.16 * u, 0.28 * H, 0.04 * u, luz);
+      cuadro(w - 0.12 * u - 0.16 * u, 0.52 * H, 0.16 * u, 0.28 * H, 0.04 * u, luz);
+      if (frente) cuadro(0.34 * u, 0.56 * H, w - 0.68 * u, 0.24 * H, 0.03 * u, "#262a33"); // parrilla
+      else cuadro(w / 2 - 0.1 * u, 0.56 * H, 0.2 * u, 0.24 * H, 0.02 * u, "#f4f4f4");      // placa
+      cuadro(0.01 * u, 0.5 * H, 0.08 * u, 0.48 * H, 0.02 * u, "#1d1f26");                  // llantas
+      cuadro(w - 0.09 * u, 0.5 * H, 0.08 * u, 0.48 * H, 0.02 * u, "#1d1f26");
+    }
+    ctx.restore();
+  }
+}
+
+// Vehículo visto desde arriba: pared inferior (ver arriba), cuerpo de color, techo claro, parabrisas al frente y flecha blanca en el techo.
 // (cx, cy) = centro en casillas; (dx, dy) = hacia dónde mira (unitario); los autos largos (3) se ven como autobuses.
 function dibujarAuto(c, pose) {
   const { cx, cy, dx, dy, alfa } = pose || poseDe(c);
@@ -500,9 +559,16 @@ function dibujarAuto(c, pose) {
   const col = (f, sat) => "hsl(" + c.tono + "," + (sat || 76) + "%," + Math.min(93, c.luz * f).toFixed(1) + "%)";
   ctx.globalAlpha = alfa;
 
-  if (det === 0) { // de lejos: un rectángulo de color
+  const ty = sy - SUBE_TECHO * u; // el techo sube un poco; debajo de él queda la pared
+
+  if (det === 0) { // de lejos: un rectángulo de color con su pared (más oscura) debajo
     ctx.save();
-    ctx.translate(sx, sy); ctx.rotate(ang);
+    ctx.translate(sx, ty + ALTO_PARED * u * 0.7); ctx.rotate(ang);
+    ctx.fillStyle = col(0.6, 70);
+    ctx.fillRect(-L / 2, -W / 2, L, W);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(sx, ty); ctx.rotate(ang);
     ctx.fillStyle = col(1);
     ctx.fillRect(-L / 2, -W / 2, L, W);
     ctx.restore();
@@ -510,16 +576,11 @@ function dibujarAuto(c, pose) {
     return;
   }
 
-  // Grosor: la misma silueta más oscura, un poco más abajo en la pantalla (no gira con el auto)
-  ctx.save();
-  ctx.translate(sx, sy + 0.09 * u); ctx.rotate(ang);
-  rr(-L / 2, -W / 2, L, W, 0.22 * u);
-  ctx.fillStyle = col(0.55, 70);
-  ctx.fill();
-  ctx.restore();
+  // Pared inferior (la que mira hacia la pantalla): según hacia dónde mire el auto es su costado, su frente o su parte de atrás
+  dibujarPared(c, sx, ty, dx, dy, L, W, u, det, col);
 
   ctx.save();
-  ctx.translate(sx, sy); ctx.rotate(ang);
+  ctx.translate(sx, ty); ctx.rotate(ang);
   // Cuerpo
   rr(-L / 2, -W / 2, L, W, 0.22 * u);
   ctx.fillStyle = col(1);
@@ -576,13 +637,16 @@ function dibujar() {
   dibujarSuelo();
   const u = CELL * cam.s;
   // Solo se dibujan los autos que caen dentro de la pantalla (con margen por su largo): al acercar un tablero de 50×50 son pocos
+  const vis = [];
   for (const c of autos) {
     if (c.estado === 2) continue;
     const p = poseDe(c);
     const sx = cam.ox + p.cx * u, sy = cam.oy + p.cy * u, mg = (c.len + 1.5) * u;
     if (sx < -mg || sx > cw + mg || sy < -mg || sy > ch + mg) continue;
-    dibujarAuto(c, p);
+    vis.push({ c, p, k: p.cy + (Math.abs(p.dy) * (c.len - 0.14) + Math.abs(p.dx) * 0.8) / 2 }); // k = borde de abajo del auto
   }
+  vis.sort((a, b) => a.k - b.k); // los de más arriba primero: el de abajo tapa la pared del de arriba
+  for (const v of vis) dibujarAuto(v.c, v.p);
   if (modoBomba && zonaBomba) { // vista previa de la zona que borrará la bomba
     const [a, b] = P(zonaBomba.x, zonaBomba.y), [e, f] = P(zonaBomba.x + LADO_BOMBA, zonaBomba.y + LADO_BOMBA);
     rr(a, b, e - a, f - b, 0.2 * u);
@@ -627,6 +691,22 @@ function actualizar(dt) {
   if (movs !== ultMovs) { ultMovs = movs; const em = $("movs"); if (em) em.textContent = movs; }
 }
 
+// Fin de nivel «sobre el tablero» (estándar en compartido/inmersivo.css, clase .sobre-tablero): la ventana con «Siguiente nivel ▶» se coloca
+// encima del cuadro del tablero, recortado a la ventana; si casi no se ve (muy acercado o movido), ocupa toda la ventana. Sigue al tablero si se mueve la vista.
+let ultColoc = "";
+function colocarVictoria() {
+  const v = $("victoria");
+  if (v.hidden) { ultColoc = ""; return; }
+  const r = cv.getBoundingClientRect(), [x0, y0] = P(0, 0), [x1, y1] = P(N, N);
+  let a = Math.max(0, x0), b = Math.max(0, y0), c = Math.min(cw, x1), d = Math.min(ch, y1);
+  if (c - a < 200 || d - b < 200) { a = 0; b = 0; c = cw; d = ch; }
+  const css = [r.left + a, r.top + b, c - a, d - b].map((n) => Math.round(n) + "px").join(" ");
+  if (css === ultColoc) return;
+  ultColoc = css;
+  const m = css.split(" ");
+  v.style.left = m[0]; v.style.top = m[1]; v.style.width = m[2]; v.style.height = m[3];
+}
+
 function victoria() {
   ganado = true;
   let txt = "Lo lograste en " + movs + " movimientos.";
@@ -654,6 +734,7 @@ function victoria() {
   $("vtexto").textContent = txt + (pts ? " +" + pts + " puntos" : "");
   $("siguiente").hidden = ultimo;
   $("victoria").hidden = false;
+  colocarVictoria();
 }
 
 let tMsg = 0;
@@ -826,6 +907,7 @@ function bucle(ahora) {
   const dt = Math.min(0.05, (ahora - ultimo) / 1000);
   ultimo = ahora;
   actualizar(dt);
+  colocarVictoria(); // si la ventana de fin de nivel está abierta, sigue al tablero
   if (mapa.abierto()) firmaPrev = ""; // con el mapa encima no se dibuja; al cerrarlo se redibuja
   else {
     // El tablero solo se redibuja si cambió la vista (cámara, tamaño, bomba, autos que quedan, nivel nuevo) o si algo se está moviendo.

@@ -147,3 +147,24 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
 .pausa-opciones .b3d > span { position: relative; }
 .pausa-opciones .b3d > .b-ico { margin-right: 8px; }
 .pausa-ayuda { display: block; margin: -4px 0 2px; color: #b0b4bd; font-size: .75rem; line-height: 1.25; }
+
+/* ----- Fin de nivel «sobre el tablero»: ESTÁNDAR de todos los juegos con niveles -----
+   Al terminar un nivel, «Siguiente nivel ▶» (y las demás opciones: repetir, mapa…) aparecen ENCIMA DEL CUADRO DEL TABLERO, centradas en él.
+   No van abajo, ni arriba, ni en una ventana que tape toda la pantalla, ni con velo oscuro: el tablero se sigue viendo y moviendo.
+   El juego pone la clase .sobre-tablero a su ventana de victoria y le da left/top/width/height (en px) = rectángulo del tablero en pantalla,
+   recortado a la ventana (si el tablero casi no se ve, toda la ventana). Sin esos valores cubre la ventana entera y centra.
+   La caja no recibe toques (pointer-events: none): solo el texto y los botones, así el tablero de abajo sigue respondiendo.
+   Estructura:  <div class="sobre-tablero" hidden>
+                  <div class="sobre-texto"><h2>¡Nivel 7 completado!</h2><div>Lo lograste en 12 movimientos.</div></div>
+                  <button class="b3d txt grande b-verde">Siguiente nivel ▶</button>          ← siempre el primero y el más grande
+                  <div class="sobre-fila"> <button class="b3d txt b-gris">Repetir nivel</button> … </div>
+                </div> */
+.sobre-tablero { position: fixed; z-index: 7; left: 0; top: 0; width: 100%; height: 100%; box-sizing: border-box; padding: 10px; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; color: #f1f2f4; pointer-events: none; }
+.sobre-tablero[hidden] { display: none; }
+.sobre-tablero > * { pointer-events: auto; }
+.sobre-tablero .b3d { margin-bottom: 5px; }
+.sobre-texto { max-width: 100%; padding: 8px 16px 10px; background: rgba(10, 10, 12, .8); border: 2px solid #121316; border-radius: 16px;
+  box-shadow: 0 4px 0 #0c0d0f, 0 8px 16px rgba(0, 0, 0, .4); }
+.sobre-texto h2 { margin: 0 0 2px; font-size: 1.4rem; text-shadow: 0 2px 0 rgba(0, 0, 0, .5); }
+.sobre-fila { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }

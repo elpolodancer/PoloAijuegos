@@ -80,3 +80,13 @@ El juego solo indica cuántos niveles tiene cada etapa (`porEtapa`), el progreso
 
 ## 5. Para registrar un juego nuevo o cambiado
 Anotarlo en `juegos.js`, en `JUEGOS` de `sw.js`, subir `VERSION`, y agregar su fila y nota «Estado» al README principal.
+
+## 6. Fin de nivel: «Siguiente nivel ▶» sobre el tablero
+
+En todos los juegos con niveles, al terminar un nivel el botón **Siguiente nivel ▶** aparece **encima del cuadro del tablero**, centrado en él. No va abajo, ni arriba, ni en otra parte de la pantalla, ni en una ventana que tape todo con un velo oscuro.
+
+- Es el **primer botón** de la ventana y el más grande (`b3d txt grande b-verde`). Debajo van, más chicos y en una fila, las demás opciones (Repetir nivel, Mapa…). Arriba, el título y el resultado dentro de un recuadro oscuro (`.sobre-texto`) para que se lea sobre cualquier tablero.
+- Estilos en `compartido/inmersivo.css` (clase `.sobre-tablero`, con la estructura de ejemplo en el comentario). La ventana **no bloquea** el tablero (`pointer-events: none`; solo el texto y los botones reciben toques).
+- El juego pone la ventana encima del tablero asignando `left`, `top`, `width` y `height` (px) = rectángulo del tablero en pantalla, recortado a la ventana; si el tablero casi no se ve (muy acercado o muy movido), toda la ventana. Si el jugador mueve o acerca la vista con la ventana abierta, el juego la recoloca. Ejemplo: `colocarVictoria()` en `estacionamiento/juego-estacionamiento.js`.
+- En el último nivel del juego el botón «Siguiente» se oculta.
+
