@@ -16,10 +16,11 @@
     .zona { position: fixed; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: calc(58px + env(safe-area-inset-top, 0px)) 12px calc(64px + env(safe-area-inset-bottom, 0px)); }
     .zona > section { width: 100%; max-width: 480px; margin: 0 auto; }
 
-    /* ----- Inicio ----- */
-    #menu { display: flex; flex-direction: column; gap: 14px; align-items: center; justify-content: center; min-height: calc(100dvh - 130px); }
-    #menuInfo { margin: 0 0 4px; text-align: center; font-weight: 700; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
-    #menu .b3d { width: 100%; max-width: 340px; --t: 56px; height: 56px; font-size: 17px; }
+    /* ----- Menú principal y modo libre ----- */
+    #inicio, #menu { display: flex; flex-direction: column; gap: 14px; align-items: center; justify-content: center; min-height: calc(100dvh - 130px); }
+    #inicioInfo, #menuInfo { margin: 0 0 4px; text-align: center; font-weight: 700; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    #inicio .b3d, #menu .b3d { width: 100%; max-width: 340px; --t: 56px; height: 56px; font-size: 17px; }
+    #menu h2, #niveles h2 { margin: 0; text-align: center; font-size: 1.3rem; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
     #dificultades { display: flex; flex-direction: column; gap: 14px; align-items: center; width: 100%; }
 
     /* ----- Lista de niveles de una dificultad ----- */
@@ -34,11 +35,49 @@
     .nv.bloq { --c1: #5b5f68; --c2: #3d4048; --c3: #26282d; opacity: .55; cursor: default; box-shadow: 0 4px 0 var(--c3); }
     .nv:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 
+    /* ----- Niveles de la campaña ----- */
+    #niveles { padding-bottom: 8px; }
+    .cab-niv { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 6px; margin-bottom: 4px; }
+    .cab-niv .b3d { --t: 40px; margin: 0; }
+    #nivSub, #mapaInfo { margin: 0 0 12px; text-align: center; font-size: .85rem; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
+    #leyenda { display: flex; justify-content: center; gap: 14px; margin: 0 0 12px; font-size: .8rem; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
+    #leyenda i { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 50%; vertical-align: -1px; }
+    .t-facil::after, .t-medio::after, .t-dificil::after { content: ""; position: absolute; left: 50%; bottom: 5px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; border: 1.5px solid rgba(0,0,0,.35); }
+    .t-facil::after, #leyenda .t-facil { background: #5be06a; }
+    .t-medio::after, #leyenda .t-medio { background: #4aa8ff; }
+    .t-dificil::after, #leyenda .t-dificil { background: #ff5a4a; }
+    #leyenda i { border: 1.5px solid rgba(0,0,0,.35); }
+
+    /* ----- Mapa ----- */
+    #mapa { max-width: 640px !important; }
+    .cab-mapa { display: flex; justify-content: center; gap: 10px; margin-bottom: 10px; }
+    .cab-mapa .b3d { --t: 40px; margin: 0; }
+    #mapaLienzo svg { display: block; width: 100%; height: auto; background: #fff; border-radius: 14px; box-shadow: 0 4px 0 rgba(0,0,0,.25), 0 8px 18px rgba(0,0,0,.25); }
+    #mapaLienzo .sel { cursor: pointer; }
+    #mapaLienzo [role="button"]:focus-visible { outline: 2px solid #1c3a82; outline-offset: 2px; }
+    #mapaLienzo .pulso { transform-box: fill-box; transform-origin: center; animation: pulso 1.8s ease-out infinite; }
+    #mapaLienzo .ola { animation: ola 4s linear infinite; }
+    @keyframes pulso { from { transform: scale(1); opacity: .9; } to { transform: scale(2.4); opacity: 0; } }
+    @keyframes ola { to { transform: translateX(-140px); } }
+    @media (prefers-reduced-motion: reduce) { #mapaLienzo .pulso, #mapaLienzo .ola { animation: none; } }
+    #mapaFichas { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; margin: 14px 0 8px; }
+    .ficha { --c1: #d5d9e0; --c2: #8b93a0; --c3: #4f5662; padding: 8px 6px; font: inherit; font-size: .82rem; font-weight: 800; color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.4); cursor: pointer; text-align: center;
+      background: linear-gradient(180deg, var(--c1) 0%, var(--c2) 60%, var(--c3) 150%); border: 2px solid var(--c3); border-radius: 11px; box-shadow: 0 3px 0 var(--c3); touch-action: manipulation; }
+    .ficha:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--c3); }
+    .ficha.hecho { --c1: #b6f7a6; --c2: #3fcf4a; --c3: #1d7f2a; }
+    .ficha.actual { --c1: #fff08c; --c2: #ffb020; --c3: #a85d00; box-shadow: 0 3px 0 var(--c3), 0 0 0 2px #fff; }
+    .ficha:disabled { --c1: #5b5f68; --c2: #3d4048; --c3: #26282d; opacity: .55; cursor: default; }
+    .ficha:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+
     /* ----- Partida ----- */
     #partida { position: fixed; inset: 0; }
     #cab { position: absolute; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); text-align: center; line-height: 1.1; pointer-events: none; }
     #tag { display: inline-block; padding: 2px 12px; font-size: 11px; font-weight: 800; letter-spacing: .04em; color: #fff; background: #8d9298; border-radius: 999px; white-space: nowrap; }
     #titulo { display: block; margin-top: 2px; font-size: 20px; font-weight: 800; white-space: nowrap; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    #sub { display: none; max-width: 46vw; margin: 0 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
+    #partida.camp #sub { display: block; }
+    #partida.camp #barra { top: calc(max(8px, env(safe-area-inset-top)) + 104px); }
+    #partida.camp #area { top: calc(max(8px, env(safe-area-inset-top)) + 118px); }
     #vidas { margin-top: 2px; font-size: 24px; letter-spacing: 4px; color: #c0272d; text-shadow: 0 2px 0 rgba(0,0,0,.3); }
     #vidas .perdida { color: rgba(255,255,255,.92); }
     #barra { position: absolute; top: calc(max(8px, env(safe-area-inset-top)) + 88px); left: 50%; transform: translateX(-50%); width: min(70vw, 360px); height: 6px; overflow: hidden; border-radius: 6px; background: rgba(0,0,0,.22); }
@@ -51,6 +90,9 @@
     @media (orientation: landscape) and (max-height: 520px) {
       #cab { display: flex; align-items: center; gap: 10px; }
       #titulo, #vidas { margin: 0; }
+      #partida.camp #sub { display: none; }
+      #partida.camp #barra { top: calc(max(8px, env(safe-area-inset-top)) + 38px); }
+      #partida.camp #area { top: calc(max(8px, env(safe-area-inset-top)) + 52px); }
       #titulo { font-size: 17px; }
       #vidas { font-size: 20px; }
       #barra { top: calc(max(8px, env(safe-area-inset-top)) + 38px); }
@@ -70,14 +112,48 @@
   </div>
 
   <main class="zona" id="zona">
-    <section id="menu">
-      <p id="menuInfo"></p>
+    <!-- Menú principal del juego -->
+    <section id="inicio">
+      <p id="inicioInfo"></p>
       <button class="b3d txt b-verde" id="continuar" type="button">▶ Continuar</button>
+      <button class="b3d txt b-oro" id="bLibre" type="button">♾️ Modo libre</button>
+      <button class="b3d txt b-azul" id="bNiveles" type="button">📋 Niveles</button>
+      <button class="b3d txt b-morado" id="bMapa" type="button">🗺️ Mapa</button>
+    </section>
+
+    <!-- Modo libre: las 5 dificultades con sus 100 niveles cada una -->
+    <section id="menu" hidden>
+      <h2>♾️ Modo libre</h2>
+      <p id="menuInfo"></p>
+      <button class="b3d txt b-verde" id="continuarLibre" type="button">▶ Continuar</button>
       <div id="dificultades"></div>
     </section>
     <section id="lista" hidden>
       <h2 id="listaTitulo"></h2>
       <div class="rejilla-niveles" id="rejilla"></div>
+    </section>
+
+    <!-- Campaña: niveles de un estado o país -->
+    <section id="niveles" hidden>
+      <div class="cab-niv">
+        <button class="b3d chico b-gris" id="nivAnt" type="button" aria-label="Anterior"><span class="b-ico">◀</span></button>
+        <h2 id="nivTitulo"></h2>
+        <button class="b3d chico b-gris" id="nivSig" type="button" aria-label="Siguiente"><span class="b-ico">▶</span></button>
+      </div>
+      <p id="nivSub"></p>
+      <div id="leyenda"><span><i class="t-facil"></i>Fácil</span><span><i class="t-medio"></i>Medio</span><span><i class="t-dificil"></i>Difícil</span></div>
+      <div class="rejilla-niveles" id="rejillaNiv"></div>
+    </section>
+
+    <!-- Mapa: México y, al terminarlo, el mundo -->
+    <section id="mapa" hidden>
+      <div class="cab-mapa" id="cabMapa" hidden>
+        <button class="b3d txt b-verde" id="mapaMex" type="button">📍 México</button>
+        <button class="b3d txt b-azul" id="mapaMun" type="button">🌍 Mundo</button>
+      </div>
+      <p id="mapaInfo"></p>
+      <div id="mapaLienzo"></div>
+      <div id="mapaFichas"></div>
     </section>
   </main>
 
@@ -85,6 +161,7 @@
     <div id="cab">
       <span id="tag"></span>
       <b id="titulo"></b>
+      <div id="sub"></div>
       <div id="vidas" aria-live="polite"></div>
     </div>
     <div id="barra" role="progressbar" aria-label="Flechas sacadas"><i id="barraI"></i></div>

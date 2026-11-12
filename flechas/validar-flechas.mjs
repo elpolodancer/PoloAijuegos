@@ -9,8 +9,8 @@ const N = Number(process.argv[2]) || 5;
 let mal = 0;
 for (const dif of ORDEN) {
   const d = DIFICULTADES[dif];
-  console.log(`\n${d.nombre} (${d.cols}x${d.filas}${d.estimado ? ", ESTIMADO" : ""})`);
-  for (let n = 1; n <= N; n++) {
+  console.log(`\n${d.nombre}${d.estimado ? " (ESTIMADO)" : ""}`);
+  for (let n = 1; n <= (dif === "facil" ? N + 15 : N); n++) { // en Fácil los niveles 1 a 15 son fijos: se prueban N más
     const t0 = Date.now();
     const g = generar(dif, n);
     const ms = Date.now() - t0;
@@ -19,7 +19,7 @@ for (const dif of ORDEN) {
     const prom = largos.reduce((s, x) => s + x, 0) / largos.length;
     if (!a.resuelto) mal++;
     console.log(
-      `  nivel ${n}: ${a.resuelto ? "OK " : "SIN SOLUCIÓN"} flechas=${g.flechas.length} largo(prom/máx)=${prom.toFixed(1)}/${Math.max(...largos)} ` +
+      `  nivel ${n}: ${a.resuelto ? "OK " : "SIN SOLUCIÓN"}${g.fijo ? " FIJO" : ""} ${g.cols}x${g.filas} flechas=${g.flechas.length} largo(prom/máx)=${prom.toFixed(1)}/${Math.max(...largos)} ` +
       `relleno=${(g.relleno * 100).toFixed(0)}% rondas=${g.profundidad} libresAlInicio=${g.libresAlInicio} ${ms} ms`
     );
   }

@@ -1,16 +1,23 @@
 // Ruta: flechas/juego-flechas.js
 // Flechas: toca una flecha para sacarla del tablero. Sale en línea recta por donde apunta; si otra flecha le estorba, pierdes un corazón.
-// Cinco dificultades (Fácil, Medio, Difícil, Extra difícil, Ultra difícil) con niveles generados por semilla (generador-flechas.js).
+// Menú principal con tres partes:
+//   ♾️ Modo libre   las cinco dificultades (Fácil, Medio, Difícil, Extra difícil, Ultra difícil), 100 niveles cada una (generador-flechas.js)
+//   📋 Niveles      la campaña: 32 estados de México y 194 países, 100 niveles cada uno (cuentas en campana-flechas.js)
+//   🗺️ Mapa         México con agua que sube por cada estado terminado y, al terminar México, el mundo
 import { generar, DIFICULTADES, ORDEN } from "./generador-flechas.js";
 import { crearEstado, bloqueo, quitar, libres, direccion } from "./logica-flechas.js";
+import { crearCampana } from "./campana-flechas.js";
+import { crearEtapas, nombrePais, banderaPais } from "../compartido/etapas-mapa.js";
+import { MEXICO, CONTINENTES, LAGOS } from "../compartido/geografia-mapa.js";
 import { encolarPuntos } from "../compartido/cola-puntos.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
 
 // ----- Ajustes -----
 const ID = "flechas";
-const CLAVE = "flechas_progreso_v1";   // { facil: nivel más alto pasado, medio: ..., ... }
-const CLAVE_ULTIMA = "flechas_ultima"; // solo local: última dificultad jugada (para «Continuar»)
-const NIVELES = 100;                   // niveles por dificultad
+const CLAVE = "flechas_progreso_v1";   // { facil, medio, dificil, extra, ultra: nivel más alto pasado en modo libre;  max, hecho: nivel más alto abierto / terminado de la campaña }
+const CLAVE_ULTIMA = "flechas_ultima"; // solo local: última dificultad del modo libre (para «Continuar»)
+const NIVELES = 100;                   // niveles por dificultad en modo libre
+const POR_ETAPA = 100;                 // niveles por estado o país en la campaña
 const VIDAS = 3;
 const PUNTOS = { facil: 5, medio: 10, dificil: 20, extra: 30, ultra: 50 }; // puntos al perfil, solo la primera vez que se pasa el nivel
 const COLOR_BOTON = { facil: "b-verde", medio: "b-azul", dificil: "b-morado", extra: "b-oro", ultra: "b-rojo" };
@@ -18,6 +25,13 @@ const TINTA = "#2f3e4a", ROJO = "#d2431e", VERDE = "#14a36e";
 
 const $ = (id) => document.getElementById(id);
 const lienzo = $("lienzo"), cx = lienzo.getContext("2d");
+
+// ----- Campaña: etapas (estados y países) y cuentas de dificultad -----
+const ETAPAS = crearEtapas({ porEtapa: POR_ETAPA });
+const CAMP = crearCampana({ numEstados: ETAPAS.numEstados, numPaises: ETAPAS.numPaises, porEtapa: POR_ETAPA });
+const nombreE = (e) => (e < ETAPAS.numEstados ? ETAPAS.estados[e].nombre : nombrePais(ETAPAS.paises[e - ETAPAS.numEstados]));
+const banderaE = (e) => (e < ETAPAS.numEstados ? "" : banderaPais(ETAPAS.paises[e - ETAPAS.numEstados]) + " ");
+const etiquetaE = (e) => banderaE(e) + nombreE(e);
 
 // ----- Progreso (local primero; se sincroniza con la cuenta si hay sesión) -----
 let prog = {};
@@ -28,9 +42,13 @@ const hechos = (d) => Math.min(NIVELES, Math.max(0, Math.floor(Number(prog[d])) 
 const siguiente = (d) => Math.min(NIVELES, hechos(d) + 1);
 const leerUltima = () => { try { const d = localStorage.getItem(CLAVE_ULTIMA); return DIFICULTADES[d] ? d : "facil"; } catch (e) { return "facil"; } };
 const guardarUltima = (d) => { try { localStorage.setItem(CLAVE_ULTIMA, d); } catch (e) {} };
+const resumen = () => ETAPAS.resumen({ max: prog.max, hecho: prog.hecho }); // { hecho, max, estadosHechos, mexicoCompleto, paisesHechos, ... }
+const etapaMax = () => Math.floor((resumen().max - 1) / POR_ETAPA); // número de la última etapa abierta (0 = primer estado)
 
 // ----- Estado de la partida -----
-let dif = "facil", nivel = 1, est = null;
+let modo = "libre";            // "libre" | "campana"
+let nCamp = 0;                 // nivel de la campaña que se está jugando (1 a ETAPAS.total)
+let dif = "facil", nivel = 1, est = null; // dificultad y número que se le pasa al generador
 let vidas = VIDAS, quitadas = 0, total = 0;
 let jugando = false, pausado = false, terminado = false, ticket = 0;
 let volando = [];   // flechas saliendo del tablero
@@ -41,27 +59,35 @@ let ocup0 = null;   // casillas que al empezar tenían flecha (los huecos del ta
 let anchoCss = 0, altoCss = 0, cell = 10, raf = 0;
 
 // ----- Pantallas -----
-function rotularMenu(texto) { $("btn-menu").innerHTML = '<span class="b-ico">☰</span> ' + texto; }
-function mostrar(cual) { // "menu" | "lista" | "partida"
-  $("menu").hidden = cual !== "menu";
-  $("lista").hidden = cual !== "lista";
+const PANTALLAS = ["inicio", "menu", "lista", "niveles", "mapa"];
+function mostrar(cual) { // una de PANTALLAS o "partida"
+  for (const p of PANTALLAS) $(p).hidden = p !== cual;
   $("zona").hidden = cual === "partida";
   $("partida").hidden = cual !== "partida";
   $("fin").hidden = true;
   $("hudJuego").hidden = cual !== "partida";
-  $("btn-menu").hidden = cual === "menu"; // en el menú principal no se muestra el ☰
-  if (cual === "lista") rotularMenu("Menú principal");
-  if (cual === "partida") rotularMenu("Pausa");
+  $("btn-menu").hidden = cual === "inicio"; // en el menú principal no se muestra el ☰
+  $("btn-menu").innerHTML = '<span class="b-ico">☰</span> ' + (cual === "partida" ? "Pausa" : "Menú principal");
   pausado = false;
   if (cual !== "partida") { jugando = false; ticket++; }
 }
 
+// --- Menú principal ---
+function inicio() {
+  mostrar("inicio");
+  const r = resumen();
+  const x = CAMP.nivel(Math.min(ETAPAS.total, r.max));
+  $("inicioInfo").textContent = "Niveles pasados: " + r.hecho + " de " + ETAPAS.total;
+  $("continuar").textContent = "▶ " + (r.hecho ? "Continuar" : "Empezar") + " · " + etiquetaE(x.etapa) + " · Nivel " + x.k;
+}
+
+// --- Modo libre ---
 function menu() {
   mostrar("menu");
   const d = leerUltima();
   const hay = ORDEN.some((x) => hechos(x) > 0);
   $("menuInfo").textContent = "Saca todas las flechas sin que se estorben";
-  $("continuar").textContent = "▶ " + (hay ? "Continuar" : "Empezar") + " · " + DIFICULTADES[d].nombre + " · Nivel " + siguiente(d);
+  $("continuarLibre").textContent = "▶ " + (hay ? "Continuar" : "Empezar") + " · " + DIFICULTADES[d].nombre + " · Nivel " + siguiente(d);
   const cont = $("dificultades");
   cont.replaceChildren();
   for (const x of ORDEN) {
@@ -91,13 +117,117 @@ function lista(d) {
   }
 }
 
+// --- Campaña: niveles de un estado o país ---
+function niveles(e) {
+  const eMax = etapaMax();
+  e = Math.max(0, Math.min(eMax, e == null ? eMax : e)); // solo las etapas ya abiertas
+  mostrar("niveles");
+  const r = resumen();
+  const c = CAMP.conteos(e), o = CAMP.orden(e);
+  const hechosAqui = Math.max(0, Math.min(POR_ETAPA, r.hecho - e * POR_ETAPA));
+  $("nivTitulo").textContent = etiquetaE(e);
+  $("nivSub").textContent = (e < ETAPAS.numEstados ? "Estado " + (e + 1) + " de " + ETAPAS.numEstados : "País " + (e - ETAPAS.numEstados + 1) + " de " + ETAPAS.numPaises) +
+    " · " + hechosAqui + "/" + POR_ETAPA + " · " + c.facil + " fáciles, " + c.medio + " medios, " + c.dificil + " difíciles";
+  const ant = $("nivAnt"), sig = $("nivSig");
+  ant.disabled = e <= 0; sig.disabled = e >= eMax;
+  ant.onclick = () => niveles(e - 1); sig.onclick = () => niveles(e + 1);
+  const g = $("rejillaNiv");
+  g.replaceChildren();
+  for (let k = 1; k <= POR_ETAPA; k++) {
+    const n = e * POR_ETAPA + k;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = String(k);
+    b.className = "nv t-" + o[k - 1] + (n <= r.hecho ? " hecho" : n <= r.max ? " actual" : " bloq");
+    b.setAttribute("aria-label", "Nivel " + k + ", " + DIFICULTADES[o[k - 1]].nombre);
+    if (n <= r.max) b.addEventListener("click", () => jugarCamp(n));
+    else b.disabled = true;
+    g.appendChild(b);
+  }
+}
+
+// --- Mapa ---
+let vistaMapa = "mexico";
+const MAPA_MEX = { w: 561, h: 368 };
+const proyMex = ([lon, lat]) => [((lon + 117.2) * 18.34).toFixed(1), ((32.8 - lat) * 20).toFixed(1)];
+const MAPA_MUN = { w: 720, h: 290 };
+const proyMun = ([lon, lat]) => [((lon + 180) * 2).toFixed(1), ((85 - lat) * 2).toFixed(1)];
+const trazo = (poly, P) => "M" + poly.map((p) => P(p).join(",")).join("L") + "Z";
+function ola(y, w) { // franja de agua con borde ondulado (se anima desplazándola 140 px, que es lo que mide una onda)
+  let d = "M-140," + y + " q35,-7 70,0";
+  for (let x = -70; x < w + 140; x += 70) d += " t70,0";
+  return d + " V" + (y + 400) + " H-140 Z";
+}
+function mapa(vista) {
+  const r = resumen();
+  mostrar("mapa");
+  vistaMapa = vista || (r.max > ETAPAS.nivelesMexico ? "mundo" : "mexico");
+  if (vistaMapa === "mundo" && !r.mexicoCompleto) vistaMapa = "mexico";
+  $("cabMapa").hidden = !r.mexicoCompleto; // el mundo no se anuncia hasta terminar México
+  $("mapaMex").classList.toggle("on", vistaMapa === "mexico");
+  $("mapaMun").classList.toggle("on", vistaMapa === "mundo");
+  const eMax = etapaMax();
+  const mex = vistaMapa === "mexico";
+  const [W, H] = mex ? [MAPA_MEX.w, MAPA_MEX.h] : [MAPA_MUN.w, MAPA_MUN.h];
+  const hechas = mex ? r.estadosHechos : r.paisesHechos, cuantas = mex ? ETAPAS.numEstados : ETAPAS.numPaises;
+  const y = Math.round(H * (1 - hechas / cuantas));
+  const siluetas = mex ? [trazo(MEXICO, proyMex)] : CONTINENTES.map((p) => trazo(p, proyMun));
+  let svg = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + (mex ? "Mapa de México: " + hechas + " de " + cuantas + " estados terminados" : "Mapa del mundo: " + hechas + " de " + cuantas + " países terminados") + '">';
+  svg += '<defs><clipPath id="tierra">' + siluetas.map((d) => '<path d="' + d + '"/>').join("") + "</clipPath></defs>";
+  svg += '<g fill="#eef2f1" stroke="#5b6b78" stroke-width="' + (mex ? 1.4 : 0.6) + '" stroke-linejoin="round">' + siluetas.map((d) => '<path d="' + d + '"/>').join("") + "</g>";
+  if (hechas > 0) svg += '<g clip-path="url(#tierra)"><g class="ola"><path d="' + ola(y, W) + '" fill="#5cb4ee" fill-opacity=".8"/></g></g>';
+  if (!mex) svg += '<g fill="#fff">' + LAGOS.map((p) => '<path d="' + trazo(p, proyMun) + '"/>').join("") + "</g>";
+  if (mex) { // un punto por estado (en el mundo no hay coordenadas de países: se elige en la lista de abajo)
+    ETAPAS.estados.forEach((s, i) => {
+      const [px, py] = proyMex([s.lon, s.lat]);
+      const hecho = i < r.estadosHechos, actual = i === eMax;
+      const abierto = i <= eMax;
+      const fill = hecho ? "#3fcf4a" : actual ? "#ffb020" : abierto ? "#8b93a0" : "#3d4048";
+      svg += '<g' + (abierto ? ' class="sel" role="button" tabindex="0" data-e="' + i + '"' : "") + ' aria-label="' + s.nombre + '">' +
+        (actual ? '<circle class="pulso" cx="' + px + '" cy="' + py + '" r="6" fill="#ffb020"/>' : "") +
+        '<circle cx="' + px + '" cy="' + py + '" r="5" fill="' + fill + '" stroke="#1b1d22" stroke-width="1.2"' + (abierto ? "" : ' opacity=".6"') + "/><title>" + s.nombre + "</title></g>";
+    });
+  }
+  $("mapaLienzo").innerHTML = svg + "</svg>";
+  $("mapaInfo").textContent = mex
+    ? "Estados terminados: " + r.estadosHechos + " de " + ETAPAS.numEstados + (r.mexicoCompleto ? " · ¡México completo!" : "")
+    : "Países terminados: " + r.paisesHechos + " de " + ETAPAS.numPaises;
+  // Lista de estados o países en el orden en que se juegan (también sirve para elegir con el dedo)
+  const f = $("mapaFichas");
+  f.replaceChildren();
+  const desde = mex ? 0 : ETAPAS.numEstados, hasta = mex ? ETAPAS.numEstados : (ETAPAS.numEstados + ETAPAS.numPaises);
+  for (let e = desde; e < hasta; e++) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ficha" + ((e + 1) * POR_ETAPA <= r.hecho ? " hecho" : e <= eMax ? " actual" : "");
+    b.textContent = etiquetaE(e);
+    if (e <= eMax) b.dataset.e = String(e); else b.disabled = true;
+    f.appendChild(b);
+  }
+}
+$("mapaMex").addEventListener("click", () => mapa("mexico"));
+$("mapaMun").addEventListener("click", () => mapa("mundo"));
+$("mapa").addEventListener("click", (ev) => { const t = ev.target.closest("[data-e]"); if (t) niveles(Number(t.dataset.e)); });
+$("mapa").addEventListener("keydown", (ev) => { if (ev.key !== "Enter" && ev.key !== " ") return; const t = ev.target.closest && ev.target.closest("[data-e]"); if (t) { ev.preventDefault(); niveles(Number(t.dataset.e)); } });
+
 // ----- Partida -----
-function jugar(d, n) {
-  dif = d; nivel = n;
+function jugar(d, n) { // modo libre
+  modo = "libre"; nCamp = 0;
   guardarUltima(d);
+  arrancar(d, n, DIFICULTADES[d].nombre.toUpperCase(), "Nivel " + n, "");
+}
+function jugarCamp(n) { // campaña: n = número de nivel de toda la campaña (1 a 22 600)
+  const x = CAMP.nivel(n);
+  modo = "campana"; nCamp = x.n;
+  arrancar(x.dif, x.idx, DIFICULTADES[x.dif].nombre.toUpperCase(), "Nivel " + x.k, etiquetaE(x.etapa));
+}
+function arrancar(d, n, etiqueta, titulo, sub) {
+  dif = d; nivel = n;
   mostrar("partida");
-  $("tag").textContent = DIFICULTADES[d].nombre.toUpperCase();
-  $("titulo").textContent = "Nivel " + n;
+  $("partida").classList.toggle("camp", modo === "campana");
+  $("tag").textContent = etiqueta;
+  $("titulo").textContent = titulo;
+  $("sub").textContent = sub;
   est = null; volando = []; rebotes = []; pista = -1; jugando = false;
   vidas = VIDAS; quitadas = 0; total = 0; terminado = false;
   cx.clearRect(0, 0, anchoCss, altoCss);
@@ -119,6 +249,8 @@ function jugar(d, n) {
     ajustar();
   }, 40);
 }
+const reintentar = () => (modo === "campana" ? jugarCamp(nCamp) : jugar(dif, nivel));
+const irNiveles = () => (modo === "campana" ? niveles(CAMP.nivel(nCamp).etapa) : lista(dif));
 
 function pintarHud() {
   let h = "";
@@ -297,9 +429,15 @@ function mostrarFin(titulo, botones) {
   try { c.firstChild.focus({ preventScroll: true }); } catch (e) {}
 }
 
+async function puntos(d) { // se anotan en el dispositivo y se envían al perfil cuando haya internet y sesión
+  encolarPuntos(ID, PUNTOS[d]);
+  try { (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
+}
+
 async function ganar() {
   if ($("partida").hidden) return;
   jugando = false;
+  if (modo === "campana") return ganarCamp();
   const primera = nivel > hechos(dif);
   if (primera) { prog[dif] = nivel; guardar(); }
   const ultimo = nivel >= NIVELES;
@@ -307,17 +445,38 @@ async function ganar() {
     [ultimo ? "Ver niveles" : "Siguiente nivel ▶", "b-verde", () => (ultimo ? lista(dif) : jugar(dif, nivel + 1))],
     ["Niveles", "b-azul", () => lista(dif)],
   ]);
-  if (primera) {
-    encolarPuntos(ID, PUNTOS[dif]); // se anotan en el dispositivo y se envían al perfil cuando haya internet y sesión
-    try { (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
-  }
+  if (primera) await puntos(dif);
 }
+
+async function ganarCamp() {
+  const x = CAMP.nivel(nCamp), antes = resumen();
+  const primera = nCamp > antes.hecho;
+  if (primera) { // los niveles se abren en orden: al terminar uno se abre el siguiente
+    prog.hecho = nCamp;
+    prog.max = Math.max(Number(prog.max) || 1, Math.min(ETAPAS.total, nCamp + 1));
+    guardar();
+  }
+  const ultimo = nCamp >= ETAPAS.total;
+  const cierra = x.k === POR_ETAPA;                  // último nivel del estado o país
+  const abreMundo = nCamp === ETAPAS.nivelesMexico;  // último de México
+  const titulo = ultimo ? "🏆 ¡Completaste el mundo entero!"
+    : abreMundo ? "🌍 ¡Terminaste México! Se abrió el mapa del mundo"
+    : cierra ? "🎉 ¡Terminaste " + nombreE(x.etapa) + "!"
+    : "🎉 ¡Nivel " + x.k + " resuelto!";
+  const botones = [];
+  if (!ultimo) botones.push([cierra ? "Siguiente " + (x.etapa < ETAPAS.numEstados - 1 ? "estado" : "país") + " ▶" : "Siguiente nivel ▶", "b-verde", () => jugarCamp(nCamp + 1)]);
+  botones.push(["Niveles", "b-azul", () => niveles(x.etapa)]);
+  if (cierra || ultimo) botones.push(["🗺️ Mapa", "b-oro", () => mapa(abreMundo ? "mundo" : undefined)]);
+  mostrarFin(titulo, botones);
+  if (primera) await puntos(x.dif);
+}
+
 function derrota() {
   if ($("partida").hidden) return;
   jugando = false;
   mostrarFin("💔 Te quedaste sin corazones", [
-    ["Reintentar", "b-verde", () => jugar(dif, nivel)],
-    ["Niveles", "b-azul", () => lista(dif)],
+    ["Reintentar", "b-verde", reintentar],
+    ["Niveles", "b-azul", irNiveles],
   ]);
 }
 
@@ -329,9 +488,13 @@ $("pista").addEventListener("click", () => { // marca una flecha que sí puede s
   pista = l[(Math.random() * l.length) | 0];
   pedir();
 });
-$("reiniciar").addEventListener("click", () => { if (!$("partida").hidden) jugar(dif, nivel); });
-$("continuar").addEventListener("click", () => { const d = leerUltima(); jugar(d, siguiente(d)); });
-$("btn-menu").addEventListener("click", () => { if (!$("lista").hidden) menu(); }); // en la lista el ☰ dice «Menú principal»
+$("reiniciar").addEventListener("click", () => { if (!$("partida").hidden) reintentar(); });
+$("continuar").addEventListener("click", () => jugarCamp(Math.min(ETAPAS.total, resumen().max)));
+$("bLibre").addEventListener("click", menu);
+$("bNiveles").addEventListener("click", () => niveles());
+$("bMapa").addEventListener("click", () => mapa());
+$("continuarLibre").addEventListener("click", () => { const d = leerUltima(); jugar(d, siguiente(d)); });
+$("btn-menu").addEventListener("click", () => { if ($("partida").hidden && $("inicio").hidden) inicio(); }); // fuera de partida el ☰ dice «Menú principal»
 
 // Menú de pausa estándar (☰ en partida): Continuar / Niveles / Salir. No hay reloj que congelar, solo se ignoran los toques.
 crearMenuPausa({
@@ -339,19 +502,19 @@ crearMenuPausa({
   puedeAbrir: () => jugando && !terminado && !$("partida").hidden && $("fin").hidden,
   alAbrir: () => { pausado = true; },
   alContinuar: () => { pausado = false; pedir(); },
-  extras: () => [{ icono: "📋", texto: "Niveles", clase: "b-azul", alElegir: () => lista(dif) }],
+  extras: () => [{ icono: "📋", texto: "Niveles", clase: "b-azul", alElegir: irNiveles }],
   ayudaSalir: () => (quitadas && jugando ? "Se pierde lo que llevas de este nivel" : ""),
-  alSalir: () => menu(),
+  alSalir: () => (modo === "campana" ? inicio() : menu()),
 });
 
 leer();
-menu();
+inicio();
 
-// Sincroniza los niveles pasados con la cuenta de Google (por dificultad gana el nivel más alto)
+// Sincroniza el progreso con la cuenta de Google (por cada dificultad y para la campaña gana el nivel más alto)
 import("../compartido/progreso.js").then((m) => {
   nube = m.conectar(ID, {
     clave: CLAVE,
     fusionar: m.unirMaximos,
-    alCambiar: (v) => { prog = v || {}; if (!$("menu").hidden) menu(); },
+    alCambiar: (v) => { prog = v || {}; if (!$("inicio").hidden) inicio(); else if (!$("menu").hidden) menu(); },
   });
 }).catch(() => {});
