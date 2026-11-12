@@ -8,9 +8,9 @@
 export const NEGRA = -1;
 export const COLORES = 5;
 export const MIN_CADENA = 3;
-// Poderes que deja una cadena larga (en la última casilla, con el color de la cadena). Umbrales subidos de 5/7 a 7/9 para que salgan menos:
-export const CADENA_HORIZONTAL = 7; // 7 o 8 gominolas → poder horizontal (rompe toda la fila)
-export const CADENA_VERTICAL = 9;   // 9 o más → poder vertical (rompe toda la columna)
+// Poderes que deja una cadena larga (en la última casilla, con el color de la cadena). Umbrales: 5 (antes 7) y 6 (antes 9):
+export const CADENA_HORIZONTAL = 5; // exactamente 5 gominolas → poder horizontal (rompe toda la fila)
+export const CADENA_VERTICAL = 6;   // 6 o más → poder vertical (rompe toda la columna)
 // Poder «color»: NO lo deja ninguna cadena; se coloca desde la tienda (50 monedas, colocarPoder). Al incluirlo en una cadena rompe TODAS las gominolas de ese color.
 export const PODERES_VALIDOS = ["horizontal", "vertical", "color"];
 
@@ -64,7 +64,7 @@ export function parametrosCampana(n, rng = Math.random) {
 // Los tipos de nivel (capas, contrarreloj, jefe…) todavía no cambian los números: se calibran como un nivel clásico.
 export const CAMPANA_NIVEL = {
   dens: 0.36, escalaArea: 0.2, extra: 3,
-  // factor[dificultad][tablero]: calibrado con el estilo «casual» del bot (la persona típica) para que gane ≈ 90 % en Fácil, ≈ 70 % en Normal y ≈ 50 % en Difícil (con poderes a 7/9; si cambias los umbrales hay que recalibrar).
+  // factor[dificultad][tablero]: calibrado con el estilo «casual» del bot (la persona típica) para que gane ≈ 90 % en Fácil, ≈ 70 % en Normal y ≈ 50 % en Difícil (calibrado con poderes a 7/9; con 5/6 el bot casual midió prácticamente lo mismo: fácil ≈ 85–91 %, normal ≈ 59–74 %, difícil ≈ 45–61 %; si cambias los umbrales hay que volver a medir).
   // Los tableros chicos necesitan MÁS holgura (pocas negras = más varianza); los grandes, algo menos. Si cambias densidad, extra o la lógica, vuelve a correr el bot.
   factor: {
     facil:   { "6x8": 2.2,  "8x10": 2.2,  "10x12": 2.0,  "12x14": 2.15 },

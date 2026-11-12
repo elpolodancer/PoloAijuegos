@@ -41,8 +41,8 @@ const BONO_MOVIMIENTO = 20; // puntos por cada movimiento que te sobre al ganar
 // y solo se activa cuando lo incluyes en una cadena de ositos de ese mismo color (tocarlo solo no hace nada).
 // El poder se activa en la última casilla seleccionada. Si la cadena lleva varios poderes, se aplican todos: fila + columna (+ color).
 // Mismos números que logica-gominolas.js (ahí se miden con el bot).
-const CADENA_HORIZONTAL = 7; // 7 o 8 gominolas → poder horizontal (rompe toda la fila)
-const CADENA_VERTICAL = 9;   // 9 o más → poder vertical (rompe toda la columna)
+const CADENA_HORIZONTAL = 5; // exactamente 5 gominolas → poder horizontal (rompe toda la fila)
+const CADENA_VERTICAL = 6;   // 6 o más → poder vertical (rompe toda la columna)
 // «color» no lo deja ninguna cadena: se coloca desde la tienda (50 monedas) y, al entrar en una cadena, rompe todas las gominolas de ese color
 const PODERES = {
   horizontal: { icono: "↔️" },
