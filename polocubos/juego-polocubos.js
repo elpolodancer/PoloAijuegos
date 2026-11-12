@@ -6,7 +6,7 @@
 import { crearEtapas } from "../compartido/etapas-mapa.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
-import { AJUSTES, BONOS_SORTEO, cuadrosDeSorteo, cubosParaCuadros, vecinosDePared, DIFICULTADES, PUNTOS_INICIO, ponerPared, premiarCierre, canjearCubos, puedeJugar, puedeSortear, hayPared, sortearModo, sortearParedes, PAREDES_POR_CUADRO, crearTablero, completo, clonarTablero, metasDeTiempo, monedasDe, unirCartera } from "./logica-polocubos.js";
+import { AJUSTES, BONOS_SORTEO, cuadrosDeSorteo, cubosParaCuadros, vecinosDePared, DIFICULTADES, PUNTOS_INICIO, ponerPared, premiarCierre, canjearCubos, puedeJugar, puedeSortear, hayPared, sortearModo, sortearParedes, paredSuelta, cercaDe, PAREDES_POR_CUADRO, crearTablero, completo, clonarTablero, metasDeTiempo, monedasDe, unirCartera } from "./logica-polocubos.js";
 import { jugadaBot } from "./ia-polocubos.js";
 import { generarInicio } from "./patrones-polocubos.js";
 
@@ -242,7 +242,7 @@ function empezar(d) {
   } else g = generarInicio(d.n, inicial, { lineas: AJUSTES.puntosJugar });
   t = g.t;
   if (!g.cumple) console.info("Polocubos: este tablero deja juntar " + g.cubos + " de los " + AJUSTES.tanda + " cubos para poder sortear (pocos cuadros cerrados para la hoja)");
-  J[1] = { p: AJUSTES.puntosJugar, a: 0, c: 0, cu: 0 }; J[2] = { p: AJUSTES.puntosJugar, a: 0, c: 0, cu: 0 };
+  J[1] = { p: AJUSTES.puntosJugar, a: 0, c: 0, cu: 0, ult: -1, combo: 0 }; J[2] = { p: AJUSTES.puntosJugar, a: 0, c: 0, cu: 0, ult: -1, combo: 0 };
   maxPuntos = AJUSTES.puntosJugar; turno = 1; terminado = false; pausado = false; ultima = null;
   cantidad = AJUSTES.tanda;
   historial = []; gratis = AJUSTES.deshacerGratis; extra = 0; listoAntes = false; // deshacer: 10 gratis en cada partida
@@ -310,11 +310,18 @@ function poner(a, tipo, r, c) {
   ultima = a === 2 ? { tipo, r, c } : null;
   if (!cerrados.length) { j.c = 0; return false; } // una pared que no cierra nada rompe la cadena
   const { puntos, cubos } = premiarCierre(t, cerrados, a);
-  for (const k of cerrados) { j.c++; t.dueno[k] = a; j.cu++; }
+  // Combo: cuadros cerrados seguidos (sin romper la cadena) y cerca uno del otro (radioCombo). El 1.º no da nada; del 2.º en adelante, cada cuadro pone 1 pared suelta al azar en la hoja
+  let paredes = 0;
+  for (const k of cerrados) {
+    j.combo = j.c > 0 && cercaDe(t, j.ult, k) ? j.combo + 1 : 1;
+    j.ult = k; j.c++; t.dueno[k] = a; j.cu++;
+    if (j.combo >= 2 && paredSuelta(t)) paredes++;
+  }
   j.p += puntos; j.a += cubos;
   const partes = [];
   if (puntos) partes.push("+" + puntos + (puntos === 1 ? " punto" : " puntos"));
   if (cubos) partes.push("+" + cubos + (cubos === 1 ? " cubo 🎲" : " cubos 🎲"));
+  if (paredes) partes.push("🔥 combo ×" + j.combo + ": +" + paredes + (paredes === 1 ? " pared al azar" : " paredes al azar"));
   aviso((a === 2 ? "🤖 " : "") + partes.join(" · ") + (j.c > 1 ? " · cadena ×" + j.c : ""));
   return true;
 }

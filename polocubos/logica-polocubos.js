@@ -14,6 +14,7 @@ export const AJUSTES = {
   tanda: 20,         // cubos aleatorios que hay que TENER para poder sortear: con 20 o más se abre el botón Sortear y el jugador
                      // elige cuántos usa y cuándo. También es la meta que el bot de backtracking comprueba al armar
                      // el tablero inicial (que el jugador PUEDA juntar esos 20 cubos)
+  radioCombo: 2,     // combo: cerrar cuadros seguidos (sin romper la cadena) a esta distancia o menos (2 = en un área de 2 cuadros alrededor) del anterior
   maxInicial: 0.6,   // al empezar, como máximo esta fracción de la hoja se llena con el sorteo automático (hojas chicas)
   costoPared: 1,     // poner una pared a mano
   costoSorteo: 2,    // puntos que vale un cuadro sorteado AUTOMÁTICAMENTE (los puntos se convierten solos en cuadros al azar)
@@ -153,6 +154,26 @@ export function sortearParedes(t, paredes, rng = Math.random) {
 export function sortearModo(t, cuadros, modo, rng = Math.random) {
   if (modo !== "paredes") return sortear(t, cuadros, rng);
   return Math.ceil(sortearParedes(t, cuadros * PAREDES_POR_CUADRO, rng) / PAREDES_POR_CUADRO);
+}
+
+// ----- Combos -----
+// ¿Está el cuadro «b» a distancia radioCombo o menos (en cuadros, en cualquier dirección) del cuadro «a»?
+export function cercaDe(t, a, b, radio = AJUSTES.radioCombo) {
+  if (a < 0) return false;
+  return Math.abs(Math.floor(a / t.n) - Math.floor(b / t.n)) <= radio && Math.abs((a % t.n) - (b % t.n)) <= radio;
+}
+// Pone UNA pared suelta en un lugar al azar de la hoja (sin dueño y sin premio; si cierra algún cuadro por casualidad, sus paredes se gastan).
+// Devuelve true si logró ponerla (false si la hoja ya no tiene paredes libres).
+export function paredSuelta(t, rng = Math.random) {
+  const n = t.n, nH = (n + 1) * n, total = nH + n * (n + 1);
+  for (let i = 0; i < 40; i++) { // lo normal: una pared libre al primer o segundo intento (sin recorrer toda la hoja)
+    const id = Math.floor(rng() * total);
+    if (id < nH ? t.H[id] : t.V[id - nH]) continue;
+    const c = id < nH ? ponerPared(t, "H", Math.floor(id / n), id % n) : ponerPared(t, "V", Math.floor((id - nH) / (n + 1)), (id - nH) % (n + 1));
+    for (const q of c || []) gastarParedes(t, q);
+    return true;
+  }
+  return sortearParedes(t, 1, rng) === 1; // hoja casi llena: busca entre las que quedan
 }
 
 export const completo = (t) => t.cuadros === t.n * t.n;
