@@ -17,9 +17,10 @@ export const AJUSTES = {
   maxInicial: 0.6,   // al empezar, como máximo esta fracción de la hoja se llena con el sorteo automático (hojas chicas)
   costoPared: 1,     // poner una pared a mano
   costoSorteo: 2,    // puntos que vale un cuadro sorteado AUTOMÁTICAMENTE (los puntos se convierten solos en cuadros al azar)
-  premioCuadro: 2,   // puntos que da cerrar un cuadro poniendo 2 o más paredes tuyas (con 3 o 4 paredes tuyas también son 2: te cuesta más de lo que paga)
-  cubosPorLinea: 5,  // si te quedas sin líneas, cada 5 cubos aleatorios se cambian solos por 1 línea
+  premioCuadro: 1,   // líneas que devuelve cerrar un cuadro poniendo 2 o más paredes tuyas: siempre 1, sin importar si pusiste 2, 3 o 4 (así pierdes líneas)
+  cubosPorLinea: 3,  // si te quedas sin líneas, cada 3 cubos aleatorios se cambian solos por 1 línea (sin límite de veces)
   cubosPorUnaPared: 1, // cerrar un cuadro poniendo UNA sola pared: ganas 1 «cubo aleatorio» (se coloca con el botón Sortear) y recuperas esa pared
+  cubosPorDosCuadros: 3, // UNA sola pared que cierra DOS cuadros a la vez (ninguno con otra pared tuya): ganas 3 cubos aleatorios en total (y recuperas esa pared)
   maxPatron: 0.05,     // fracción MÁXIMA de los cuadros iniciales que van en patrones (peines); el resto (95 % o más) se sortea 100 % al azar
   deshacerGratis: 10,  // jugadas que se pueden deshacer gratis en cada partida (nivel)
   boostDeshacer: 10,   // cuántos deshacer da un boost
@@ -28,10 +29,10 @@ export const AJUSTES = {
 };
 // ----- Bono al sortear -----
 // Sortear 20 cubos pone 20 cuadros (1 por cubo). Pero si el jugador sortea más de una vez, los cubos rinden más:
-//   30 cubos → 60 cuadros · 40 cubos → 80 cuadros · 50 cubos → 120 cuadros
+//   30 cubos → 50 cuadros · 40 cubos → 80 cuadros · 50 cubos → 120 cuadros
 // Con cantidades mayores se arma por bloques, de más grande a más chico (p. ej. 100 cubos = 2 bloques de 50 = 240 cuadros;
-// 35 cubos = un bloque de 30 + 5 sueltos = 65 cuadros). Lo que sobra de los bloques vale 1 cuadro por cubo.
-export const BONOS_SORTEO = [{ cubos: 50, cuadros: 120 }, { cubos: 40, cuadros: 80 }, { cubos: 30, cuadros: 60 }]; // de mayor a menor
+// 35 cubos = un bloque de 30 + 5 sueltos = 55 cuadros). Lo que sobra de los bloques vale 1 cuadro por cubo.
+export const BONOS_SORTEO = [{ cubos: 50, cuadros: 120 }, { cubos: 40, cuadros: 80 }, { cubos: 30, cuadros: 50 }]; // de mayor a menor
 export function cuadrosDeSorteo(cubos) {
   let resto = Math.max(0, Math.floor(Number(cubos) || 0)), total = 0;
   for (const b of BONOS_SORTEO) { const veces = Math.floor(resto / b.cubos); total += veces * b.cuadros; resto -= veces * b.cubos; }
@@ -126,6 +127,34 @@ export function sortear(t, cantidad, rng = Math.random) {
   return hechos;
 }
 
+// Sorteo POR PAREDES: en lugar de cerrar «cantidad» cuadros completos, reparte «paredes» paredes sueltas en lugares al azar de la hoja
+// (por defecto cada cuadro del sorteo vale PAREDES_POR_CUADRO = 4 paredes: 500 cuadros → 2000 paredes). Las paredes sueltas pueden cerrar
+// cuadros por casualidad (sin dueño y sin premio: sus paredes se gastan) y dejar muchos cuadros a una pared de cerrarse.
+// Devuelve cuántas paredes puso de verdad (menos que «paredes» si la hoja ya no tiene tantas libres).
+export const PAREDES_POR_CUADRO = 4;
+export function sortearParedes(t, paredes, rng = Math.random) {
+  const n = t.n, nH = (n + 1) * n, libres = [];
+  for (let i = 0; i < nH; i++) if (!t.H[i]) libres.push(i);
+  for (let i = 0; i < n * (n + 1); i++) if (!t.V[i]) libres.push(nH + i);
+  let hechas = 0;
+  for (let i = 0; i < libres.length && hechas < paredes; i++) {
+    const j = i + Math.floor(rng() * (libres.length - i)); // mezcla solo lo que se necesita
+    [libres[i], libres[j]] = [libres[j], libres[i]];
+    const id = libres[i];
+    const cerrados = id < nH ? ponerPared(t, "H", Math.floor(id / n), id % n) : ponerPared(t, "V", Math.floor((id - nH) / (n + 1)), (id - nH) % (n + 1));
+    for (const q of cerrados || []) gastarParedes(t, q);
+    hechas++;
+  }
+  return hechas;
+}
+
+// Sortea el equivalente a «cuadros» cuadros según el modo: "bloques" (cuadros completos) o "paredes" (4 paredes sueltas por cuadro).
+// Devuelve cuántos «cuadros equivalentes» se sortearon (en paredes: paredes puestas / 4, redondeado hacia arriba).
+export function sortearModo(t, cuadros, modo, rng = Math.random) {
+  if (modo !== "paredes") return sortear(t, cuadros, rng);
+  return Math.ceil(sortearParedes(t, cuadros * PAREDES_POR_CUADRO, rng) / PAREDES_POR_CUADRO);
+}
+
 export const completo = (t) => t.cuadros === t.n * t.n;
 
 // Copia independiente del tablero (para que un bot pruebe jugadas sin tocar la partida)
@@ -158,7 +187,7 @@ export const puedeSortear = (j) => j.a >= AJUSTES.tanda;
 // cerrar cuadros con una pared y por tanto no puede hacer más cubos aleatorios.
 // «j» = { p: puntos/líneas, a: cubos aleatorios }
 export const puedeJugar = (j) => j.p >= AJUSTES.costoPared || j.a >= AJUSTES.cubosPorLinea;
-// Si j se quedó sin líneas y tiene cubos para cambiar, cambia 5 cubos por 1 línea. Devuelve true si hizo el cambio.
+// Si j se quedó sin líneas y tiene cubos para cambiar, cambia 3 cubos por 1 línea (se puede repetir sin límite). Devuelve true si hizo el cambio.
 export function canjearCubos(j) {
   if (j.p >= AJUSTES.costoPared || j.a < AJUSTES.cubosPorLinea) return false;
   j.a -= AJUSTES.cubosPorLinea; j.p += AJUSTES.costoPared;
@@ -168,7 +197,8 @@ export function canjearCubos(j) {
 // ----- Premios por cerrar cuadros a mano -----
 // Se cuenta cuántas de las 4 paredes del cuadro puso quien lo cierra (y siguen «vigentes»):
 //   1 pared  → +1 cubo aleatorio y recupera esa pared (+costoPared punto)
-//   2 o más  → +premioCuadro puntos (2)   (con 3 paredes propias gastó 3 y cobra 2: pierde 1)
+//   1 pared que cierra 2 cuadros a la vez (a los dos solo les faltaba esa) → +3 cubos aleatorios y recupera esa pared
+//   2 o más  → +premioCuadro líneas (1)   (con 2 paredes propias gastó 2 y recupera 1: pierde 1; con 3 gastó 3 y recupera 1: pierde 2)
 // En cuanto un cuadro se cierra, sus 4 paredes se «gastan»: dejan de contar (sean de quien sean) para los cuadros vecinos.
 function paredesDe(t, k) {
   const r = Math.floor(k / t.n), c = k % t.n;
@@ -191,6 +221,8 @@ export function premiarCierre(t, cerrados, quien) {
     if (m <= 1) { cubos += AJUSTES.cubosPorUnaPared; reembolso = true; }
     else puntos += AJUSTES.premioCuadro;
   }
+  // Una pared que cierra dos cuadros a la vez, y a los dos solo les faltaba esa pared (para ti): 3 cubos en lugar de 2
+  if (cerrados.length === 2 && propias.every((m) => m <= 1)) cubos = AJUSTES.cubosPorDosCuadros;
   if (reembolso) puntos += AJUSTES.costoPared;
   for (const k of cerrados) gastarParedes(t, k);
   return { puntos, cubos };

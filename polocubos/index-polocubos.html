@@ -22,6 +22,10 @@
     .pantalla h1, .pantalla h2 { margin: 0; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
     .pantalla h1 { font-size: clamp(2rem, 9vw, 3.2rem); }
     .pantalla p { margin: 0; max-width: 340px; font-size: .95rem; line-height: 1.35; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
+    .info-panel { width: min(100%, 440px); }
+    .info-texto { max-height: 58vh; overflow-y: auto; text-align: left; margin-bottom: 12px; padding-right: 4px; -webkit-overflow-scrolling: touch; }
+    .info-texto h3 { margin: 12px 0 2px; font-size: 1rem; }
+    .info-texto p { margin: 0 0 6px; max-width: none; font-size: .88rem; line-height: 1.35; color: #d8dbe1; text-shadow: none; }
     .col { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 6px; }
     .col .b3d { width: min(320px, 86vw); }
 
@@ -55,7 +59,7 @@
   <!-- Menú principal estándar: Modo libre · Niveles · Mapa · Salir -->
   <main class="pantalla" id="menu">
     <h1>📓 Polocubos</h1>
-    <p>Cierra cuadritos de tu libreta: cada pared cuesta 1 punto. Cierra un cuadro con 1 pared y ganas 1 cubo 🎲 (y recuperas tu punto); con 2 o más paredes ganas 2 puntos. Con 20 cubos o más puedes sortear cuadros al azar, y si sorteas más rinden más: 30 cubos = 60 cuadros, 40 = 80 y 50 = 120. Si te quedas sin puntos, 5 cubos se cambian solos por 1 punto.</p>
+    <p>Cierra cuadritos de tu libreta: cada pared cuesta 1 punto. Cierra un cuadro con 1 pared y ganas 1 cubo 🎲 (y recuperas tu punto); si una sola pared cierra 2 cuadros a la vez, ganas 3 cubos; con 2 o más paredes solo recuperas 1 punto (pierdes el resto). Con 20 cubos o más puedes sortear cuadros al azar, y si sorteas más rinden más: 30 cubos = 50 cuadros, 40 = 80 y 50 = 120. Si te quedas sin puntos, 3 cubos se cambian solos por 1 punto, las veces que haga falta.</p>
     <div class="col">
       <button class="b3d txt grande b-verde" id="b-libre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
       <button class="b3d txt grande b-azul" id="b-niveles" type="button"><span class="b-ico">🪜</span> Niveles</button>
@@ -70,9 +74,41 @@
     <p>Elige cuántos puntos se sortean al azar al empezar (2 puntos = 1 cuadro; tú empiezas con 15 puntos) y contra quién juegas. Al tocar un tamaño de hoja empieza la partida.</p>
     <div class="opc"><h3>Puntos que se sortean al empezar</h3><div class="fila" id="o-puntos"></div></div>
     <div class="opc"><h3>Cómo jugar</h3><div class="fila" id="o-modo"></div></div>
+    <div class="opc"><h3>Tipo de sorteo</h3><div class="fila" id="o-sorteo"></div>
+      <p>🟦 Por bloques: se cierran cuadros completos al azar. 🧱 Por paredes: cada cuadro del sorteo se convierte en 4 paredes sueltas al azar (500 cuadros = 2000 paredes), así que quedan muchos cuadros a una pared de cerrarse.</p></div>
+    <button class="b3d txt b-azul" id="b-info-libre" type="button"><span class="b-ico">ℹ️</span> Info</button>
     <div class="opc"><h3>Tamaño de la hoja</h3></div>
     <div class="col" id="dificultades"></div>
   </section>
+
+  <!-- Info: qué hace y cómo se consigue cada cosa (se abre desde el Modo libre y desde ☰ Pausa) -->
+  <div class="pausa-fondo" id="info" role="dialog" aria-modal="true" aria-label="Información" hidden>
+    <div class="pausa-panel info-panel">
+      <h2>ℹ️ Cómo se juega</h2>
+      <div class="info-texto">
+        <h3>📏 Líneas (puntos)</h3>
+        <p>Cada pared que pones cuesta 1 línea. Empiezas con 15. Las ganas al cerrar cuadros o cambiando cubos.</p>
+        <h3>🟦 Cerrar un cuadro</h3>
+        <p><b>Con 1 pared</b> (al cuadro solo le faltaba esa): ganas 1 cubo 🎲 y recuperas tu línea, así que no pierdes nada.</p>
+        <p><b>1 pared que cierra 2 cuadros a la vez:</b> ganas 3 cubos 🎲 y recuperas tu línea.</p>
+        <p><b>Con 2 o más paredes tuyas:</b> solo recuperas 1 línea, así que pierdes las demás. Cuando el cuadro se cierra, sus paredes ya no cuentan para otros cuadros.</p>
+        <p>Si cierras un cuadro sigues jugando y la cadena sube; una pared que no cierra nada rompe la cadena.</p>
+        <h3>🎲 Cubos aleatorios</h3>
+        <p>Se ganan cerrando cuadros con una sola pared. Con 20 o más puedes sortear: se ponen cuadros cerrados al azar en la hoja. Si sorteas más, rinden más: 20 cubos = 20 cuadros, 30 = 50, 40 = 80 y 50 = 120.</p>
+        <p>Si te quedas sin líneas, cada 3 cubos se cambian solos por 1 línea, las veces que haga falta.</p>
+        <h3>🧱 Tipo de sorteo</h3>
+        <p>Lo eliges en Modo libre y vale para toda la partida (al empezar, sorteo automático y sorteo con cubos). <b>Por bloques:</b> se cierran cuadros completos al azar. <b>Por paredes:</b> cada cuadro del sorteo se cambia por 4 paredes sueltas repartidas al azar (500 cuadros = 2000 paredes; si la hoja ya no tiene tantas libres, se ponen las que quedan). Algunas paredes cierran cuadros por casualidad, sin premio. Las marcas y monedas del sorteo por paredes se guardan aparte.</p>
+        <h3>🎯 Sorteo automático</h3>
+        <p>Cada vez que juntas 100 líneas, se gastan solas en cuadros al azar (2 líneas = 1 cuadro).</p>
+        <h3>🪙 Monedas, tiempo y deshacer</h3>
+        <p>No hay límite de tiempo: el reloj solo cuenta. Si completas la hoja a tiempo ganas monedas por cada meta 🥇🥈🥉 (una sola vez cada una).</p>
+        <p>↩️ Deshacer: 10 gratis por partida. Después, 30 monedas te dan 10 más.</p>
+        <h3>🎨 Colores y zoom</h3>
+        <p>Verde: cuadros que cerraste tú. Naranja: los del bot. Azul: sorteados. Acércate (＋ o pellizcar) para poner paredes: toca el lado de un cuadro.</p>
+      </div>
+      <div class="pausa-opciones"><button class="b3d txt b-verde" id="info-cerrar" type="button"><span class="b-ico">✔</span> <span>Entendido</span></button></div>
+    </div>
+  </div>
 
   <!-- Partida -->
   <section id="partida" hidden>

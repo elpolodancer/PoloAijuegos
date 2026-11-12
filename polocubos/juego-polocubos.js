@@ -6,7 +6,7 @@
 import { crearEtapas } from "../compartido/etapas-mapa.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
-import { AJUSTES, BONOS_SORTEO, cuadrosDeSorteo, cubosParaCuadros, vecinosDePared, DIFICULTADES, PUNTOS_INICIO, ponerPared, premiarCierre, canjearCubos, puedeJugar, puedeSortear, hayPared, sortear, completo, clonarTablero, metasDeTiempo, monedasDe, unirCartera } from "./logica-polocubos.js";
+import { AJUSTES, BONOS_SORTEO, cuadrosDeSorteo, cubosParaCuadros, vecinosDePared, DIFICULTADES, PUNTOS_INICIO, ponerPared, premiarCierre, canjearCubos, puedeJugar, puedeSortear, hayPared, sortearModo, sortearParedes, PAREDES_POR_CUADRO, crearTablero, completo, clonarTablero, metasDeTiempo, monedasDe, unirCartera } from "./logica-polocubos.js";
 import { jugadaBot } from "./ia-polocubos.js";
 import { generarInicio } from "./patrones-polocubos.js";
 
@@ -20,8 +20,9 @@ let pantalla = "menu", dif = null, t = null;
 const J = [null, { p: 0, a: 0, c: 0, cu: 0 }, { p: 0, a: 0, c: 0, cu: 0 }]; // 1 = tú, 2 = bot: puntos (paredes), cubos aleatorios, cadena y cuadros cerrados a mano
 const puede = (x) => puedeJugar(J[x]); // ¿tiene con qué jugar? (una línea, o 5 cubos para cambiar por una)
 let turno = 1, maxPuntos = 0, cantidad = 20, terminado = false, pausado = false, tBot = 0, ultima = null;
-let op = { pi: AJUSTES.puntosInicio, bot: false };
-try { const g = JSON.parse(localStorage.getItem(CLAVE_OPC)); if (g && PUNTOS_INICIO.includes(g.pi)) op = { pi: g.pi, bot: !!g.bot }; } catch (e) {}
+let op = { pi: AJUSTES.puntosInicio, bot: false, sorteo: "bloques" }; // sorteo: "bloques" (cuadros completos al azar) o "paredes" (4 paredes sueltas por cuadro)
+try { const g = JSON.parse(localStorage.getItem(CLAVE_OPC)); if (g && PUNTOS_INICIO.includes(g.pi)) op = { pi: g.pi, bot: !!g.bot, sorteo: g.sorteo === "paredes" ? "paredes" : "bloques" }; } catch (e) {}
+const porParedes = () => op.sorteo === "paredes";
 const cam = { x: 0, y: 0, z: 20 };
 
 // ---------- Deshacer, monedas y tiempo ----------
@@ -111,7 +112,7 @@ function pintarTiempo() {
 function pagarMetas() {
   const seg = Math.floor(msJugado / 1000), nuevas = [];
   for (const m of metas) {
-    const k = dif.id + "_" + op.pi + "_" + m.id;
+    const k = dif.id + "_" + op.pi + (porParedes() ? "p" : "") + "_" + m.id; // el sorteo por paredes tiene sus propias metas
     if (seg <= m.seg && !cartera.metas[k]) { cartera.metas[k] = 1; cartera.g += m.monedas; nuevas.push(m); }
   }
   if (nuevas.length) guardarCartera();
@@ -120,7 +121,7 @@ function pagarMetas() {
 
 // ---------- Mejores marcas ----------
 const leerMejores = () => { try { return JSON.parse(localStorage.getItem(CLAVE_MEJORES)) || {}; } catch (e) { return {}; } };
-const claveMejor = (d) => d.id + "_" + op.pi;
+const claveMejor = (d) => d.id + "_" + op.pi + (porParedes() ? "p" : ""); // el sorteo por paredes tiene sus propias marcas
 function guardarMejor() {
   if (!t || !dif || op.bot) return;
   const m = leerMejores(), k = claveMejor(dif), a = m[k] || { p: 0, c: 0 };
@@ -164,6 +165,15 @@ function ir(p) {
 }
 function abrirMapa(n) { ir("mapa"); mapa.abrir(n); }
 
+// ---------- Info ----------
+// Desde ☰ Pausa la partida sigue en pausa mientras se lee; al cerrar se reanuda.
+function abrirInfo() { $("info").hidden = false; try { $("info-cerrar").focus({ preventScroll: true }); } catch (e) {} }
+function cerrarInfo() { if ($("info").hidden) return; $("info").hidden = true; if (pantalla === "partida") reanudar(); }
+$("b-info-libre").addEventListener("click", abrirInfo);
+$("info-cerrar").addEventListener("click", cerrarInfo);
+$("info").addEventListener("click", (e) => { if (e.target === $("info")) cerrarInfo(); });
+addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("info").hidden) { e.preventDefault(); e.stopPropagation(); cerrarInfo(); } }, true);
+
 $("btn-menu").addEventListener("click", () => (pantalla === "partida" ? pausa.abrir() : ir("menu")));
 $("b-libre").addEventListener("click", () => ir("libre"));
 $("b-niveles").addEventListener("click", () => abrirMapa(1));
@@ -186,6 +196,7 @@ function fichas(contenedor, items, activo, alElegir) {
 function pintarLibre() {
   fichas($("o-puntos"), PUNTOS_INICIO.map((v) => [v, String(v)]), op.pi, (v) => (op.pi = v));
   fichas($("o-modo"), [[false, "👤 Solo"], [true, "🤖 Contra el bot"]], op.bot, (v) => (op.bot = v));
+  fichas($("o-sorteo"), [["bloques", "🟦 Por bloques"], ["paredes", "🧱 Por paredes (×4)"]], op.sorteo, (v) => (op.sorteo = v));
   const m = leerMejores(), cont = $("dificultades");
   cont.replaceChildren();
   for (const d of DIFICULTADES) {
@@ -206,8 +217,9 @@ const pausa = crearMenuPausa({
   alAbrir: () => { pausado = true; clearTimeout(tBot); },                                   // el bot espera
   alContinuar: reanudar,
   extras: () => [
+    { icono: "ℹ️", texto: "Info", clase: "b-azul", alElegir: abrirInfo },
     { icono: "↩️", texto: "Comprar +" + AJUSTES.boostDeshacer + " deshacer", clase: "b-oro", ayuda: "Cuesta " + AJUSTES.costoBoost + " monedas · tienes " + fmt(monedas()), deshabilitado: monedas() < AJUSTES.costoBoost, alElegir: () => { reanudar(); comprarBoost(); } },
-    { icono: "🔁", texto: "Reiniciar tablero", clase: "b-azul", ayuda: "Se sortean " + op.pi + " puntos (" + fmt(Math.floor(op.pi / AJUSTES.costoSorteo)) + " cuadros) al azar y empiezas con " + AJUSTES.puntosJugar + " puntos", alElegir: () => empezar(dif) },
+    { icono: "🔁", texto: "Reiniciar tablero", clase: "b-azul", ayuda: "Se sortean " + op.pi + " puntos (" + fmt(Math.floor(op.pi / AJUSTES.costoSorteo)) + (porParedes() ? " cuadros = " + fmt(Math.floor(op.pi / AJUSTES.costoSorteo) * PAREDES_POR_CUADRO) + " paredes" : " cuadros") + ") al azar y empiezas con " + AJUSTES.puntosJugar + " puntos", alElegir: () => empezar(dif) },
   ],
   ayudaSalir: "Se pierde esta partida" + (op.bot ? "" : " (tu mejor marca se conserva)"),
   alSalir: () => ir("menu"),
@@ -222,7 +234,12 @@ function empezar(d) {
   // En hojas chicas se limita para no llenarlas desde el principio. Van al azar (95 % o más); solo un 5 % o menos se arma en «peines» con pasillos de
   // cuadros a una pared de cerrarse (patrones-polocubos.js), y un bot de backtracking comprueba que se puedan juntar los cubos mínimos para poder sortear (AJUSTES.tanda).
   const inicial = Math.min(Math.floor(op.pi / AJUSTES.costoSorteo), Math.floor(d.n * d.n * AJUSTES.maxInicial));
-  const g = generarInicio(d.n, inicial, { lineas: AJUSTES.puntosJugar });
+  let g;
+  if (porParedes()) {
+    // Sorteo por paredes: cada cuadro del sorteo vale 4 paredes sueltas al azar (p. ej. 500 cuadros → 2000 paredes); como mucho maxInicial de todas las paredes de la hoja
+    g = { t: crearTablero(d.n), cumple: true };
+    sortearParedes(g.t, Math.min(inicial * PAREDES_POR_CUADRO, Math.floor(2 * d.n * (d.n + 1) * AJUSTES.maxInicial)));
+  } else g = generarInicio(d.n, inicial, { lineas: AJUSTES.puntosJugar });
   t = g.t;
   if (!g.cumple) console.info("Polocubos: este tablero deja juntar " + g.cubos + " de los " + AJUSTES.tanda + " cubos para poder sortear (pocos cuadros cerrados para la hoja)");
   J[1] = { p: AJUSTES.puntosJugar, a: 0, c: 0, cu: 0 }; J[2] = { p: AJUSTES.puntosJugar, a: 0, c: 0, cu: 0 };
@@ -233,7 +250,7 @@ function empezar(d) {
   metas = op.bot || !METAS_EN_LIBRE ? [] : metasDeTiempo(d, d.n * d.n - t.cuadros);
   ir("partida");
   pintarHud();
-  aviso("🧩 " + fmt(t.cuadros) + " cuadros colocados · busca cuadritos a los que solo les falta una pared · empiezas con " + AJUSTES.puntosJugar + " puntos");
+  aviso("🧩 " + (porParedes() ? fmt(t.LH.length + t.LV.length) + " paredes sueltas (" + fmt(t.cuadros) + " cuadros cerrados)" : fmt(t.cuadros) + " cuadros colocados") + " · busca cuadritos a los que solo les falta una pared · empiezas con " + AJUSTES.puntosJugar + " puntos");
 }
 
 // Cada vez que «a» junta AJUSTES.autoSorteo puntos, se gastan solos en sortear cuadros al azar (sin premio, como el sorteo normal).
@@ -243,7 +260,7 @@ function autoSortear(a) {
   let total = 0;
   const antes = marcaCaida();
   while (j.p >= AJUSTES.autoSorteo && !completo(t)) {
-    const hechos = sortear(t, por);
+    const hechos = sortearModo(t, por, op.sorteo);
     if (!hechos) break;
     j.p -= hechos * AJUSTES.costoSorteo; total += hechos;
   }
@@ -315,7 +332,7 @@ $("b-sortear").addEventListener("click", () => {
   guardarPaso();
   const usar = Math.min(cantidad, J[1].a), pedidos = cuadrosDeSorteo(usar); // el bono: 30 cubos → 60 cuadros, 40 → 80, 50 → 120
   const antes = marcaCaida();
-  const hechos = sortear(t, pedidos);
+  const hechos = sortearModo(t, pedidos, op.sorteo);
   const gasto = hechos < pedidos ? cubosParaCuadros(hechos, usar) : usar;      // si la hoja ya no tiene tantos cuadros libres, no se gastan cubos de más
   J[1].a -= gasto; J[1].c = 0; ultima = null;
   animarCaida(antes);
@@ -349,7 +366,7 @@ function pasoBot() {
   if (!m) { revisar(true, 2); return; } // no puede jugar (sin puntos y sin 50 cubos)
   if (m.accion === "sortear") {
     const antes = marcaCaida();
-    const hechos = sortear(t, m.cantidad);
+    const hechos = sortearModo(t, m.cantidad, op.sorteo);
     J[2].a -= hechos; ultima = null;
     animarCaida(antes);
     aviso("🤖 sorteó " + hechos + (hechos === 1 ? " cuadro" : " cuadros"));
