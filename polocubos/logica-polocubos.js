@@ -16,7 +16,7 @@ export const AJUSTES = {
   costoSorteo: 2,    // sortear un cuadro (4 paredes con descuento)
   premioCuadro: 2,   // cerrar un cuadro a mano. En cadena, cada cuadro extra sin interrupción da +1 más (2, 3, 4…)
 };
-export const PUNTOS_INICIO = [100, 200, 300, 400, 500];
+export const PUNTOS_INICIO = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
 
 // Tamaños de hoja del Modo libre. Los 5 primeros son las dificultades estándar; los 3 últimos son hojas gigantes.
 export const DIFICULTADES = [
