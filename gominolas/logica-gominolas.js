@@ -75,17 +75,24 @@ export const CAMPANA_NIVEL = {
 // Niveles de tipo «capas»: parte de las negras necesita 2 o 3 jugadas para quitarse. Cada golpe extra pesa «pesoGolpe» negras al calcular los movimientos
 // (calibrado con el bot: node gominolas/bot-gominolas.mjs catalogo --tipo capas).
 export const CAPAS = { dos: 0.30, tres: 0.10, pesoGolpe: 0.65 };
+// Niveles «sorpresa» (🎁): al empezar solo hay UNA negra, en la fila de abajo; mientras sea la única, fallar no castiga (no salen negras nuevas).
+// Al romperla salen de golpe TODAS las negras del nivel (SORPRESA.negras veces las de un nivel clásico de ese tablero).
+// Movimientos = negras reales × factor[dificultad][tablero] × SORPRESA.factor[tablero] + extra + SORPRESA.movsSenuelo (margen para romper la primera negra).
+// Los movimientos cuentan desde la primera jugada, así que el tope depende de la dificultad y del tablero igual que en los demás niveles.
+export const SORPRESA = { negras: 1.3, factor: { "6x8": 0.72, "8x10": 0.72, "10x12": 0.72, "12x14": 0.57 }, movsSenuelo: 4 };
 export function parametrosNivel(nv, rng = Math.random) {
   const C = CAMPANA_NIVEL, t = nv.tablero, dif = DIFICULTADES[nv.dificultad];
   const zona = zonaInicial(t.filas);
   const escala = Math.pow(48 / (t.cols * t.filas), C.escalaArea);
   const variacion = Math.floor(rng() * 3) - 1;
-  const negras = Math.max(4, Math.round(zona * t.cols * C.dens * escala) + variacion);
+  const sorpresa = nv.tipo === "sorpresa";
+  const base = Math.max(4, Math.round(zona * t.cols * C.dens * escala) + variacion);
+  const negras = sorpresa ? Math.round(base * SORPRESA.negras) : base; // en una sorpresa: las negras que salen al romper la primera
   const capas = nv.tipo === "capas" ? { dos: CAPAS.dos, tres: CAPAS.tres } : null;
   const golpesExtra = capas ? Math.round(negras * capas.dos) + 2 * Math.round(negras * capas.tres) : 0;
-  const movs = Math.round((negras + CAPAS.pesoGolpe * golpesExtra) * C.factor[dif.id][t.id]) + C.extra;
+  const movs = Math.round((negras + CAPAS.pesoGolpe * golpesExtra) * C.factor[dif.id][t.id] * (sorpresa ? SORPRESA.factor[t.id] : 1)) + C.extra + (sorpresa ? SORPRESA.movsSenuelo : 0);
   const filasCompletas = nv.patron === "filas" ? filasDelPatron(negras, t.cols) : 0; // patrón del nivel (lo da el catálogo)
-  return { cols: t.cols, filas: t.filas, negras, movs, zona, zonaNueva: zonaNueva(t.filas), penaliza: dif.penaliza, filasCompletas, capas };
+  return { cols: t.cols, filas: t.filas, negras, movs, zona, zonaNueva: zonaNueva(t.filas), penaliza: dif.penaliza, filasCompletas, capas, sorpresa };
 }
 
 // --- Modo libre: rondas sin fin en el tablero y dificultad elegidos ---
@@ -202,10 +209,11 @@ function colocarNegras(p, cant, filasCompletas = 0) {
       if (filasNegras.length >= k) break;
       if (filasNegras.every((x) => Math.abs(x - f) > 1)) filasNegras.push(f);
     }
-    for (const f of filasNegras) for (let c = 0; c < p.cols; c++) p.grid[f][c].k = NEGRA;
+    for (const f of filasNegras) for (let c = 0; c < p.cols; c++) { p.grid[f][c].k = NEGRA; delete p.grid[f][c].p; }
   }
   const celdas = [];
-  for (let f = p.filas - 1; f >= desde; f--) if (!filasNegras.includes(f)) for (let c = 0; c < p.cols; c++) celdas.push([f, c]);
+  // (un osito con poder nunca se convierte en negra: solo puede haberlos cuando las negras salen a mitad de partida, en un nivel sorpresa)
+  for (let f = p.filas - 1; f >= desde; f--) if (!filasNegras.includes(f)) for (let c = 0; c < p.cols; c++) if (!p.grid[f][c].p) celdas.push([f, c]);
   mezclar(celdas).slice(0, cant - filasNegras.length * p.cols).forEach(([f, c]) => { p.grid[f][c].k = NEGRA; });
   // Capas (niveles de tipo «capas»): una parte de las negras lleva 2 capas (1 candado) y otra 3 capas (2 candados). Se ven como cadenas con candado.
   if (p.capas) {
@@ -229,8 +237,19 @@ export function crearPartida(params, rng = Math.random) {
   }
   let i = 0;
   while (!hayJugada(p) && i++ < 50) barajar(p);
-  colocarNegras(p, params.negras, params.filasCompletas || 0);
+  if (params.sorpresa) { // nivel sorpresa: una sola negra, en la fila de abajo; las demás salen cuando se rompe (revelar)
+    p.fase = "senuelo";
+    p.grid[p.filas - 1][Math.floor(p.rng() * p.cols)].k = NEGRA;
+    i = 0;
+    while (!hayJugada(p) && i++ < 50) barajar(p);
+  } else colocarNegras(p, params.negras, params.filasCompletas || 0);
   return p;
+}
+
+// Nivel sorpresa: se rompió la negra del señuelo → salen TODAS las negras del nivel (p.negras) en la zona de abajo
+export function revelar(p) {
+  p.fase = "real";
+  colocarNegras(p, p.negras, p.filasCompletas || 0);
 }
 
 function caer(p) {
@@ -317,8 +336,12 @@ function romper(p, lista) {
 function cerrarJugada(p, avance) {
   p.movs--;
   caer(p);
-  if (contarNegras(p) === 0) { p.estado = "gano"; return; }
-  if (!avance) { p.fallos++; for (let i = 0; i < p.penaliza; i++) nuevaNegra(p); }
+  if (p.fase === "senuelo") { // sorpresa: con una sola negra no se castiga; al romperla salen todas (y el nivel no se gana todavía)
+    if (contarNegras(p) === 0) revelar(p);
+  } else {
+    if (contarNegras(p) === 0) { p.estado = "gano"; return; }
+    if (!avance) { p.fallos++; for (let i = 0; i < p.penaliza; i++) nuevaNegra(p); }
+  }
   if (p.movs <= 0) { p.estado = "perdio"; return; }
   if (!hayJugada(p)) barajar(p);
 }

@@ -9,7 +9,7 @@
 // MONEDAS: se ganan al pasar un nivel de la campaña (no en el modo libre, para que no se pueda repetir sin límite):
 //   · PRIMERA vez que se pasa: monedas base según la dificultad del nivel + MONEDAS.porEstrella por cada estrella obtenida.
 //   · Al repetirlo: solo se pagan las estrellas NUEVAS (mejorar de 1★ a 3★ paga 2 estrellas). Repetir sin mejorar no da nada.
-//   · Nivel jefe: todo × MONEDAS.jefe.
+//   · Nivel jefe: todo × MONEDAS.jefe. Nivel sorpresa (🎁, siempre difícil): todo × MONEDAS.sorpresa.
 //   Se gastan en boosts (PRECIOS): quitar una gominola, revolver las gominolas y colocar un boost de color (borra un color completo).
 //
 // CARTERA: las monedas se GASTAN, así que no se pueden unir con «el mayor» (como los récords): si el celular gasta 50 y la computadora no se entera,
@@ -20,7 +20,7 @@
 //   Forma guardada:  cartera = { d: { "<id del dispositivo>": { g: número, s: número } } }
 
 export const PRECIOS = { quitar: 50, revolver: 50, color: 50 }; // monedas por boost
-export const MONEDAS = { base: { facil: 8, medio: 15, dificil: 25 }, porEstrella: 5, jefe: 3 };
+export const MONEDAS = { base: { facil: 8, medio: 15, dificil: 25 }, porEstrella: 5, jefe: 3, sorpresa: 2 };
 export const UMBRALES_ESTRELLAS = [0.45, 0.65]; // [para 2★, para 3★]: fracción de movimientos que sobran
 
 // ---------- Estrellas ----------
@@ -60,7 +60,7 @@ export function recompensa(nv, estrellas, previas = 0) {
   if (!nuevas) return 0;
   const base = previas === 0 ? (MONEDAS.base[nv.dificultad] || 0) : 0;
   const m = base + nuevas * MONEDAS.porEstrella;
-  return nv.tipo === "jefe" ? m * MONEDAS.jefe : m;
+  return nv.tipo === "jefe" ? m * MONEDAS.jefe : nv.tipo === "sorpresa" ? m * MONEDAS.sorpresa : m;
 }
 
 // ---------- Cartera ----------

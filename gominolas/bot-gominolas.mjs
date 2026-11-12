@@ -18,7 +18,7 @@
 //   azar     siempre una cadena cualquiera (el peor caso: alguien que no entiende dónde están las negras)
 import {
   NEGRA, TABLEROS, DIFICULTADES, crearRng, crearPartida, vecinos, lineasDePoderes, conjuntoRoto,
-  jugarCadena, cadenaValida, parametrosLibre, parametrosCampana, parametrosNivel, CAMPANA_NIVEL, contarNegras, CADENA_HORIZONTAL, CADENA_VERTICAL,
+  jugarCadena, cadenaValida, parametrosLibre, parametrosCampana, parametrosNivel, CAMPANA_NIVEL, contarNegras, CADENA_HORIZONTAL, CADENA_VERTICAL, SORPRESA,
 } from "./logica-gominolas.js";
 
 // ---------- Búsqueda de jugadas ----------
@@ -38,7 +38,13 @@ function candidatas(p, rng, presupuesto = 1500, maxLen = 10) {
   const lista = [];
   // cadenas de ositos del mismo color (los que tienen poder son ositos de su color y lo activan al entrar en la cadena)
   const inicios = [];
-  for (let f = 0; f < p.filas; f++) for (let c = 0; c < p.cols; c++) if (p.grid[f][c].k >= 0) inicios.push({ f, c });
+  // Nivel sorpresa con una sola negra: una persona apunta directo hacia ella, así que solo se prueban cadenas que empiezan cerca de la negra (y con más presupuesto)
+  let cerca = null;
+  if (p.fase === "senuelo") {
+    for (let f = 0; f < p.filas; f++) for (let c = 0; c < p.cols; c++) if (p.grid[f][c].k === NEGRA) cerca = { f, c };
+    presupuesto = 6000;
+  }
+  for (let f = 0; f < p.filas; f++) for (let c = 0; c < p.cols; c++) if (p.grid[f][c].k >= 0 && (!cerca || Math.max(Math.abs(f - cerca.f), Math.abs(c - cerca.c)) <= 2)) inicios.push({ f, c });
   for (let i = inicios.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [inicios[i], inicios[j]] = [inicios[j], inicios[i]]; }
   let nodos = 0;
   const cad = [], usados = new Set();
@@ -100,7 +106,7 @@ function mayorRegion(p) {
 }
 function jugarPartida(params, estilo, rng) {
   const p = crearPartida(params, rng);
-  let atascos = 0, jugadas = 0, hor = 0, ver = 0, hay7 = 0, hay9 = 0;
+  let atascos = 0, jugadas = 0, hor = 0, ver = 0, hay7 = 0, hay9 = 0, senuelo = 0; // senuelo: jugadas que costó romper la primera negra de un nivel sorpresa
   while (p.estado === "jugando") {
     const m = elegir(p, estilo, rng);
     if (!m) { atascos++; if (atascos > 5) break; continue; }
@@ -109,10 +115,11 @@ function jugarPartida(params, estilo, rng) {
     if (reg >= CADENA_HORIZONTAL) hay7++;
     if (reg >= CADENA_VERTICAL) hay9++;
     jugadas++;
+    if (p.fase === "senuelo") senuelo++;
     if (m.cad.length >= CADENA_VERTICAL) ver++; else if (m.cad.length >= CADENA_HORIZONTAL) hor++;
     jugarCadena(p, m.cad);
   }
-  return { gano: p.estado === "gano", movsUsados: params.movs - p.movs, fallos: p.fallos, negrasFin: contarNegras(p), atascos, jugadas, hor, ver, hay7, hay9 };
+  return { gano: p.estado === "gano", movsUsados: params.movs - p.movs, fallos: p.fallos, negrasFin: contarNegras(p), atascos, jugadas, hor, ver, hay7, hay9, senuelo };
 }
 
 // ---------- Reportes ----------
@@ -220,18 +227,20 @@ function catalogo() {
       for (const estilo of ESTILOS) {
         const rng = crearRng(SEMILLA * 4242 + t.cols * 17 + DIFICULTADES[dId].penaliza * 3 + estilo.length);
         const nn = estilo === "azar" ? Math.max(10, Math.round(N / 2)) : N;
-        let gan = 0, usados = 0, ej; const factores = [];
+        let gan = 0, usados = 0, sen = 0, ej; const factores = [];
+        const fijos = CAMPANA_NIVEL.extra + (TIPO === "sorpresa" ? SORPRESA.movsSenuelo : 0); // movimientos que no dependen de las negras
         for (let i = 0; i < nn; i++) {
           const par = parametrosNivel({ tablero: t, dificultad: dId, patron: PATRON, tipo: TIPO }, rng); ej = par;
           const r = jugarPartida({ ...par, movs: 400 }, estilo, rng);
           const T = r.gano ? r.movsUsados : Infinity;
           if (T <= par.movs) gan++;
           if (r.gano) usados += T;
-          factores.push(T === Infinity ? Infinity : (T - CAMPANA_NIVEL.extra) / par.negras);
+          sen += r.senuelo;
+          factores.push(T === Infinity ? Infinity : (T - fijos) / par.negras);
         }
         factores.sort((a, b) => a - b);
         const f = QS.map((q) => { const v = factores[Math.min(factores.length - 1, Math.ceil(q * factores.length) - 1)]; return v === Infinity ? "  ∞ " : Math.max(0, v).toFixed(2); });
-        console.log(dId.padEnd(8) + t.id.padEnd(6) + estilo.padEnd(8) + "gana " + pct(gan, nn) + "  (" + ej.negras + "n/" + ej.movs + "m, castigo " + ej.penaliza + ")  factor para " + QS.join("/") + ": " + f.join(" / "));
+        console.log(dId.padEnd(8) + t.id.padEnd(6) + estilo.padEnd(8) + "gana " + pct(gan, nn) + "  (" + ej.negras + "n/" + ej.movs + "m, castigo " + ej.penaliza + ")  factor para " + QS.join("/") + ": " + f.join(" / ") + (TIPO === "sorpresa" ? "  · rompe la 1ª negra en ≈" + (sen / nn).toFixed(1) + " jugadas" : ""));
       }
     }
   }

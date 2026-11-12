@@ -3,7 +3,7 @@
 //   node gominolas/prueba-catalogo-gominolas.mjs            (revisa los 226 bloques y imprime el reparto)
 //   node gominolas/prueba-catalogo-gominolas.mjs --ver 1-40  (además lista esos niveles)
 // Sale con error (código 1) si algo no cumple las reglas del README.
-import { nivelDe, TOTAL_NIVELES, NUM_BLOQUES, NIVELES_POR_ETAPA, BLOQUES_ESTADOS, ESPECIALES, TUTORIAL, TIPOS, NIVELES_CON_FILAS } from "./catalogo-gominolas.js";
+import { nivelDe, TOTAL_NIVELES, NUM_BLOQUES, NIVELES_POR_ETAPA, BLOQUES_ESTADOS, ESPECIALES, TUTORIAL, TIPOS, NIVELES_CON_FILAS, SORPRESAS, SORPRESAS_PRIMER_BLOQUE } from "./catalogo-gominolas.js";
 
 const fallos = [];
 const exige = (ok, texto) => { if (!ok) fallos.push(texto); };
@@ -32,21 +32,29 @@ for (let b = 0; b < NUM_BLOQUES; b++) {
   exige(ti.jefe === 1 && niv[99].tipo === "jefe", `bloque ${b}: el nivel 100 no es el único jefe`);
   exige(niv[99].dificultad === "dificil", `bloque ${b}: el jefe no es difícil`);
   exige(niv[99].tablero.id === (b === 0 ? "10x12" : "12x14"), `bloque ${b}: el jefe no tiene el tablero más grande`);
-  exige(ti.clasico === 100 - Object.values(ESPECIALES).reduce((a, x) => a + x, 0) - 1, `bloque ${b}: clásicos = ${ti.clasico}`);
+  const eSorp = b === 0 ? SORPRESAS_PRIMER_BLOQUE : SORPRESAS;
+  exige(ti.clasico === 100 - Object.values(ESPECIALES).reduce((a, x) => a + x, 0) - 1 - eSorp, `bloque ${b}: clásicos = ${ti.clasico}`);
+  // sorpresas (🎁): cantidad exacta, todas difíciles, con patrón al azar, fuera del tutorial, sin vecinos especiales y separadas
+  const sorp = niv.filter((x) => x.tipo === "sorpresa");
+  exige(sorp.length === eSorp, `bloque ${b}: sorpresas = ${sorp.length} (debían ser ${eSorp})`);
+  exige(sorp.every((x) => x.dificultad === "dificil" && x.patron === "azar"), `bloque ${b}: hay una sorpresa que no es difícil o no tiene patrón al azar`);
+  exige(sorp.every((x) => x.k >= 2 && x.k <= 98 && (b > 0 || x.k >= 21)), `bloque ${b}: una sorpresa cae fuera del rango permitido (en el primer estado desde el 21)`);
+  exige(sorp.every((x) => niv[x.k - 2].tipo === "clasico" && niv[x.k].tipo === "clasico"), `bloque ${b}: una sorpresa quedó pegada a otro nivel especial`);
+  sorp.forEach((x, i) => { if (i) exige(x.k - sorp[i - 1].k >= 2, `bloque ${b}: sorpresas seguidas (${sorp[i - 1].n} y ${x.n})`); });
   // patrón inicial: exactamente NIVELES_CON_FILAS niveles con filas completas, todos clásicos y fuera del tutorial
   const conFilas = niv.filter((x) => x.patron === "filas");
   exige(conFilas.length === NIVELES_CON_FILAS, `bloque ${b}: niveles con filas = ${conFilas.length}`);
   exige(conFilas.every((x) => x.tipo === "clasico" && !(b === 0 && x.k <= TUTORIAL)), `bloque ${b}: hay filas en un nivel que no es clásico o es del tutorial`);
   exige(niv.every((x) => x.patron === "filas" || x.patron === "azar"), `bloque ${b}: patrón desconocido`);
   // especiales: nunca seguidos ni pegados al jefe, y el mismo tipo nunca dos veces seguidas
-  const esp = niv.filter((x) => x.tipo !== "clasico" && x.tipo !== "jefe");
+  const esp = niv.filter((x) => x.tipo !== "clasico" && x.tipo !== "jefe" && x.tipo !== "sorpresa"); // las sorpresas se revisan aparte
   esp.forEach((x, i) => {
     if (i) {
       exige(x.k - esp[i - 1].k >= 2, `bloque ${b}: especiales seguidos en los niveles ${esp[i - 1].n} y ${x.n}`);
       exige(x.tipo !== esp[i - 1].tipo, `bloque ${b}: el tipo ${x.tipo} se repite seguido (${esp[i - 1].n}, ${x.n})`);
     }
   });
-  exige(!niv[98].tipo.match(/capas|contrarreloj|puntos|monedas|lluvia/), `bloque ${b}: hay un especial justo antes del jefe`);
+  exige(!niv[98].tipo.match(/capas|contrarreloj|puntos|monedas|lluvia|sorpresa/), `bloque ${b}: hay un especial justo antes del jefe`);
   if (b > 0) exige(niv[0].tipo === "clasico", `bloque ${b}: el primer nivel no es clásico (quedaría pegado al jefe del bloque anterior)`);
   if (b === 0) for (let i = 0; i < TUTORIAL; i++) {
     const x = niv[i];
@@ -97,4 +105,4 @@ if (fallos.length) {
   fallos.slice(0, 30).forEach((f) => console.log("  - " + f));
   process.exit(1);
 }
-console.log("\n✅ Todo en orden: cuentas exactas en los 226 bloques, tutorial, jefes, especiales separados y niveles fijos (determinista).");
+console.log("\n✅ Todo en orden: cuentas exactas en los 226 bloques, tutorial, jefes, especiales y sorpresas separados y niveles fijos (determinista).");

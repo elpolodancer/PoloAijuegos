@@ -2,7 +2,7 @@
 // CATÁLOGO de los 22 600 niveles de la campaña de «Conecta gominolas»: dice de cada nivel qué TABLERO, qué DIFICULTAD y qué TIPO es.
 // Módulo puro: no usa document, ni Firebase, ni nada del navegador. Lo importarán el juego, el bot y el script de pruebas.
 //   import { nivelDe, TOTAL_NIVELES } from "./catalogo-gominolas.js";
-//   nivelDe(250)  →  { n, bloque, k, zona, etapa, tablero, dificultad, tipo, patron, semilla }
+//   nivelDe(250)  →  { n, bloque, k, zona, etapa, tablero, dificultad, tipo, patron, semilla }   (tipo: clasico, capas, contrarreloj, puntos, monedas, lluvia, jefe o sorpresa)
 //
 // «Fijo» = el nivel n SIEMPRE es el mismo (misma función de n con semilla). No se guarda nada: se calcula al pedirlo.
 // Cada bloque de 100 niveles (un estado o un país) se sortea con CUENTAS EXACTAS (no «al azar puro»):
@@ -12,6 +12,10 @@
 // Tablero y dificultad se sortean POR SEPARADO (los difíciles se reparten al azar entre todos los tamaños).
 // Tipos de nivel en cada bloque de 100: 5 «capas», 5 «contrarreloj», 5 «puntos», 5 «monedas», 5 «lluvia» (sin negras: bajan solo gominolas de colores y hay que juntar ~2000 puntos),
 // el nivel 100 es «jefe», el resto «clásico» (74 clásicos por bloque).
+// Niveles «sorpresa» (🎁): 8 por bloque (4 en el primer estado, que casi no tiene niveles difíciles). Se toman de los clásicos con patrón «azar», todos DIFÍCILES
+// (si no lo eran, intercambian la dificultad con un clásico difícil: las cuentas exactas por dificultad no cambian), nunca en el tutorial ni pegados a otro especial u otra sorpresa.
+// Se eligen con una semilla aparte: los tipos y los tableros de los demás niveles no se mueven.
+// Empiezan con UNA sola negra abajo; al romperla salen todas las del nivel (ver SORPRESA en logica-gominolas.js).
 // Patrón inicial de las negras: en cada bloque, 10 niveles CLÁSICOS (fuera del tutorial) empiezan con FILAS COMPLETAS de negras («filas»); el resto, negras al azar («azar»).
 // Si cambias CUALQUIER número de este archivo, el nivel n cambia para todos los jugadores: no lo hagas después de publicar.
 // Para comprobar que todo salió bien: node gominolas/prueba-catalogo-gominolas.mjs
@@ -39,13 +43,18 @@ export const TUTORIAL = 10;       // niveles 1 a 10 del juego: siempre 6×8, fá
 const SEPARACION_MIN = 2;         // dos niveles especiales nunca van seguidos (ni dentro de un bloque ni entre dos tipos iguales seguidos)
 
 export const NIVELES_CON_FILAS = 10; // por bloque de 100
-export const TIPOS = ["clasico", "capas", "contrarreloj", "puntos", "monedas", "lluvia", "jefe"];
+export const SORPRESAS = 8;               // por bloque de 100
+export const SORPRESAS_PRIMER_BLOQUE = 4; // el primer estado tiene solo 10 niveles difíciles (uno es el jefe): ahí caben menos
+const SEPARACION_SORPRESA = 6;            // niveles mínimos entre dos sorpresas
+const SORPRESA_DESDE_PRIMER_BLOQUE = 21;  // en el primer estado la primera sorpresa llega después del tutorial (niveles 1–10) y de unos cuantos clásicos
+export const TIPOS = ["clasico", "capas", "contrarreloj", "puntos", "monedas", "lluvia", "jefe", "sorpresa"];
 
 // ---------- Utilidades ----------
 const TABLERO_POR_ID = Object.fromEntries(TABLEROS.map((t) => [t.id, t]));
 const mezclar = (a, rng) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const expandir = (cuentas) => Object.entries(cuentas).flatMap(([id, n]) => Array(n).fill(id));
 const semillaPatron = (b) => (Math.imul(b + 1, 0x7f4a7c15) ^ 0x2c1b3c6d) >>> 0; // aparte de la del plan: elegir los niveles con filas no cambia nada de lo ya sorteado
+const semillaSorpresa = (b) => (Math.imul(b + 1, 0x51ed270b) ^ 0x1b873593) >>> 0; // aparte de las demás: elegir las sorpresas no cambia nada de lo ya sorteado
 const semillaDeBloque = (b) => (Math.imul(b + 1, 0x9e3779b1) ^ 0x85ebca6b) >>> 0;
 // Semilla propia de cada nivel (para generar después su patrón inicial, sus negras, etc.)
 export const semillaDeNivel = (n) => (Math.imul(n, 0x2545f491) ^ Math.imul(n >>> 3, 0x27d4eb2f) ^ 0x165667b1) >>> 0;
@@ -127,6 +136,31 @@ function planDeBloque(b) {
   // Patrón «filas»: exactamente NIVELES_CON_FILAS niveles clásicos del bloque (nunca el tutorial)
   const elegibles = plan.map((_, i) => i).filter((i) => plan[i].tipo === "clasico" && !(b === 0 && i < TUTORIAL));
   mezclar(elegibles, crearRng(semillaPatron(b))).slice(0, NIVELES_CON_FILAS).forEach((i) => { plan[i].patron = "filas"; });
+  // Niveles «sorpresa»: clásicos con patrón «azar», lejos entre sí y sin especiales pegados (se mira el plan ya armado).
+  // Se prefieren los que ya son difíciles; a los demás se les INTERCAMBIA la dificultad con otro clásico difícil, así las cuentas por dificultad no cambian.
+  const cuantasSorpresas = b === 0 ? SORPRESAS_PRIMER_BLOQUE : SORPRESAS;
+  const clasico = (i) => i < 0 || i >= NIVELES_POR_ETAPA || plan[i].tipo === "clasico"; // fuera del bloque no cuenta
+  const candidatos = plan.map((_, i) => i).filter((i) => i >= (b === 0 ? SORPRESA_DESDE_PRIMER_BLOQUE - 1 : 1) && i <= NIVELES_POR_ETAPA - 3 &&
+    plan[i].tipo === "clasico" && plan[i].patron === "azar" && clasico(i - 1) && clasico(i + 1));
+  const rngS = crearRng(semillaSorpresa(b));
+  const orden = [...mezclar(candidatos.filter((i) => plan[i].dificultad === "dificil"), rngS), ...mezclar(candidatos.filter((i) => plan[i].dificultad !== "dificil"), rngS)];
+  const elegidas = [];
+  for (const sep of [SEPARACION_SORPRESA, 2]) { // si no alcanzan con la separación normal, se relaja
+    for (const i of orden) {
+      if (elegidas.length >= cuantasSorpresas) break;
+      if (!elegidas.includes(i) && elegidas.every((j) => Math.abs(j - i) >= sep)) elegidas.push(i);
+    }
+    if (elegidas.length >= cuantasSorpresas) break;
+  }
+  for (const i of elegidas) {
+    if (plan[i].dificultad !== "dificil") { // toda sorpresa es difícil: se cambia de dificultad con un clásico difícil que no sea sorpresa (si no hay, con cualquier difícil que no sea el jefe)
+      const donante = (soloClasicos) => plan.findIndex((x, j) => x.dificultad === "dificil" && !elegidas.includes(j) && j !== NIVELES_POR_ETAPA - 1 && !(b === 0 && j < TUTORIAL) && (!soloClasicos || x.tipo === "clasico"));
+      let j = donante(true);
+      if (j < 0) j = donante(false);
+      if (j >= 0) { plan[j].dificultad = plan[i].dificultad; plan[i].dificultad = "dificil"; }
+    }
+  }
+  elegidas.forEach((i) => { plan[i].tipo = "sorpresa"; });
   planes.set(b, plan);
   return plan;
 }

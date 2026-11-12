@@ -102,6 +102,10 @@ let movsIni = 1;        // movimientos con que empezó el nivel
 let mejor = 0;
 let cadena = null;      // [{f,c}, ...] mientras el dedo está abajo
 let revisar = false;
+let fase = "normal";    // "senuelo" = nivel sorpresa con UNA sola negra abajo (no castiga); al romperla salen todas y pasa a "normal"
+let negrasReales = 0;   // sorpresa: cuántas negras salen al romperse la primera
+let filasPatron = 0;    // sorpresa: filas completas de negras al revelar (lo da el catálogo)
+let destello = 0;       // destello blanco al revelar la sorpresa (1 → 0)
 let particulas = [];
 let textos = [];
 let tam = 50;           // tamaño de celda en px CSS
@@ -165,8 +169,9 @@ function abrirInfo() {
   const panel = document.createElement("div"); panel.className = "pausa-panel";
   const t = document.createElement("h2"); t.textContent = "ℹ️ Cómo se juega";
   const txt = document.createElement("p"); txt.style.cssText = "margin:0 0 12px;line-height:1.45;font-size:.92rem";
-  txt.textContent = "Arrastra por 3 o más gominolas iguales y juntas. Rompe las gominolas que están pegadas a una negra (arriba, abajo, izquierda o derecha; en diagonal no cuenta) para eliminarla: si en una jugada no eliminas ninguna, aparece otra. Cadenas de 5 crean un osito con poder ↔️ (rompe una fila) y de 7 uno con poder ↕️ (rompe una columna). El osito con poder conserva su color y solo se activa cuando lo incluyes en una cadena de ositos de ese mismo color: se activa en la última casilla de la cadena. Si metes dos poderes en la misma cadena se aplican a la vez." + " Los niveles se desbloquean en orden: cada estado y cada país tiene 100. Al terminar un estado se desbloquea el siguiente y el agua del mapa sube." + " Modo libre: elige tablero y dificultad y juega rondas sin fin hasta quedarte sin movimientos. Si una jugada no elimina ninguna negra, aparece 1 nueva en Fácil, 2 en Medio y 3 en Difícil. No suma al perfil; solo guarda tu récord de rondas.";
+  txt.textContent = "Arrastra por 3 o más gominolas iguales y juntas. Rompe las gominolas que están pegadas a una negra (arriba, abajo, izquierda o derecha; en diagonal no cuenta) para eliminarla: si en una jugada no eliminas ninguna, aparece otra. Cadenas de 5 crean un osito con poder ↔️ (rompe una fila) y de 6 o más uno con poder ↕️ (rompe una columna). El osito con poder conserva su color y solo se activa cuando lo incluyes en una cadena de ositos de ese mismo color: se activa en la última casilla de la cadena. Si metes dos poderes en la misma cadena se aplican a la vez." + " Los niveles se desbloquean en orden: cada estado y cada país tiene 100. Al terminar un estado se desbloquea el siguiente y el agua del mapa sube." + " Modo libre: elige tablero y dificultad y juega rondas sin fin hasta quedarte sin movimientos. Si una jugada no elimina ninguna negra, aparece 1 nueva en Fácil, 2 en Medio y 3 en Difícil. No suma al perfil; solo guarda tu récord de rondas.";
   txt.textContent += " Si una negra tiene cadenas y candados, necesita una jugada por cada candado: cada vez que la toques con una gominola rota pierde uno.";
+  txt.textContent += " Los niveles con 🎁 son sorpresa: al empezar solo hay UNA negra abajo, pero cuando la rompes salen todas las del nivel, así que no desperdicies movimientos: el límite cuenta desde la primera jugada.";
   const ok = document.createElement("button"); ok.type = "button"; ok.className = "b3d txt b-verde"; ok.textContent = "Entendido";
   const cerrar = () => { fondo.remove(); };
   ok.addEventListener("click", cerrar); fondo.addEventListener("click", (e) => { if (e.target === fondo) cerrar(); });
@@ -178,7 +183,11 @@ const mapa = montarMapa({
   etapas: ETAPAS,
   progreso: () => ({ max: Math.min(nivel, TOTAL_NIVELES), hecho: Math.min(nivel - 1, TOTAL_NIVELES) }),
   jugarNivel: (n) => { mapa.cerrar(); puntosInicioNivel = 0; jugar(n); },
-  infoNivel: (n) => { const e = estrellasDeNivel(estrellas, n); return e ? { sub: "★".repeat(e) + "☆".repeat(3 - e), sinMarca: true, aria: e + (e === 1 ? " estrella" : " estrellas") } : {}; },
+  infoNivel: (n) => {
+    const e = estrellasDeNivel(estrellas, n), sorpresa = nivelDe(n).tipo === "sorpresa";
+    if (e) return { sub: "★".repeat(e) + "☆".repeat(3 - e) + (sorpresa ? "🎁" : ""), sinMarca: true, aria: e + (e === 1 ? " estrella" : " estrellas") + (sorpresa ? ", nivel sorpresa" : "") };
+    return sorpresa ? { sub: "🎁", aria: "nivel sorpresa" } : {};
+  },
   alInfo: abrirInfo,
   alCambiarVista: () => menuBoton(),
   botonesExtra: [{ icono: "♾️", texto: "Modo libre", clase: "b-morado", fn: () => { mapa.cerrar(); mostrarLibre(); } }], // estándar: junto a «Continuar»
@@ -389,10 +398,11 @@ function colocarNegras(cant, filasCompletas = 0, capas = null) {
       if (filasNegras.length >= k) break;
       if (filasNegras.every((x) => Math.abs(x - f) > 1)) filasNegras.push(f);
     }
-    for (const f of filasNegras) for (let c = 0; c < COLUMNAS; c++) grid[f][c].k = NEGRA;
+    for (const f of filasNegras) for (let c = 0; c < COLUMNAS; c++) { grid[f][c].k = NEGRA; delete grid[f][c].p; }
   }
   const celdas = [];
-  for (let f = FILAS - 1; f >= desde; f--) if (!filasNegras.includes(f)) for (let c = 0; c < COLUMNAS; c++) celdas.push([f, c]);
+  // (un osito con poder nunca se convierte en negra: solo puede haberlos cuando las negras salen a mitad de partida, en un nivel sorpresa)
+  for (let f = FILAS - 1; f >= desde; f--) if (!filasNegras.includes(f)) for (let c = 0; c < COLUMNAS; c++) if (!grid[f][c].p) celdas.push([f, c]);
   mezclar(celdas).slice(0, cant - filasNegras.length * COLUMNAS).forEach(([f, c]) => { grid[f][c].k = NEGRA; });
   // Capas (niveles de tipo «capas»): una parte de las negras lleva 2 capas (1 candado) y otra 3 capas (2 candados). Misma regla que logica-gominolas.js
   if (capas) {
@@ -412,6 +422,31 @@ function contarNegras() {
   for (let f = 0; f < FILAS; f++)
     for (let c = 0; c < COLUMNAS; c++) if (grid[f][c] && grid[f][c].k === NEGRA) n++;
   return n;
+}
+
+// ---------- Nivel sorpresa 🎁 (misma regla que logica-gominolas.js: crearPartida y revelar) ----------
+// Al empezar solo hay UNA negra, en la fila de abajo, y mientras sea la única fallar no castiga. Al romperla salen todas las negras del nivel.
+function colocarSenuelo() {
+  grid[FILAS - 1][Math.floor(Math.random() * COLUMNAS)].k = NEGRA;
+  let intentos = 0;
+  while (!hayJugada() && intentos++ < 50) barajar();
+}
+function revelar() {
+  fase = "normal";
+  colocarNegras(negrasReales, filasPatron, null);
+  destello = 1;
+  for (let f = 0; f < FILAS; f++)
+    for (let c = 0; c < COLUMNAS; c++) {
+      const g = grid[f][c];
+      if (!g || g.k !== NEGRA) continue;
+      for (let i = 0; i < 5; i++) {
+        const a = Math.random() * Math.PI * 2, v = 40 + Math.random() * 110;
+        particulas.push({ x: (c + 0.5) * tam, y: (g.y + 0.5) * tam, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, vida: 0.5 + Math.random() * 0.4, k: NEGRA });
+      }
+    }
+  textos.push({ x: tam * COLUMNAS / 2, y: tam * FILAS * 0.42, vida: 2.4, txt: "🎁 ¡SORPRESA!" });
+  textos.push({ x: tam * COLUMNAS / 2, y: tam * FILAS * 0.42 + tam * 0.75, vida: 2.4, txt: "Salieron " + contarNegras() + " negras" });
+  [220, 165, 110].forEach((f, i) => setTimeout(() => tono(f, 0.22), i * 110));
 }
 
 // Aparece una negra nueva en la zona de abajo (cuando el movimiento no eliminó ninguna)
@@ -483,8 +518,12 @@ function romper(lista) {
 function cerrarJugada(negrasQuitadas) {
   movs--;
   caer();
-  if (contarNegras() === 0) { actualizarHud(); ganar(); return; }
-  if (!negrasQuitadas) for (let i = 0; i < penaliza; i++) nuevaNegra(); // jugada sin negras: salen 1, 2 o 3 nuevas según la dificultad
+  if (fase === "senuelo") { // sorpresa: con una sola negra no se castiga; al romperla salen todas (y el nivel todavía no se gana)
+    if (contarNegras() === 0) revelar();
+  } else {
+    if (contarNegras() === 0) { actualizarHud(); ganar(); return; }
+    if (!negrasQuitadas) for (let i = 0; i < penaliza; i++) nuevaNegra(); // jugada sin negras: salen 1, 2 o 3 nuevas según la dificultad
+  }
   actualizarHud();
   if (movs <= 0) perder();
 }
@@ -621,7 +660,7 @@ lienzo.addEventListener("pointercancel", () => { cadena = null; puntoPrevio = nu
 function actualizarHud() {
   elPts.textContent = puntos;
   elMovs.textContent = Math.max(0, movs);
-  elNegras.textContent = contarNegras();
+  elNegras.textContent = fase === "senuelo" ? contarNegras() + " 🎁" : contarNegras();
   elNivel.textContent = modo === "libre" ? libre.ronda : actual;
   rotNivel.textContent = modo === "libre" ? "Ronda" : "Nivel";
   elBarra.style.width = Math.max(0, (movs / movsIni) * 100) + "%";
@@ -649,9 +688,18 @@ function empezar() {
   particulas = [];
   textos = [];
   revisar = false;
+  destello = 0;
   llenar();
-  colocarNegras(par.negras, par.filasCompletas || 0, par.capas || null); // filasCompletas y capas las da parametrosNivel (patrón y tipo del catálogo)
-  if (par.capas) textos.push({ x: tam * COLUMNAS / 2, y: tam * 1.2, vida: 2.2, txt: "⛓️ Negras con candados" });
+  if (par.sorpresa) { // nivel sorpresa: una sola negra abajo; las demás salen cuando se rompe (revelar)
+    fase = "senuelo"; negrasReales = par.negras; filasPatron = par.filasCompletas || 0;
+    colocarSenuelo();
+    textos.push({ x: tam * COLUMNAS / 2, y: tam * 1.2, vida: 2.8, txt: "🎁 ¡Nivel sorpresa!" });
+    textos.push({ x: tam * COLUMNAS / 2, y: tam * 2.0, vida: 2.8, txt: "Rompe la negra de abajo" });
+  } else {
+    fase = "normal";
+    colocarNegras(par.negras, par.filasCompletas || 0, par.capas || null); // filasCompletas y capas las da parametrosNivel (patrón y tipo del catálogo)
+    if (par.capas) textos.push({ x: tam * COLUMNAS / 2, y: tam * 1.2, vida: 2.2, txt: "⛓️ Negras con candados" });
+  }
   estado = "jugando";
   menuBoton();
   ovl.classList.add("oculto");
@@ -729,7 +777,7 @@ function perder() {
     return;
   }
   ovlTitulo.textContent = "¡Sin movimientos!";
-  ovlTexto.textContent = "Quedaron " + contarNegras() + " gominolas negras.";
+  ovlTexto.textContent = fase === "senuelo" ? "No alcanzaste a romper la negra de abajo a tiempo." : "Quedaron " + contarNegras() + " gominolas negras.";
   ganoUltimo = false;
   pendiente = actual;
   ovlBtn.textContent = "Reintentar nivel " + actual;
@@ -1054,6 +1102,10 @@ function dibujar() {
     ctx.beginPath(); ctx.arc(p.x, p.y, tam * 0.07, 0, Math.PI * 2); ctx.fill();
   }
   ctx.globalAlpha = 1;
+  if (destello > 0) { // destello blanco al salir todas las negras (nivel sorpresa)
+    ctx.fillStyle = "rgba(255,255,255," + (destello * 0.65).toFixed(2) + ")";
+    ctx.fillRect(0, 0, tam * COLUMNAS, tam * FILAS);
+  }
   // textos flotantes
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.font = "bold " + tam * 0.36 + "px system-ui, sans-serif";
@@ -1091,6 +1143,7 @@ function bucle(ahora) {
   // partículas y textos
   particulas.forEach((p) => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 300 * dt; p.vida -= dt; });
   particulas = particulas.filter((p) => p.vida > 0);
+  destello = Math.max(0, destello - dt * 1.4);
   textos.forEach((t) => { t.y -= 30 * dt; t.vida -= dt; });
   textos = textos.filter((t) => t.vida > 0);
 
