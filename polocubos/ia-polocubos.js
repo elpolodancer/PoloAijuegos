@@ -1,7 +1,8 @@
 // Ruta: polocubos/ia-polocubos.js
 // El bot de Polocubos. Sin pantalla: recibe el tablero y sus puntos y devuelve la jugada.
 //   { accion: "pared", tipo, r, c }   o   { accion: "sortear", cantidad }
-// Las paredes cuestan puntos; sortear cuesta «cubos aleatorios» (se ganan cerrando un cuadro con una sola pared).
+// Las paredes cuestan puntos; sortear cuesta «cubos aleatorios» (se ganan cerrando un cuadro con una sola pared) y, igual que al jugador,
+// solo puede sortear cuando tiene AJUSTES.tanda (50) cubos o más.
 // Reglas del bot (a propósito sencillas):
 //   0. Si no le quedan puntos para una pared, solo puede sortear con sus cubos.
 //   1. Si hay un cuadro con 3 paredes, pone la que falta y lo cierra (así encadena y gana un cubo).
@@ -12,9 +13,9 @@ import { AJUSTES, hayPared, paredFaltante, vecinosDePared } from "./logica-poloc
 
 export function jugadaBot(t, puntos, cubos = 0, rng = Math.random) {
   const n = t.n, libres = n * n - t.cuadros;
-  const puedeSortear = cubos >= 1 && libres > 0;
+  const puedeSortear = cubos >= AJUSTES.tanda && libres > 0;
   const cuantos = Math.max(1, Math.min(5, cubos, libres));
-  if (puntos < AJUSTES.costoPared) return { accion: "sortear", cantidad: cuantos }; // solo le quedan cubos
+  if (puntos < AJUSTES.costoPared) return puedeSortear ? { accion: "sortear", cantidad: cuantos } : null; // solo le quedan cubos (null = no puede jugar)
   if (t.tres.size) return { accion: "pared", ...paredFaltante(t, t.tres.values().next().value) };
   if (puedeSortear && t.cuadros < 5) return { accion: "sortear", cantidad: cuantos };
 

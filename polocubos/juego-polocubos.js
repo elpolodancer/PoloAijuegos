@@ -1,12 +1,14 @@
 // Ruta: polocubos/juego-polocubos.js
 // Menú principal estándar (Modo libre · Niveles · Mapa · Salir), mapa de 22 600 niveles SIN niveles todavía, y el Modo libre
-// (solo o contra el bot; hojas de 12×12 a 500×500; 100 a 500 puntos iniciales).
-// Modo libre: no da monedas ni puntos al perfil (estándar), solo guarda tu mejor marca en este dispositivo (en solitario).
+// (solo o contra el bot; hojas de 12×12 a 500×500; 100 a 1000 puntos que se sortean al empezar).
+// Modo libre: no da puntos al perfil; guarda tu mejor marca en este dispositivo (en solitario). Las metas de tiempo dan monedas una sola vez cada una
+// (METAS_EN_LIBRE). Deshacer: 10 gratis por partida; el boost cuesta 30 monedas.
 import { crearEtapas } from "../compartido/etapas-mapa.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
-import { AJUSTES, DIFICULTADES, PUNTOS_INICIO, crearTablero, ponerPared, premiarCierre, canjearCubos, puedeJugar, hayPared, sortear, completo } from "./logica-polocubos.js";
+import { AJUSTES, DIFICULTADES, PUNTOS_INICIO, ponerPared, premiarCierre, canjearCubos, puedeJugar, puedeSortear, hayPared, sortear, completo, clonarTablero, metasDeTiempo, monedasDe, unirCartera } from "./logica-polocubos.js";
 import { jugadaBot } from "./ia-polocubos.js";
+import { generarInicio } from "./patrones-polocubos.js";
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => n.toLocaleString("es-MX");
@@ -21,6 +23,99 @@ let turno = 1, maxPuntos = 0, cantidad = 20, terminado = false, pausado = false,
 let op = { pi: AJUSTES.puntosInicio, bot: false };
 try { const g = JSON.parse(localStorage.getItem(CLAVE_OPC)); if (g && PUNTOS_INICIO.includes(g.pi)) op = { pi: g.pi, bot: !!g.bot }; } catch (e) {}
 const cam = { x: 0, y: 0, z: 20 };
+
+// ---------- Deshacer, monedas y tiempo ----------
+// Deshacer: 10 gratis por partida (nivel). Cuando se acaban, el botón pasa a ser «Boost»: +10 deshacer por 30 monedas.
+// Monedas: se ganan con las metas de tiempo (🥇🥈🥉, una sola vez cada una). No hay límite de tiempo: el reloj solo cuenta.
+const CLAVE_CARTERA = "polocubos_cartera_v1"; // { g: monedas ganadas en total, s: gastadas en total, metas: { "<hoja>_<puntos>_<meta>": 1 } }
+const METAS_EN_LIBRE = true;                   // false = el Modo libre no da monedas (como dice el estándar de los juegos)
+let historial = [], gratis = 0, extra = 0;     // jugadas guardadas, deshacer gratis que quedan y deshacer comprados que quedan
+let msJugado = 0, ultimoTick = performance.now(), metas = [], textoTiempo = "";
+let listoAntes = false, nube = null;           // listoAntes: ¿ya tenía 50 cubos? (para avisar solo al llegar a 50)
+
+function leerCartera() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CLAVE_CARTERA));
+    if (c && typeof c === "object") return { g: Number(c.g) || 0, s: Number(c.s) || 0, metas: c.metas && typeof c.metas === "object" ? c.metas : {} };
+  } catch (e) {}
+  return { g: 0, s: 0, metas: {} };
+}
+let cartera = leerCartera();
+const monedas = () => monedasDe(cartera);
+function guardarCartera() {
+  try { localStorage.setItem(CLAVE_CARTERA, JSON.stringify(cartera)); } catch (e) {}
+  if (nube) nube.guardado();
+}
+// Sincroniza la cartera con la cuenta (si hay sesión e internet); sin eso el juego funciona igual
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar("polocubos", { clave: CLAVE_CARTERA, fusionar: unirCartera, alCambiar: () => { cartera = leerCartera(); if (t) pintarHud(); } });
+}).catch(() => {});
+
+const quedan = () => gratis + extra;
+function guardarPaso() { // se llama justo ANTES de cada jugada tuya (pared o sorteo)
+  historial.push({ t: clonarTablero(t), j1: { ...J[1] }, j2: { ...J[2] }, turno, maxPuntos, cantidad });
+  if (historial.length > AJUSTES.maxHistorial) historial.shift();
+}
+function deshacer() {
+  if (terminado || pausado || turno !== 1) return;
+  if (quedan() < 1) { comprarBoost(); return; }   // sin deshacer: el botón es el boost
+  if (!historial.length) { aviso("No hay jugadas por deshacer"); return; }
+  const s = historial.pop();
+  if (gratis > 0) gratis--; else extra--;
+  t = s.t; J[1] = s.j1; J[2] = s.j2; turno = s.turno; maxPuntos = s.maxPuntos; cantidad = s.cantidad; ultima = null;
+  clearTimeout(tBot);
+  aviso("↩️ Jugada deshecha · te quedan " + quedan());
+  pintarHud();
+}
+function comprarBoost() {
+  if (monedas() < AJUSTES.costoBoost) { aviso("Te faltan monedas: tienes " + fmt(monedas()) + " y el boost cuesta " + AJUSTES.costoBoost); return false; }
+  cartera.s += AJUSTES.costoBoost; extra += AJUSTES.boostDeshacer; guardarCartera();
+  aviso("⚡ Boost: +" + AJUSTES.boostDeshacer + " deshacer (−" + AJUSTES.costoBoost + " monedas)");
+  pintarHud();
+  return true;
+}
+function reanudar() { pausado = false; if (turno === 2 && !terminado) programarBot(); }
+$("b-deshacer").addEventListener("click", deshacer);
+
+function parpadear(...ids) { // hace parpadear unos segundos (ver .parpadeo en el html)
+  for (const id of ids) {
+    const el = $(id);
+    el.classList.remove("parpadeo"); void el.offsetWidth; el.classList.add("parpadeo");
+    setTimeout(() => el.classList.remove("parpadeo"), 4500);
+  }
+}
+
+function mmss(s) {
+  s = Math.max(0, Math.floor(s));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0");
+}
+// El reloj solo cuenta mientras juegas: se detiene en la pausa, al terminar y si la pestaña está oculta
+setInterval(() => {
+  const ahora = performance.now(), d = ahora - ultimoTick;
+  ultimoTick = ahora;
+  if (pantalla !== "partida" || !t || terminado || pausado || document.hidden || d > 2000) return;
+  msJugado += d;
+  pintarTiempo();
+}, 250);
+function pintarTiempo() {
+  let txt = "";
+  if (!op.bot && t) {
+    const seg = Math.floor(msJugado / 1000), sig = metas.find((m) => seg <= m.seg); // sig = la meta más difícil que aún se puede lograr
+    txt = `<small>⏱️ Tiempo</small>${mmss(seg)}` + (sig ? ` · ${sig.icono} ${mmss(sig.seg)}` : "");
+  }
+  if (txt !== textoTiempo) { textoTiempo = txt; $("c-tiempo").innerHTML = txt; }
+}
+// Al completar la hoja: cada meta alcanzada que aún no habías cobrado paga una vez. Devuelve las metas nuevas.
+function pagarMetas() {
+  const seg = Math.floor(msJugado / 1000), nuevas = [];
+  for (const m of metas) {
+    const k = dif.id + "_" + op.pi + "_" + m.id;
+    if (seg <= m.seg && !cartera.metas[k]) { cartera.metas[k] = 1; cartera.g += m.monedas; nuevas.push(m); }
+  }
+  if (nuevas.length) guardarCartera();
+  return nuevas;
+}
 
 // ---------- Mejores marcas ----------
 const leerMejores = () => { try { return JSON.parse(localStorage.getItem(CLAVE_MEJORES)) || {}; } catch (e) { return {}; } };
@@ -108,8 +203,11 @@ function pintarLibre() {
 const pausa = crearMenuPausa({
   puedeAbrir: () => pantalla === "partida" && !terminado,
   alAbrir: () => { pausado = true; clearTimeout(tBot); },                                   // el bot espera
-  alContinuar: () => { pausado = false; if (turno === 2 && !terminado) programarBot(); },
-  extras: () => [{ icono: "🔁", texto: "Reiniciar tablero", clase: "b-azul", ayuda: "Se sortean " + op.pi + " puntos al azar y empiezas con " + AJUSTES.puntosJugar, alElegir: () => empezar(dif) }],
+  alContinuar: reanudar,
+  extras: () => [
+    { icono: "↩️", texto: "Comprar +" + AJUSTES.boostDeshacer + " deshacer", clase: "b-oro", ayuda: "Cuesta " + AJUSTES.costoBoost + " monedas · tienes " + fmt(monedas()), deshabilitado: monedas() < AJUSTES.costoBoost, alElegir: () => { reanudar(); comprarBoost(); } },
+    { icono: "🔁", texto: "Reiniciar tablero", clase: "b-azul", ayuda: "Se sortean " + op.pi + " puntos (" + fmt(Math.floor(op.pi / AJUSTES.costoSorteo)) + " cuadros) al azar y empiezas con " + AJUSTES.puntosJugar + " puntos", alElegir: () => empezar(dif) },
+  ],
   ayudaSalir: "Se pierde esta partida" + (op.bot ? "" : " (tu mejor marca se conserva)"),
   alSalir: () => ir("menu"),
 });
@@ -117,17 +215,23 @@ const pausa = crearMenuPausa({
 // ---------- Partida ----------
 function empezar(d) {
   clearTimeout(tBot);
-  dif = d; t = crearTablero(d.n);
-  // Los puntos elegidos se colocan solos: se sortean cuadros al azar (a costo de sorteo) y cada jugador se queda con puntosJugar.
-  // En hojas chicas se limita para no llenarlas desde el principio.
+  dif = d;
+  // Los puntos elegidos se colocan solos como cuadros cerrados (2 puntos por cuadro) y cada jugador se queda con puntosJugar.
+  // En hojas chicas se limita para no llenarlas desde el principio. No van del todo al azar: se arman «peines» con pasillos de
+  // cuadros a una pared de cerrarse (patrones-polocubos.js), y un bot de backtracking comprueba que se puedan juntar los 50 cubos para poder sortear.
   const inicial = Math.min(Math.floor(op.pi / AJUSTES.costoSorteo), Math.floor(d.n * d.n * AJUSTES.maxInicial));
-  sortear(t, inicial);
+  const g = generarInicio(d.n, inicial, { lineas: AJUSTES.puntosJugar });
+  t = g.t;
+  if (!g.cumple) console.info("Polocubos: este tablero deja juntar " + g.cubos + " de los " + AJUSTES.tanda + " cubos para poder sortear (pocos cuadros cerrados para la hoja)");
   J[1] = { p: AJUSTES.puntosJugar, a: 0, c: 0, cu: 0 }; J[2] = { p: AJUSTES.puntosJugar, a: 0, c: 0, cu: 0 };
   maxPuntos = AJUSTES.puntosJugar; turno = 1; terminado = false; pausado = false; ultima = null;
-  cantidad = 20;
+  cantidad = AJUSTES.tanda;
+  historial = []; gratis = AJUSTES.deshacerGratis; extra = 0; listoAntes = false; // deshacer: 10 gratis en cada partida
+  msJugado = 0; ultimoTick = performance.now();
+  metas = op.bot || !METAS_EN_LIBRE ? [] : metasDeTiempo(d, d.n * d.n - t.cuadros);
   ir("partida");
   pintarHud();
-  aviso("🎲 " + fmt(t.cuadros) + " cuadros colocados al azar · empiezas con " + AJUSTES.puntosJugar + " puntos");
+  aviso("🧩 " + fmt(t.cuadros) + " cuadros colocados · busca cuadritos a los que solo les falta una pared · empiezas con " + AJUSTES.puntosJugar + " puntos");
 }
 
 // Cada vez que «a» junta AJUSTES.autoSorteo puntos, se gastan solos en sortear cuadros al azar (sin premio, como el sorteo normal).
@@ -146,18 +250,30 @@ function autoSortear(a) {
 const maxSortear = () => Math.max(0, Math.min(J[1].a, t.n * t.n - t.cuadros)); // el sorteo manual se paga con cubos aleatorios
 
 function pintarHud() {
+  const listo = puedeSortear(J[1]); // ¿ya tienes 50 cubos o más? entonces el botón Sortear está abierto
+  if (listo && !listoAntes && !terminado) {
+    cantidad = AJUSTES.tanda;
+    aviso("🎲 ¡Ya tienes " + AJUSTES.tanda + " cubos! Ya puedes sortear cuando quieras");
+    parpadear("b-sortear", "c-azar");
+  }
+  listoAntes = listo;
   cantidad = Math.max(0, Math.min(cantidad, maxSortear()));
   if (cantidad === 0 && maxSortear() > 0) cantidad = 1;
   const chip = (id, txt) => ($(id).innerHTML = txt); // chip vacío = oculto
   chip("c-pts", `<small>${op.bot ? "Tú · puntos" : "Puntos"}</small>${fmt(J[1].p)}`);
-  chip("c-azar", `<small>🎲 Cubos</small>${fmt(J[1].a)}`);
+  chip("c-azar", `<small>🎲 Cubos</small>${fmt(J[1].a)}${listo ? " ✓" : "/" + AJUSTES.tanda}`); // «/50» = cubos que necesitas para poder sortear
+  chip("c-monedas", '<span class="moneda"></span>' + fmt(monedas()));
   chip("c-bot", op.bot ? `<small>🤖 Bot</small>${fmt(J[2].p)} · 🎲${fmt(J[2].a)}` : "");
   chip("c-cuadros", `<small>Cuadros</small>${fmt(t.cuadros)}/${fmt(t.n * t.n)}`);
   $("c-cadena").textContent = terminado ? "" : op.bot && turno === 2 ? "🤖 Turno del bot"
     : J[1].c > 1 ? "🔗 Cadena ×" + J[1].c : op.bot ? "Tu turno" : "";
   $("c-cant").textContent = cantidad;
-  $("t-sortear").textContent = "Sortear (−" + cantidad + (cantidad === 1 ? " cubo)" : " cubos)");
-  $("b-sortear").disabled = terminado || turno !== 1 || cantidad < 1;
+  $("t-sortear").textContent = listo ? "Sortear (−" + cantidad + (cantidad === 1 ? " cubo)" : " cubos)") : "Sortear (faltan " + (AJUSTES.tanda - J[1].a) + " cubos)";
+  $("b-sortear").disabled = terminado || turno !== 1 || cantidad < 1 || !listo;
+  const q = quedan(); // sin deshacer, el botón es el boost
+  $("t-deshacer").textContent = q > 0 ? "Deshacer (" + q + ")" : "Boost +" + AJUSTES.boostDeshacer + " · " + AJUSTES.costoBoost + " monedas";
+  $("b-deshacer").disabled = terminado || turno !== 1 || (q > 0 && !historial.length);
+  pintarTiempo();
   pedirDibujo();
 }
 for (const b of document.querySelectorAll("[data-paso]")) b.addEventListener("click", () => { cantidad += Number(b.dataset.paso); if (cantidad < 1) cantidad = 1; pintarHud(); });
@@ -184,11 +300,14 @@ function poner(a, tipo, r, c) {
 function jugarPared(tipo, r, c) {
   if (terminado || turno !== 1 || hayPared(t, tipo, r, c)) return;
   if (J[1].p < AJUSTES.costoPared) { aviso("Te faltan puntos"); return; }
+  guardarPaso();
   revisar(!poner(1, tipo, r, c), 1);
 }
 
 $("b-sortear").addEventListener("click", () => {
   if (terminado || turno !== 1 || cantidad < 1) return;
+  if (!puedeSortear(J[1])) { aviso("🎲 Necesitas " + AJUSTES.tanda + " cubos para sortear (tienes " + fmt(J[1].a) + ")"); return; }
+  guardarPaso();
   const hechos = sortear(t, Math.min(cantidad, J[1].a));
   J[1].a -= hechos; J[1].c = 0; ultima = null;
   aviso("🎲 " + hechos + (hechos === 1 ? " cuadro sorteado" : " cuadros sorteados") + " (−" + hechos + (hechos === 1 ? " cubo)" : " cubos)"));
@@ -199,8 +318,8 @@ $("b-sortear").addEventListener("click", () => {
 function revisar(terminaTurno, a) {
   const auto = autoSortear(a); // al llegar a 100 puntos se colocan solos al azar
   if (auto) aviso((a === 2 ? "🤖 " : "") + "🎲 " + AJUSTES.autoSorteo + " puntos → " + auto + (auto === 1 ? " cuadro" : " cuadros") + " al azar");
-  for (const x of op.bot ? [1, 2] : [1]) // sin líneas: 5 cubos aleatorios se cambian solos por 1 línea
-    if (canjearCubos(J[x])) aviso((x === 2 ? "🤖 " : "") + "🎲 " + AJUSTES.cubosPorLinea + " cubos → 1 línea");
+  for (const x of op.bot ? [1, 2] : [1]) // sin puntos: 5 cubos aleatorios se cambian solos por 1 punto
+    if (canjearCubos(J[x])) aviso((x === 2 ? "🤖 " : "") + "🎲 " + AJUSTES.cubosPorLinea + " cubos → 1 punto");
   if (J[1].p > maxPuntos) maxPuntos = J[1].p;
   if (completo(t) || (op.bot ? !puede(1) && !puede(2) : !puede(1))) return terminar();
   if (op.bot) {
@@ -218,6 +337,7 @@ function programarBot() {
 function pasoBot() {
   if (pausado || terminado || turno !== 2) return;
   const m = jugadaBot(t, J[2].p, J[2].a);
+  if (!m) { revisar(true, 2); return; } // no puede jugar (sin puntos y sin 50 cubos)
   if (m.accion === "sortear") {
     const hechos = sortear(t, m.cantidad);
     J[2].a -= hechos; ultima = null;
@@ -234,11 +354,16 @@ function terminar() {
     $("fin-titulo").textContent = a.p > b.p ? "¡Le ganaste al bot! 🏆" : a.p < b.p ? "Ganó el bot 🤖" : "¡Empate!";
     $("fin-texto").textContent = `Tú: ${fmt(a.p)} puntos (${fmt(a.cu)} cuadros). Bot: ${fmt(b.p)} puntos (${fmt(b.cu)} cuadros).`;
   } else if (completo(t)) {
+    const seg = Math.floor(msJugado / 1000), nuevas = pagarMetas();
+    let metasTxt = "";
+    if (nuevas.length) metasTxt = ` Metas nuevas: ${nuevas.map((m) => m.icono + " +" + fmt(m.monedas)).join(" · ")} monedas.`;
+    else if (metas.length && metas.some((m) => seg <= m.seg)) metasTxt = " Alcanzaste metas de tiempo, pero ya las habías cobrado.";
+    else if (metas.length) { const f = metas[metas.length - 1]; metasTxt = ` Para la meta ${f.icono} necesitabas ${mmss(f.seg)}.`; }
     $("fin-titulo").textContent = "¡Hoja completa! 🎉";
-    $("fin-texto").textContent = `Cerraste los ${total} cuadros y terminaste con ${fmt(J[1].p)} puntos.`;
+    $("fin-texto").textContent = `Cerraste los ${total} cuadros en ${mmss(seg)} y terminaste con ${fmt(J[1].p)} puntos.` + metasTxt;
   } else {
-    $("fin-titulo").textContent = "Sin líneas";
-    $("fin-texto").textContent = `Te quedaste sin líneas y sin ${AJUSTES.cubosPorLinea} cubos para cambiar por una, así que ya no puedes hacer más cubos. Cerraste ${fmt(t.cuadros)} de ${total} cuadros.`;
+    $("fin-titulo").textContent = "Sin puntos";
+    $("fin-texto").textContent = `Te quedaste sin puntos y sin ${AJUSTES.cubosPorLinea} cubos para cambiar por 1 punto, así que ya no puedes hacer más cubos. Cerraste ${fmt(t.cuadros)} de ${total} cuadros.`;
   }
   $("fin").hidden = false;
 }

@@ -35,6 +35,12 @@
       display: flex; flex-direction: column; align-items: center; gap: 6px; }
     .fila { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
     .panel .b3d.chico.txt { --t: 40px; padding: 0 10px; }
+    /* Monedas y tiempo: abajo de ☰, a la izquierda (fila de información) */
+    .info-izq { position: fixed; z-index: 5; left: max(10px, env(safe-area-inset-left)); top: calc(108px + env(safe-area-inset-top)); display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+    /* Parpadeo de aviso (p. ej. cuando ya hay 50 cubos para sortear); sin movimiento si la persona lo pidió así */
+    @keyframes parpadeo { 0%, 100% { filter: none; } 50% { filter: brightness(1.5) drop-shadow(0 0 8px #ffd23f); } }
+    .parpadeo { animation: parpadeo .7s ease-in-out 6; }
+    @media (prefers-reduced-motion: reduce) { .parpadeo { animation: none; outline: 3px solid #ffd23f; outline-offset: 2px; } }
     #aviso { position: fixed; z-index: 30; left: 50%; top: calc(14px + env(safe-area-inset-top)); transform: translateX(-50%); max-width: 90vw; padding: 8px 16px; font-weight: 800; text-align: center;
       color: #fff; background: rgba(10, 10, 12, .85); border: 2px solid #121316; border-radius: 999px; pointer-events: none; }
     #aviso[hidden] { display: none; }
@@ -49,7 +55,7 @@
   <!-- Menú principal estándar: Modo libre · Niveles · Mapa · Salir -->
   <main class="pantalla" id="menu">
     <h1>📓 Polocubos</h1>
-    <p>Cierra cuadritos de tu libreta: cada pared cuesta 1 punto. Cierra un cuadro con 1 pared y ganas un cubo aleatorio (y recuperas tu punto); con 2 o más paredes ganas 2 puntos. Si te quedas sin líneas, 5 cubos se cambian solos por 1.</p>
+    <p>Cierra cuadritos de tu libreta: cada pared cuesta 1 punto. Cierra un cuadro con 1 pared y ganas 1 cubo 🎲 (y recuperas tu punto); con 2 o más paredes ganas 2 puntos. Con 50 cubos o más puedes sortear cuadros al azar. Si te quedas sin puntos, 5 cubos se cambian solos por 1 punto.</p>
     <div class="col">
       <button class="b3d txt grande b-verde" id="b-libre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
       <button class="b3d txt grande b-azul" id="b-niveles" type="button"><span class="b-ico">🪜</span> Niveles</button>
@@ -61,8 +67,8 @@
   <!-- Modo libre: 5 dificultades -->
   <section class="pantalla" id="libre" hidden>
     <h2>♾️ Modo libre</h2>
-    <p>Elige cuántos puntos se sortean al azar al empezar (tú juegas con 15 líneas) y contra quién juegas. Al tocar un tamaño de hoja empieza la partida.</p>
-    <div class="opc"><h3>Puntos para empezar</h3><div class="fila" id="o-puntos"></div></div>
+    <p>Elige cuántos puntos se sortean al azar al empezar (2 puntos = 1 cuadro; tú empiezas con 15 puntos) y contra quién juegas. Al tocar un tamaño de hoja empieza la partida.</p>
+    <div class="opc"><h3>Puntos que se sortean al empezar</h3><div class="fila" id="o-puntos"></div></div>
     <div class="opc"><h3>Cómo jugar</h3><div class="fila" id="o-modo"></div></div>
     <div class="opc"><h3>Tamaño de la hoja</h3></div>
     <div class="col" id="dificultades"></div>
@@ -77,6 +83,10 @@
       <span class="chip" id="c-bot"></span>
       <span class="chip" id="c-cuadros"></span>
       <span class="chip" id="c-cadena"></span>
+    </div>
+    <div class="info-izq">
+      <span class="chip chip-monedas" id="c-monedas"></span>
+      <span class="chip" id="c-tiempo"></span>
     </div>
     <div class="zoom">
       <button class="b3d chico b-gris" id="z-mas" type="button" aria-label="Acercar"><span class="b-ico">＋</span></button>
@@ -93,7 +103,10 @@
         <button class="b3d chico txt b-gris" data-paso="10" type="button">+10</button>
         <button class="b3d chico txt b-gris" data-paso="50" type="button">+50</button>
       </div>
-      <button class="b3d txt b-oro" id="b-sortear" type="button"><span class="b-ico">🎲</span> <span id="t-sortear">Sortear</span></button>
+      <div class="fila">
+        <button class="b3d txt b-oro" id="b-sortear" type="button"><span class="b-ico">🎲</span> <span id="t-sortear">Sortear</span></button>
+        <button class="b3d txt b-azul" id="b-deshacer" type="button"><span class="b-ico">↩️</span> <span id="t-deshacer">Deshacer</span></button>
+      </div>
     </div>
     <div class="sobre-tablero" id="fin" hidden>
       <div class="sobre-texto"><h2 id="fin-titulo"></h2><div id="fin-texto"></div></div>

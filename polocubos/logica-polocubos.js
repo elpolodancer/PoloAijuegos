@@ -9,14 +9,21 @@
 export const AJUSTES = {
   puntosInicio: 100, // puntos por defecto al empezar (el jugador puede elegir entre PUNTOS_INICIO). Al empezar se colocan solos
                      // en cuadros al azar (sorteo) y el jugador se queda con puntosJugar
-  puntosJugar: 15,   // puntos (líneas) con los que se juega al empezar (el resto de puntosInicio se sortea automáticamente)
+  puntosJugar: 15,   // puntos con los que se juega al empezar (el resto de puntosInicio se sortea automáticamente)
   autoSorteo: 100,   // cada vez que alguien junta esta cantidad, se gasta sola en sortear cuadros al azar
+  tanda: 50,         // cubos aleatorios que hay que TENER para poder sortear: con 50 o más se abre el botón Sortear y el jugador
+                     // elige cuántos usa y cuándo. También es la meta que el bot de backtracking comprueba al armar
+                     // el tablero inicial (que el jugador PUEDA juntar esos 50 cubos)
   maxInicial: 0.6,   // al empezar, como máximo esta fracción de la hoja se llena con el sorteo automático (hojas chicas)
   costoPared: 1,     // poner una pared a mano
   costoSorteo: 2,    // puntos que vale un cuadro sorteado AUTOMÁTICAMENTE (los puntos se convierten solos en cuadros al azar)
   premioCuadro: 2,   // puntos que da cerrar un cuadro poniendo 2 o más paredes tuyas (con 3 o 4 paredes tuyas también son 2: te cuesta más de lo que paga)
   cubosPorLinea: 5,  // si te quedas sin líneas, cada 5 cubos aleatorios se cambian solos por 1 línea
   cubosPorUnaPared: 1, // cerrar un cuadro poniendo UNA sola pared: ganas 1 «cubo aleatorio» (se coloca con el botón Sortear) y recuperas esa pared
+  deshacerGratis: 10,  // jugadas que se pueden deshacer gratis en cada partida (nivel)
+  boostDeshacer: 10,   // cuántos deshacer da un boost
+  costoBoost: 30,      // monedas que cuesta un boost
+  maxHistorial: 30,    // jugadas que se guardan para poder deshacer (las más viejas se olvidan)
 };
 export const PUNTOS_INICIO = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
 
@@ -103,7 +110,31 @@ export function sortear(t, cantidad, rng = Math.random) {
 
 export const completo = (t) => t.cuadros === t.n * t.n;
 
-// ----- Quedarse sin líneas -----
+// Copia independiente del tablero (para que un bot pruebe jugadas sin tocar la partida)
+export function clonarTablero(t) {
+  return {
+    n: t.n, H: t.H.slice(), V: t.V.slice(), HD: t.HD.slice(), VD: t.VD.slice(), cnt: t.cnt.slice(),
+    cerradas: t.cerradas.slice(), cuadros: t.cuadros, dueno: t.dueno.slice(), tres: new Set(t.tres),
+    LH: t.LH.slice(), LV: t.LV.slice(), LC: t.LC.slice(),
+  };
+}
+
+// Cierra (dibuja las 4 paredes de) todos los cuadros marcados con 1 en «cerrado» (Uint8Array n*n), como si los hubiera sorteado el juego:
+// sin dueño y sin premio. Los cuadros que se cierren de rebote también gastan sus paredes.
+export function cerrarCuadros(t, cerrado) {
+  const n = t.n;
+  for (let k = 0; k < n * n; k++) {
+    if (!cerrado[k] || t.cerradas[k]) continue;
+    const r = Math.floor(k / n), c = k % n;
+    const nuevos = [ponerPared(t, "H", r, c), ponerPared(t, "H", r + 1, c), ponerPared(t, "V", r, c), ponerPared(t, "V", r, c + 1)].flatMap((x) => x || []);
+    for (const q of nuevos) gastarParedes(t, q);
+  }
+}
+
+// Sortear a mano solo se puede a partir de AJUSTES.tanda (50) cubos aleatorios. Después el jugador elige cuántos usa y cuándo.
+export const puedeSortear = (j) => j.a >= AJUSTES.tanda;
+
+// ----- Quedarse sin puntos -----
 // Quedarse sin líneas NO termina la partida: si tiene cubos suficientes, se cambian por una línea. El jugador queda sin forma
 // de seguir (y la partida acaba para él) solo cuando no tiene ni una línea ni cubos para cambiar por una: sin líneas no puede
 // cerrar cuadros con una pared y por tanto no puede hacer más cubos aleatorios.
@@ -145,4 +176,38 @@ export function premiarCierre(t, cerrados, quien) {
   if (reembolso) puntos += AJUSTES.costoPared;
   for (const k of cerrados) gastarParedes(t, k);
   return { puntos, cubos };
+}
+
+// ----- Metas de tiempo (monedas) -----
+// NO hay límite de tiempo: el reloj solo cuenta. Si terminas la hoja a tiempo, cada meta alcanzada paga monedas UNA sola vez
+// (por tamaño de hoja y puntos iniciales; el juego anota cuáles ya cobraste). El tiempo de cada meta crece con los cuadros que faltaban
+// por cerrar al empezar. Solo hojas de hasta 50×50 (las 5 dificultades estándar); en las gigantes no hay metas.
+// Para ajustar la dificultad cambia segPorCuadro; para el premio, monedas y MULT_MONEDAS.
+export const METAS_TIEMPO = [ // de la más difícil a la más fácil
+  { id: "oro", icono: "🥇", segPorCuadro: 2, monedas: 40 },
+  { id: "plata", icono: "🥈", segPorCuadro: 3.5, monedas: 20 },
+  { id: "bronce", icono: "🥉", segPorCuadro: 6, monedas: 10 },
+];
+const MULT_MONEDAS = { muyfacil: 1, facil: 1.5, normal: 2, dificil: 3, experto: 4 };
+// «dif» = una de DIFICULTADES, «faltan» = cuadros por cerrar al empezar. Devuelve [{ id, icono, seg, monedas }] ([] si esa hoja no tiene metas)
+export function metasDeTiempo(dif, faltan) {
+  const mult = MULT_MONEDAS[dif && dif.id];
+  if (!mult || !(faltan >= 1)) return [];
+  return METAS_TIEMPO.map((m) => ({
+    id: m.id, icono: m.icono, seg: Math.max(30, Math.ceil((faltan * m.segPorCuadro) / 10) * 10), monedas: Math.round(m.monedas * mult),
+  }));
+}
+
+// ----- Cartera de monedas -----
+// c = { g: monedas ganadas en total, s: monedas gastadas en total, metas: { clave: 1 } }; monedas = g − s.
+// Así dos dispositivos se pueden unir sin que las monedas gastadas vuelvan ni queden en negativo (se usa como «fusionar» de progreso.js).
+export const monedasDe = (c) => Math.max(0, (Number(c && c.g) || 0) - (Number(c && c.s) || 0));
+export function unirCartera(a, b) {
+  if (!a && !b) return null;
+  a = a || {}; b = b || {};
+  return {
+    g: Math.max(Number(a.g) || 0, Number(b.g) || 0),
+    s: Math.max(Number(a.s) || 0, Number(b.s) || 0),
+    metas: { ...(a.metas || {}), ...(b.metas || {}) },
+  };
 }
