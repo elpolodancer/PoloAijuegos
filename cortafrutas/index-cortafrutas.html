@@ -1,0 +1,87 @@
+<!doctype html>
+<!-- Ruta: cortafrutas/index-cortafrutas.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Corta Frutas</title>
+  <meta name="theme-color" content="#d9a866" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <style>
+    /* Menú: ocupa la ventana y se desplaza solo si no cabe (el body es fijo). Deja libres las esquinas reservadas. */
+    .menu { position: fixed; inset: 0; z-index: 1; display: flex; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;
+      padding: calc(max(8px, env(safe-area-inset-top)) + 96px) 16px calc(max(14px, env(safe-area-inset-bottom)) + 62px); }
+    .menu[hidden] { display: none; }
+    .pantalla { width: min(100%, 460px); margin: auto; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+    .pantalla[hidden] { display: none; }
+    h1, h2 { margin: 0; color: var(--txt-fondo); text-shadow: var(--sombra-txt); line-height: 1.05; }
+    h1 { font-size: clamp(2.4rem, 10vw, 3.6rem); letter-spacing: -.01em; }
+    h2 { font-size: 1.9rem; }
+    .sub { margin: 0; max-width: 34ch; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); font-weight: 600; }
+    .etq { margin: 6px 0 0; font-size: 1.05rem; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+
+    /* Frutas decorativas (solo adorno) */
+    .deco { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 2.4rem; line-height: 1; filter: drop-shadow(0 4px 3px rgba(0,0,0,.3)); }
+    .deco span:nth-child(odd) { transform: rotate(-12deg); }
+    .deco span:nth-child(even) { transform: rotate(10deg); }
+
+    /* Botones del menú principal: en columna, mismo ancho; Niveles y Mapa lado a lado */
+    .botones { display: flex; flex-direction: column; align-items: stretch; gap: 10px; width: min(100%, 320px); margin-top: 6px; }
+    .botones .b3d { width: 100%; }
+    .par { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    /* Selector de dificultad */
+    .fila { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 10px; }
+    .fila .b3d.txt { font-size: 14px; }
+    #ayuda-dif { min-height: 2.6em; }
+
+    /* Aviso flotante (abajo al centro, entre las esquinas reservadas) */
+    .aviso { position: fixed; z-index: 8; left: 50%; transform: translateX(-50%); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 4px);
+      max-width: min(420px, calc(100vw - 140px)); margin: 0; padding: 8px 14px; text-align: center; font-weight: 700; font-size: .9rem; line-height: 1.25;
+      color: #f1f2f4; background: rgba(10, 10, 12, .85); border: 2px solid #121316; border-radius: 14px; box-shadow: 0 4px 0 #0c0d0f; pointer-events: none; }
+    .aviso[hidden] { display: none; }
+    @media (max-height: 420px) { .menu { padding-top: calc(max(8px, env(safe-area-inset-top)) + 56px); } }
+  </style>
+</head>
+<body class="inmersivo">
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Menú principal" hidden><span class="b-ico">☰</span> <span id="txt-menu">Menú principal</span></button>
+  </nav>
+
+  <div class="menu" id="menu">
+    <!-- Menú principal -->
+    <section id="pant-principal" class="pantalla" aria-labelledby="titulo">
+      <div class="deco" aria-hidden="true"><span>🍉</span><span>🍊</span><span>💣</span><span>🍎</span><span>🍍</span></div>
+      <h1 id="titulo">Corta Frutas</h1>
+      <p class="sub">Desliza el dedo para cortar las frutas. ¡Cuidado con las bombas!</p>
+      <div class="botones">
+        <button id="btn-libre" class="b3d txt grande b-verde" type="button"><span class="b-ico">🍉</span> Partida libre</button>
+        <button id="btn-sin" class="b3d txt grande b-azul" type="button"><span class="b-ico">♾️</span> Sin tiempo límite</button>
+        <div class="par">
+          <button id="btn-niveles" class="b3d txt b-oro" type="button"><span class="b-ico">🎯</span> Niveles</button>
+          <button id="btn-mapa" class="b3d txt b-morado" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Partida libre o Sin tiempo límite: se elige la dificultad -->
+    <section id="pant-modo" class="pantalla" aria-labelledby="titulo-modo" hidden>
+      <h2 id="titulo-modo"></h2>
+      <p class="sub" id="sub-modo"></p>
+      <h3 class="etq" id="etq-dif">Dificultad</h3>
+      <div class="fila" id="fila-dif" role="group" aria-labelledby="etq-dif"></div>
+      <p class="sub" id="ayuda-dif" role="status"></p>
+      <button id="btn-jugar" class="b3d txt grande b-verde" type="button"></button>
+    </section>
+  </div>
+
+  <p id="aviso" class="aviso" role="status" hidden></p>
+
+  <script type="module" src="juego-cortafrutas.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
