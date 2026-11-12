@@ -5,40 +5,106 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Saltarín</title>
-  <meta name="theme-color" content="#15161a" />
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
   <link rel="stylesheet" href="../compartido/estilos.css" />
   <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    html.inmersivo { --fondo-juego: #101114; }
     /* Juego vertical (360×540): el marco se ajusta a la altura de la ventana */
     .inmersivo .marco { aspect-ratio: 360 / 540;
       width: min(100vw, calc(100vh * 360 / 540));
       width: min(100vw, calc(100dvh * 360 / 540)); }
-    #velo { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 12px; padding: 16px; text-align: center; background: rgba(10,10,12,.8); overflow-y: auto; }
-    #velo > :first-child { margin-top: auto; }   /* centrado vertical que, si no cabe (celular acostado), se desplaza en vez de cortarse */
-    #velo > :last-child { margin-bottom: auto; }
-    @media (max-height: 520px) { #velo { gap: 8px; padding: 12px; } #velo h2 { font-size: 1.3rem; } #velo p { font-size: .8rem; line-height: 1.35; } }
+    #velo { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; text-align: center; background: rgba(10,10,12,.8); overflow-y: auto; }
     #velo h2 { margin: 0; font-size: 1.6rem; }
     #velo p { margin: 0; max-width: 320px; font-size: .9rem; line-height: 1.45; }
-    #estado { min-height: 1.2em; }
+    .acciones { position: absolute; z-index: 3; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; gap: 10px; pointer-events: none; }
+    .acciones > * { pointer-events: auto; }
+
+    /* Pantallas de menú (sobre la madera) */
+    .pantalla { position: fixed; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 14px;
+      padding: max(96px, calc(env(safe-area-inset-top) + 84px)) 16px 72px; overflow-y: auto; text-align: center; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    .pantalla > :first-child { margin-top: auto; }
+    .pantalla > :last-child { margin-bottom: auto; }
+    .pantalla h1, .pantalla h2 { margin: 0; font-size: 1.7rem; }
+    .pantalla p, .pantalla small { margin: 0; max-width: 340px; color: var(--txt-fondo-suave); font-size: .9rem; line-height: 1.4; }
+    .col { display: flex; flex-direction: column; gap: 12px; width: min(300px, 100%); }
+    .fila { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
+    .rejilla-niv { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; width: min(340px, 100%); }
+    #aviso { position: fixed; z-index: 9; left: 50%; bottom: 70px; transform: translateX(-50%); max-width: 90vw; padding: 10px 16px; border-radius: 12px; background: rgba(20,20,24,.92); color: #fff; font-size: .9rem; text-align: center; }
     .ayuda { color: var(--suave); }
   </style>
 </head>
-<body class="inmersivo" data-pantalla-auto>
-  <div class="escena">
+<body class="inmersivo">
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> <span id="menu-txt">Pausa</span></button>
+  </nav>
+
+  <!-- Menú principal estándar (sección 7 de ESTANDARES-juegos.md) + Mejoras -->
+  <section class="pantalla" id="p-menu">
+    <h1>🦘 Saltarín</h1>
+    <div class="col">
+      <button class="b3d txt grande b-verde" id="b-libre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
+      <button class="b3d txt grande b-azul" id="b-niveles" type="button"><span class="b-ico">🪜</span> Niveles</button>
+      <button class="b3d txt grande b-azul" id="b-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+      <button class="b3d txt grande b-oro" id="b-mejoras" type="button"><span class="b-ico">🧢</span> Mejoras</button>
+      <a class="b3d txt grande b-rojo" href="../"><span class="b-ico">🚪</span> Salir</a>
+    </div>
+    <button id="entrar" class="b3d txt chico b-azul" type="button" title="Entrar con Google para guardar puntos" hidden>👤 Entrar con Google</button>
+  </section>
+
+  <section class="pantalla" id="p-libre" hidden>
+    <h2>♾️ Modo libre</h2>
+    <p>Elige la dificultad. Controles: flechas o A/D para moverte; espacio o clic para disparar hacia arriba; G para usar un gorrito. En el celular, toca la mitad izquierda o derecha para moverte y usa los botones de abajo.</p>
+    <div class="col">
+      <button class="b3d txt grande b-azul" data-dif="facil" type="button">Fácil</button>
+      <button class="b3d txt grande b-morado" data-dif="normal" type="button">Normal</button>
+      <button class="b3d txt grande b-rojo" data-dif="dificil" type="button">Difícil</button>
+    </div>
+  </section>
+
+  <section class="pantalla" id="p-niveles" hidden>
+    <h2 id="niv-titulo">Niveles</h2>
+    <small id="niv-sub"></small>
+    <div class="rejilla-niv" id="niv-rejilla"></div>
+    <div class="fila">
+      <button class="b3d txt b-gris" id="niv-ant" type="button">◀ Anterior</button>
+      <button class="b3d txt b-gris" id="niv-sig" type="button">Siguiente ▶</button>
+    </div>
+  </section>
+
+  <section class="pantalla" id="p-mapa" hidden></section>
+
+  <section class="pantalla" id="p-mejoras" hidden>
+    <h2>🧢 Mejoras</h2>
+    <span class="chip chip-monedas"><span class="moneda"></span><b id="m-monedas">0</b></span>
+    <p>El gorro te hace volar sin que nada te toque. Gorro nivel <b id="m-nivel"></b>: vuelas <b id="m-vuelo"></b>.</p>
+    <p>Gorritos guardados: <b id="m-gorros">0</b>. Úsalos en la partida con la tecla G o el botón 🧢.</p>
+    <div class="col">
+      <button class="b3d txt grande b-oro" id="b-mejorar" type="button"><span class="b-ico">⬆️</span> <span id="t-mejorar"></span></button>
+      <button class="b3d txt grande b-verde" id="b-comprar" type="button"><span class="b-ico">🧢</span> <span id="t-comprar"></span></button>
+    </div>
+  </section>
+
+  <div class="escena" id="escena" hidden>
     <div class="marco">
       <canvas id="lienzo" class="lienzo" width="360" height="540"></canvas>
-      <div id="velo">
+      <div class="acciones" id="acciones" hidden>
+        <button id="btn-gorro" class="b3d txt chico b-azul" type="button" title="Usar un gorrito (G)">🧢 ×0</button>
+        <button id="btn-disparo" class="b3d txt chico b-rojo" type="button" title="Disparar (espacio o clic)">🔫 Disparar</button>
+      </div>
+      <div id="velo" hidden>
         <h2>🦘 Saltarín</h2>
-        <p id="estado">Flechas o A/D para moverte; en el celular, toca la mitad izquierda o derecha de la pantalla.</p>
-        <p class="ayuda">Verde: normal · Azul: se mueve · Naranja con resorte: salto doble · Café con grietas: se rompe y no rebotas · Blanca: solo sirve una vez. Pisa a los monstruos desde arriba; si los tocas de lado, caes. Junta monedas y atrapa el gorro 🧢 para volar 100 m sin que nada te toque.</p>
-        <button id="jugar" class="b3d txt grande b-verde" type="button">Jugar</button>
-        <button id="entrar" class="b3d txt chico b-azul" type="button" title="Entrar con Google para guardar puntos" hidden>👤 Entrar con Google</button>
+        <p id="estado"></p>
+        <button id="jugar" class="b3d txt grande b-verde" type="button">Jugar otra vez</button>
+        <button id="volver" class="b3d txt b-azul" type="button">Menú principal</button>
       </div>
     </div>
   </div>
-  <div class="hud hud-abajo"><a class="b3d chico b-gris" href="../" aria-label="Volver al portal" title="Volver al portal"><span class="b-ico">🏠</span></a></div>
+  <div id="aviso" hidden></div>
+
   <script type="module" src="juego-doodle.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>
