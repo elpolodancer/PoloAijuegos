@@ -8,7 +8,6 @@ import { montarMapa } from "../compartido/mapa-niveles.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
 import { AJUSTES, BONOS_SORTEO, cuadrosDeSorteo, cubosParaCuadros, cubosASortear, vecinosDePared, DIFICULTADES, PUNTOS_INICIO, ponerPared, premiarCierre, paredesPropias, canjearCubos, puedeJugar, puedeSortear, hayPared, sortearModo, sortearParedes, paredSuelta, cercaDe, PAREDES_POR_CUADRO, crearTablero, completo, clonarTablero, metasDeTiempo, monedasDe, unirCartera } from "./logica-polocubos.js";
 import { jugadaBot } from "./ia-polocubos.js";
-import { generarInicio } from "./patrones-polocubos.js";
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => n.toLocaleString("es-MX");
@@ -242,17 +241,16 @@ function empezar(d) {
   limpiarCaida();
   dif = d;
   // Los puntos elegidos se colocan solos como cuadros cerrados (2 puntos por cuadro) y cada jugador se queda con puntosJugar.
-  // En hojas chicas se limita para no llenarlas desde el principio. Van al azar (95 % o más); solo un 5 % o menos se arma en «peines» con pasillos de
-  // cuadros a una pared de cerrarse (patrones-polocubos.js), y un bot de backtracking comprueba que se puedan juntar los cubos mínimos para poder sortear (AJUSTES.tanda).
+  // En hojas chicas se limita para no llenarlas desde el principio. Van 100 % al azar (sortearModo → sortear): sin patrones, sin peines y sin ningún algoritmo que revise
+  // o acomode el tablero. Los cuadros a una pared de cerrarse salen solo por casualidad.
   const inicial = Math.min(Math.floor(op.pi / AJUSTES.costoSorteo), Math.floor(d.n * d.n * AJUSTES.maxInicial));
   let g;
   if (porParedes()) {
     // Sorteo por paredes: cada cuadro del sorteo vale 4 paredes sueltas al azar (p. ej. 500 cuadros → 2000 paredes); como mucho maxInicial de todas las paredes de la hoja
     g = { t: crearTablero(d.n), cumple: true };
     sortearParedes(g.t, Math.min(inicial * PAREDES_POR_CUADRO, Math.floor(2 * d.n * (d.n + 1) * AJUSTES.maxInicial)));
-  } else g = generarInicio(d.n, inicial, { lineas: AJUSTES.puntosJugar });
+  } else { g = { t: crearTablero(d.n) }; sortearModo(g.t, inicial, "bloques"); }
   t = g.t;
-  if (!g.cumple) console.info("Polocubos: este tablero deja juntar " + g.cubos + " de los " + AJUSTES.tanda + " cubos para poder sortear (pocos cuadros cerrados para la hoja)");
   J[1] = { p: AJUSTES.puntosJugar, a: 0, c: 0, cu: 0, ult: -1, combo: 0 }; J[2] = { p: AJUSTES.puntosJugar, a: 0, c: 0, cu: 0, ult: -1, combo: 0 };
   maxPuntos = AJUSTES.puntosJugar; turno = 1; terminado = false; pausado = false; ultima = null;
   cantidad = AJUSTES.tanda;
