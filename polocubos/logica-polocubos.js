@@ -11,9 +11,9 @@ export const AJUSTES = {
                      // en cuadros al azar (sorteo) y el jugador se queda con puntosJugar
   puntosJugar: 15,   // puntos con los que se juega al empezar (el resto de puntosInicio se sortea automáticamente)
   autoSorteo: 100,   // cada vez que alguien junta esta cantidad, se gasta sola en sortear cuadros al azar
-  tanda: 50,         // cubos aleatorios que hay que TENER para poder sortear: con 50 o más se abre el botón Sortear y el jugador
+  tanda: 20,         // cubos aleatorios que hay que TENER para poder sortear: con 20 o más se abre el botón Sortear y el jugador
                      // elige cuántos usa y cuándo. También es la meta que el bot de backtracking comprueba al armar
-                     // el tablero inicial (que el jugador PUEDA juntar esos 50 cubos)
+                     // el tablero inicial (que el jugador PUEDA juntar esos 20 cubos)
   maxInicial: 0.6,   // al empezar, como máximo esta fracción de la hoja se llena con el sorteo automático (hojas chicas)
   costoPared: 1,     // poner una pared a mano
   costoSorteo: 2,    // puntos que vale un cuadro sorteado AUTOMÁTICAMENTE (los puntos se convierten solos en cuadros al azar)
@@ -26,6 +26,23 @@ export const AJUSTES = {
   costoBoost: 30,      // monedas que cuesta un boost
   maxHistorial: 30,    // jugadas que se guardan para poder deshacer (las más viejas se olvidan)
 };
+// ----- Bono al sortear -----
+// Sortear 20 cubos pone 20 cuadros (1 por cubo). Pero si el jugador sortea más de una vez, los cubos rinden más:
+//   30 cubos → 60 cuadros · 40 cubos → 80 cuadros · 50 cubos → 120 cuadros
+// Con cantidades mayores se arma por bloques, de más grande a más chico (p. ej. 100 cubos = 2 bloques de 50 = 240 cuadros;
+// 35 cubos = un bloque de 30 + 5 sueltos = 65 cuadros). Lo que sobra de los bloques vale 1 cuadro por cubo.
+export const BONOS_SORTEO = [{ cubos: 50, cuadros: 120 }, { cubos: 40, cuadros: 80 }, { cubos: 30, cuadros: 60 }]; // de mayor a menor
+export function cuadrosDeSorteo(cubos) {
+  let resto = Math.max(0, Math.floor(Number(cubos) || 0)), total = 0;
+  for (const b of BONOS_SORTEO) { const veces = Math.floor(resto / b.cubos); total += veces * b.cuadros; resto -= veces * b.cubos; }
+  return total + resto;
+}
+// Menos cubos con los que se llegan a «cuadros» cuadros (para devolver cubos si la hoja ya no tiene tantos cuadros libres)
+export function cubosParaCuadros(cuadros, maxCubos) {
+  for (let c = 1; c <= maxCubos; c++) if (cuadrosDeSorteo(c) >= cuadros) return c;
+  return maxCubos;
+}
+
 export const PUNTOS_INICIO = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
 
 // Tamaños de hoja del Modo libre. Los 5 primeros son las dificultades estándar; los 3 últimos son hojas gigantes.
@@ -132,7 +149,7 @@ export function cerrarCuadros(t, cerrado) {
   }
 }
 
-// Sortear a mano solo se puede a partir de AJUSTES.tanda (50) cubos aleatorios. Después el jugador elige cuántos usa y cuándo.
+// Sortear a mano solo se puede a partir de AJUSTES.tanda (20) cubos aleatorios. Después el jugador elige cuántos usa y cuándo.
 export const puedeSortear = (j) => j.a >= AJUSTES.tanda;
 
 // ----- Quedarse sin puntos -----

@@ -2,7 +2,7 @@
 // El bot de Polocubos. Sin pantalla: recibe el tablero y sus puntos y devuelve la jugada.
 //   { accion: "pared", tipo, r, c }   o   { accion: "sortear", cantidad }
 // Las paredes cuestan puntos; sortear cuesta «cubos aleatorios» (se ganan cerrando un cuadro con una sola pared) y, igual que al jugador,
-// solo puede sortear cuando tiene AJUSTES.tanda (50) cubos o más.
+// solo puede sortear cuando tiene AJUSTES.tanda (20) cubos o más.
 // Reglas del bot (a propósito sencillas):
 //   0. Si no le quedan puntos para una pared, solo puede sortear con sus cubos.
 //   1. Si hay un cuadro con 3 paredes, pone la que falta y lo cierra (así encadena y gana un cubo).

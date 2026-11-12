@@ -6,7 +6,7 @@
 import { crearEtapas } from "../compartido/etapas-mapa.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
-import { AJUSTES, DIFICULTADES, PUNTOS_INICIO, ponerPared, premiarCierre, canjearCubos, puedeJugar, puedeSortear, hayPared, sortear, completo, clonarTablero, metasDeTiempo, monedasDe, unirCartera } from "./logica-polocubos.js";
+import { AJUSTES, BONOS_SORTEO, cuadrosDeSorteo, cubosParaCuadros, vecinosDePared, DIFICULTADES, PUNTOS_INICIO, ponerPared, premiarCierre, canjearCubos, puedeJugar, puedeSortear, hayPared, sortear, completo, clonarTablero, metasDeTiempo, monedasDe, unirCartera } from "./logica-polocubos.js";
 import { jugadaBot } from "./ia-polocubos.js";
 import { generarInicio } from "./patrones-polocubos.js";
 
@@ -31,7 +31,7 @@ const CLAVE_CARTERA = "polocubos_cartera_v1"; // { g: monedas ganadas en total, 
 const METAS_EN_LIBRE = true;                   // false = el Modo libre no da monedas (como dice el estándar de los juegos)
 let historial = [], gratis = 0, extra = 0;     // jugadas guardadas, deshacer gratis que quedan y deshacer comprados que quedan
 let msJugado = 0, ultimoTick = performance.now(), metas = [], textoTiempo = "";
-let listoAntes = false, nube = null;           // listoAntes: ¿ya tenía 50 cubos? (para avisar solo al llegar a 50)
+let listoAntes = false, nube = null;           // listoAntes: ¿ya tenía los cubos mínimos para sortear? (para avisar solo una vez)
 
 function leerCartera() {
   try {
@@ -63,6 +63,7 @@ function deshacer() {
   const s = historial.pop();
   if (gratis > 0) gratis--; else extra--;
   t = s.t; J[1] = s.j1; J[2] = s.j2; turno = s.turno; maxPuntos = s.maxPuntos; cantidad = s.cantidad; ultima = null;
+  limpiarCaida();
   clearTimeout(tBot);
   aviso("↩️ Jugada deshecha · te quedan " + quedan());
   pintarHud();
@@ -148,7 +149,7 @@ const mapa = montarMapa({
 
 // ---------- Pantallas ----------
 function ir(p) {
-  if (pantalla === "partida" && p !== "partida") { guardarMejor(); clearTimeout(tBot); }
+  if (pantalla === "partida" && p !== "partida") { guardarMejor(); clearTimeout(tBot); limpiarCaida(); }
   pantalla = p;
   $("menu").hidden = p !== "menu";
   $("libre").hidden = p !== "libre";
@@ -215,10 +216,11 @@ const pausa = crearMenuPausa({
 // ---------- Partida ----------
 function empezar(d) {
   clearTimeout(tBot);
+  limpiarCaida();
   dif = d;
   // Los puntos elegidos se colocan solos como cuadros cerrados (2 puntos por cuadro) y cada jugador se queda con puntosJugar.
   // En hojas chicas se limita para no llenarlas desde el principio. Van al azar (95 % o más); solo un 5 % o menos se arma en «peines» con pasillos de
-  // cuadros a una pared de cerrarse (patrones-polocubos.js), y un bot de backtracking comprueba que se puedan juntar los 50 cubos para poder sortear.
+  // cuadros a una pared de cerrarse (patrones-polocubos.js), y un bot de backtracking comprueba que se puedan juntar los cubos mínimos para poder sortear (AJUSTES.tanda).
   const inicial = Math.min(Math.floor(op.pi / AJUSTES.costoSorteo), Math.floor(d.n * d.n * AJUSTES.maxInicial));
   const g = generarInicio(d.n, inicial, { lineas: AJUSTES.puntosJugar });
   t = g.t;
@@ -239,11 +241,13 @@ function empezar(d) {
 function autoSortear(a) {
   const j = J[a], por = Math.floor(AJUSTES.autoSorteo / AJUSTES.costoSorteo);
   let total = 0;
+  const antes = marcaCaida();
   while (j.p >= AJUSTES.autoSorteo && !completo(t)) {
     const hechos = sortear(t, por);
     if (!hechos) break;
     j.p -= hechos * AJUSTES.costoSorteo; total += hechos;
   }
+  if (total) animarCaida(antes);
   return total;
 }
 
@@ -253,7 +257,7 @@ function pintarHud() {
   const listo = puedeSortear(J[1]); // ¿ya tienes 50 cubos o más? entonces el botón Sortear está abierto
   if (listo && !listoAntes && !terminado) {
     cantidad = AJUSTES.tanda;
-    aviso("🎲 ¡Ya tienes " + AJUSTES.tanda + " cubos! Ya puedes sortear cuando quieras");
+    aviso("🎲 ¡Ya tienes " + AJUSTES.tanda + " cubos! Ya puedes sortear · " + BONOS_SORTEO.map((b) => b.cubos + " cubos = " + b.cuadros + " cuadros").reverse().join(" · "));
     parpadear("b-sortear", "c-azar");
   }
   listoAntes = listo;
@@ -268,7 +272,8 @@ function pintarHud() {
   $("c-cadena").textContent = terminado ? "" : op.bot && turno === 2 ? "🤖 Turno del bot"
     : J[1].c > 1 ? "🔗 Cadena ×" + J[1].c : op.bot ? "Tu turno" : "";
   $("c-cant").textContent = cantidad;
-  $("t-sortear").textContent = listo ? "Sortear (−" + cantidad + (cantidad === 1 ? " cubo)" : " cubos)") : "Sortear (faltan " + (AJUSTES.tanda - J[1].a) + " cubos)";
+  const cuadrosHoy = Math.min(cuadrosDeSorteo(cantidad), t.n * t.n - t.cuadros); // cuadros que pondría el sorteo (con el bono)
+  $("t-sortear").textContent = listo ? "Sortear (−" + cantidad + (cantidad === 1 ? " cubo" : " cubos") + " → " + fmt(cuadrosHoy) + (cuadrosHoy === 1 ? " cuadro)" : " cuadros)") : "Sortear (faltan " + (AJUSTES.tanda - J[1].a) + " cubos)";
   $("b-sortear").disabled = terminado || turno !== 1 || cantidad < 1 || !listo;
   const q = quedan(); // sin deshacer, el botón es el boost
   $("t-deshacer").textContent = q > 0 ? "Deshacer (" + q + ")" : "Boost +" + AJUSTES.boostDeshacer + " · " + AJUSTES.costoBoost + " monedas";
@@ -308,9 +313,13 @@ $("b-sortear").addEventListener("click", () => {
   if (terminado || turno !== 1 || cantidad < 1) return;
   if (!puedeSortear(J[1])) { aviso("🎲 Necesitas " + AJUSTES.tanda + " cubos para sortear (tienes " + fmt(J[1].a) + ")"); return; }
   guardarPaso();
-  const hechos = sortear(t, Math.min(cantidad, J[1].a));
-  J[1].a -= hechos; J[1].c = 0; ultima = null;
-  aviso("🎲 " + hechos + (hechos === 1 ? " cuadro sorteado" : " cuadros sorteados") + " (−" + hechos + (hechos === 1 ? " cubo)" : " cubos)"));
+  const usar = Math.min(cantidad, J[1].a), pedidos = cuadrosDeSorteo(usar); // el bono: 30 cubos → 60 cuadros, 40 → 80, 50 → 120
+  const antes = marcaCaida();
+  const hechos = sortear(t, pedidos);
+  const gasto = hechos < pedidos ? cubosParaCuadros(hechos, usar) : usar;      // si la hoja ya no tiene tantos cuadros libres, no se gastan cubos de más
+  J[1].a -= gasto; J[1].c = 0; ultima = null;
+  animarCaida(antes);
+  aviso("🎲 " + fmt(hechos) + (hechos === 1 ? " cuadro sorteado" : " cuadros sorteados") + " (−" + gasto + (gasto === 1 ? " cubo)" : " cubos)"));
   revisar(true, 1);
 });
 
@@ -339,8 +348,10 @@ function pasoBot() {
   const m = jugadaBot(t, J[2].p, J[2].a);
   if (!m) { revisar(true, 2); return; } // no puede jugar (sin puntos y sin 50 cubos)
   if (m.accion === "sortear") {
+    const antes = marcaCaida();
     const hechos = sortear(t, m.cantidad);
     J[2].a -= hechos; ultima = null;
+    animarCaida(antes);
     aviso("🤖 sorteó " + hechos + (hechos === 1 ? " cuadro" : " cuadros"));
     revisar(true, 2);
   } else revisar(!poner(2, m.tipo, m.r, m.c), 2);
@@ -397,6 +408,7 @@ function pedirDibujo() { if (!pendiente) { pendiente = true; requestAnimationFra
 function dibujar() {
   pendiente = false;
   if (!t || pantalla !== "partida") return;
+  aterrizar();
   const w = cv.clientWidth, h = cv.clientHeight, n = t.n, m = n + 1, { x, y, z } = cam;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
@@ -409,6 +421,7 @@ function dibujar() {
   for (const k of t.LC) { // cuadros cerrados
     const r = (k / n) | 0, c = k - r * n;
     if (r < r0 || r >= r1 || c < c0 || c >= c1) continue;
+    if (cayendo.size && cayendo.has(k)) continue; // todavía va cayendo del cielo
     const d = t.dueno[k];
     if (d !== ultimo) { ctx.fillStyle = COLORES[d]; ultimo = d; }
     ctx.fillRect(x + c * z, y + r * z, tam, tam);
@@ -420,14 +433,106 @@ function dibujar() {
   ctx.stroke();
   const grosor = Math.max(z >= 8 ? 2 : 1.5, z * 0.14);
   ctx.strokeStyle = "#16255e"; ctx.lineWidth = grosor; ctx.lineCap = "round"; ctx.beginPath(); // paredes (tinta)
-  for (const i of t.LH) { const r = (i / n) | 0, c = i - r * n; if (r < r0 || r > r1 || c < c0 || c >= c1) continue; ctx.moveTo(x + c * z, y + r * z); ctx.lineTo(x + (c + 1) * z, y + r * z); }
-  for (const i of t.LV) { const r = (i / m) | 0, c = i - r * m; if (r < r0 || r >= r1 || c < c0 || c > c1) continue; ctx.moveTo(x + c * z, y + r * z); ctx.lineTo(x + c * z, y + (r + 1) * z); }
+  for (const i of t.LH) { const r = (i / n) | 0, c = i - r * n; if (r < r0 || r > r1 || c < c0 || c >= c1) continue; if (oculP.size && oculP.has(i)) continue; ctx.moveTo(x + c * z, y + r * z); ctx.lineTo(x + (c + 1) * z, y + r * z); }
+  for (const i of t.LV) { const r = (i / m) | 0, c = i - r * m; if (r < r0 || r >= r1 || c < c0 || c > c1) continue; if (oculP.size && oculP.has(-i - 1)) continue; ctx.moveTo(x + c * z, y + r * z); ctx.lineTo(x + c * z, y + (r + 1) * z); }
   ctx.stroke();
   if (ultima) { // última pared del bot, para que se vea qué hizo
     const { tipo, r, c } = ultima;
     ctx.strokeStyle = "#e8590c"; ctx.lineWidth = grosor * 1.3; ctx.beginPath();
     ctx.moveTo(x + c * z, y + r * z); ctx.lineTo(x + (c + (tipo === "H" ? 1 : 0)) * z, y + (r + (tipo === "V" ? 1 : 0)) * z); ctx.stroke();
   }
+  dibujarCaida(x, y, z, grosor);
+}
+
+// ---------- Cuadros que caen del cielo ----------
+// Cuando se sortean cuadros (a mano, el bot o los 100 puntos automáticos) los datos del tablero ya están puestos, pero lo que se VE
+// se retrasa: cada cuadro nuevo (y sus paredes nuevas) se oculta y se dibuja como un bloque que cae desde arriba de la pantalla, girando,
+// con una sombra que crece en su lugar; al aterrizar aparece el cuadro y sale un pequeño destello. Para no gastar de más:
+//   · solo caen los cuadros que se ven en pantalla (como máximo MAX_CAIDA), el resto aparece directo;
+//   · con poco zoom (cuadros de menos de 4 px) o con «reducir movimiento» activado no hay animación.
+const MAX_CAIDA = 120, ZOOM_MIN_CAIDA = 4, MS_IMPACTO = 280;
+const SIN_MOVIMIENTO = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+const cayendo = new Map();   // cuadro (r*n+c) → { t0, dur, giro, paredes: [llaves ocultas] }
+const oculP = new Map();     // llave de pared nueva (H: i, V: −i−1) → cuántos cuadros que caen la necesitan todavía
+let impactos = [];           // [{ k, t0 }] destellos de aterrizaje
+
+const marcaCaida = () => ({ c: t.LC.length, h: t.LH.length, v: t.LV.length }); // se toma ANTES de sortear
+function limpiarCaida() { cayendo.clear(); oculP.clear(); impactos = []; }
+
+function animarCaida(antes) {
+  if (SIN_MOVIMIENTO || !t || cam.z < ZOOM_MIN_CAIDA || pantalla !== "partida") return;
+  const n = t.n, w = cv.clientWidth, h = cv.clientHeight;
+  const nuevos = t.LC.slice(antes.c);          // cuadros que cerró este sorteo (en orden aleatorio)
+  const anim = [];
+  for (const k of nuevos) {
+    const r = (k / n) | 0, c = k - r * n, px = cam.x + c * cam.z, py = cam.y + r * cam.z;
+    if (px + cam.z < 0 || px > w || py + cam.z < 0 || py > h) continue; // fuera de pantalla: aparece directo
+    anim.push(k);
+    if (anim.length >= MAX_CAIDA) break;
+  }
+  if (!anim.length) return;
+  const esN = new Set(nuevos), esA = new Set(anim), ahora = performance.now();
+  const dispersion = Math.min(1000, 250 + anim.length * 12); // más cuadros → llueven durante más tiempo
+  const paredes = new Map(anim.map((k) => [k, []]));
+  // Paredes nuevas: solo se ocultan las que pertenecen únicamente a cuadros que caen (si las usa uno que aparece directo, se ven ya)
+  const ocultar = (tipo, lista, desde, ancho) => {
+    for (let q = desde; q < lista.length; q++) {
+      const i = lista[q], r = (i / ancho) | 0, c = i - r * ancho;
+      const vec = vecinosDePared(t, tipo, r, c).filter((k) => esN.has(k));
+      if (!vec.length || vec.some((k) => !esA.has(k))) continue;
+      const llave = tipo === "H" ? i : -i - 1;
+      oculP.set(llave, vec.length);
+      for (const k of vec) paredes.get(k).push(llave);
+    }
+  };
+  ocultar("H", t.LH, antes.h, n);
+  ocultar("V", t.LV, antes.v, n + 1);
+  for (const k of anim) cayendo.set(k, { t0: ahora + Math.random() * dispersion, dur: 520 + Math.random() * 320, giro: (Math.random() - 0.5) * 1.4, paredes: paredes.get(k) });
+  pedirDibujo();
+}
+
+// Los bloques que ya llegaron al suelo: sus cuadros y paredes dejan de estar ocultos y sueltan un destello
+function aterrizar() {
+  if (!cayendo.size && !impactos.length) return;
+  const ahora = performance.now();
+  for (const [k, o] of cayendo) {
+    if (ahora < o.t0 + o.dur) continue;
+    cayendo.delete(k);
+    for (const llave of o.paredes) { const q = (oculP.get(llave) || 1) - 1; if (q > 0) oculP.set(llave, q); else oculP.delete(llave); }
+    impactos.push({ k, t0: ahora });
+  }
+  impactos = impactos.filter((i) => ahora - i.t0 < MS_IMPACTO);
+}
+
+function dibujarCaida(x, y, z, grosor) {
+  if (!cayendo.size && !impactos.length) return;
+  const n = t.n, ahora = performance.now(), w = cv.clientWidth;
+  ctx.save();
+  for (const [k, o] of cayendo) {
+    if (ahora < o.t0) continue;                               // todavía no le toca caer
+    const r = (k / n) | 0, c = k - r * n, cx = x + c * z, cy = y + r * z;
+    const p = Math.min(1, (ahora - o.t0) / o.dur), e = p * p;  // cae acelerando, como con gravedad
+    const inicio = Math.min(-z * 2, cy - 140);                 // arranca arriba de la pantalla (y al menos 140 px más arriba que su lugar)
+    const cyy = cy + (inicio - cy) * (1 - e);
+    if (cx + z < 0 || cx > w) continue;
+    ctx.fillStyle = "rgba(20,30,70," + (0.26 * e) + ")";      // sombra en el lugar donde va a caer: crece y se oscurece
+    const sh = z * (0.5 + 0.5 * e), off = (z - sh) / 2;
+    ctx.fillRect(cx + off, cy + off, sh, sh);
+    const s = 1 + 0.7 * (1 - e);                               // más grande al principio (está más cerca de la cámara)
+    ctx.save();
+    ctx.translate(cx + z / 2, cyy + z / 2); ctx.rotate(o.giro * (1 - e)); ctx.scale(s, s);
+    ctx.fillStyle = "#79bbff"; ctx.fillRect(-z / 2, -z / 2, z, z);
+    ctx.fillStyle = "rgba(255,255,255,.5)"; ctx.fillRect(-z / 2, -z / 2, z, z * 0.3); // cara de arriba del cubo
+    ctx.lineWidth = Math.max(1.5, grosor); ctx.strokeStyle = "#16255e"; ctx.strokeRect(-z / 2, -z / 2, z, z);
+    ctx.restore();
+  }
+  for (const i of impactos) { // destello: un marco que se abre y se desvanece
+    const p = (ahora - i.t0) / MS_IMPACTO, r = (i.k / n) | 0, c = i.k - r * n, g = z * 0.45 * p;
+    ctx.strokeStyle = "rgba(22,37,94," + (0.55 * (1 - p)) + ")"; ctx.lineWidth = 2;
+    ctx.strokeRect(x + c * z - g, y + r * z - g, z + 2 * g, z + 2 * g);
+  }
+  ctx.restore();
+  pedirDibujo(); // sigue animando hasta que no quede nada cayendo
 }
 
 // ---------- Zoom, arrastre y toque ----------
