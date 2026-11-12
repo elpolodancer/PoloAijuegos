@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prueba: mapa general y franja exterior</title>
+<style>body{margin:0;padding:12px;background:#d9a866;font-family:system-ui,sans-serif;color:#2b1a08}canvas{display:block;margin:0 0 6px;max-width:100%;height:auto;border-radius:16px}
+h3{margin:14px 0 6px}#msg{min-height:1.4em;font-weight:700}</style>
+<h3>1) Mapa general (toca una zona; ?nivel=10&amp;energia=20 para probar candados y falta de energía)</h3>
+<canvas id="m" width="900" height="680"></canvas><div id="msg"></div>
+<h3>2) Franja exterior de la base: 35×35 + 2 casillas por lado (39×39) — vista plana</h3>
+<canvas id="r" width="560" height="560"></canvas>
+<script type="module">
+import { dibujarMapaMundo, zonaEn } from "./dibujo-mapa-mundo.js";
+import { crearEstadoViaje, viajar, textoRazon, casillasAnillo, tamExt, BORDE, COLOR_ANILLO, dentro, salida } from "./mapa-general-supervivencia.js";
+const q = new URLSearchParams(location.search);
+const est = crearEstadoViaje({ nivel: +(q.get("nivel") || 0), energia: +(q.get("energia") || 100) });
+const cm = document.getElementById("m"), g = cm.getContext("2d"), msg = document.getElementById("msg");
+let sel = q.get("sel") || null, hits = [];
+const pintar = () => { hits = dibujarMapaMundo(g, cm.width, cm.height, { estado: est, seleccion: sel }); };
+cm.addEventListener("click", (e) => {
+  const b = cm.getBoundingClientRect(), x = (e.clientX - b.left) * cm.width / b.width, y = (e.clientY - b.top) * cm.height / b.height;
+  const id = zonaEn(hits, x, y); if (!id || id === "base") { sel = null; msg.textContent = ""; return pintar(); }
+  if (sel === id) { const r = viajar(est, id); msg.textContent = r.ok ? "Viajando… " + r.segundos + " s (energía " + est.energia + ")" : textoRazon(r); }
+  else msg.textContent = "Toca otra vez para viajar";
+  sel = id; pintar();
+});
+pintar();
+
+// Franja exterior
+const N = 35, B = BORDE, T = tamExt(N, B), cr = document.getElementById("r"), h = cr.getContext("2d"), s = cr.width / T;
+h.fillStyle = "#7fae5a"; h.fillRect(0, 0, cr.width, cr.height);
+for (const [i, j] of casillasAnillo(N, B)) { h.fillStyle = COLOR_ANILLO.fondo; h.fillRect((i + B) * s, (j + B) * s, s, s); h.strokeStyle = COLOR_ANILLO.borde; h.lineWidth = 0.5; h.strokeRect((i + B) * s, (j + B) * s, s, s); }
+h.strokeStyle = "#fff"; h.lineWidth = 3; h.strokeRect(B * s, B * s, N * s, N * s);
+h.fillStyle = "#1f3d12"; h.font = "700 15px system-ui"; h.textAlign = "center";
+h.fillText("mapa 35×35 (se construye)", cr.width / 2, cr.height / 2); h.fillText("franja de 2 casillas: se camina, no se construye", cr.width / 2, B * s * 0.62);
+// recorrido de ejemplo: el personaje sale por el oeste
+h.strokeStyle = "#c0392b"; h.lineWidth = 3; h.setLineDash([6, 5]); h.beginPath(); h.moveTo(cr.width / 2, cr.height / 2 + 30); h.lineTo(2, cr.height / 2 + 30); h.stroke();
+h.fillStyle = "#c0392b"; h.fillText("salida → mapa general", 130, cr.height / 2 + 52);
+window.__ok = { salidaOeste: salida(-1.9, 10, N, B), dentro00: dentro(0, 0, N) };
+</script>
+</html>
