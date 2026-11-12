@@ -14,8 +14,9 @@
     /* El mapa (compartido/mapa-niveles.js) es z-index 5: la navegación y las ventanas van encima */
     .nav-juego { z-index: 9; }
     html.inmersivo button.b3d.btn-fondo { z-index: 9; }
-    #libre, #info { z-index: 7; }
-    #libre .pausa-panel, #info .pausa-panel { width: min(100%, 440px); }
+    .hud-der { z-index: 6; }
+    #libre, #info, #tienda { z-index: 7; }
+    #libre .pausa-panel, #info .pausa-panel, #tienda .pausa-panel { width: min(100%, 440px); }
     .etq { margin: 12px 0 6px; font-weight: 800; font-size: .95rem; }
     .fila-b { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
     .fila-b .b3d.txt { --t: 42px; font-size: 15px; }
@@ -25,6 +26,17 @@
     #libre-resumen { margin: 10px 0 12px; font-weight: 800; }
     .pausa-opciones .b3d.txt.grande { --t: 56px; font-size: 19px; }
     #info p { margin: 0 0 10px; line-height: 1.4; font-size: .92rem; text-align: left; }
+    /* Tienda de boosts */
+    #tienda-saldo { display: inline-flex; margin: 0 0 10px; }
+    .t-fila { display: flex; align-items: center; gap: 10px; padding: 8px 4px; text-align: left; border-top: 1px solid rgba(255,255,255,.12); }
+    .t-ico { flex: none; width: 38px; font-size: 28px; text-align: center; }
+    .t-txt { flex: 1 1 auto; min-width: 0; }
+    .t-txt b { display: block; font-size: 1rem; }
+    .t-txt small { display: block; color: #b0b4bd; font-size: .74rem; line-height: 1.25; }
+    .t-txt em { font-style: normal; font-size: .78rem; font-weight: 800; color: #fff4c2; }
+    .t-fila .b3d.txt { --t: 40px; font-size: 14px; flex: none; }
+    .t-fila .moneda { margin-right: 5px; }
+    #tienda-nota { margin: 10px 0 12px; color: #b0b4bd; font-size: .74rem; line-height: 1.3; }
     /* Aviso corto (toast) */
     #aviso { position: fixed; z-index: 10; left: 50%; bottom: max(70px, calc(env(safe-area-inset-bottom) + 60px)); transform: translateX(-50%); max-width: min(92vw, 460px);
       padding: 10px 16px; text-align: center; font-weight: 700; font-size: .95rem; color: #f1f2f4; background: linear-gradient(180deg, #3a3d45, #22242a);
@@ -37,6 +49,9 @@
     <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
     <button class="b3d txt b-gris" id="btn-menu" type="button" title="Menú principal" hidden><span class="b-ico">☰</span> <span id="txt-menu">Menú principal</span></button>
   </nav>
+
+  <!-- Monedas (chip dorado estándar, arriba a la derecha) -->
+  <div class="hud hud-der"><span class="chip chip-monedas" title="Tus monedas"><span class="moneda"></span><span id="monedas">0</span></span></div>
 
   <!-- Partida libre: dificultad (5) y tamaño del tablero (6) -->
   <div class="pausa-fondo" id="libre" role="dialog" aria-modal="true" aria-labelledby="libre-titulo" hidden>
@@ -55,13 +70,25 @@
     </div>
   </div>
 
+  <!-- Tienda de boosts -->
+  <div class="pausa-fondo" id="tienda" role="dialog" aria-modal="true" aria-labelledby="tienda-titulo" hidden>
+    <div class="pausa-panel">
+      <h2 id="tienda-titulo">🛒 Tienda</h2>
+      <span class="chip chip-monedas" id="tienda-saldo"></span>
+      <div id="tienda-lista"></div>
+      <p id="tienda-nota">Ganas de 20 a 40 monedas por nivel según tus estrellas: ★ 20 · ★★ 30 · ★★★ 40. Si repites un nivel, solo cobras la diferencia al mejorar tus estrellas. Los boosts de ayuda (💡 🔀 🔍) limitan el nivel a ★★.</p>
+      <div class="pausa-opciones"><button class="b3d txt b-gris" id="tienda-cerrar" type="button"><span class="b-ico">←</span><span>Volver</span></button></div>
+    </div>
+  </div>
+
   <!-- Info -->
   <div class="pausa-fondo" id="info" role="dialog" aria-modal="true" aria-labelledby="info-titulo" hidden>
     <div class="pausa-panel">
       <h2 id="info-titulo">ℹ️ Cómo se juega</h2>
       <p>Encuentra todas las palabras escondidas en el tablero de letras: arrastra el dedo (o el ratón) de la primera a la última letra.</p>
       <p><b>Partida libre:</b> elige la dificultad y el tamaño del tablero. No da monedas ni puntos.</p>
-      <p><b>Mapa:</b> 226 etapas (32 estados y 194 países) de 100 niveles cada una. Los niveles llegan pronto.</p>
+      <p><b>Mapa:</b> 226 etapas (32 estados y 194 países) de 100 niveles cada una. Cada nivel da hasta 3 estrellas y de 20 a 40 monedas. Los niveles llegan pronto.</p>
+      <p><b>Tienda:</b> con las monedas compras boosts: pista, reordenar y más.</p>
       <div class="pausa-opciones"><button class="b3d txt b-gris" id="info-cerrar" type="button"><span class="b-ico">←</span><span>Volver</span></button></div>
     </div>
   </div>
