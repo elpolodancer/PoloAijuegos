@@ -36,7 +36,8 @@ const PAISES_INICIALES = { facil: ["MX"], normal: ["MX"], dificil: ["MX"] };
 
 // Tiempos (README 5.1 y 5.2). Con «?rapido» en la dirección duran la décima parte, para probar sin esperar un minuto por mejora.
 const TIEMPO = new URLSearchParams(location.search).has("rapido") ? 0.1 : 1;
-const MS_EXPANDIR = 25000, MS_MISIL1 = 5000, MISILES_INICIALES = 2; // capacidad máxima por país: pendiente (README 9.2), por ahora sin tope
+const MS_EXPANDIR = 25000, MS_MISIL1 = 5000, MISILES_INICIALES = 2;
+const CAPACIDAD_BASE = 2, CAPACIDAD_RESILIENCIA = 4; // casillas de misiles por país: 2 al inicio; con «Resiliencia suprema» (8) sube a 4 (README 5.3; el 5 y el tope definitivo siguen en duda, 9.2)
 // Alcance de cada nivel de misil, como fracción de la superficie del planeta (igual que la niebla: 50 % = un hemisferio, 90° desde el país que lo lanza).
 // ❓ Nivel 1 «corto» no tiene número en el README: se usa el 10 % provisional. Nivel 3: README dice 66 % y también «todo el mundo» (duda 1).
 const ALCANCE = { 1: 0.10, 2: 0.50, 3: 0.66 };
@@ -80,6 +81,7 @@ function leerProgreso() {
 const mundo = crearMundo({
   lienzo,
   congelado: () => pausado, // los misiles en vuelo se detienen con la pausa
+  celdasDe: (iso) => { const a = arsenal(iso), niveles = []; a.forEach((n, i) => { for (let k = 0; k < n; k++) niveles.push(i + 1); }); return { cap: Math.max(capacidad(), niveles.length), niveles }; }, // casillas grises dentro de tus países
   alCuadro: () => { if (menuPais) menuPais.seguir(); if (armas) armas.seguir(); }, // el menú circular y la confirmación siguen al país mientras se gira el planeta
   alSeleccionar(iso) {
     pintarFicha(iso);
@@ -221,6 +223,8 @@ function limpiarPartida() {
 }
 const arsenal = (iso) => { if (!misiles.has(iso)) misiles.set(iso, [MISILES_INICIALES, 0, 0]); return misiles.get(iso); };
 const stock = (iso, nivel = 1) => arsenal(iso)[nivel - 1];
+const capacidad = () => (hechas.has(8) ? CAPACIDAD_RESILIENCIA : CAPACIDAD_BASE);
+const hayEspacio = (iso) => arsenal(iso).reduce((t, n) => t + n, 0) < capacidad(); // ¿queda alguna casilla vacía?
 // Vecinos a los que se podría expandir: sin dueño (los tuyos y los de los bots no) y sin que ya vayas hacia ellos
 const vecinosLibres = (iso) => vecinosDe(iso).filter((v) => !duenos.has(v));
 const destinosDe = (iso) => vecinosLibres(iso).filter((v) => !reservados.has(v));
@@ -261,7 +265,7 @@ function elegirDestino(origen) {
 
 // Misil de nivel 1 (5 s)
 function fabricarMisil(iso) {
-  if (ocupado.has(iso)) return;
+  if (ocupado.has(iso) || !hayEspacio(iso)) return;
   ocupar(iso, {
     texto: "Fabricando misil nivel 1", total: MS_MISIL1,
     alTerminar: () => { arsenal(iso)[0]++; menuPais.aviso("Misil nivel 1 listo en " + nombreTerritorio(iso)); menuPais.refrescar(); },
@@ -303,7 +307,7 @@ function investigar(m, iso) {
 function accionesDe(iso) {
   const libre = !ocupado.has(iso), lista = [];
   if (vecinosLibres(iso).length) lista.push({ texto: "EXPANDIR", nombre: "Expandir", icono: "expandir", deshabilitado: !libre || !destinosDe(iso).length, alElegir: () => elegirDestino(iso) });
-  lista.push({ texto: "MISIL NIVEL 1", nombre: "Crear misil nivel 1", icono: "misil", deshabilitado: !libre, info: stock(iso), alElegir: () => fabricarMisil(iso) });
+  lista.push({ texto: "MISIL NIVEL 1", nombre: "Crear misil nivel 1", icono: "misil", deshabilitado: !libre || !hayEspacio(iso), info: stock(iso), alElegir: () => fabricarMisil(iso) });
   lista.push({ texto: "INVESTIGAR", nombre: "Investigar", icono: "investigar", deshabilitado: !libre, alElegir: () => abrirInvestigacion(iso) });
   return lista;
 }

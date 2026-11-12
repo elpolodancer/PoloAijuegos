@@ -166,7 +166,7 @@ export function vecinosDe(iso) {
   return s ? [...s] : [];
 }
 
-export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, giroAuto = false } = {}) { // congelado(): true detiene el vuelo de los misiles (pausa)
+export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasDe, giroAuto = false } = {}) { // congelado(): true detiene el vuelo de los misiles (pausa). celdasDe(iso) → { cap, niveles: [1,1,2…] } = casillas de misiles que se dibujan dentro de TUS países (cap casillas grises; una por cada misil guardado lleva un misil dibujado)
   const ctx = lienzo.getContext("2d");
   const quieto = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   let W = 0, H = 0, dpr = 1, Rmin = 100, Rmax = 3000;
@@ -435,6 +435,7 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, giroAut
 
     // Nombres (en pantalla, sin deformarse): solo los países cuyo dibujo ya es lo bastante grande
     ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+    const rotulos = new Map(); // iso → { ty, tam }: dónde quedó el nombre (las casillas de misiles se acomodan junto a él)
     for (const p of LISTA) {
       if (!visibleVec(p.cv)) continue;
       const forzado = p.iso === sel;
@@ -451,6 +452,46 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, giroAut
       const ty = q[1] + (p.micro ? -(Math.max(p.radio * RAD * R, 4) + 10) : 0);
       ctx.lineWidth = 3.2; ctx.strokeStyle = "rgba(3,9,24,.9)"; ctx.strokeText(nombre, q[0], ty);
       ctx.fillStyle = "#fff4dc"; ctx.fillText(nombre, q[0], ty);
+      rotulos.set(p.iso, { ty, tam });
+    }
+    if (celdasDe) pintarCeldas(rotulos);
+  }
+
+  // ---------- Casillas de misiles dentro de TUS países ----------
+  // Una casilla gris vacía por cada misil que el país puede guardar (capacidad); cada misil fabricado dibuja un misil dentro de su casilla.
+  const COLOR_MISIL = ["#f1f2f4", "#ffcf5a", "#ff7a6e"]; // cuerpo según el nivel (1, 2, 3)
+  function casilla(x, y, l, nivel) {
+    const r = Math.max(2, l * 0.18);
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, l, l, r); else ctx.rect(x, y, l, l);
+    ctx.fillStyle = nivel ? "rgba(132,138,150,.88)" : "rgba(104,110,122,.72)"; ctx.fill();
+    ctx.lineWidth = 1.6; ctx.strokeStyle = "rgba(20,24,32,.9)"; ctx.stroke();
+    if (!nivel) return;
+    const cx = x + l / 2, cy = y + l / 2, a = l * 0.15, h = l * 0.34; // misil vertical: cuerpo, punta roja y aletas
+    ctx.lineWidth = 1.2; ctx.strokeStyle = "#1b1d22";
+    ctx.fillStyle = "#c9ced6"; ctx.beginPath(); ctx.moveTo(cx - a, cy + h * 0.55); ctx.lineTo(cx - a * 2.3, cy + h); ctx.lineTo(cx - a, cy + h * 0.9); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + a, cy + h * 0.55); ctx.lineTo(cx + a * 2.3, cy + h); ctx.lineTo(cx + a, cy + h * 0.9); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = COLOR_MISIL[Math.min(2, nivel - 1)]; ctx.fillRect(cx - a, cy - h * 0.55, a * 2, h * 1.45); ctx.strokeRect(cx - a, cy - h * 0.55, a * 2, h * 1.45);
+    ctx.fillStyle = "#e8392b"; ctx.beginPath(); ctx.moveTo(cx - a, cy - h * 0.55); ctx.lineTo(cx, cy - h * 1.2); ctx.lineTo(cx + a, cy - h * 0.55); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  function pintarCeldas(rotulos) {
+    for (const p of LISTA) {
+      const e = estado.get(p.iso);
+      if (!e || !e.propio || !e.dueno || e.destruido || !visibleVec(p.cv)) continue; // solo países tuyos y en pie
+      const q = proy(p.c[0], p.c[1]);
+      if (q[2] < 0.15 || q[0] < -80 || q[0] > W + 80 || q[1] < -40 || q[1] > H + 40) continue;
+      const d = celdasDe(p.iso), n = d && d.cap | 0;
+      if (!(n > 0)) continue;
+      const ancho = (p.micro ? p.radio * 2 : p.ww) * RAD * R * q[2], alto = (p.micro ? p.radio * 2 : p.hh) * RAD * R * q[2];
+      const gap = 3, l = Math.min(24, Math.floor((Math.max(ancho, 54) * 0.9 - gap * (n - 1)) / n), Math.floor(Math.max(alto, 30) * 0.45));
+      if (l < 10 && p.iso !== sel) continue; // el país se ve muy chico: no caben casillas legibles
+      const lado = Math.max(l, 10), total = n * lado + (n - 1) * gap, x0 = q[0] - total / 2;
+      const r = rotulos.get(p.iso);
+      let cy = q[1];
+      if (r) cy = p.micro ? r.ty - r.tam * 0.5 - lado / 2 - 4 : r.ty + r.tam * 0.5 + lado / 2 + 4; // con nombre: debajo (marcadores chicos: encima)
+      else if (p.micro) cy = q[1] - (Math.max(p.radio * RAD * R, 4) + 10);
+      const niv = d.niveles || [];
+      for (let i = 0; i < n; i++) casilla(x0 + i * (lado + gap), cy - lado / 2, lado, niv[i] || 0);
     }
   }
 
