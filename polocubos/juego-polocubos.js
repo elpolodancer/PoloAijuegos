@@ -193,8 +193,19 @@ function fichas(contenedor, items, activo, alElegir) {
     contenedor.appendChild(b);
   }
 }
+function plegarPuntos(plegar) {
+  const lista = $("o-puntos"), cab = $("o-puntos-cab");
+  lista.hidden = plegar;
+  cab.setAttribute("aria-expanded", String(!plegar));
+  cab.querySelector(".b-ico").textContent = plegar ? "▾" : "▴";
+  const on = lista.querySelector(".on");
+  if (!plegar && on) lista.scrollTop = on.offsetTop - lista.clientHeight / 2 + on.offsetHeight / 2; // al abrir, deja a la vista la opción elegida
+}
+$("o-puntos-cab").addEventListener("click", () => plegarPuntos(!$("o-puntos").hidden));
 function pintarLibre() {
-  fichas($("o-puntos"), PUNTOS_INICIO.map((v) => [v, String(v)]), op.pi, (v) => (op.pi = v));
+  // Cuadros iniciales: barra plegable (op.pi sigue guardándose en puntos, 2 por cuadro)
+  fichas($("o-puntos"), PUNTOS_INICIO.map((v) => [v, fmt(v / AJUSTES.costoSorteo)]), op.pi, (v) => { op.pi = v; plegarPuntos(true); });
+  $("o-puntos-t").textContent = fmt(op.pi / AJUSTES.costoSorteo) + " cuadros";
   fichas($("o-modo"), [[false, "👤 Solo"], [true, "🤖 Contra el bot"]], op.bot, (v) => (op.bot = v));
   fichas($("o-sorteo"), [["bloques", "🟦 Por bloques"], ["paredes", "🧱 Por paredes (×4)"]], op.sorteo, (v) => (op.sorteo = v));
   const m = leerMejores(), cont = $("dificultades");

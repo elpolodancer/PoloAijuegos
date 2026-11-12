@@ -7,7 +7,7 @@
 // y listas de lo que ya está puesto (LH, LV, LC): así dibujar y buscar jugadas del bot no recorre los 250 000 cuadros cada vez.
 
 export const AJUSTES = {
-  puntosInicio: 100, // puntos por defecto al empezar (el jugador puede elegir entre PUNTOS_INICIO). Al empezar se colocan solos
+  puntosInicio: 200, // puntos por defecto al empezar (200 = 100 cuadros, lo mínimo que se puede elegir) (el jugador puede elegir entre PUNTOS_INICIO). Al empezar se colocan solos
                      // en cuadros al azar (sorteo) y el jugador se queda con puntosJugar
   puntosJugar: 15,   // puntos con los que se juega al empezar (el resto de puntosInicio se sortea automáticamente)
   autoSorteo: 100,   // cada vez que alguien junta esta cantidad, se gasta sola en sortear cuadros al azar
@@ -49,7 +49,9 @@ export function cubosParaCuadros(cuadros, maxCubos) {
   return maxCubos;
 }
 
-export const PUNTOS_INICIO = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
+// Cuadros que se sortean al empezar: de 100 en 100, de 100 a 5 000 (50 opciones). Se guardan como PUNTOS (2 por cuadro): 200, 400 ... 10 000,
+// así las marcas y metas ya guardadas de 200 a 1 000 puntos siguen valiendo lo mismo.
+export const PUNTOS_INICIO = Array.from({ length: 50 }, (_, i) => (i + 1) * 100 * AJUSTES.costoSorteo);
 
 // Tamaños de hoja del Modo libre. Los 5 primeros son las dificultades estándar; los 3 últimos son hojas gigantes.
 export const DIFICULTADES = [

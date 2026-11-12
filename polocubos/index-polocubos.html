@@ -19,6 +19,7 @@
     .opc { display: flex; flex-direction: column; align-items: center; gap: 6px; }
     .opc h3 { margin: 0; font-size: 1rem; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
     .opc .fila .b3d.chico.txt { padding: 0 12px; }
+    .lista-plegable { position: relative; width: min(100%, 420px); max-height: 34vh; overflow-y: auto; padding: 8px; background: rgba(10, 10, 12, .55); border-radius: 14px; -webkit-overflow-scrolling: touch; }
     .pantalla h1, .pantalla h2 { margin: 0; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
     .pantalla h1 { font-size: clamp(2rem, 9vw, 3.2rem); }
     .pantalla p { margin: 0; max-width: 340px; font-size: .95rem; line-height: 1.35; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
@@ -71,8 +72,10 @@
   <!-- Modo libre: 5 dificultades -->
   <section class="pantalla" id="libre" hidden>
     <h2>♾️ Modo libre</h2>
-    <p>Elige cuántos puntos se sortean al azar al empezar (2 puntos = 1 cuadro; tú empiezas con 15 puntos) y contra quién juegas. Al tocar un tamaño de hoja empieza la partida.</p>
-    <div class="opc"><h3>Puntos que se sortean al empezar</h3><div class="fila" id="o-puntos"></div></div>
+    <p>Elige cuántos cuadros se sortean al azar al empezar (de 100 en 100, hasta 5,000; en hojas chicas se limita a 60 % de la hoja; tú empiezas con 15 puntos) y contra quién juegas. Al tocar un tamaño de hoja empieza la partida.</p>
+    <div class="opc"><h3>Cuadros que se sortean al empezar</h3>
+      <button class="b3d chico txt b-gris" id="o-puntos-cab" type="button" aria-expanded="false" aria-controls="o-puntos"><span class="b-ico">▾</span> <span id="o-puntos-t"></span></button>
+      <div class="fila lista-plegable" id="o-puntos" hidden></div></div>
     <div class="opc"><h3>Cómo jugar</h3><div class="fila" id="o-modo"></div></div>
     <div class="opc"><h3>Tipo de sorteo</h3><div class="fila" id="o-sorteo"></div>
       <p>🟦 Por bloques: se cierran cuadros completos al azar. 🧱 Por paredes: cada cuadro del sorteo se convierte en 4 paredes sueltas al azar (500 cuadros = 2000 paredes), así que quedan muchos cuadros a una pared de cerrarse.</p></div>
