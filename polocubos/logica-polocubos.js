@@ -13,8 +13,9 @@ export const AJUSTES = {
   autoSorteo: 100,   // cada vez que alguien junta esta cantidad, se gasta sola en sortear cuadros al azar
   maxInicial: 0.6,   // al empezar, como máximo esta fracción de la hoja se llena con el sorteo automático (hojas chicas)
   costoPared: 1,     // poner una pared a mano
-  costoSorteo: 2,    // sortear un cuadro (4 paredes con descuento)
-  premioCuadro: 2,   // cerrar un cuadro a mano. En cadena, cada cuadro extra sin interrupción da +1 más (2, 3, 4…)
+  costoSorteo: 2,    // puntos que vale un cuadro sorteado AUTOMÁTICAMENTE (los puntos se convierten solos en cuadros al azar)
+  premioCuadro: 2,   // puntos que da cerrar un cuadro poniendo 2 o más paredes tuyas (con 3 o 4 paredes tuyas también son 2: te cuesta más de lo que paga)
+  cubosPorUnaPared: 1, // cerrar un cuadro poniendo UNA sola pared: ganas 1 «cubo aleatorio» (se coloca con el botón Sortear) y recuperas esa pared
 };
 export const PUNTOS_INICIO = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
 
@@ -33,6 +34,7 @@ export const DIFICULTADES = [
 export function crearTablero(n) {
   return {
     n, H: new Uint8Array((n + 1) * n), V: new Uint8Array(n * (n + 1)),
+    HD: new Uint8Array((n + 1) * n), VD: new Uint8Array(n * (n + 1)), // quién puso cada pared y sigue «vigente»: 0 = nadie/sorteo/ya usada, 1 = tú, 2 = bot
     cnt: new Uint8Array(n * n),        // paredes que tiene cada cuadro (0..4)
     cerradas: new Uint8Array(n * n), cuadros: 0,
     dueno: new Uint8Array(n * n),      // quién cerró cada cuadro: 0 = sorteo/rebote, 1 = tú, 2 = bot
@@ -53,11 +55,13 @@ export function vecinosDePared(t, tipo, r, c) {
 }
 
 // Pone una pared. Devuelve null si ya existía, o la lista de cuadros (índice r*n+c) que esta pared acaba de cerrar (puede ser []).
-export function ponerPared(t, tipo, r, c) {
+// «quien» (1 = tú, 2 = bot, 0 = sorteo) queda anotado en la pared para calcular el premio de los cuadros que cierre.
+export function ponerPared(t, tipo, r, c, quien = 0) {
   const i = tipo === "H" ? iH(t, r, c) : iV(t, r, c);
   const lista = tipo === "H" ? t.H : t.V;
   if (lista[i]) return null;
   lista[i] = 1;
+  (tipo === "H" ? t.HD : t.VD)[i] = quien;
   (tipo === "H" ? t.LH : t.LV).push(i);
   const nuevos = [];
   for (const k of vecinosDePared(t, tipo, r, c)) {
@@ -89,10 +93,42 @@ export function sortear(t, cantidad, rng = Math.random) {
     const k = libres[i];
     if (t.cerradas[k]) continue; // se cerró de rebote al sortear otro
     const r = Math.floor(k / t.n), c = k % t.n;
-    ponerPared(t, "H", r, c); ponerPared(t, "H", r + 1, c); ponerPared(t, "V", r, c); ponerPared(t, "V", r, c + 1);
+    const cerrados = [ponerPared(t, "H", r, c), ponerPared(t, "H", r + 1, c), ponerPared(t, "V", r, c), ponerPared(t, "V", r, c + 1)].flatMap((x) => x || []);
+    for (const q of cerrados) gastarParedes(t, q); // los cuadros cerrados por el sorteo también dejan de contar sus paredes
     hechos++;
   }
   return hechos;
 }
 
 export const completo = (t) => t.cuadros === t.n * t.n;
+
+// ----- Premios por cerrar cuadros a mano -----
+// Se cuenta cuántas de las 4 paredes del cuadro puso quien lo cierra (y siguen «vigentes»):
+//   1 pared  → +1 cubo aleatorio y recupera esa pared (+costoPared punto)
+//   2 o más  → +premioCuadro puntos (2)   (con 3 paredes propias gastó 3 y cobra 2: pierde 1)
+// En cuanto un cuadro se cierra, sus 4 paredes se «gastan»: dejan de contar (sean de quien sean) para los cuadros vecinos.
+function paredesDe(t, k) {
+  const r = Math.floor(k / t.n), c = k % t.n;
+  return [[t.HD, iH(t, r, c)], [t.HD, iH(t, r + 1, c)], [t.VD, iV(t, r, c)], [t.VD, iV(t, r, c + 1)]];
+}
+export function paredesPropias(t, k, quien) {
+  let m = 0;
+  for (const [lista, i] of paredesDe(t, k)) if (lista[i] === quien) m++;
+  return m;
+}
+export function gastarParedes(t, k) {
+  for (const [lista, i] of paredesDe(t, k)) lista[i] = 0;
+}
+// «cerrados» = lo que devolvió ponerPared. Devuelve { puntos, cubos } a sumar. Si una misma pared cierra dos cuadros,
+// cada uno paga por su cuenta, pero el reembolso de la pared se da una sola vez.
+export function premiarCierre(t, cerrados, quien) {
+  const propias = cerrados.map((k) => paredesPropias(t, k, quien)); // se cuentan TODAS antes de gastar, por si dos cuadros comparten pared
+  let puntos = 0, cubos = 0, reembolso = false;
+  for (const m of propias) {
+    if (m <= 1) { cubos += AJUSTES.cubosPorUnaPared; reembolso = true; }
+    else puntos += AJUSTES.premioCuadro;
+  }
+  if (reembolso) puntos += AJUSTES.costoPared;
+  for (const k of cerrados) gastarParedes(t, k);
+  return { puntos, cubos };
+}

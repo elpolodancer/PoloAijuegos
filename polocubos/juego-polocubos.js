@@ -5,7 +5,7 @@
 import { crearEtapas } from "../compartido/etapas-mapa.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
-import { AJUSTES, DIFICULTADES, PUNTOS_INICIO, crearTablero, ponerPared, hayPared, sortear, completo } from "./logica-polocubos.js";
+import { AJUSTES, DIFICULTADES, PUNTOS_INICIO, crearTablero, ponerPared, premiarCierre, hayPared, sortear, completo } from "./logica-polocubos.js";
 import { jugadaBot } from "./ia-polocubos.js";
 
 const $ = (id) => document.getElementById(id);
@@ -15,7 +15,8 @@ const CLAVE_OPC = "polocubos_opciones_v1";     // { pi: puntos iniciales, bot: t
 const ZOOM_MIN_TOQUE = 8;                      // con menos zoom (px por cuadro) no se ponen paredes: no se distingue el lado
 
 let pantalla = "menu", dif = null, t = null;
-const J = [null, { p: 0, c: 0, cu: 0 }, { p: 0, c: 0, cu: 0 }]; // 1 = tú, 2 = bot: puntos, cadena y cuadros cerrados a mano
+const J = [null, { p: 0, a: 0, c: 0, cu: 0 }, { p: 0, a: 0, c: 0, cu: 0 }]; // 1 = tú, 2 = bot: puntos (paredes), cubos aleatorios, cadena y cuadros cerrados a mano
+const puede = (x) => J[x].p >= AJUSTES.costoPared || J[x].a >= 1; // ¿tiene con qué jugar? (una pared o un sorteo)
 let turno = 1, maxPuntos = 0, cantidad = 20, terminado = false, pausado = false, tBot = 0, ultima = null;
 let op = { pi: AJUSTES.puntosInicio, bot: false };
 try { const g = JSON.parse(localStorage.getItem(CLAVE_OPC)); if (g && PUNTOS_INICIO.includes(g.pi)) op = { pi: g.pi, bot: !!g.bot }; } catch (e) {}
@@ -121,7 +122,7 @@ function empezar(d) {
   // En hojas chicas se limita para no llenarlas desde el principio.
   const inicial = Math.min(Math.floor(op.pi / AJUSTES.costoSorteo), Math.floor(d.n * d.n * AJUSTES.maxInicial));
   sortear(t, inicial);
-  J[1] = { p: AJUSTES.puntosJugar, c: 0, cu: 0 }; J[2] = { p: AJUSTES.puntosJugar, c: 0, cu: 0 };
+  J[1] = { p: AJUSTES.puntosJugar, a: 0, c: 0, cu: 0 }; J[2] = { p: AJUSTES.puntosJugar, a: 0, c: 0, cu: 0 };
   maxPuntos = AJUSTES.puntosJugar; turno = 1; terminado = false; pausado = false; ultima = null;
   cantidad = 20;
   ir("partida");
@@ -142,36 +143,41 @@ function autoSortear(a) {
   return total;
 }
 
-const maxSortear = () => Math.max(0, Math.min(Math.floor(J[1].p / AJUSTES.costoSorteo), t.n * t.n - t.cuadros));
+const maxSortear = () => Math.max(0, Math.min(J[1].a, t.n * t.n - t.cuadros)); // el sorteo manual se paga con cubos aleatorios
 
 function pintarHud() {
   cantidad = Math.max(0, Math.min(cantidad, maxSortear()));
   if (cantidad === 0 && maxSortear() > 0) cantidad = 1;
   const chip = (id, txt) => ($(id).innerHTML = txt); // chip vacío = oculto
-  chip("c-pts", `<small>${op.bot ? "Tú" : "Puntos"}</small>${fmt(J[1].p)}`);
-  chip("c-bot", op.bot ? `<small>🤖 Bot</small>${fmt(J[2].p)}` : "");
+  chip("c-pts", `<small>${op.bot ? "Tú · puntos" : "Puntos"}</small>${fmt(J[1].p)}`);
+  chip("c-azar", `<small>🎲 Cubos</small>${fmt(J[1].a)}`);
+  chip("c-bot", op.bot ? `<small>🤖 Bot</small>${fmt(J[2].p)} · 🎲${fmt(J[2].a)}` : "");
   chip("c-cuadros", `<small>Cuadros</small>${fmt(t.cuadros)}/${fmt(t.n * t.n)}`);
   $("c-cadena").textContent = terminado ? "" : op.bot && turno === 2 ? "🤖 Turno del bot"
     : J[1].c > 1 ? "🔗 Cadena ×" + J[1].c : op.bot ? "Tu turno" : "";
   $("c-cant").textContent = cantidad;
-  $("t-sortear").textContent = "Sortear (−" + cantidad * AJUSTES.costoSorteo + ")";
+  $("t-sortear").textContent = "Sortear (−" + cantidad + (cantidad === 1 ? " cubo)" : " cubos)");
   $("b-sortear").disabled = terminado || turno !== 1 || cantidad < 1;
   pedirDibujo();
 }
 for (const b of document.querySelectorAll("[data-paso]")) b.addEventListener("click", () => { cantidad += Number(b.dataset.paso); if (cantidad < 1) cantidad = 1; pintarHud(); });
 
-// Pared puesta por «a» (1 = tú, 2 = bot): cuesta 1; cada cuadro que cierra paga 2 y, en cadena, +1 por cada uno seguido.
+// Pared puesta por «a» (1 = tú, 2 = bot): cuesta 1 punto. Si cierra cuadros, el premio depende de cuántas paredes de ese cuadro puso él (premiarCierre):
+//   1 pared → +1 cubo aleatorio y recupera su punto · 2 o más → +2 puntos. Las paredes de un cuadro cerrado ya no cuentan para los vecinos.
 // Devuelve true si cerró algún cuadro (y entonces sigue jugando quien la puso).
 function poner(a, tipo, r, c) {
   const j = J[a];
   j.p -= AJUSTES.costoPared;
-  const cerrados = ponerPared(t, tipo, r, c);
+  const cerrados = ponerPared(t, tipo, r, c, a);
   ultima = a === 2 ? { tipo, r, c } : null;
   if (!cerrados.length) { j.c = 0; return false; } // una pared que no cierra nada rompe la cadena
-  let ganado = 0;
-  for (const k of cerrados) { j.c++; ganado += AJUSTES.premioCuadro + (j.c - 1); t.dueno[k] = a; j.cu++; }
-  j.p += ganado;
-  aviso((a === 2 ? "🤖 " : "") + "+" + ganado + (j.c > 1 ? " · cadena ×" + j.c : ""));
+  const { puntos, cubos } = premiarCierre(t, cerrados, a);
+  for (const k of cerrados) { j.c++; t.dueno[k] = a; j.cu++; }
+  j.p += puntos; j.a += cubos;
+  const partes = [];
+  if (puntos) partes.push("+" + puntos + (puntos === 1 ? " punto" : " puntos"));
+  if (cubos) partes.push("+" + cubos + (cubos === 1 ? " cubo 🎲" : " cubos 🎲"));
+  aviso((a === 2 ? "🤖 " : "") + partes.join(" · ") + (j.c > 1 ? " · cadena ×" + j.c : ""));
   return true;
 }
 
@@ -183,9 +189,9 @@ function jugarPared(tipo, r, c) {
 
 $("b-sortear").addEventListener("click", () => {
   if (terminado || turno !== 1 || cantidad < 1) return;
-  const hechos = sortear(t, cantidad);
-  J[1].p -= hechos * AJUSTES.costoSorteo; J[1].c = 0; ultima = null;
-  aviso("🎲 " + hechos + (hechos === 1 ? " cuadro sorteado" : " cuadros sorteados") + " (−" + hechos * AJUSTES.costoSorteo + ")");
+  const hechos = sortear(t, Math.min(cantidad, J[1].a));
+  J[1].a -= hechos; J[1].c = 0; ultima = null;
+  aviso("🎲 " + hechos + (hechos === 1 ? " cuadro sorteado" : " cuadros sorteados") + " (−" + hechos + (hechos === 1 ? " cubo)" : " cubos)"));
   revisar(true, 1);
 });
 
@@ -194,10 +200,10 @@ function revisar(terminaTurno, a) {
   const auto = autoSortear(a); // al llegar a 100 puntos se colocan solos al azar
   if (auto) aviso((a === 2 ? "🤖 " : "") + "🎲 " + AJUSTES.autoSorteo + " puntos → " + auto + (auto === 1 ? " cuadro" : " cuadros") + " al azar");
   if (J[1].p > maxPuntos) maxPuntos = J[1].p;
-  if (completo(t) || (op.bot ? J[1].p < 1 && J[2].p < 1 : J[1].p < 1)) return terminar();
+  if (completo(t) || (op.bot ? !puede(1) && !puede(2) : !puede(1))) return terminar();
   if (op.bot) {
     if (terminaTurno) { J[a].c = 0; turno = a === 1 ? 2 : 1; }
-    if (J[turno].p < 1) turno = turno === 1 ? 2 : 1; // quien se quedó sin puntos no puede jugar: sigue el otro
+    if (!puede(turno)) turno = turno === 1 ? 2 : 1; // quien se quedó sin puntos ni cubos no puede jugar: sigue el otro
   }
   pintarHud();
   if (turno === 2) programarBot();
@@ -205,14 +211,14 @@ function revisar(terminaTurno, a) {
 
 function programarBot() {
   clearTimeout(tBot);
-  tBot = setTimeout(pasoBot, J[1].p < 1 ? 200 : 650);
+  tBot = setTimeout(pasoBot, !puede(1) ? 200 : 650);
 }
 function pasoBot() {
   if (pausado || terminado || turno !== 2) return;
-  const m = jugadaBot(t, J[2].p);
+  const m = jugadaBot(t, J[2].p, J[2].a);
   if (m.accion === "sortear") {
     const hechos = sortear(t, m.cantidad);
-    J[2].p -= hechos * AJUSTES.costoSorteo; ultima = null;
+    J[2].a -= hechos; ultima = null;
     aviso("🤖 sorteó " + hechos + (hechos === 1 ? " cuadro" : " cuadros"));
     revisar(true, 2);
   } else revisar(!poner(2, m.tipo, m.r, m.c), 2);

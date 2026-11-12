@@ -49,7 +49,7 @@
   <!-- Menú principal estándar: Modo libre · Niveles · Mapa · Salir -->
   <main class="pantalla" id="menu">
     <h1>📓 Polocubos</h1>
-    <p>Cierra cuadritos de tu libreta: cada pared cuesta, cada cuadro cerrado paga, y en cadena paga más.</p>
+    <p>Cierra cuadritos de tu libreta: cada pared cuesta 1 punto. Cierra un cuadro con 1 pared y ganas un cubo aleatorio (y recuperas tu punto); con 2 o más paredes ganas 2 puntos.</p>
     <div class="col">
       <button class="b3d txt grande b-verde" id="b-libre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
       <button class="b3d txt grande b-azul" id="b-niveles" type="button"><span class="b-ico">🪜</span> Niveles</button>
@@ -73,6 +73,7 @@
     <canvas id="tablero" aria-label="Hoja cuadriculada: toca un lado de un cuadro para poner una pared"></canvas>
     <div class="hud hud-der">
       <span class="chip" id="c-pts"></span>
+      <span class="chip" id="c-azar"></span>
       <span class="chip" id="c-bot"></span>
       <span class="chip" id="c-cuadros"></span>
       <span class="chip" id="c-cadena"></span>
