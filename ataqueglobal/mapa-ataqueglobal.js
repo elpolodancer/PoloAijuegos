@@ -464,12 +464,19 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, giroAut
     }
     for (let i = explosiones.length - 1; i >= 0; i--) if (ahora - explosiones[i].t0 > 900) explosiones.splice(i, 1);
   }
-  // Punto del recorrido (círculo máximo) en pantalla, con altura: [x, y, cos]; cos < 0 = al otro lado del planeta
+  // Perfil del vuelo (t = 0..1, 5 s): SUBE casi en vertical hasta salir de la atmósfera (primer ~22 %), viaja arriba (crucero) y CAE en picada (último ~22 %).
+  //   avance(t): cuánto del recorrido por la superficie ya se hizo (arranca y termina muy lento: casi vertical)
+  //   altura(t): 0 = en el suelo, 1 = en el punto más alto (sube y baja rápido, meseta arriba)
+  const avance = (t) => t * t * t * (t * (6 * t - 15) + 10);
+  const altura = (t) => Math.sqrt(Math.max(0, Math.sin(Math.PI * acotar(t, 0, 1))));
+  // Punto del recorrido (círculo máximo) en pantalla, con altura: [x, y, cos, h]; cos < 0 = al otro lado del planeta; h = altura 0..1
   function puntoDeVuelo(f, t) {
-    const o = f.ome, s1 = o < 1e-6 ? 1 : Math.sin((1 - t) * o) / Math.sin(o), s2 = o < 1e-6 ? 0 : Math.sin(t * o) / Math.sin(o);
+    const g = avance(acotar(t, 0, 1)), h = altura(t), o = f.ome, s1 = o < 1e-6 ? 1 : Math.sin((1 - g) * o) / Math.sin(o), s2 = o < 1e-6 ? 0 : Math.sin(g * o) / Math.sin(o);
     const x = s1 * f.va[0] + s2 * f.vb[0], y = s1 * f.va[1] + s2 * f.vb[1], z = s1 * f.va[2] + s2 * f.vb[2];
-    const q = proy(Math.atan2(y, x) / RAD, Math.asin(acotar(z, -1, 1)) / RAD), e = 1 + f.alto * Math.sin(Math.PI * t);
-    return [CX + (q[0] - CX) * e, CY + (q[1] - CY) * e, q[2]];
+    const q = proy(Math.atan2(y, x) / RAD, Math.asin(acotar(z, -1, 1)) / RAD), e = 1 + f.alto * h;
+    // Alejarse del centro (se ve bien en el borde del planeta) + subir en pantalla (se ve bien de frente): así la subida se nota en todo el globo
+    const lev = cam.R * f.alto * h * 0.9 * Math.max(0, q[2]);
+    return [CX + (q[0] - CX) * e, CY + (q[1] - CY) * e - lev, q[2], h, q[0], q[1]]; // [4],[5] = el punto en el suelo (para la sombra)
   }
   function pintarVuelos() {
     ctx.lineCap = "round";
@@ -485,10 +492,17 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, giroAut
       }
       ctx.globalAlpha = 1;
       const h = puntoDeVuelo(f, t1);
-      if (h[2] > 0) { // cabeza con resplandor
-        const g = ctx.createRadialGradient(h[0], h[1], 0, h[0], h[1], 9);
+      if (h[2] > 0) {
+        // sombra en el suelo: más tenue y más separada mientras más alto va (da sensación de altura)
+        ctx.globalAlpha = 0.18 + 0.22 * (1 - h[3]); ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(h[4], h[5], 3 + 2 * h[3], 1.6 + h[3], 0, 0, DOS_PI); ctx.fill(); ctx.globalAlpha = 1;
+        // cabeza con resplandor: más grande y brillante al salir de la atmósfera
+        const rad = 8 + 6 * h[3], g = ctx.createRadialGradient(h[0], h[1], 0, h[0], h[1], rad);
         g.addColorStop(0, "#fff"); g.addColorStop(0.35, f.color); g.addColorStop(1, "rgba(255,255,255,0)");
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(h[0], h[1], 9, 0, DOS_PI); ctx.fill();
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(h[0], h[1], rad, 0, DOS_PI); ctx.fill();
+      }
+      if (f.p < 0.2) { // humo y destello del despegue en el punto de salida
+        const q0 = proy(f.de[0], f.de[1]);
+        if (q0[2] > 0) { const u = f.p / 0.2, r = 6 + 16 * u; ctx.globalAlpha = 0.55 * (1 - u); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(q0[0], q0[1], r, 0, DOS_PI); ctx.fill(); ctx.globalAlpha = 1; }
       }
     }
     for (const e of explosiones) { // explosión: destello que crece y se apaga
@@ -685,7 +699,7 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, giroAut
     setMira(lon, lat) { mira = lon == null ? null : { lon, lat }; },
     lanzar({ de, a, ms = 5000, espera = 0, color = "#fff", alImpactar }) { // espera: milisegundos antes de despegar (para escalonar varios misiles)
       const va = vec(de[0], de[1]), vb = vec(a[0], a[1]), ome = Math.acos(acotar(va[0] * vb[0] + va[1] * vb[1] + va[2] * vb[2], -1, 1));
-      vuelos.push({ va, vb, b: a, ome, alto: acotar(0.03 + 0.12 * (ome / Math.PI), 0.03, 0.15), ms: Math.max(1, ms), p: -espera / Math.max(1, ms), color, alImpactar });
+      vuelos.push({ va, vb, b: a, ome, de, alto: acotar(0.10 + 0.14 * (ome / Math.PI), 0.10, 0.24), ms: Math.max(1, ms), p: -espera / Math.max(1, ms), color, alImpactar });
     },
     cancelarVuelos() { vuelos.length = 0; explosiones.length = 0; mira = null; },
     setVision, vision: () => niebla.fraccion,
