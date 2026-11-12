@@ -1,5 +1,5 @@
 // Ruta: estacionamiento/niveles-estacionamiento.js
-// Generador de los 22 600 niveles del Estacionamiento. No toca la página (no usa document), así que se puede probar en Node.
+// Generador de los 22 600 niveles del Estacionamiento (tableros siempre llenos: ver generarNivel). No toca la página (no usa document), así que se puede probar en Node.
 //   - configNivel(n)   → { n, zona, etapa, k, tam, seed, obj, p3, K, premio, dif }  (todo sale del número de nivel: iguales para todos)
 //   - generarNivel(cfg) → lista de autos del nivel; SIEMPRE tiene solución (se resuelve quitando los autos del último al primero)
 //
@@ -99,18 +99,17 @@ export function configNivel(n) {
     tam = tamanosPais(etapa)[k - 1];
     dif = 0.5 + 0.5 * ((tam - 10) / 40);
   }
-  // Densidad (parte de las casillas que ocupan los autos), proporción de autos largos y «desorden» del generador:
-  // todo crece con la dificultad. Pero hay un TOPE por tamaño: mientras más grande es el tablero, más largo es el camino de cada auto
-  // hasta la orilla y más fácil que otro lo tape, así que no caben tantos autos (medido: ~74 % de ocupación máxima en 10×10,
-  // ~52 % en 25×25, ~36 % en 50×50). El tope va un poco por debajo de ese máximo.
+  // El tablero SIEMPRE se llena casi por completo (ver generarNivel). La dificultad ya no sale de cuántos autos caben, sino de:
+  //   p3      proporción de autos largos (3 casillas): 0.3 → 0.6
+  //   enredo  qué tanto se prefieren los caminos tapados por otros autos al desarmar el tablero: 0.1 → 0.95
+  //           (poco enredo = muchos autos libres desde el principio; mucho = pocos libres y cadenas largas de autos que estorban)
   const p3 = 0.3 + 0.3 * dif;
-  const dens = Math.min(0.16 + 0.44 * dif, 0.245 + 4.25 / tam);
   return {
     n, zona, etapa, k, tam, dif,
     seed: mezclar(n, 12345),
     p3,
-    K: Math.round(6 + 26 * dif),
-    obj: Math.max(4, Math.round((dens * tam * tam) / (2 + p3))),
+    enredo: 0.1 + 0.85 * dif,
+    obj: Math.round((tam * tam) / (2 + p3)), // autos aproximados (informativo: el tablero se llena casi entero)
     premio: premioMonedas(tam),
   };
 }
@@ -120,58 +119,94 @@ const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0]; // 0 arriba, 1 derecha, 2 abajo, 3
 const TONOS = [0, 22, 48, 120, 165, 198, 225, 265, 300, 335];
 export const cabeza = (c) => [c.dir === 1 ? c.x + c.len - 1 : c.x, c.dir === 2 ? c.y + c.len - 1 : c.y];
 
-// Cada auto se coloca con su camino hacia afuera LIBRE respecto a los ya puestos; los nuevos pueden estorbar a los viejos.
-// Por eso, quitando los autos del último al primero, el nivel siempre se puede resolver.
+// Paso 1: TESELAR. Se recorre el tablero fila por fila y en cada casilla libre se pone un auto de 2 o 3 casillas, horizontal o vertical,
+// hasta llenarlo. (Hacia abajo siempre hay lugar, así que solo pueden quedar casillas sueltas en las últimas filas.)
+function teselar(N, p3, rnd) {
+  const lleno = new Uint8Array(N * N), piezas = [];
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    if (lleno[y * N + x]) continue;
+    let r = 0;
+    while (x + r < N && !lleno[y * N + x + r]) r++; // casillas libres seguidas hacia la derecha
+    const v = N - y;                                // hacia abajo
+    let h = rnd() < 0.6; // un poco más de horizontales: al barrer fila por fila, los verticales ocupan casillas de las filas siguientes y saldrían de más
+    if (h && r < 2) h = false;
+    else if (!h && v < 2) h = r >= 2;
+    const espacio = h ? r : v;
+    if (espacio < 2) continue;                      // casilla suelta
+    let len = rnd() < p3 ? 3 : 2;
+    if (len > espacio) len = espacio;
+    if (espacio - len === 1) len = len === 2 ? 3 : 2; // que no sobre una sola casilla
+    for (let i = 0; i < len; i++) lleno[(h ? y : y + i) * N + (h ? x + i : x)] = 1;
+    piezas.push({ x, y, len, h });
+  }
+  return piezas;
+}
+
+// Paso 2: DESARMAR. Se van quitando autos en un orden al azar: en cada paso se elige uno que tenga libre su camino hacia la orilla
+// (con los autos que aún quedan) y se le pone la flecha hacia ese lado. Ese orden de salida ES una solución: cada auto solo tiene
+// delante autos que salen antes que él. Con «enredo» alto se prefieren los autos cuyo camino, en el tablero completo, está tapado
+// (cadenas largas); con «enredo» bajo, los que ya estaban libres. Si el tablero se atora (ningún auto libre), se quita un auto al azar
+// y queda un hueco (pasa muy pocas veces).
+function desarmar(N, piezas, enredo, rnd) {
+  const M = piezas.length;
+  const orig = new Int32Array(N * N).fill(-1), occ = new Int32Array(N * N).fill(-1);
+  piezas.forEach((p, i) => { for (let k = 0; k < p.len; k++) orig[(p.h ? p.y : p.y + k) * N + (p.h ? p.x + k : p.x)] = i; });
+  occ.set(orig);
+  const vivo = new Uint8Array(M).fill(1), dir = new Int8Array(M).fill(-1), orden = [];
+  let quedan = M;
+  const sacar = (i) => { const p = piezas[i]; vivo[i] = 0; quedan--; for (let k = 0; k < p.len; k++) occ[(p.h ? p.y : p.y + k) * N + (p.h ? p.x + k : p.x)] = -1; };
+  // ¿Su camino hacia la orilla, en el tablero completo, está libre?
+  const libreEnOrig = (i, d) => {
+    const p = piezas[i];
+    let x = d === 1 ? p.x + p.len - 1 : p.x, y = d === 2 ? p.y + p.len - 1 : p.y;
+    x += DX[d]; y += DY[d];
+    while (x >= 0 && y >= 0 && x < N && y < N) { if (orig[y * N + x] !== -1) return false; x += DX[d]; y += DY[d]; }
+    return true;
+  };
+  while (quedan > 0) {
+    const faciles = [], dificiles = [];
+    const nuevo = (i, d) => (libreEnOrig(i, d) ? faciles : dificiles).push(i * 4 + d);
+    for (let y = 0; y < N; y++) { // solo el primero y el último auto de cada fila (y de cada columna) pueden tener el camino libre
+      let x = 0; while (x < N && occ[y * N + x] < 0) x++;
+      if (x === N) continue;
+      if (piezas[occ[y * N + x]].h) nuevo(occ[y * N + x], 3);
+      let x2 = N - 1; while (occ[y * N + x2] < 0) x2--;
+      if (piezas[occ[y * N + x2]].h) nuevo(occ[y * N + x2], 1);
+    }
+    for (let x = 0; x < N; x++) {
+      let y = 0; while (y < N && occ[y * N + x] < 0) y++;
+      if (y === N) continue;
+      if (!piezas[occ[y * N + x]].h) nuevo(occ[y * N + x], 0);
+      let y2 = N - 1; while (occ[y2 * N + x] < 0) y2--;
+      if (!piezas[occ[y2 * N + x]].h) nuevo(occ[y2 * N + x], 2);
+    }
+    if (!faciles.length && !dificiles.length) { // atorado: se quita un auto al azar (no entra al nivel)
+      let k = (rnd() * quedan) | 0, i = 0;
+      for (; i < M; i++) if (vivo[i] && k-- === 0) break;
+      sacar(i);
+      continue;
+    }
+    const pool = (rnd() < enredo && dificiles.length) || !faciles.length ? dificiles : faciles;
+    const e = pool[(rnd() * pool.length) | 0], i = e >> 2;
+    dir[i] = e & 3;
+    orden.push(i);
+    sacar(i);
+  }
+  return { orden, dir };
+}
+
+// Cada auto sale con su camino libre respecto a los que salen después que él; quitando los autos del último al primero, el nivel siempre se puede resolver.
 export function generarNivel(cfg) {
   const N = cfg.tam;
   const rnd = mulberry32(cfg.seed);
-  const occ = new Int32Array(N * N).fill(-1);
-  const ruta = new Uint16Array(N * N); // cuántos autos ya puestos pasarían por cada casilla al salir (mide el «enredo»)
-  const autos = [];
-  const candidato = () => {
-    const len = rnd() < cfg.p3 ? 3 : 2, h = rnd() < 0.5;
-    const x = (rnd() * (N - (h ? len : 1) + 1)) | 0, y = (rnd() * (N - (h ? 1 : len) + 1)) | 0;
-    const celdas = [];
-    let score = 0;
-    for (let i = 0; i < len; i++) {
-      const cx = h ? x + i : x, cy = h ? y : y + i;
-      if (occ[cy * N + cx] !== -1) return null;
-      celdas.push(cy * N + cx);
-      score += ruta[cy * N + cx];
-    }
-    // sentido al azar; si su camino está tapado, prueba el contrario (sube mucho la cantidad de autos que caben)
-    const d0 = h ? (rnd() < 0.5 ? 1 : 3) : (rnd() < 0.5 ? 0 : 2);
-    for (const dir of [d0, (d0 + 2) % 4]) {
-      const c = { x, y, len, dir, h };
-      const [hx, hy] = cabeza(c);
-      let rx = hx + DX[dir], ry = hy + DY[dir], libre = true;
-      while (rx >= 0 && ry >= 0 && rx < N && ry < N) {
-        if (occ[ry * N + rx] !== -1) { libre = false; break; }
-        rx += DX[dir]; ry += DY[dir];
-      }
-      if (libre) return { c, celdas, score };
-    }
-    return null;
-  };
-  const maxIntentos = cfg.obj * 30 + 2000;
-  for (let intento = 0; autos.length < cfg.obj && intento < maxIntentos; intento++) {
-    let mejor = null;
-    for (let k = 0; k < cfg.K; k++) {
-      const r = candidato();
-      if (r && (!mejor || r.score > mejor.score)) mejor = r;
-    }
-    if (!mejor) continue;
-    const id = autos.length;
-    mejor.celdas.forEach((i) => (occ[i] = id));
-    mejor.c.id = id;
-    mejor.c.tono = TONOS[(rnd() * TONOS.length) | 0];
-    mejor.c.luz = 46 + ((rnd() * 12) | 0);
-    // su camino de salida cuenta para el «enredo» de los autos que se pongan después
-    const [hx, hy] = cabeza(mejor.c);
-    let rx = hx + DX[mejor.c.dir], ry = hy + DY[mejor.c.dir];
-    while (rx >= 0 && ry >= 0 && rx < N && ry < N) { ruta[ry * N + rx]++; rx += DX[mejor.c.dir]; ry += DY[mejor.c.dir]; }
-    autos.push(mejor.c);
-  }
+  const piezas = teselar(N, cfg.p3, rnd);
+  const { orden, dir } = desarmar(N, piezas, cfg.enredo, rnd);
+  const K = orden.length;
+  const autos = new Array(K);
+  orden.forEach((i, k) => { // el primero en salir recibe el id más alto (esResoluble los quita del último al primero)
+    const p = piezas[i], id = K - 1 - k;
+    autos[id] = { x: p.x, y: p.y, len: p.len, dir: dir[i], h: p.h, id, tono: TONOS[(rnd() * TONOS.length) | 0], luz: 46 + ((rnd() * 12) | 0) };
+  });
   return autos;
 }
 

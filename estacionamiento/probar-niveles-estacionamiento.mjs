@@ -25,9 +25,9 @@ console.log("Monedas: límites de cada rango correctos");
 const a = JSON.stringify(generarNivel(configNivel(1234))), b = JSON.stringify(generarNivel(configNivel(1234)));
 if (a!==b) mal("no determinista"); else console.log("Determinista: mismo nivel = mismo tablero");
 
-// 5) Generación: todos los de México + muestra de países. Tiempo, resolubilidad, autos logrados vs objetivo
+// 5) Generación: todos los niveles. Tiempo, resolubilidad y qué tan lleno queda el tablero (casillas ocupadas / casillas totales)
 function probar(lista, nombre) {
-  let max = 0, suma = 0, peor = null, noRes = 0, corto = 0, minRatio = 1;
+  let max = 0, suma = 0, peor = null, noRes = 0, corto = 0, minRatio = 1;  // ratio = ocupación del tablero
   const porTam = {};
   for (const n of lista) {
     const cfg = configNivel(n);
@@ -36,15 +36,15 @@ function probar(lista, nombre) {
     const ms = performance.now() - t0;
     suma += ms; if (ms > max) { max = ms; peor = cfg; }
     if (!esResoluble(cfg.tam, autos)) noRes++;
-    const r = autos.length / cfg.obj; if (r < 0.98) corto++; minRatio = Math.min(minRatio, r);
+    const r = autos.reduce((t, c) => t + c.len, 0) / (cfg.tam * cfg.tam); if (r < 0.98) corto++; minRatio = Math.min(minRatio, r);
     const o = porTam[cfg.tam] ||= { n:0, ms:0, ratio:1 }; o.n++; o.ms = Math.max(o.ms, ms); o.ratio = Math.min(o.ratio, r);
   }
-  console.log(`${nombre}: ${lista.length} niveles · media ${(suma/lista.length).toFixed(1)} ms · máx ${max.toFixed(0)} ms (nivel ${peor.n}, ${peor.tam}×${peor.tam}) · no resolubles: ${noRes} · por debajo del 98% del objetivo: ${corto} (mínimo ${(minRatio*100).toFixed(0)}%)`);
+  console.log(`${nombre}: ${lista.length} niveles · media ${(suma/lista.length).toFixed(1)} ms · máx ${max.toFixed(0)} ms (nivel ${peor.n}, ${peor.tam}×${peor.tam}) · no resolubles: ${noRes} · tableros con menos de 98% de casillas ocupadas: ${corto} (mínimo ${(minRatio*100).toFixed(1)}%)`);
   return porTam;
 }
 const mex = []; for (let n = 1; n <= 3200; n++) mex.push(n);
 probar(mex, "México");
 const mundo = []; for (let n = 3201; n <= TOTAL_NIVELES; n += 1) mundo.push(n);
 const pt = probar(mundo, "Mundo (todos)");
-console.log("Peor caso por tamaño (ms / % de autos logrados):", Object.keys(pt).sort((x,y)=>x-y).filter((_,i)=>i%5===0).map(t=>`${t}×${t}: ${pt[t].ms.toFixed(0)}ms/${(pt[t].ratio*100).toFixed(0)}%`).join(" · "));
+console.log("Peor caso por tamaño (ms / % de casillas ocupadas):", Object.keys(pt).sort((x,y)=>x-y).filter((_,i)=>i%5===0).map(t=>`${t}×${t}: ${pt[t].ms.toFixed(0)}ms/${(pt[t].ratio*100).toFixed(0)}%`).join(" · "));
 console.log(fallos ? `\n${fallos} FALLOS` : "\nTodo correcto");
