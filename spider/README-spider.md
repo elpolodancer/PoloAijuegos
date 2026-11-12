@@ -13,9 +13,11 @@ Solitario Spider de 104 cartas, 10 columnas, 5 repartos de 10 y 8 series K→A. 
 
 ## Archivos
 - `logica-spider.js` lógica pura (cartas, reparto con semilla, jugadas, series, repartir). Sin DOM.
-- `ia-spider.js` **bot de backtracking**: `resolver`, `comprobar` (repite la solución con las reglas del juego), `verificar(dif, semilla)`, `generarVerificada(dif, semilla)`, `AJUSTES` por dificultad.
+- `ia-spider.js` **bot de backtracking**: `resolver`, `comprobar` (repite la solución con las reglas del juego), `verificar(palos, semilla)`, `generarVerificada(palos, semilla)`, `AJUSTES` por cantidad de palos.
+- `repartos-spider.js` **banco** `BANCO[palos][dif] = [[semilla, nodos], …]`: 200 repartos de 1 palo, 150 de 2, 30 de 3 y 14 de 4, todos con solución comprobada; la dificultad sale de los nodos del bot (más nodos = más difícil). Se generó con el bot fuera del juego.
+- `banco-spider.js` elige un reparto del banco para (palos, dificultad); si la casilla está vacía usa la dificultad más cercana.
 - `verificar-spider.mjs` consola: `node spider/verificar-spider.mjs [cuantas] [semilla] [maxMs] [maxNodos]`.
-- `niveles-spider.js` niveles fijos `{ dif, semilla, nodos }`, todos comprobados con el bot. No cambiar semillas ya publicadas.
+- `niveles-spider.js` niveles fijos `{ palos, dif, semilla, nodos }`, todos comprobados con el bot. No cambiar semillas ya publicadas.
 - `juego-spider.js`, `index-spider.html` menú, partida (toca un tramo y luego la columna destino) y mapa.
 
 ## El bot: qué garantiza y qué no
@@ -31,7 +33,7 @@ Más niveles (el mapa tiene `porEtapa: 10`, provisional; los que faltan salen bl
 ```js
   { id: "spider", nombre: "Spider", icono: "🕷️", descripcion: "Solitario Spider de 104 cartas con 5 dificultades (de 1 a 4 palos y un modo Maestro sin deshacer), modo libre y mapa de México y del mundo para los niveles que vendrán.", carpeta: "spider" },
 ```
-y `"spider"` en `EN_DESARROLLO`. `sw.js`, dentro de `JUEGOS`: `spider: ["juego.js", "logica.js", "ia.js", "niveles.js"],` y `VERSION = 153` (+ nota «153 = se agregó «spider»»).
+y `"spider"` en `EN_DESARROLLO`. `sw.js`, dentro de `JUEGOS`: `spider: ["juego.js", "logica.js", "ia.js", "niveles.js", "banco-spider.js", "repartos-spider.js"],` (los dos últimos con su nombre completo) y `VERSION = 164`.
 
-README principal, fila: `spider/index-spider.html`, `juego-spider.js`, `logica-spider.js`, `ia-spider.js`, `verificar-spider.mjs`, `README-spider.md` — Solitario Spider (id de puntos `spider`); lógica pura, bot de backtracking y progreso en `localStorage` (`spider_progreso_v1`, mejor tiempo por dificultad, sincronizado con `conectar()`).
+README principal, fila: `spider/index-spider.html`, `juego-spider.js`, `logica-spider.js`, `ia-spider.js`, `banco-spider.js`, `repartos-spider.js`, `niveles-spider.js`, `verificar-spider.mjs`, `README-spider.md` — Solitario Spider (id de puntos `spider`); lógica pura, bot de backtracking y progreso en `localStorage` (`spider_progreso_v1`, mejor tiempo por dificultad, sincronizado con `conectar()`).
 Nota «Estado»: Spider (11 nov 2026): menú, modo libre con 5 dificultades y mapa sin niveles; bot probado en Node, pantalla sin probar en celular.
