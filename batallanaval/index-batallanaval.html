@@ -1,0 +1,52 @@
+<!doctype html>
+<!-- Ruta: batallanaval/index-batallanaval.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Batalla naval</title>
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    /* Pantalla «Partida libre»: misma madera y mismos márgenes que el mapa (zonas reservadas de los botones fijos) */
+    .bn-raiz { position: fixed; inset: 0; z-index: 5; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y;
+      padding: max(8px, env(safe-area-inset-top)) max(160px, env(safe-area-inset-right)) 14px max(160px, env(safe-area-inset-left));
+      color: var(--txt-fondo, #4a2a10); font-family: system-ui, sans-serif;
+      background: url("../imagenes/fondomaderaclara.webp") center / cover no-repeat, #d9a866; }
+    html.oscura .bn-raiz { background: url("../imagenes/fondomaderaoscura.webp") center / cover no-repeat, #1d2024; }
+    @media (max-aspect-ratio: 1/1) { .bn-raiz { padding: calc(104px + env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) calc(66px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); } }
+    .bn-col { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; text-align: center; }
+    .bn-col h2 { margin: 0; font-size: 1.35rem; text-shadow: var(--sombra-txt); }
+    .bn-col h3 { margin: 6px 0 0; font-size: 1rem; text-shadow: var(--sombra-txt); }
+    .bn-nota { margin: 0; font-size: .82rem; line-height: 1.35; color: var(--txt-fondo-suave, #6b4423); }
+    .bn-fila { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 10px; }
+    .bn-fila .b3d.txt { --t: 42px; font-size: 15px; }
+    /* Resumen de la flota: panel oscuro legible sobre cualquier madera */
+    .bn-flota { padding: 10px 12px; text-align: left; color: #f1f2f4; background: rgba(10, 10, 12, .8); border: 2px solid #121316; border-radius: 16px; box-shadow: 0 4px 0 #0c0d0f, 0 8px 16px rgba(0, 0, 0, .4); }
+    .bn-flota p { margin: 0 0 6px; font-size: .85rem; }
+    .bn-barco { display: flex; align-items: center; gap: 10px; padding: 3px 0; font-size: .82rem; }
+    .bn-casillas { display: flex; gap: 2px; flex: none; }
+    .bn-casillas i { display: block; width: 12px; height: 12px; background: #8ccdf5; border: 1px solid #1f78c8; border-radius: 2px; }
+    .bn-barco b { margin-left: auto; font-weight: 800; color: #ffd36b; }
+    .bn-comenzar { display: flex; justify-content: center; margin-top: 4px; }
+    #bn-aviso { min-height: 1.2em; font-size: .85rem; font-weight: 700; color: var(--txt-fondo, #4a2a10); }
+    .bn-toast { position: fixed; z-index: 9; left: 50%; bottom: calc(70px + env(safe-area-inset-bottom)); transform: translateX(-50%); max-width: min(92vw, 420px); padding: 10px 16px; font-size: .9rem; font-weight: 700; text-align: center; color: #fff; background: rgba(10, 10, 12, .88); border: 2px solid #121316; border-radius: 14px; box-shadow: 0 4px 0 #0c0d0f; pointer-events: none; }
+    .hud-der { z-index: 6; } /* por encima de la pantalla del mapa (z-index 5) */
+    .bn-info-texto { margin: 0 0 10px; font-size: .9rem; line-height: 1.4; text-align: left; }
+  </style>
+</head>
+<body class="inmersivo">
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Menú principal" hidden><span class="b-ico">☰</span> Menú principal</button>
+  </nav>
+
+  <div class="hud hud-der"><span class="chip chip-monedas" title="Monedas"><span class="moneda"></span><span id="monedas-n">0</span></span></div>
+
+  <script type="module" src="./juego-batallanaval.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
