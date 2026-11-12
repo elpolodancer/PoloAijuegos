@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#d9a866">
+  <title>Billar</title>
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <link rel="stylesheet" href="../compartido/estilos.css">
+  <link rel="stylesheet" href="../compartido/inmersivo.css">
+  <style>
+    /* Solo lo propio de Billar; botones, madera y colores vienen de compartido/inmersivo.css */
+    .pantalla { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 90px 16px 80px; text-align: center; }
+    .pantalla h1, .pantalla h2 { margin: 0 0 6px; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    .pantalla p { margin: 0; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
+    .columna { display: flex; flex-direction: column; gap: 12px; width: min(320px, 100%); }
+    #aviso-billar { position: fixed; z-index: 7; left: 50%; bottom: max(70px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+      max-width: min(92vw, 420px); padding: 10px 16px; border-radius: 12px; background: rgba(20, 20, 24, .92); color: #f1f2f4; font-weight: 600; text-align: center; }
+  </style>
+</head>
+<body class="inmersivo">
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Menú principal" hidden><span class="b-ico">☰</span> Menú principal</button>
+  </nav>
+
+  <!-- Monedas (chip estándar dorado, arriba a la derecha) -->
+  <div class="hud hud-der"><span class="chip chip-monedas" id="chip-monedas" title="Monedas"><span class="moneda"></span><span id="n-monedas">0</span></span></div>
+
+  <!-- 1) MENÚ PRINCIPAL ESTÁNDAR (sección 7): Modo libre · Niveles · Mapa · Salir -->
+  <main class="pantalla" id="pantalla-menu">
+    <h1>🎱 Billar</h1>
+    <div class="columna">
+      <button class="b3d txt grande b-verde" id="btn-libre" type="button"><span class="b-ico">♾️</span> <span>Modo libre</span></button>
+      <button class="b3d txt grande b-azul" id="btn-niveles" type="button"><span class="b-ico">🪜</span> <span>Niveles</span></button>
+      <button class="b3d txt grande b-azul" id="btn-mapa" type="button"><span class="b-ico">🗺️</span> <span>Mapa</span></button>
+      <a class="b3d txt grande b-rojo" id="btn-salir" href="../"><span class="b-ico">🚪</span> <span>Salir</span></a>
+    </div>
+  </main>
+
+  <!-- 2) DIFICULTADES DEL MODO LIBRE (5 niveles) -->
+  <section class="pantalla" id="pantalla-libre" hidden>
+    <h2>♾️ Modo libre</h2>
+    <p>Elige la dificultad</p>
+    <div class="columna" id="lista-dificultad"></div>
+  </section>
+
+  <!-- 3) El mapa (Niveles y Mapa) lo dibuja compartido/mapa-niveles.js encima de todo: no necesita HTML aquí -->
+
+  <div id="aviso-billar" role="status" hidden></div>
+
+  <script type="module" src="juego-billar.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
