@@ -7,7 +7,11 @@
 // y listas de lo que ya está puesto (LH, LV, LC): así dibujar y buscar jugadas del bot no recorre los 250 000 cuadros cada vez.
 
 export const AJUSTES = {
-  puntosInicio: 100, // puntos por defecto al empezar (el jugador puede elegir entre PUNTOS_INICIO)
+  puntosInicio: 100, // puntos por defecto al empezar (el jugador puede elegir entre PUNTOS_INICIO). Al empezar se colocan solos
+                     // en cuadros al azar (sorteo) y el jugador se queda con puntosJugar
+  puntosJugar: 2,    // puntos con los que se juega al empezar (el resto de puntosInicio se sortea automáticamente)
+  autoSorteo: 100,   // cada vez que alguien junta esta cantidad, se gasta sola en sortear cuadros al azar
+  maxInicial: 0.6,   // al empezar, como máximo esta fracción de la hoja se llena con el sorteo automático (hojas chicas)
   costoPared: 1,     // poner una pared a mano
   costoSorteo: 2,    // sortear un cuadro (4 paredes con descuento)
   premioCuadro: 2,   // cerrar un cuadro a mano. En cadena, cada cuadro extra sin interrupción da +1 más (2, 3, 4…)

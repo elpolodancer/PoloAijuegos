@@ -108,7 +108,7 @@ const pausa = crearMenuPausa({
   puedeAbrir: () => pantalla === "partida" && !terminado,
   alAbrir: () => { pausado = true; clearTimeout(tBot); },                                   // el bot espera
   alContinuar: () => { pausado = false; if (turno === 2 && !terminado) programarBot(); },
-  extras: () => [{ icono: "🔁", texto: "Reiniciar tablero", clase: "b-azul", ayuda: "Empiezas de nuevo con " + op.pi + " puntos", alElegir: () => empezar(dif) }],
+  extras: () => [{ icono: "🔁", texto: "Reiniciar tablero", clase: "b-azul", ayuda: "Se sortean " + op.pi + " puntos al azar y empiezas con " + AJUSTES.puntosJugar, alElegir: () => empezar(dif) }],
   ayudaSalir: "Se pierde esta partida" + (op.bot ? "" : " (tu mejor marca se conserva)"),
   alSalir: () => ir("menu"),
 });
@@ -117,11 +117,29 @@ const pausa = crearMenuPausa({
 function empezar(d) {
   clearTimeout(tBot);
   dif = d; t = crearTablero(d.n);
-  J[1] = { p: op.pi, c: 0, cu: 0 }; J[2] = { p: op.pi, c: 0, cu: 0 };
-  maxPuntos = op.pi; turno = 1; terminado = false; pausado = false; ultima = null;
-  cantidad = Math.min(20, Math.floor(op.pi / AJUSTES.costoSorteo));
+  // Los puntos elegidos se colocan solos: se sortean cuadros al azar (a costo de sorteo) y cada jugador se queda con puntosJugar.
+  // En hojas chicas se limita para no llenarlas desde el principio.
+  const inicial = Math.min(Math.floor(op.pi / AJUSTES.costoSorteo), Math.floor(d.n * d.n * AJUSTES.maxInicial));
+  sortear(t, inicial);
+  J[1] = { p: AJUSTES.puntosJugar, c: 0, cu: 0 }; J[2] = { p: AJUSTES.puntosJugar, c: 0, cu: 0 };
+  maxPuntos = AJUSTES.puntosJugar; turno = 1; terminado = false; pausado = false; ultima = null;
+  cantidad = 20;
   ir("partida");
   pintarHud();
+  aviso("🎲 " + fmt(t.cuadros) + " cuadros colocados al azar · empiezas con " + AJUSTES.puntosJugar + " puntos");
+}
+
+// Cada vez que «a» junta AJUSTES.autoSorteo puntos, se gastan solos en sortear cuadros al azar (sin premio, como el sorteo normal).
+// Devuelve cuántos cuadros sorteó.
+function autoSortear(a) {
+  const j = J[a], por = Math.floor(AJUSTES.autoSorteo / AJUSTES.costoSorteo);
+  let total = 0;
+  while (j.p >= AJUSTES.autoSorteo && !completo(t)) {
+    const hechos = sortear(t, por);
+    if (!hechos) break;
+    j.p -= hechos * AJUSTES.costoSorteo; total += hechos;
+  }
+  return total;
 }
 
 const maxSortear = () => Math.max(0, Math.min(Math.floor(J[1].p / AJUSTES.costoSorteo), t.n * t.n - t.cuadros));
@@ -173,6 +191,8 @@ $("b-sortear").addEventListener("click", () => {
 
 // Después de cada jugada: ¿terminó la partida? ¿de quién es el turno? (sortear o una pared sin cerrar pasan el turno al rival)
 function revisar(terminaTurno, a) {
+  const auto = autoSortear(a); // al llegar a 100 puntos se colocan solos al azar
+  if (auto) aviso((a === 2 ? "🤖 " : "") + "🎲 " + AJUSTES.autoSorteo + " puntos → " + auto + (auto === 1 ? " cuadro" : " cuadros") + " al azar");
   if (J[1].p > maxPuntos) maxPuntos = J[1].p;
   if (completo(t) || (op.bot ? J[1].p < 1 && J[2].p < 1 : J[1].p < 1)) return terminar();
   if (op.bot) {
