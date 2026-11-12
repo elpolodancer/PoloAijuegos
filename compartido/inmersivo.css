@@ -69,6 +69,43 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
      .b3d); no se les cambia el radio (12 px los de 40 px, 15 px los de 52 px, 18 px los grandes).
    =================================================================================================================== */
 
+/* ===================================================================================================================
+   MENÚ PRINCIPAL ESTÁNDAR (obligatorio en TODOS los juegos; se crea siempre igual cuando se pide «el menú como dicta el inmersivo»)
+   Es la pantalla de inicio del juego: columna de botones grandes (b3d txt grande) centrada, sobre la madera, en ESTE orden y con
+   estos nombres. Siempre los mismos botones, siempre en el mismo orden, para que el jugador los encuentre igual en cualquier juego:
+
+   | # | Botón            | Color (clase) | Qué hace                                                                                     |
+   |---|------------------|---------------|----------------------------------------------------------------------------------------------|
+   | 1 | ♾️ Modo libre    | b-verde       | SIEMPRE el primero. Abre la pantalla de dificultades: 5 niveles (Muy fácil b-verde, Fácil b-azul,           |
+   |   |                  |               | Normal b-morado, Difícil b-oro, Experto b-rojo) y las opciones propias del juego (tamaño del tablero…)      |
+   | 2 | 🪜 Niveles        | b-azul        | Lista de niveles de la etapa donde vas (el mapa abierto en el nivel actual: mapa.abrir(n))                  |
+   | 3 | 🗺️ Mapa          | b-azul        | Vista principal del mapa estándar de México y del mundo (compartido/mapa-niveles.js: mapa.abrir())          |
+   | 4 | 🚪 Salir         | b-rojo        | SIEMPRE el último. Vuelve al portal de juegos (href="../")                                                  |
+
+   • Modo libre: sin límite de tiradas ni de tiempo si el juego lo permite; por defecto no da monedas ni puntos (ver ESTANDARES-juegos.md).
+   • Si el juego todavía no tiene niveles, «Niveles» y «Mapa» se muestran igual (el mapa existe, aunque sus niveles estén por crear);
+     al tocar un nivel inexistente se avisa con «🚧 Los niveles todavía no están creados».
+   • No se agregan botones entre estos cuatro ni se cambia su orden; cualquier extra (ℹ️ Info, ajustes…) va en ☰ Pausa o dentro
+     de la pantalla de Modo libre, nunca en medio. «Salir» siempre queda al final.
+   • El ☰ no se muestra en este menú (es el menú principal); en las pantallas de Modo libre, Niveles y Mapa dice «Menú principal»
+     y vuelve aquí; dentro de una partida dice «Pausa» (compartido/menu-pausa.js).
+   =================================================================================================================== */
+
+/* ===================================================================================================================
+   DIFICULTAD DE LOS NIVELES DEL MAPA (común en la mayoría de los juegos por niveles; ver sección 8 de ESTANDARES-juegos.md)
+   La dificultad sube POCO A POCO a lo largo de los niveles (tramos de 100 niveles, cambio lineal):
+
+   | Tramo de 100 niveles          | Fáciles | Normales | Difíciles |
+   |-------------------------------|---------|----------|-----------|
+   | Primeros 100                  |  50 %   |   40 %   |   10 %    |
+   | Últimos 100 (p. ej. 22 501-22 600) | 25 % |  40 %   |   35 %    |
+
+   • Dentro de cada tramo van revueltos pero igual para todos los jugadores (semilla fija).
+   • Código: compartido/dificultad-niveles.js → dificultadDeNivel(n, ETAPAS.total) = "facil" | "normal" | "dificil".
+   • Qué es «fácil/normal/difícil» lo decide cada juego y lo explica en su README. No es lo mismo que las 5 dificultades del Modo libre.
+   • No cambiar las cifras ni la semilla después de publicar un juego (cambiaría niveles que los jugadores ya pasaron).
+   =================================================================================================================== */
+
 /* Etiqueta tipo píldora (monedas, puntos, nivel…) */
 .chip { display: inline-flex; align-items: center; height: 34px; padding: 0 12px; font-weight: 800; font-size: 15px; color: #fff4c2;
   background: linear-gradient(180deg, #4a4f57, #2b2f35); border: 2px solid #15171a; border-radius: 999px;
