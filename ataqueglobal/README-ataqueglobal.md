@@ -32,11 +32,27 @@ No usa Firebase todavía (no hay puntos ni progreso en la nube).
 
 ## 3. Pantallas
 
-1. **Menú principal** (madera): título, «Partida libre» con **Fácil · Normal · Difícil**, y **🗺️ Niveles**. Sin ☰ (estándar).
+1. **Menú principal** (madera): título, «Partida libre» con el selector **Enemigos − N +** (de **1 a 15 bots**, se recuerda en el aparato; debajo, un punto del color de cada bot) y **Fácil · Normal · Difícil**, y **🗺️ Niveles**. Sin ☰ (estándar).
 2. **Partida libre**: el mundo a pantalla completa. ☰ = «Pausa» (Continuar / Ver todo el mundo / Salir). Arriba a la derecha, un chip con el modo.
 3. **Niveles**: mapa estándar (32 estados de México → al terminarlos, 194 países). ☰ = «Menú principal».
 
 El mundo pinta su **propio fondo de espacio** (excepción al fondo de madera: es el cielo del planeta); los botones fijos de las esquinas se respetan. El zoom va a media altura del borde derecho para no ocupar las esquinas.
+
+### 3.0 Colores, bots y botón Centrar (hecho)
+- **Tierra:** todos los países son **verde oscuro de tierra con césped** (tres tonos casi iguales, `TIERRAS` en `mapa-ataqueglobal.js`; fronteras claras). El país seleccionado se aclara a verde césped con trazo blanco.
+- **Hasta 15 bots**, cada uno con **su color propio** (`COLORES_BOTS` en `juego-ataqueglobal.js`, revisados para que se distingan entre sí, de tu amarillo y del verde): rojo, naranja, morado, rosa, azul, blanco, turquesa, guinda, celeste, magenta, café, gris plata, azul acero, salmón y lavanda. Un país de bot se tiñe fuerte de su color (`ALFA_BOT` = 0.72) y lleva un trazo de ese color. Los más parecidos entre sí son los tres azules (azul, celeste y azul acero).
+- **Tu país:** sigue verde (apenas teñido, `ALFA_JUGADOR` = 0.12) pero con un **trazo amarillo brillante** (`COLOR_JUGADOR`), más grueso, con resplandor y un filo blanco: es el más brillante de todos. Ningún bot usa amarillo.
+- La ficha de abajo dice «Tu país» o «Enemigo N» y su borde lleva el color del dueño.
+- **Botón 🎯 Centrar** (o tecla `C`), en la columna de zoom: lleva la cámara **exactamente** al centro de tu país y lo acerca (`mundo.centrarEn(iso)`).
+- ⚠️ **Provisional:** los bots aún no juegan. Cada uno ocupa un solo país elegido de la lista `PAISES_BOTS` (de los más cercanos a México a los más lejanos); la niebla los oculta salvo los que caen en tu visión. Se cambiará cuando existan los niveles y el grafo de vecindad.
+
+### 3.1 Niebla de guerra (hecha)
+- **TODA partida empieza con una niebla negra opaca** que tapa el planeta entero: no se ven países, fronteras, nombres ni destrucción, y **no se puede tocar nada** bajo ella (así tampoco se «descubre» el nombre de un país).
+- El jugador empieza viendo el **10 %** de la superficie del planeta alrededor de su país; la **1.ª mejora de Inteligencia** lo sube al **50 %** (un hemisferio) y la **2.ª** al **100 %** (sin niebla). Constantes `VISION = [0.10, 0.50, 1]` en `juego-ataqueglobal.js`.
+- La visión es un **casquete esférico** (círculo sobre el globo) alrededor de cada país propio, con el borde difuso. Medida en superficie: 10 % ≈ 37° de radio (unos 4 100 km), 50 % = hemisferio. **El propio país siempre se ve entero**, aunque sea más grande que el círculo (ej. Rusia). Con varios países propios, se suman las visiones.
+- API en `mapa-ataqueglobal.js`: `mundo.setVision(["MX"], 0.10)`; sin llamarla el planeta queda totalmente tapado. En `juego-ataqueglobal.js`: `empezarPartida(paisesPropios)` (**toda partida, libre o de nivel, debe empezar por aquí**) y `mejorarVision()` (llamarla al terminar cada mejora de Inteligencia). Al volver al menú se vuelve a tapar todo.
+- Por ahora el país inicial es **México** (`PAISES_INICIALES`, provisional hasta tener niveles y el grafo de vecindad).
+- **El mouse no hace nada al pasar** (sin resaltado de países ni cambio de cursor); arrastrar, rueda y clic funcionan igual.
 
 ### Controles del mundo
 Rueda / pellizco / botones **+ − 🌍** (o teclas `+ - 0`) para el zoom; arrastrar para recorrer; tocar un país lo selecciona (y su nombre aparece en la ficha de abajo); tocar el mismo país o el mar lo suelta. En celular vertical se empieza más cerca (África y Europa) y **🌍** muestra todo el mundo.
@@ -79,11 +95,11 @@ Un país puede investigar desde el inicio (y queda ocupado mientras lo hace). **
 |---|---|---|---|
 | 1 | **Eficiencia defensiva mejorada** | — | −20 % tiempos de construcción y espera; se construyen **2 misiles de crucero a la vez** |
 | 2 | **Tecnología de misiles mejorada** | — | Desbloquea el misil de **nivel 2** |
-| 3 | **Inteligencia mejorada** | — | Quita la **niebla de guerra**; **aviso justo antes de una detonación** en uno de tus países |
+| 3 | **Inteligencia mejorada** | — | Amplía la visión de la **niebla de guerra** del 10 % al **50 %** del planeta (ver 3.1); **aviso justo antes de una detonación** en uno de tus países |
 | 4 | **Infraestructura mejorada** | — | **−50 % tiempo de conquista** de países nuevos; **+50 % puntos de impacto** por país |
 | 5 | **Eficiencia defensiva superior** | 1 | −20 % más de tiempos; el **SDA** (defensa) se activa solo si un misil sobrevuela un país aliado ❓ |
 | 6 | **Tecnología de misiles superior** | 2 | Desbloquea el misil de **nivel 3** intercontinental |
-| 7 | **Inteligencia superior** | 3 | **Espionaje:** ver si un país está bloqueado. **Cálculo avanzado:** ver el punto de impacto de cada misil (avisa y tarda **5 s** en caer) |
+| 7 | **Inteligencia superior** | 3 | Visión al **100 %** (sin niebla). **Espionaje:** ver si un país está bloqueado. **Cálculo avanzado:** ver el punto de impacto de cada misil (avisa y tarda **5 s** en caer) |
 | 8 | **Resiliencia suprema** | 4 | Nueva base de misiles: capacidad por país a **4**, y luego a **5** ❓ |
 | 9 | **Primera superarma elegida** | 5 y 7 | Se puede investigar la primera de las 2 superarmas elegidas al inicio (**3 min**) |
 | 10 | **Segunda superarma elegida** | 6 y 8 | Igual con la segunda (**3 min**) |
@@ -119,7 +135,7 @@ El menú muestra por ahora 3; el plan es de **5**.
 | Normal | por definir | por definir |
 | Difícil | **1** propio | Rivales con **3–4** países, bots más hábiles, a veces lanzan un misil suelto |
 | Muy difícil | por definir | Rivales con 4–5 países ya aliados desde el inicio |
-| Extremo | por definir | Hasta **8 bots**; algunos con varios enemigos, otros con treguas entre sí |
+| Extremo | por definir | Hasta **8 bots** (el selector del menú ya permite hasta 15); algunos con varios enemigos, otros con treguas entre sí |
 
 ## 7. Niveles
 

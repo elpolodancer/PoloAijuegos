@@ -9,6 +9,10 @@
 //   const mundo = crearMundo({ lienzo, alSeleccionar: (iso) => {}, giroAuto: false });
 //   mundo.iniciar(); mundo.detener(); mundo.reiniciarVista() (planeta completo); mundo.vistaInicial(); mundo.zoom(1.6);
 //   mundo.seleccionar("BR"); mundo.enfocar("BR", 6) (centra el país y acerca); mundo.aPantalla(lon, lat) → [x, y] o null si está al otro lado;
+//   mundo.setVision(["MX"], 0.10) → NIEBLA NEGRA: solo se ve esa fracción (0 a 1) de la superficie del planeta alrededor de esos países; 1 = sin niebla.
+//     Sin llamarla, todo el planeta está tapado. Bajo la niebla no se dibuja, no se nombra ni se puede tocar nada. mundo.vision() devuelve la fracción.
+//   mundo.centrarEn("MX") → centra la cámara en el país y lo acerca. mundo.setDueno("MX", "#fff23a", true): 3.er parámetro = es del jugador (trazo brillante con resplandor).
+//   mundo.setDueno("US", "#ff3b30") → país de un bot: se tiñe fuerte de su color y lleva un trazo de ese color.
 //   mundo.setDueno("MX", "#ffb020"); mundo.setDestruido("BR", true); mundo.limpiarEstados(); mundo.paises();
 import { PAISES, NOMBRES_ESPECIALES } from "./paises-ataqueglobal.js";
 import { nombrePais } from "../compartido/etapas-mapa.js";
@@ -23,8 +27,14 @@ export const banderaTerritorio = (iso) => {
 const RAD = Math.PI / 180, DOS_PI = Math.PI * 2;
 const PASO_MAX = 2;            // al preparar los contornos, ningún lado mide más de esto (grados): así las líneas largas se curvan con el globo
 const ZOOM_MAX = 30;           // veces que se puede acercar desde el planeta completo
-const TIERRAS = ["#d9a066", "#cf8f52", "#c4a06a", "#b98b4e", "#a8884f", "#8f8a45", "#6f7a3c", "#d6b07a", "#c87f4a"]; // tierras arena / naranja / oliva
-const COLOR_SEL = "#ffd98a", COLOR_HOVER = "#f0c27a", COLOR_DESTRUIDO = "#0b0b0b";
+const TIERRAS = ["#2f5f2b", "#356a30", "#2a5527"]; // verde oscuro de tierra con césped: tres tonos casi iguales (cada país usa uno, estable por código)
+const ALFA_BOT = 0.72;         // un país de un bot se tiñe MUCHO de su color para identificarlo de un vistazo
+const ALFA_JUGADOR = 0.12;     // tu país conserva su verde casi intacto: lo que lo distingue es su trazo brillante
+// NIEBLA DE GUERRA. La visión se mide como fracción de la SUPERFICIE del planeta: un casquete esférico alrededor de cada país propio.
+// Un casquete que cubre la fracción f tiene radio angular θ con cos θ = 1 − 2f: 10 % ≈ 37°, 50 % = un hemisferio, 100 % = todo (sin niebla).
+const FUNDIDO_NIEBLA = 0.07;   // borde difuso (en coseno): dentro del radio se ve limpio y, un poco afuera, se oscurece hasta negro total
+const MARGEN_TOQUE = 0.02;     // dentro de este margen del borde el terreno aún cuenta como visto; más afuera no se puede tocar ni se escribe su nombre
+const COLOR_SEL = "#86d65e", COLOR_DESTRUIDO = "#0b0b0b"; // el seleccionado se aclara a verde césped (y lleva trazo blanco)
 
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 const azar = (semilla) => () => ((semilla = (Math.imul(semilla, 1664525) + 1013904223) >>> 0) / 4294967296);
@@ -87,10 +97,12 @@ for (const iso of Object.keys(PAISES)) {
   const cv = vec(cx, cy);
   let ang = 0; // radio angular del país (para saber si está del lado oculto sin proyectarlo)
   for (const a of orig) for (let i = 0; i < a.length; i += 2) { const v = vec(a[i], a[i + 1]); ang = Math.max(ang, Math.acos(acotar(v[0] * cv[0] + v[1] * cv[1] + v[2] * cv[2], -1, 1))); }
+  let angPrincipal = 0; // radio angular de la parte más grande del país: su propio territorio siempre se ve completo bajo la niebla
+  for (let i = 0; i < mayor.a.length; i += 2) { const v = vec(mayor.a[i], mayor.a[i + 1]); angPrincipal = Math.max(angPrincipal, Math.acos(acotar(v[0] * cv[0] + v[1] * cv[1] + v[2] * cv[2], -1, 1))); }
   const micro = !!d.m;
   const anillos = micro ? [] : orig.map((a) => { const f = densificar(a); return { t: trig(f), n: f.length / 2 }; });
   LISTA.push({
-    iso, micro, orig, anillos, bbox: [x0, y0, x1, y1], c: [cx, cy], cv, ang, area, ww: mayor.w, hh: mayor.h,
+    iso, micro, orig, anillos, bbox: [x0, y0, x1, y1], c: [cx, cy], cv, ang, angPrincipal, area, ww: mayor.w, hh: mayor.h,
     radio: micro ? Math.max((x1 - x0) / 2, (y1 - y0) / 2) : 0, // grados
     color: TIERRAS[hash(iso) % TIERRAS.length],
   });
@@ -104,11 +116,60 @@ export function crearMundo({ lienzo, alSeleccionar, giroAuto = false } = {}) {
   let W = 0, H = 0, dpr = 1, Rmin = 100, Rmax = 3000;
   const cam = { lon: 10 * RAD, lat: 25 * RAD, R: 100 }; // centro de la vista (radianes) y radio del planeta en píxeles
   let sl0, cl0, sp0, cp0, CX = 0, CY = 0;               // trigonometría de la cámara, recalculada en cada cuadro
-  let sel = null, hover = null, raf = 0, activo = false, fondo = null, tween = null, inercia = null, ultimo = 0, ultimoToque = 0;
+  let sel = null, raf = 0, activo = false, fondo = null, tween = null, inercia = null, ultimo = 0, ultimoToque = 0;
   const estado = new Map(); // iso → { dueno, destruido, grietas }
   const anchoTexto = new Map();
   const punteros = new Map();
   let arrastre = null, pellizco = null;
+
+  // ---------- Niebla de guerra ----------
+  // Por omisión TODO el planeta está tapado (sin fuentes de visión): cada partida debe llamar a setVision(paisesPropios, fraccion).
+  const niebla = { fuentes: [], fraccion: 0, version: 0, lienzo: null, ctx: null, img: null, mw: 0, mh: 0, div: 4, clave: "" };
+  const nieblaActiva = () => niebla.fraccion < 1;
+  function visibleVec(v, margen = MARGEN_TOQUE) { // ¿este punto del planeta (vector unitario) queda dentro de la visión?
+    if (!nieblaActiva()) return true;
+    for (const s of niebla.fuentes) if (v[0] * s.cv[0] + v[1] * s.cv[1] + v[2] * s.cv[2] >= s.u - margen) return true;
+    return false;
+  }
+  function setVision(isos, fraccion) {
+    const lista = (Array.isArray(isos) ? isos : [isos]).map((i) => POR_ISO.get(i)).filter(Boolean);
+    const f = acotar(Number(fraccion) || 0, 0, 1), cosR = 1 - 2 * f;
+    niebla.fraccion = f;
+    // el país propio siempre se ve entero: el radio es el mayor entre la visión y el tamaño de su parte principal
+    niebla.fuentes = lista.map((p) => ({ cv: p.cv, c: p.c, u: Math.min(cosR, Math.cos(Math.min(Math.PI, p.angPrincipal + 0.02))) }));
+    niebla.version++;
+    if (sel && !visibleVec(POR_ISO.get(sel).cv)) seleccionar(null);
+  }
+  // Máscara de niebla en baja resolución (se recalcula solo si la cámara o la visión cambian): alfa 255 = negro total, 0 = visible.
+  function prepararNiebla() {
+    if (!nieblaActiva()) return false;
+    const n = niebla, R = cam.R, div = Math.max(4, Math.ceil(Math.sqrt((W * H) / 90000)));
+    const mw = Math.ceil(W / div), mh = Math.ceil(H / div);
+    if (!n.lienzo) { n.lienzo = document.createElement("canvas"); n.ctx = n.lienzo.getContext("2d"); }
+    if (mw !== n.mw || mh !== n.mh || div !== n.div) { n.lienzo.width = mw; n.lienzo.height = mh; n.mw = mw; n.mh = mh; n.div = div; n.img = n.ctx.createImageData(mw, mh); n.clave = ""; }
+    const clave = [cam.lon, cam.lat, R, W, H, n.version].join(",");
+    if (clave === n.clave) return true;
+    n.clave = clave;
+    const fu = n.fuentes.map((s) => { // cada fuente en el marco de la cámara (x a la derecha, y arriba, z hacia el jugador)
+      const l = s.c[0] * RAD, p = s.c[1] * RAD, sl = Math.sin(l), cl = Math.cos(l), sp = Math.sin(p), cp = Math.cos(p), dc = cl * cl0 + sl * sl0;
+      return { x: cp * (sl * cl0 - cl * sl0), y: cp0 * sp - sp0 * cp * dc, z: sp0 * sp + cp0 * cp * dc, u: s.u };
+    });
+    const d = n.img.data, F = FUNDIDO_NIEBLA, ns = fu.length;
+    let k = 0;
+    for (let j = 0; j < mh; j++) {
+      const v0 = (CY - (j + 0.5) * div) / R;
+      for (let i = 0; i < mw; i++, k += 4) {
+        let u = ((i + 0.5) * div - CX) / R, v = v0, r2 = u * u + v * v;
+        if (r2 > 0.9999) { const e = Math.sqrt(0.9999 / r2); u *= e; v *= e; r2 = 0.9999; } // fuera del disco: se repite el valor del borde (sin halo claro)
+        const w = Math.sqrt(1 - r2);
+        let t = 0;
+        for (let q = 0; q < ns; q++) { const s = fu[q], tt = (u * s.x + v * s.y + w * s.z - s.u + F) / F; if (tt > t) t = tt; }
+        d[k + 3] = t >= 1 ? 0 : Math.round(255 * (1 - t * t * (3 - 2 * t))); // RGB queda en 0: negro
+      }
+    }
+    n.ctx.putImageData(n.img, 0, 0);
+    return true;
+  }
 
   function fijarCam() {
     sl0 = Math.sin(cam.lon); cl0 = Math.cos(cam.lon); sp0 = Math.sin(cam.lat); cp0 = Math.cos(cam.lat);
@@ -203,7 +264,7 @@ export function crearMundo({ lienzo, alSeleccionar, giroAuto = false } = {}) {
     }
     return g;
   }
-  const colorDe = (p, e) => (e && e.destruido ? COLOR_DESTRUIDO : p.iso === sel ? COLOR_SEL : p.iso === hover ? COLOR_HOVER : p.color);
+  const colorDe = (p, e) => (e && e.destruido ? COLOR_DESTRUIDO : p.iso === sel ? COLOR_SEL : p.color);
 
   function pintar() {
     fijarCam();
@@ -247,7 +308,7 @@ export function crearMundo({ lienzo, alSeleccionar, giroAuto = false } = {}) {
     for (const [p, path] of vis) {
       const e = estado.get(p.iso);
       ctx.fillStyle = colorDe(p, e); ctx.fill(path, "evenodd");
-      if (e && e.dueno && !e.destruido) { ctx.globalAlpha = 0.6; ctx.fillStyle = e.dueno; ctx.fill(path, "evenodd"); ctx.globalAlpha = 1; }
+      if (e && e.dueno && !e.destruido) { ctx.globalAlpha = e.propio ? ALFA_JUGADOR : ALFA_BOT; ctx.fillStyle = e.dueno; ctx.fill(path, "evenodd"); ctx.globalAlpha = 1; }
     }
     // marcadores de los países diminutos
     const marcadores = [];
@@ -258,7 +319,7 @@ export function crearMundo({ lienzo, alSeleccionar, giroAuto = false } = {}) {
       const e = estado.get(p.iso), r = Math.max(p.radio * RAD * R * q[2], 4);
       ctx.beginPath(); ctx.arc(q[0], q[1], r, 0, DOS_PI);
       ctx.fillStyle = colorDe(p, e); ctx.fill();
-      if (e && e.dueno && !e.destruido) { ctx.globalAlpha = 0.6; ctx.fillStyle = e.dueno; ctx.fill(); ctx.globalAlpha = 1; }
+      if (e && e.dueno && !e.destruido) { ctx.globalAlpha = e.propio ? ALFA_JUGADOR : ALFA_BOT; ctx.fillStyle = e.dueno; ctx.fill(); ctx.globalAlpha = 1; }
       marcadores.push([p, q, r]);
     }
     // 3) luz y sombra del planeta (lado de noche abajo a la derecha, oscurecido hacia el borde)
@@ -269,6 +330,20 @@ export function crearMundo({ lienzo, alSeleccionar, giroAuto = false } = {}) {
     ctx.lineWidth = acotar(R * 0.0035, 0.8, 2.2); ctx.strokeStyle = "rgba(255,238,205,.6)";
     for (const v of vis) ctx.stroke(v[1]);
     for (const m of marcadores) { ctx.beginPath(); ctx.arc(m[1][0], m[1][1], m[2], 0, DOS_PI); ctx.stroke(); }
+    // 4b) Trazo de los dueños: cada bot con su color; TU país con un trazo más grueso, con resplandor y un filo blanco (el más brillante de todos)
+    const bots = [], mios = [];
+    const dueno = (iso) => { const e = estado.get(iso); return e && e.dueno && !e.destruido ? e : null; };
+    for (const v of vis) { const e = dueno(v[0].iso); if (e) (e.propio ? mios : bots).push([e, () => ctx.stroke(v[1])]); }
+    for (const m of marcadores) { const e = dueno(m[0].iso); if (e) (e.propio ? mios : bots).push([e, () => { ctx.beginPath(); ctx.arc(m[1][0], m[1][1], m[2], 0, DOS_PI); ctx.stroke(); }]); }
+    if (bots.length) {
+      ctx.lineWidth = acotar(R * 0.0045, 1.5, 2.8);
+      for (const [e, trazar] of bots) { ctx.strokeStyle = e.dueno; trazar(); }
+    }
+    if (mios.length) {
+      const w = acotar(R * 0.008, 2.4, 4.4);
+      for (const [e, trazar] of mios) { ctx.globalAlpha = 0.35; ctx.lineWidth = w * 3; ctx.strokeStyle = e.dueno; trazar(); ctx.globalAlpha = 1; ctx.lineWidth = w; trazar(); }
+      for (const [, trazar] of mios) { ctx.lineWidth = Math.max(1, w * 0.4); ctx.strokeStyle = "rgba(255,255,255,.9)"; trazar(); }
+    }
     // Destrucción: mancha carbonizada y grietas rojas
     for (const [iso, e] of estado) {
       if (!e.destruido) continue;
@@ -291,6 +366,8 @@ export function crearMundo({ lienzo, alSeleccionar, giroAuto = false } = {}) {
       if (p && p.micro) { const q = proy(p.c[0], p.c[1]); if (q[2] > 0) { ctx.beginPath(); ctx.arc(q[0], q[1], Math.max(p.radio * RAD * R * q[2], 4), 0, DOS_PI); ctx.stroke(); } }
       else { const v = vis.find((x) => x[0].iso === sel); if (v) ctx.stroke(v[1]); }
     }
+    // NIEBLA NEGRA: tapa todo lo que quede fuera de la visión (países, fronteras, marcas de destrucción y selección)
+    if (prepararNiebla()) { ctx.imageSmoothingEnabled = true; ctx.drawImage(niebla.lienzo, 0, 0, niebla.mw * niebla.div, niebla.mh * niebla.div); }
     ctx.restore();
     // Borde luminoso del planeta
     ctx.lineWidth = 2; ctx.strokeStyle = "rgba(150,170,255,.75)";
@@ -299,7 +376,8 @@ export function crearMundo({ lienzo, alSeleccionar, giroAuto = false } = {}) {
     // Nombres (en pantalla, sin deformarse): solo los países cuyo dibujo ya es lo bastante grande
     ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
     for (const p of LISTA) {
-      const forzado = p.iso === sel || p.iso === hover;
+      if (!visibleVec(p.cv)) continue;
+      const forzado = p.iso === sel;
       const q = proy(p.c[0], p.c[1]);
       if (q[2] < 0.15) continue;
       const grande = (p.micro ? 0 : p.ww) * RAD * R * q[2];
@@ -349,7 +427,7 @@ export function crearMundo({ lienzo, alSeleccionar, giroAuto = false } = {}) {
       for (const p of LISTA) {
         if (!p.micro) continue;
         const q = proy(p.c[0], p.c[1]);
-        if (q[2] < 0.03) continue;
+        if (q[2] < 0.03 || !visibleVec(p.cv)) continue;
         const d = Math.hypot(q[0] - px, q[1] - py);
         if (d <= Math.max(p.radio * RAD * cam.R * q[2], minimo) && d < md) { md = d; mejor = p.iso; }
       }
@@ -359,6 +437,7 @@ export function crearMundo({ lienzo, alSeleccionar, giroAuto = false } = {}) {
     if (m1) return m1;
     if (!pt) return null;
     const lon = pt[0], lat = pt[1];
+    if (!visibleVec(vec(lon, lat))) return null; // bajo la niebla no se puede tocar nada
     for (let i = LISTA.length - 1; i >= 0; i--) { // países: del más chico al más grande
       const p = LISTA[i];
       if (p.micro || lon < p.bbox[0] || lon > p.bbox[2] || lat < p.bbox[1] || lat > p.bbox[3]) continue;
@@ -406,10 +485,7 @@ export function crearMundo({ lienzo, alSeleccionar, giroAuto = false } = {}) {
   lienzo.addEventListener("pointermove", (ev) => {
     const xy = local(ev), x = xy[0], y = xy[1];
     const p = punteros.get(ev.pointerId);
-    if (!p) { // el mouse pasa sin pulsar: resalta el país
-      if (ev.pointerType === "mouse") { const h = buscar(x, y); if (h !== hover) { hover = h; lienzo.style.cursor = h ? "pointer" : "grab"; } }
-      return;
-    }
+    if (!p) return; // el mouse pasando sin pulsar no hace NADA: ni resalta países ni cambia el cursor
     p.x = x; p.y = y; ultimoToque = performance.now();
     if (punteros.size === 2 && pellizco) {
       const [a, b] = [...punteros.values()];
@@ -438,12 +514,11 @@ export function crearMundo({ lienzo, alSeleccionar, giroAuto = false } = {}) {
     } else if (!cancelado && arrastre && arrastre.movido && punteros.size === 0 && performance.now() - arrastre.tm < 80 && Math.hypot(arrastre.vl, arrastre.vp) > 0.00008) {
       inercia = { vl: arrastre.vl, vp: arrastre.vp };
     }
-    if (!punteros.size) { arrastre = null; lienzo.style.cursor = hover ? "pointer" : "grab"; }
+    if (!punteros.size) { arrastre = null; lienzo.style.cursor = "grab"; }
     else if (punteros.size === 1) { const r = [...punteros.values()][0]; arrastre = { x: r.x, y: r.y, x0: r.x, y0: r.y, t: 0, movido: true, tm: performance.now(), vl: 0, vp: 0 }; }
   }
   lienzo.addEventListener("pointerup", (ev) => soltar(ev, false));
   lienzo.addEventListener("pointercancel", (ev) => soltar(ev, true));
-  lienzo.addEventListener("pointerleave", () => { hover = null; });
   lienzo.addEventListener("wheel", (ev) => {
     ev.preventDefault();
     tween = null; inercia = null; ultimoToque = performance.now();
@@ -466,8 +541,8 @@ export function crearMundo({ lienzo, alSeleccionar, giroAuto = false } = {}) {
   lienzo.style.cursor = "grab";
 
   function reiniciarVista() { irA(cam.lon, cam.lat, Rmin); } // aleja hasta ver el planeta completo
-  // Al abrir la partida: el planeta casi completo, centrado en Europa y África
-  function vistaInicial() { irA(10 * RAD, 25 * RAD, Rmin * 1.5, 0); }
+  // Al abrir la partida: el planeta casi completo, centrado en el país indicado (con niebla es lo único que se ve); sin país, en Europa y África
+  function vistaInicial(iso) { const p = iso && POR_ISO.get(iso); irA(p ? p.c[0] * RAD : 10 * RAD, p ? p.c[1] * RAD : 25 * RAD, Rmin * 1.5, 0); }
   function enfocar(iso, factor = 6) {
     const p = POR_ISO.get(iso); if (!p) return;
     const ancho = Math.max(p.micro ? p.radio * 2 : p.ww, 1);
@@ -481,8 +556,10 @@ export function crearMundo({ lienzo, alSeleccionar, giroAuto = false } = {}) {
     zoom(factor) { irA(cam.lon, cam.lat, cam.R * factor, 200); },
     seleccionar,
     seleccionado: () => sel,
+    setVision, vision: () => niebla.fraccion,
     aPantalla(lon, lat) { fijarCam(); const q = proy(lon, lat); return q[2] > 0 ? [q[0], q[1]] : null; },
-    setDueno(iso, color) { const e = estado.get(iso) || {}; e.dueno = color || null; estado.set(iso, e); },
+    setDueno(iso, color, propio = false) { const e = estado.get(iso) || {}; e.dueno = color || null; e.propio = !!propio; estado.set(iso, e); }, // propio = país del jugador (trazo brillante)
+    centrarEn(iso) { enfocar(iso, 4); }, // lleva la cámara exactamente al centro del país (con animación) y lo acerca
     setDestruido(iso, si) { const e = estado.get(iso) || {}; e.destruido = !!si; if (si && !e.grietas) e.grietas = grietasDe(iso); estado.set(iso, e); },
     limpiarEstados() { estado.clear(); },
     paises: () => LISTA.map((p) => p.iso),

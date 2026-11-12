@@ -27,12 +27,22 @@
     #menu h2 { margin: 10px 0 0; font-size: 20px; text-shadow: var(--sombra-txt, 0 2px 0 rgba(255,240,210,.6)); }
     .fila { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
     .fila .b3d.txt { --t: 56px; min-width: 120px; font-size: 17px; }
+    /* Selector de enemigos (bots): − N + y una fila de puntos con el color de cada bot (el primero, amarillo, eres tú) */
+    .bots-sel { display: flex; align-items: center; justify-content: center; gap: 12px; }
+    .bots-sel .b3d { --t: 40px; font-size: 22px; font-weight: 800; margin-bottom: 5px; }
+    .bots-tit { font-weight: 700; font-size: 17px; }
+    .bots-num { min-width: 2ch; font-size: 28px; line-height: 1; text-shadow: var(--sombra-txt, 0 2px 0 rgba(255,240,210,.6)); }
+    .bots-puntos { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; max-width: 330px; margin-top: -4px; }
+    .bots-puntos i { width: 17px; height: 17px; border-radius: 50%; background: var(--c); border: 2px solid rgba(0,0,0,.5); box-shadow: 0 1px 0 rgba(255,255,255,.35); transition: opacity .15s; }
+    .bots-puntos i.yo { box-shadow: 0 0 0 2px #fff, 0 0 9px 3px var(--c); margin-right: 5px; }
+    .bots-puntos i.off { opacity: .18; }
     #btn-niveles { --t: 60px; min-width: 260px; font-size: 19px; margin-top: 8px; }
-    @media (max-height: 520px) { #menu { padding: 56px 16px 20px; gap: 8px; } #menu h1 { font-size: 30px; } #menu .lema { display: none; } .fila .b3d.txt { --t: 46px; } #btn-niveles { --t: 48px; } }
+    @media (max-height: 520px) { .bots-puntos { display: none; } #menu { padding: 56px 16px 20px; gap: 8px; } #menu h1 { font-size: 30px; } #menu .lema { display: none; } .fila .b3d.txt { --t: 46px; } #btn-niveles { --t: 48px; } }
 
     /* Controles de zoom (derecha, a media altura: las esquinas son de los botones fijos) */
-    #zoom { position: fixed; z-index: 5; top: 50%; right: max(10px, env(safe-area-inset-right)); transform: translateY(-50%); display: flex; flex-direction: column; gap: 6px; }
+    #zoom { position: fixed; z-index: 5; top: 50%; right: max(10px, env(safe-area-inset-right)); transform: translateY(-50%); display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
     #zoom .b3d { --t: 40px; font-size: 20px; font-weight: 800; margin-bottom: 5px; }
+    #zoom .b3d.txt { font-size: 15px; min-width: 0; padding-inline: 14px; }
 
     /* Ficha del país seleccionado (abajo al centro, sin tapar 🌙 ni ⛶) */
     #ficha { position: fixed; z-index: 5; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); max-width: calc(100vw - 150px); display: flex; align-items: center; gap: 12px;
@@ -71,6 +81,7 @@
   </div>
 
   <div id="zoom" hidden>
+    <button class="b3d txt b-oro" id="z-centrar" type="button" title="Ir a mi país (C)"><span class="b-ico">🎯</span>&nbsp;Centrar</button>
     <button class="b3d chico b-gris" id="z-mas" type="button" aria-label="Acercar" title="Acercar (+)"><span class="b-ico">+</span></button>
     <button class="b3d chico b-gris" id="z-menos" type="button" aria-label="Alejar" title="Alejar (−)"><span class="b-ico">−</span></button>
     <button class="b3d chico b-azul" id="z-todo" type="button" aria-label="Ver todo el mundo" title="Ver todo el mundo (0)"><span class="b-ico">🌍</span></button>
@@ -85,6 +96,13 @@
     <h1>🌍 Ataque Global</h1>
     <p class="lema">Expande tu territorio, investiga y lanza tus misiles antes de que lo hagan contigo.</p>
     <h2>Partida libre</h2>
+    <div class="bots-sel" role="group" aria-label="Enemigos">
+      <span class="bots-tit">Enemigos</span>
+      <button class="b3d chico b-gris" id="bots-menos" type="button" aria-label="Menos enemigos" title="Menos enemigos"><span class="b-ico">−</span></button>
+      <b class="bots-num" id="bots-num" aria-live="polite">3</b>
+      <button class="b3d chico b-gris" id="bots-mas" type="button" aria-label="Más enemigos" title="Más enemigos (hasta 15)"><span class="b-ico">+</span></button>
+    </div>
+    <div class="bots-puntos" id="bots-puntos" aria-hidden="true"></div>
     <div class="fila">
       <button class="b3d txt b-verde" id="btn-facil" type="button"><span class="b-ico">🙂</span>&nbsp;Fácil</button>
       <button class="b3d txt b-azul" id="btn-normal" type="button"><span class="b-ico">😐</span>&nbsp;Normal</button>
