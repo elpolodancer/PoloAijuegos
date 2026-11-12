@@ -7,7 +7,7 @@ Juego de guerra de misiles sobre el mapa del mundo, inspirado en *First Strike*.
 ## 1. Estado actual (fase 1)
 
 Hecho: menú principal, el mundo con zoom y países seleccionables, y el mapa de niveles estándar.
-**Todavía no hay partida.** Fácil / Normal / Difícil solo abren el mundo (la dificultad se guarda en la variable `dificultad`, sin efecto), y los niveles muestran un aviso «se están preparando».
+**Todavía no hay bots que jueguen.** Fácil / Normal / Difícil abren el mundo (la dificultad se guarda en la variable `dificultad`, sin efecto), donde ya funciona el menú circular de tus países (expandir, misil nivel 1, investigar; sección 3.2) y los botones para apuntar y disparar con alcance y destrucción de países (sección 3.3). Los niveles muestran un aviso «se están preparando».
 
 | Archivo | Qué es |
 |---|---|
@@ -15,6 +15,9 @@ Hecho: menú principal, el mundo con zoom y países seleccionables, y el mapa de
 | `juego-ataqueglobal.js` | Pantallas (menú → mundo / niveles), menú de pausa, mapa de niveles (`montarMapa`) |
 | `mapa-ataqueglobal.js` | El mundo: dibujo, zoom, gestos, selección, capas de conquista y destrucción |
 | `paises-ataqueglobal.js` | **Generado.** Contornos de los 194 territorios (ver sección 2) |
+| `menu-pais-ataqueglobal.js` | Menú circular de un país propio (botones con etiqueta curva que siguen al país), panel de lista y aviso corto (sección 3.2) |
+| `armas-ataqueglobal.js` | Botones de ataque abajo a la derecha, aviso «elige el objetivo» y burbuja de confirmación (sección 3.3) |
+| `investigacion-ataqueglobal.js` | Datos y reglas de las 8 mejoras y las 2 superarmas (solo lógica, sin pantalla) |
 | `herramientas/generar-paises.mjs` | Genera `paises-ataqueglobal.js` sin internet (aproximado) |
 | `herramientas/geojson-a-paises.mjs` | Lo regenera con fronteras reales desde un GeoJSON de Natural Earth |
 
@@ -61,6 +64,23 @@ El mundo pinta su **propio fondo de espacio** (excepción al fondo de madera: es
 - API en `mapa-ataqueglobal.js`: `mundo.setVision(["MX"], 0.10)`; sin llamarla el planeta queda totalmente tapado. En `juego-ataqueglobal.js`: `empezarPartida(paisesPropios)` (**toda partida, libre o de nivel, debe empezar por aquí**) y `mejorarVision()` (llamarla al terminar cada mejora de Inteligencia). Al volver al menú se vuelve a tapar todo.
 - Por ahora el país inicial es **México** (`PAISES_INICIALES`, provisional hasta tener niveles y el grafo de vecindad).
 - **El mouse no hace nada al pasar** (sin resaltado de países ni cambio de cursor); arrastrar, rueda y clic funcionan igual.
+
+### 3.2 Menú circular de un país propio (hecho)
+- Al **tocar un país tuyo** se resalta con anillos y salen sus botones en círculo, con la etiqueta curva (`menu-pais-ataqueglobal.js`). El menú **sigue al país** al girar o acercar el planeta (`alCuadro` y `mundo.posicion(iso)`). Al tocar **otro país** tuyo, el menú abierto se pliega y se abre el del nuevo; si el tocado no es tuyo (o es el mismo otra vez), solo se pliega. No existe el botón «Desmantelar» del juego de referencia.
+- **Botones:** **Expandir** (solo si el país tiene vecinos sin dueño; si hay varios, abre una lista para elegir), **Misil nivel 1** (5 s; el número de la esquina son los misiles guardados, empiezan en 2) e **Investigar** (abre la lista de mejoras). Mientras el país hace algo, los botones se apagan y bajo el país se ve qué hace y cuánto falta.
+- **Un país hace una sola cosa a la vez** (expandir 25 s, fabricar 5 s o investigar). El reloj se detiene con el menú de pausa y con la pestaña oculta. Con `?rapido` en la dirección todo dura la décima parte (para probar).
+- **Investigación** (`investigacion-ataqueglobal.js`): 8 mejoras de 1 min; las 4 primeras disponibles y cada una desbloquea otra (1→5, 2→6, 3→7, 4→8). Con las 8 se desbloquean las **2 superarmas** (3 min). Hoy solo tiene efecto real la visión: **Inteligencia mejorada** (3) sube la niebla al 50 % e **Inteligencia superior** (7) al 100 %. El resto de efectos (tiempos −20 %, misiles nivel 2 y 3, SDA, capacidad…) siguen pendientes.
+- ⚠️ **Vecindad provisional:** `vecinosDe(iso)` en `mapa-ataqueglobal.js` la calcula con los contornos (vértices a menos de ~1°; las islas se enlazan con las 2 más cercanas). Se cambiará por el grafo real de la fase 2.
+- ⚠️ **Capacidad de misiles sin tope** hasta resolver la duda 2 de la sección 9. El botón **Atacar / Apuntar** y los misiles de nivel 2 y 3 todavía no tienen botón.
+
+### 3.3 Botones de ataque (hecho)
+- **Abajo a la derecha**, a la izquierda del ⛶ y de la columna de zoom (esa esquina es de los botones fijos). Cada uno lleva debajo su estado: **A PUNTO**, **SIN MISILES**, **BLOQUEADA**, **SIN INVESTIGAR** o **INVESTIGANDO** (con anillo de progreso).
+- **💀 Calavera:** apunta **todos** los misiles (niveles 1, 2 y 3). **✈ Naves:** apunta solo los de **nivel 1**. No se hizo el botón del ojo (sin función).
+- **Flujo:** pulsas el botón → aviso «Elige el objetivo» → tocas un país (no se puede tocar bajo la niebla) → aparece la mira y una burbuja con «N de M misiles llegan» → **DISPARAR** o **✕**. Tocar el mapa lejos de la burbuja (más de 110 px), pulsar otra vez el botón o `Esc` cancela. Mientras apuntas puedes girar y acercar el mundo.
+- **Alcance:** solo salen los misiles cuyo país de origen llega al objetivo. Se mide como fracción de la superficie del planeta desde el centro del país (igual que la niebla): `ALCANCE = { 1: 10 %, 2: 50 %, 3: 66 % }` en `juego-ataqueglobal.js`. ❓ El 10 % del nivel 1 es provisional (el README solo dice «corto») y el del nivel 3 es la duda 1 de la sección 9.
+- **Vuelo e impacto:** cada misil tarda 5 s, sale con un pequeño desfase y se dibuja con cola y explosión (`mundo.lanzar`, se detiene con la pausa). Un país cae con **2 misiles en el centro o 3 en el borde** (más allá del 60 % de su radio: provisional, hasta tener el radio de la fase 2). Al caer se pinta destruido, deja de ser de su dueño y se puede volver a conquistar expandiéndote hacia él.
+- **🧪 Dos botones de superarmas** (arriba a la izquierda del grupo): reflejan las investigaciones 9 y 10 (bloqueadas hasta completar las 8 mejoras). Con la investigación lista dicen «A PUNTO», pero **todavía no hacen nada**: la lista de superarmas está pendiente.
+- ⚠️ Los misiles de nivel 2 y 3 todavía no se pueden fabricar (no hay botón), por eso hoy solo salen los de nivel 1. Un país recién conquistado empieza con 2 misiles, como los demás (revisar con la duda 2).
 
 ### Controles del mundo
 Rueda / pellizco / botones **+ − 🌍** (o teclas `+ - 0`) para el zoom; arrastrar para recorrer; tocar un país lo selecciona (y su nombre aparece en la ficha de abajo); tocar el mismo país o el mar lo suelta. En celular vertical se empieza más cerca (África y Europa) y **🌍** muestra todo el mundo.
