@@ -9,7 +9,8 @@
 // - Las monedas ganadas NO se guardan como número: salen de las estrellas (suma de pagos). Así, al unir el progreso de dos aparatos
 //   no se pierden monedas ganadas en cada uno. Solo se guarda lo GASTADO (para la tienda/boosts que vengan).
 //
-// ESTRELLAS (estrellasDe): por TIEMPO. 3★ si ganas antes de estrellasSeg[0], 2★ antes de estrellasSeg[1], 1★ si ganas más tarde; 0 si pierdes.
+// ESTRELLAS = MEDALLAS (estrellasDe): por TIEMPO, como el original. El tiempo ya NO hace perder el nivel: al cumplir las metas siempre hay medalla.
+// 3★ = oro (terminas en oroSeg o menos), 2★ = plata (en plataSeg o menos), 1★ = completado (más tarde). estrellasSeg = [oroSeg, plataSeg].
 
 export const ID_JUEGO = "granjafeliz";
 export const CLAVE_PROGRESO = "granjafeliz_progreso_v1";   // { e: { "nivel": estrellas }, gastado, t }
@@ -25,6 +26,7 @@ export function estrellasDe({ gano = true, segundos = 0, estrellasSeg = [0, 0] }
   if (!gano) return 0;
   return segundos <= estrellasSeg[0] ? 3 : segundos <= estrellasSeg[1] ? 2 : 1;
 }
+export const MEDALLAS = ["", "Completado", "Plata 🥈", "Oro 🥇"]; // índice = estrellas
 export const estrellasTexto = (s) => "★".repeat(acotar(entero(s), 0, 3)) + "☆".repeat(3 - acotar(entero(s), 0, 3));
 
 // ----- Progreso local -----

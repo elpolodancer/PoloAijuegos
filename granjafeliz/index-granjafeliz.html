@@ -15,7 +15,7 @@
     .columna { display: flex; flex-direction: column; gap: 10px; width: min(300px, 100%); }
     @media (max-height: 460px) { .pantalla h1 { font-size: 1.4rem; } .columna { gap: 6px; } }
     #c { position: fixed; z-index: 1; touch-action: none; -webkit-user-select: none; user-select: none; }
-    #aviso-granja { position: fixed; z-index: 8; left: 50%; bottom: 62px; transform: translateX(-50%); max-width: min(92vw, 420px); padding: 8px 14px; border-radius: 12px; background: rgba(20,20,24,.92); color: #f1f2f4; font-weight: 600; text-align: center; }
+    #aviso-granja { position: fixed; z-index: 8; left: 50%; bottom: 62px; transform: translateX(-50%); max-width: min(92vw, 420px); padding: 8px 14px; border-radius: 12px; background: rgba(20,20,24,.92); color: #f1f2f4; font-weight: 600; text-align: center; white-space: pre-line; pointer-events: none; }
     #girar { position: fixed; inset: 0; z-index: 9; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: rgba(20,20,24,.92); color: #f1f2f4; font-size: 1.2rem; text-align: center; }
     @media (orientation: portrait) { body.en-juego #girar { display: flex; } }
   </style>

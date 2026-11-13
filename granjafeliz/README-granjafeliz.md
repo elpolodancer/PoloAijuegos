@@ -31,6 +31,13 @@ Juego estilo Farm Frenzy, **solo horizontal** (en vertical pide girar el celular
 - **Nivel 3 (PROVISIONAL, banco de pruebas):** los 4 animales, los 4 edificios, $120,000 de inicio, meta $150,000 en 10:00, y empieza con almacén y camión en nivel 3 (`NIVELES[n].mejoras: { almacen: 2, camion: 2 }`, nuevo campo; por defecto 0) para que quepan la leche y la tela (peso 50). Sirve para ver todo junto; no es un nivel balanceado.
 - **Pruebas en Node** (juego real, DOM falso, bot que planta, recoge y vende, 10 min por partida): en el nivel 3 los cuatro animales producen y nadie pasa más de ~13 s seguido con hambre; en el nivel 1 con 11 gallinas el resultado es igual que antes del cambio (849 vs 860 huevos, hambre máx. 12 vs 13 s). **El dibujo no se ha visto en pantalla** (los 4 botones de compra de ~27 de alto y los emojis grandes de vaca y oveja).
 
+- **Osos, perro y gato (13 nov 2026):** un nivel activa los osos con `NIVELES[n].osos = { tipos: ["oso", "polar", "panda"] }` (opcional `primero` = segundos hasta el primero) y el gato con `gato: true`; el perro está en todo nivel con osos. Datos en `datos-granjafeliz.js` (`OSOS`, `PERRO`, `GATO`, `CASILLA`, `RADIO_OSO`, `PRIMER_OSO`, `OSOS_CADA`).
+  - **Oso:** entra por un lado del campo a los ~25 s y luego cada 35-50 s; va hacia el animal más cercano (si no hay, al pasto; si no, merodea). **Destruye el pasto dentro de 2 casillas, elimina los animales que toca y borra los productos que pisa** (las jaulas no). Se captura **tocándolo** (oso 6 clics, polar 9, panda 12; barra amarilla de avance); al capturarlo deja su **jaula** en el suelo, que se recoge y se vende como un producto: pesos del README 15 / 25 / 30, valores $1,000 / $2,000 / $3,000 (míos). El camión base (10) no las lleva: hay que mejorarlo.
+  - **Perro 🐕:** botón en la barra de arriba ($100 cada vez, solo si hay un oso suelto). Llega en 2-3 s y deja quieto al oso 5-8 s (no se mueve ni destruye; los clics siguen contando). Un perro a la vez.
+  - **Gato 🐈:** botón en la barra de arriba ($1,000 una vez por nivel). **Recoge solo los productos del suelo** hacia el almacén (no las jaulas; si el almacén está lleno no recoge). Para que también recoja jaulas, quitar el filtro `jaula` en `actualizarGato()`.
+  - **Míos, para confirmar:** 1 casilla = 32 px (el escenario no tiene casillas), los clics para capturar, la velocidad de cada oso, el costo del perro y del gato, los valores de las jaulas y los emojis (🐻‍❄️ puede verse como dos símbolos en sistemas viejos). «Ventas» de la barra se movió un poco a la izquierda para dar lugar a los botones.
+  - **Nivel 3** ya trae osos y gato. Pruebas en Node (juego real, DOM falso): oso a los ~25 s, destruye pasto/productos/animales, se captura a clics, el perro llega y bloquea el tiempo correcto, el gato recoge productos y no jaulas ni con el almacén lleno; los niveles 1 y 2 no cambian. **El dibujo no se ha visto en pantalla** (botones de 32 de alto en la barra, oso de 42 px, jaula dibujada con barrotes).
+
 ## Decisiones confirmadas (12 nov 2026)
 
 **Tiempos: se quedan los propios del juego (más ágiles que el original de 2006).** Camión: 6 s de ida y vuelta en el nivel base. Producto en el suelo: 12 s antes de desaparecer. Así la partida es activa y de clics rápidos, estilo arcade.
@@ -60,7 +67,7 @@ Nivel avanzado (sin receta cerrada): pastelería (pan → pastel $300) y sastrer
 
 **Animales** (ya en `ANIMALES` y en el juego, ver «Pavo, oveja y vaca» arriba): pavo $1,000 (7 s, huevo de pavo) · oveja $10,000 (12 s, lana) · vaca $100,000 (20 s, leche).
 
-**Osos y perro (por construir):** primer oso a los ~25 s y luego cada 35-50 s; destruye pasto en radio de 2 casillas, elimina animales y borra productos que pisa; se captura con clics en la jaula (enjaulado pesa 15, polar/panda 25-30). El perro llega en 2-3 s y lo bloquea 5-8 s. El gato recoge solo los productos del suelo.
+**Osos, perro y gato** (ya en el juego, ver arriba): primer oso a los ~25 s y luego cada 35-50 s; destruye pasto en radio de 2 casillas, elimina animales y borra productos que pisa; se captura con clics (enjaulado pesa 15, polar/panda 25-30). El perro llega en 2-3 s y lo bloquea 5-8 s. El gato recoge solo los productos del suelo.
 
 ## Por resolver
 1. **Pesos contra capacidades:** la leche y la tela (50) no caben en el camión hasta su nivel 3 (100) ni en el almacén base (30) hasta el nivel 2; el pan (10) llena el camión base. Los niveles con esos productos deben dar antes las mejoras.
@@ -72,7 +79,7 @@ Nivel avanzado (sin receta cerrada): pastelería (pan → pastel $300) y sastrer
 1. Pavo, oveja y vaca: hechos. Falta confirmar sus cifras (mordidas, velocidad, máximo) y un dibujo mejor que el emoji; el pavo vivo pesa 30 y no se vende vivo todavía.
 2. Edificios: hechos. Faltan pastelería (pan → pastel) y sastrería (tela → ropa) cuando haya receta cerrada, y probar el dibujo en celular.
 3. Aplicar la mejora que falta de `MEJORAS`: pozo (hay que decidir qué significan los «usos» frente a `MAX_AGUA`). Las de almacén, camión y fábricas ya están.
-4. Osos, perro y gato.
+4. Osos, perro y gato: hechos; falta confirmar sus cifras y verlos en pantalla.
 5. Modo libre: 5 dificultades (hoy solo avisa «en construcción»).
 6. Niveles 2 a 22 600: metas, tiempos y animales disponibles por nivel; reparto de dificultad con `compartido/dificultad-niveles.js` (sección 8 del estándar). No cambiar después de publicar.
 7. Fin de nivel: más estrellas por otras metas, boosts y tienda con `eco.gastar()`.
