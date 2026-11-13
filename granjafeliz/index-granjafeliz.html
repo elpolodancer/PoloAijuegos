@@ -13,7 +13,7 @@
     .pantalla h1, .pantalla h2 { margin: 0 0 4px; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
     .pantalla p { margin: 0; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
     .columna { display: flex; flex-direction: column; gap: 10px; width: min(300px, 100%); }
-    @media (max-height: 460px) { .pantalla h1 { font-size: 1.4rem; } .columna { gap: 6px; } }
+    @media (max-height: 460px) { .pantalla h1 { font-size: 1.4rem; } .columna { gap: 6px; } #lista-dificultad .b3d.grande { --t: 50px; } .pantalla p { font-size: .85rem; } } /* 5 dificultades: que quepan en un celular horizontal */
     #c { position: fixed; z-index: 1; touch-action: none; -webkit-user-select: none; user-select: none; }
     #aviso-granja { position: fixed; z-index: 8; left: 50%; bottom: 62px; transform: translateX(-50%); max-width: min(92vw, 420px); padding: 8px 14px; border-radius: 12px; background: rgba(20,20,24,.92); color: #f1f2f4; font-weight: 600; text-align: center; white-space: pre-line; pointer-events: none; }
     #girar { position: fixed; inset: 0; z-index: 9; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: rgba(20,20,24,.92); color: #f1f2f4; font-size: 1.2rem; text-align: center; }
@@ -39,7 +39,7 @@
 
   <section class="pantalla" id="pantalla-libre" hidden>
     <h2>♾️ Modo libre</h2>
-    <p>Elige la dificultad</p>
+    <p>Elige la dificultad. Sin metas ni tiempo: tu récord es lo que vendes en una partida (no da monedas ni estrellas)</p>
     <div class="columna" id="lista-dificultad"></div>
   </section>
 

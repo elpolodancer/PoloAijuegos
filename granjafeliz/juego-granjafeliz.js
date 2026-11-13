@@ -1,5 +1,5 @@
 // Ruta: granjafeliz/juego-granjafeliz.js
-// Granja feliz (estilo Farm Frenzy), horizontal. Menú estándar + mapa de 22 600 niveles (por ahora existen el nivel 1: gallinas y huevos, el 2, provisional: edificios, y el 3, de pruebas: pavo, oveja, vaca, osos, perro y gato).
+// Granja feliz (estilo Farm Frenzy), horizontal. Menú estándar + mapa de 22 600 niveles (por ahora existen los niveles 1 a 10 de Farm Frenzy 1) + ♾️ Modo libre (5 dificultades, sin metas ni tiempo, sin monedas; solo guarda una marca).
 // Modelo del original: cada nivel tiene una lista de METAS (dinero, producto, animal, edificio; ver datos-granjafeliz.js); el tiempo no limita, solo da medalla (oro/plata/completado).
 // Id de puntos: "granjafeliz". Datos en datos-granjafeliz.js; estrellas y monedas en economia-granjafeliz.js.
 import { crearEtapas } from "../compartido/etapas-mapa.js";
@@ -27,6 +27,7 @@ function ir(nombre) {
   document.body.classList.toggle("en-juego", nombre === "juego");
   btnMenu.hidden = nombre === "menu";
   $("txt-menu").textContent = nombre === "juego" ? "Pausa" : "Menú principal"; // dentro de la partida: Pausa (estándar)
+  if (nombre === "libre") pintarLibre();
   if (nombre === "juego") ajustar();
 }
 function abrirMapa(n) { ir("menu"); for (const k in pantallas) pantallas[k].hidden = true; btnMenu.hidden = false; $("txt-menu").textContent = "Menú principal"; donde = "mapa"; mapa.abrir(n); }
@@ -41,16 +42,23 @@ const mapa = montarMapa({
 const pausa = crearMenuPausa({
   puedeAbrir: () => donde === "juego" && J && !J.fin,
   alAbrir: () => { J.pausa = true; }, alContinuar: () => { J.pausa = false; },
-  extras: () => [{ icono: "🔄", texto: "Repetir nivel", clase: "b-azul", alElegir: () => empezar(J.n) }],
-  alSalir: () => abrirMapa(J.n),
+  extras: () => (J.libre
+    ? [{ icono: "🏁", texto: "Terminar partida", clase: "b-oro", ayuda: "Tu récord ya está guardado", alElegir: terminarLibre }, { icono: "🔄", texto: "Empezar de nuevo", clase: "b-azul", alElegir: () => empezarLibre(J.libre) }]
+    : [{ icono: "🔄", texto: "Repetir nivel", clase: "b-azul", alElegir: () => empezar(J.n) }]),
+  alSalir: () => (J.libre ? ir("libre") : abrirMapa(J.n)),
 });
 btnMenu.addEventListener("click", () => (donde === "juego" ? pausa.abrir() : ir("menu")));
 
-for (const [t, c] of DIFICULTADES) {
+// ♾️ Modo libre: una dificultad por cada entrada de D.LIBRE (mismo orden y colores que DIFICULTADES). Cada botón muestra tu marca (lo máximo vendido en una partida).
+const botonesLibre = [];
+Object.keys(D.LIBRE).forEach((id, i) => {
   const b = document.createElement("button");
-  b.type = "button"; b.className = "b3d txt grande " + c; b.innerHTML = '<span class="b-ico">🐔</span> <span></span>'; b.lastElementChild.textContent = t;
-  b.addEventListener("click", () => avisar("El modo libre todavía está en construcción (" + t + ")"));
-  $("lista-dificultad").appendChild(b);
+  b.type = "button"; b.className = "b3d txt grande " + DIFICULTADES[i][1]; b.innerHTML = '<span class="b-ico">🐔</span> <span></span>';
+  b.addEventListener("click", () => empezarLibre(id));
+  $("lista-dificultad").appendChild(b); botonesLibre.push({ id, b });
+});
+function pintarLibre() {
+  for (const { id, b } of botonesLibre) { const m = eco.mejorLibre(id); b.lastElementChild.textContent = D.LIBRE[id].nombre + " · " + (m ? "récord $" + m.toLocaleString("es-MX") : "sin récord"); }
 }
 $("btn-libre").onclick = () => ir("libre");
 $("btn-niveles").onclick = () => abrirMapa(eco.avanceMapa().max);
@@ -59,9 +67,9 @@ $("btn-mapa").onclick = () => abrirMapa();
 // ---------- Escenario ----------
 const CAMPO = { x: 20, y: 60, w: 600, h: 370 };
 const CAJAS = { pozo: { x: 640, y: 60, w: 150, h: 75 }, almacen: { x: 640, y: 145, w: 150, h: 75 }, camion: { x: 640, y: 230, w: 150, h: 75 }, comprar: { x: 640, y: 315, w: 150, h: 75 } };
-// Franja «⬆ mejorar» al pie de las cajas de Almacén y Camión (28 de alto para que se pueda tocar bien en el celular)
+// Franja «⬆ mejorar» al pie de las cajas de Pozo, Almacén y Camión (28 de alto para que se pueda tocar bien en el celular)
 const franja = (c) => ({ x: c.x, y: c.y + c.h - 28, w: c.w, h: 28 });
-const FRANJAS = { almacen: franja(CAJAS.almacen), camion: franja(CAJAS.camion) };
+const FRANJAS = { pozo: franja(CAJAS.pozo), almacen: franja(CAJAS.almacen), camion: franja(CAJAS.camion) };
 // Edificios (nivel con NIVELES[n].edificios): ocupan una franja al pie del campo; los animales y el pasto quedan por encima de ella.
 // Cada espacio: arriba el edificio (se toca para procesar) y abajo la franja «⬆ mejorar» (28 de alto en las cajas; aquí 26 para que quepa).
 const FRANJA_EDIF = { x: CAMPO.x, y: 350, w: CAMPO.w, h: CAMPO.y + CAMPO.h - 350 };
@@ -80,12 +88,15 @@ function ajustar() { // el escenario 16:9 ocupa el espacio libre (deja libres la
 addEventListener("resize", ajustar);
 
 function nuevoAnimal(tipo) { return { tipo, x: azar(CAMPO.x + 30, CAMPO.x + CAMPO.w - 30), y: azar(CAMPO.y + 40, limiteY() - 10), hambre: azar(0, 0.4), prod: azar(0, 0.5), est: "vaga", t: 0, dest: null, objetivo: null, mord: 0 }; }
-function empezar(n) {
-  const N = D.NIVELES[n];
-  J = { n, N, t: 0, dinero: N.dineroInicial, ventas: 0, rec: {}, agua: N.aguaInicial, pozo: 0, pasto: [], animales: [], suelo: [], almacen: {}, camion: 0, pago: 0, mejoras: { almacen: (N.mejoras && N.mejoras.almacen) || 0, camion: (N.mejoras && N.mejoras.camion) || 0 }, osos: [], proxOso: N.osos ? (N.osos.horario ? Infinity : (N.osos.primero ?? D.PRIMER_OSO)) : Infinity, horario: N.osos && N.osos.horario ? [...N.osos.horario] : null, perro: null, gato: (N.regalo || []).includes("gato") ? { x: CAMPO.x + 20, y: CAMPO.y + 60, dest: null } : null, edif: (N.edificios || []).map((id) => ({ id, nivel: (N.construidos || []).includes(id) ? 0 : -1, trab: 0, lote: 0, cola: [] })), flot: [], fin: false, pausa: false };
+const empezar = (n) => arrancar(n, D.NIVELES[n], null);
+// Modo libre: la dificultad es un «nivel» a medida (D.LIBRE[id]) sin metas ni tiempo; J.libre guarda el id de la dificultad (null en los niveles)
+function empezarLibre(id) { arrancar(0, { ...D.LIBRE[id], metas: [] }, id); }
+function arrancar(n, N, libre) {
+  J = { n, N, libre, mejorInicial: libre ? eco.mejorLibre(libre) : 0, avisoRecord: false, t: 0, dinero: N.dineroInicial, ventas: 0, rec: {}, agua: N.aguaInicial, pozo: 0, pasto: [], animales: [], suelo: [], almacen: {}, camion: 0, pago: 0, mejoras: { almacen: (N.mejoras && N.mejoras.almacen) || 0, camion: (N.mejoras && N.mejoras.camion) || 0, pozo: (N.mejoras && N.mejoras.pozo) || 0 }, osos: [], proxOso: N.osos ? (N.osos.horario ? Infinity : (N.osos.primero ?? D.PRIMER_OSO)) : Infinity, horario: N.osos && N.osos.horario ? [...N.osos.horario] : null, perro: null, gato: (N.regalo || []).includes("gato") ? { x: CAMPO.x + 20, y: CAMPO.y + 60, dest: null } : null, edif: (N.edificios || []).map((id) => ({ id, nivel: (N.construidos || []).includes(id) ? 0 : -1, trab: 0, lote: 0, cola: [] })), flot: [], fin: false, pausa: false };
   for (const tipo in N.animales) for (let i = 0; i < N.animales[tipo]; i++) J.animales.push(nuevoAnimal(tipo));
   ir("juego");
-  avisar("Metas: " + N.metas.map(textoMeta).join(" · ") + (N.pista ? "\n" + N.pista : ""), N.pista ? 7000 : 3500);
+  if (libre) avisar("♾️ Modo libre · " + N.nombre + ": sin metas ni tiempo; tu récord es lo que vendes en una partida.\n" + (N.pista || ""), 7000);
+  else avisar("Metas: " + N.metas.map(textoMeta).join(" · ") + (N.pista ? "\n" + N.pista : ""), N.pista ? 7000 : 3500);
 }
 
 function flotar(x, y, txt) { J.flot.push({ x, y, txt, t: 1.2 }); }
@@ -114,10 +125,11 @@ const medallaAhora = () => eco.estrellasDe({ gano: true, segundos: J.t, estrella
 // Todo producto que entra al almacén pasa por aquí (así cuenta para las metas de «producto»)
 function aAlmacen(tipo) { J.almacen[tipo] = (J.almacen[tipo] || 0) + 1; J.rec[tipo] = (J.rec[tipo] || 0) + 1; }
 const pesoAlmacen = () => Object.keys(J.almacen).reduce((t, k) => t + J.almacen[k] * D.PRODUCTOS[k].peso, 0);
-// Mejoras de almacén y camión (datos en D.MEJORAS). J.mejoras guarda el nivel de cada una (0 = base); se reinician en cada nivel, igual que el dinero.
+// Mejoras de almacén, camión y pozo (datos en D.MEJORAS). J.mejoras guarda el nivel de cada una (0 = base); se reinician en cada nivel, igual que el dinero.
 const capAlmacen = () => D.MEJORAS.almacen.capacidad[J.mejoras.almacen];
 const capCamion = () => D.MEJORAS.camion.capacidad[J.mejoras.camion];
 const segCamion = () => D.MEJORAS.camion.seg[J.mejoras.camion];
+const capPozo = () => D.MEJORAS.pozo.capacidad[J.mejoras.pozo];   // cargas de agua que guarda el pozo
 const costoMejora = (que) => { const n = J.mejoras[que]; return n < D.MEJORAS[que].capacidad.length - 1 ? D.MEJORAS[que].costo[n + 1] : null; }; // null = ya está al máximo
 // Compra la siguiente mejora de «almacen» o «camion». Devuelve true si se compró.
 function mejorar(que) {
@@ -300,7 +312,7 @@ function tocar(x, y) {
     aAlmacen(h.tipo); J.suelo.splice(J.suelo.indexOf(h), 1); return;
   }
   for (const q in FRANJAS) if (dentro(FRANJAS[q], x, y)) { mejorar(q); return; } // ⬆ mejorar almacén / camión
-  if (dentro(CAJAS.pozo, x, y)) { if (!J.pozo && J.agua < D.MAX_AGUA) J.pozo = D.SEG_POZO; return; }
+  if (dentro(CAJAS.pozo, x, y)) { if (!J.pozo && J.agua < capPozo()) J.pozo = D.SEG_POZO; return; }
   if (dentro(CAJAS.camion, x, y)) {
     if (J.camion) return;
     const c = cargaCamion();
@@ -324,10 +336,10 @@ cv.addEventListener("pointerdown", (e) => { const r = cv.getBoundingClientRect()
 
 function actualizar(dt) {
   J.t += dt;
-  if (J.pozo > 0) { J.pozo -= dt; if (J.pozo <= 0) { J.pozo = 0; J.agua = D.MAX_AGUA; } }
+  if (J.pozo > 0) { J.pozo -= dt; if (J.pozo <= 0) { J.pozo = 0; J.agua = capPozo(); } }
   actualizarEdificios(dt);
   actualizarOsos(dt); actualizarPerro(dt); actualizarGato(dt);
-  if (J.camion > 0) { J.camion -= dt; if (J.camion <= 0) { J.camion = 0; J.dinero += J.pago; J.ventas += J.pago; flotar(715, 250, "+$" + J.pago); J.pago = 0; } }
+  if (J.camion > 0) { J.camion -= dt; if (J.camion <= 0) { J.camion = 0; J.dinero += J.pago; J.ventas += J.pago; flotar(715, 250, "+$" + J.pago); J.pago = 0; marcaLibre(); } }
   for (const a of J.animales) {
     const A = D.ANIMALES[a.tipo];
     a.t += dt;
@@ -358,7 +370,7 @@ function actualizar(dt) {
   J.suelo = J.suelo.filter((h) => h.t > 0);
   for (const f of J.flot) f.t -= dt;
   J.flot = J.flot.filter((f) => f.t > 0);
-  if (metasCumplidas()) terminar(true); // el tiempo ya no hace perder: solo cambia la medalla
+  if (!J.libre && metasCumplidas()) terminar(true); // el tiempo ya no hace perder: solo cambia la medalla (el modo libre no tiene metas: no termina solo)
 }
 
 // ---------- Dibujo ----------
@@ -406,7 +418,9 @@ function dibujar() {
   caja({ x: 20, y: 8, w: 770, h: 40 }, "rgba(20,20,24,.78)");
   txt("💵 $" + J.dinero, 36, 28, 18, "#fff4c2");
   { // panel de metas: un chip por meta, de izquierda a derecha entre 💵 y los botones 🐕 🐈 (x 120 a 470); la letra se achica si no caben
-    const items = J.N.metas.map((m) => { const a = avanceMeta(m), ok = a.actual >= a.objetivo; return { t: a.icono + " " + Math.min(a.actual, a.objetivo).toLocaleString("es-MX") + "/" + a.objetivo.toLocaleString("es-MX"), ok }; });
+    const items = J.libre
+      ? [{ t: "💰 Vendido $" + J.ventas.toLocaleString("es-MX"), ok: false }, { t: "🏆 Récord $" + Math.max(J.ventas, J.mejorInicial).toLocaleString("es-MX"), ok: J.ventas > 0 && J.ventas >= J.mejorInicial }]
+      : J.N.metas.map((m) => { const a = avanceMeta(m), ok = a.actual >= a.objetivo; return { t: a.icono + " " + Math.min(a.actual, a.objetivo).toLocaleString("es-MX") + "/" + a.objetivo.toLocaleString("es-MX"), ok }; });
     let tam = 15; const medir = () => { ctx.font = "700 " + tam + "px system-ui,sans-serif"; return items.reduce((s, i) => s + ctx.measureText(i.t).width + 16, 0); };
     while (tam > 10 && medir() > 350) tam--;
     let x = 120;
@@ -419,7 +433,7 @@ function dibujar() {
     emo(b.id === "gato" ? "🐈" : "🐕", b.x + 16, b.y + b.h / 2, 20);
     txt(hecho ? "✔ tienes" : ocupado ? "en camino" : costo ? "$" + costo.toLocaleString("es-MX") : "gratis", b.x + 32, b.y + b.h / 2, 12, "#fff4c2");
   }
-  { const med = medallaAhora(); txt("⏱ " + mmss(J.t) + " " + (["", "🥉", "🥈", "🥇"][med]), 772, 28, 17, med === 3 ? "#ffe27a" : med === 2 ? "#e4e8ee" : "#f0c9a0", "right"); } // sube; el emoji es la medalla que llevas
+  { const med = J.libre ? 0 : medallaAhora(); txt("⏱ " + mmss(J.t) + " " + (["", "🥉", "🥈", "🥇"][med]), 772, 28, 17, med === 3 ? "#ffe27a" : med === 2 ? "#e4e8ee" : "#f0c9a0", "right"); } // sube; el emoji es la medalla que llevas
   caja(CAMPO, "rgba(88,160,60,.88)");
   for (const p of J.pasto) emo(p.v >= 3 ? "🌿" : "🌱", p.x, p.y, 22);
   if (J.edif.length) dibujarEdificios();
@@ -442,8 +456,8 @@ function dibujar() {
     ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.fillRect(o.x - 18, o.y - 30, 36, 5); ctx.fillStyle = "#ffe27a"; ctx.fillRect(o.x - 18, o.y - 30, 36 * o.golpes / O.golpes, 5); // avance de captura
   }
   if (J.perro) emo("🐕", J.perro.x, J.perro.y, 30);
-  caja(CAJAS.pozo, "rgba(20,20,24,.78)"); emo("⛲", 672, 98, 34);
-  txt("Pozo", 700, 82, 15); txt(J.pozo > 0 ? "Llenando… " + Math.ceil(J.pozo) : "💧 " + J.agua + " / " + D.MAX_AGUA, 700, 108, 14, "#bfe4fb");
+  caja(CAJAS.pozo, "rgba(20,20,24,.78)"); emo("⛲", 672, 84, 34);
+  txt("Pozo", 700, 72, 15); txt(J.pozo > 0 ? "Llenando… " + Math.ceil(J.pozo) : "💧 " + J.agua + " / " + capPozo(), 700, 92, 14, "#bfe4fb"); franjaMejora("pozo");
   caja(CAJAS.almacen, "rgba(20,20,24,.78)"); emo("📦", 672, 170, 34);
   txt("Almacén", 700, 157, 15); txt("⚖️ " + pesoAlmacen() + " / " + capAlmacen(), 700, 177, 14, "#fff4c2"); franjaMejora("almacen");
   caja(CAJAS.camion, cargaCamion().pago > 0 && !J.camion ? "rgba(40,120,50,.9)" : "rgba(20,20,24,.78)"); emo("🚚", 672, 255, 34);
@@ -470,23 +484,46 @@ function colocarFin() {
   const r = cv.getBoundingClientRect();
   Object.assign(cajaFin.style, { left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px" });
 }
+// Modo libre: cada venta del camión puede superar tu marca (se guarda sola; no hace falta terminar la partida)
+function marcaLibre() {
+  if (!J.libre) return;
+  const r = eco.registrarLibre(J.libre, J.ventas);
+  if (r.record) {
+    if (nube) nube.guardado();
+    if (J.mejorInicial > 0 && !J.avisoRecord) { J.avisoRecord = true; flotar(CAMPO.x + CAMPO.w / 2, CAMPO.y + 40, "🏆 ¡Nuevo récord!"); }
+  }
+}
+function terminarLibre() {
+  J.fin = true;
+  const nuevo = J.ventas > 0 && J.ventas >= eco.mejorLibre(J.libre) && J.ventas > J.mejorInicial;
+  const texto = document.createElement("div"); texto.className = "sobre-texto";
+  texto.innerHTML = "<h2></h2><div></div>";
+  texto.firstChild.textContent = "♾️ Partida terminada · " + J.N.nombre;
+  texto.lastChild.textContent = "Vendiste $" + J.ventas.toLocaleString("es-MX") + " en " + mmss(Math.ceil(J.t)) + " · " + (nuevo ? "🏆 ¡nuevo récord!" : "récord $" + eco.mejorLibre(J.libre).toLocaleString("es-MX"));
+  const b = (c, t, f) => { const x = document.createElement("button"); x.type = "button"; x.className = "b3d txt " + c; x.textContent = t; x.onclick = f; return x; };
+  const fila = document.createElement("div"); fila.className = "sobre-fila";
+  fila.append(b("b-gris", "Dificultades", () => ir("libre")));
+  cajaFin.replaceChildren(texto, b("grande b-verde", "Jugar otra vez ▶", () => empezarLibre(J.libre)), fila);
+  cajaFin.hidden = false; colocarFin();
+}
 function terminar(gano) {
   J.fin = true;
   const seg = Math.ceil(J.t);
+  const est = eco.estrellasDe({ gano, segundos: seg, estrellasSeg: [J.N.oroSeg, J.N.plataSeg] }); // medalla de ESTA partida
   let res = { estrellas: 0, monedas: 0 };
-  if (gano) { res = eco.registrarNivel(J.n, eco.estrellasDe({ gano, segundos: seg, estrellasSeg: [J.N.oroSeg, J.N.plataSeg] })); pintarMonedas(); if (nube) nube.guardado(); }
+  if (gano) { res = eco.registrarNivel(J.n, est); pintarMonedas(); if (nube) nube.guardado(); }
   const caja_ = (c, t, f) => { const b = document.createElement("button"); b.type = "button"; b.className = "b3d txt " + c; b.textContent = t; b.onclick = f; return b; };
   const sig = D.NIVELES[J.n + 1] ? J.n + 1 : 0;
   const texto = document.createElement("div"); texto.className = "sobre-texto";
   texto.innerHTML = "<h2></h2><div></div>";
   texto.firstChild.textContent = gano ? "¡Nivel " + J.n + " completado!" : "Nivel no terminado";
-  texto.lastChild.textContent = eco.estrellasTexto(eco.estrellasDe({ gano: true, segundos: seg, estrellasSeg: [J.N.oroSeg, J.N.plataSeg] })) + " " + eco.MEDALLAS[eco.estrellasDe({ gano: true, segundos: seg, estrellasSeg: [J.N.oroSeg, J.N.plataSeg] })] + " · " + mmss(seg) + (res.monedas ? " · +" + res.monedas + " monedas" : "");
+  // Si ya tenías una medalla mejor que la de esta partida, se avisa (la marca guardada nunca baja y no se paga de nuevo)
+  texto.lastChild.textContent = eco.estrellasTexto(est) + " " + eco.MEDALLAS[est] + " · " + mmss(seg) + (res.monedas ? " · +" + res.monedas + " monedas" : "") + (res.estrellas > est ? " · tu mejor: " + eco.estrellasTexto(res.estrellas) : "");
   const fila = document.createElement("div"); fila.className = "sobre-fila";
   fila.append(caja_("b-azul", "Repetir nivel", () => empezar(J.n)), caja_("b-gris", "Mapa", () => abrirMapa(J.n)));
   cajaFin.replaceChildren(texto);
   if (gano && sig) cajaFin.appendChild(caja_("grande b-verde", "Siguiente nivel ▶", () => empezar(sig))); // primero y más grande; en el último nivel se oculta
   cajaFin.appendChild(fila);
-  if (gano && sig) cajaFin.children[1].className = "b3d txt grande b-verde";
   cajaFin.hidden = false; colocarFin();
 }
 

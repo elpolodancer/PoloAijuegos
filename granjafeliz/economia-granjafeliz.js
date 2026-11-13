@@ -5,7 +5,8 @@
 // - Cada nivel guarda su MEJOR cantidad de estrellas (0 = sin pasar).
 // - Monedas por nivel según las estrellas: 1★ = 15, 2★ = 30, 3★ = 45. Nunca más de 45 por nivel: si repites y mejoras, solo se paga la
 //   diferencia (de 1★ a 3★ pagan 30 más). Repetir sin mejorar no da nada, así no se puede «cultivar» monedas.
-// - El Modo libre NO da monedas ni estrellas (estándar del portal, sección 4A de ESTANDARES-juegos.md).
+// - El Modo libre NO da monedas ni estrellas (estándar del portal, sección 4A de ESTANDARES-juegos.md). Solo guarda una MARCA por dificultad en «libre»
+//   (lo máximo vendido en una partida; registrarLibre). Va en el mismo progreso, así se sincroniza con la cuenta; si no hay marcas, «libre» no se guarda.
 // - Las monedas ganadas NO se guardan como número: salen de las estrellas (suma de pagos). Así, al unir el progreso de dos aparatos
 //   no se pierden monedas ganadas en cada uno. Solo se guarda lo GASTADO (para la tienda/boosts que vengan).
 //
@@ -13,10 +14,11 @@
 // 3★ = oro (terminas en oroSeg o menos), 2★ = plata (en plataSeg o menos), 1★ = completado (más tarde). estrellasSeg = [oroSeg, plataSeg].
 
 export const ID_JUEGO = "granjafeliz";
-export const CLAVE_PROGRESO = "granjafeliz_progreso_v1";   // { e: { "nivel": estrellas }, gastado, t }
+export const CLAVE_PROGRESO = "granjafeliz_progreso_v1";   // { e: { "nivel": estrellas }, gastado, libre?: { "dificultad": marca }, t }
 export const TOTAL_NIVELES = 22600;                   // 226 etapas × 100 (igual que ETAPAS.total)
 export const MONEDAS_POR_ESTRELLAS = [0, 15, 30, 45]; // índice = estrellas
 export const MONEDAS_MIN = 15, MONEDAS_MAX = 45;
+const MAX_MARCA = 1e12;                               // tope sensato de una marca del modo libre
 
 const entero = (v) => Math.floor(Number(v)) || 0;
 const acotar = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -36,14 +38,23 @@ function limpiar(p) {
     const n = entero(k), s = acotar(entero(p.e[k]), 0, 3);
     if (n >= 1 && n <= TOTAL_NIVELES && s > 0) e[n] = s;
   }
-  return { e, gastado: Math.max(0, entero(p && p.gastado)), t: Number(p && p.t) || 0 };
+  const libre = {};
+  for (const k in (p && p.libre) || {}) { const m = entero(p.libre[k]); if (/^[a-z]{1,20}$/.test(k) && m > 0) libre[k] = Math.min(m, MAX_MARCA); }
+  return { e, gastado: Math.max(0, entero(p && p.gastado)), libre, t: Number(p && p.t) || 0 };
+}
+// Lo que se guarda: la misma forma de siempre (e, gastado, t) y «libre» solo si ya hay marcas
+function salida(p) {
+  const o = { e: p.e, gastado: p.gastado };
+  if (Object.keys(p.libre).length) o.libre = p.libre;
+  o.t = p.t;
+  return o;
 }
 export function leerProgreso() {
   try { return limpiar(JSON.parse(localStorage.getItem(CLAVE_PROGRESO))); } catch (e) { return limpiar(null); }
 }
 function guardar(p) {
   p.t = Date.now();
-  try { localStorage.setItem(CLAVE_PROGRESO, JSON.stringify(p)); } catch (e) {}
+  try { localStorage.setItem(CLAVE_PROGRESO, JSON.stringify(salida(p))); } catch (e) {}
 }
 
 // ----- Monedas -----
@@ -67,6 +78,18 @@ export function registrarNivel(n, estrellas) {
 }
 export const estrellasDeNivel = (n, p = leerProgreso()) => p.e[n] || 0;
 
+// ----- Modo libre: marca = lo máximo vendido en una partida, por dificultad (sin monedas ni estrellas) -----
+export const mejorLibre = (id, p = leerProgreso()) => p.libre[id] || 0;
+// Anota la marca si supera a la guardada. Devuelve { mejor, record } (record = true si esta venta la superó).
+export function registrarLibre(id, vendido) {
+  const n = acotar(entero(vendido), 0, MAX_MARCA);
+  if (!/^[a-z]{1,20}$/.test(String(id))) return { mejor: 0, record: false };
+  const p = leerProgreso(), antes = p.libre[id] || 0;
+  if (n <= antes) return { mejor: antes, record: false };
+  p.libre[id] = n; guardar(p);
+  return { mejor: n, record: true };
+}
+
 // Para el mapa de niveles: { max, hecho }. Los niveles se abren en orden: hecho = el más alto con alguna estrella.
 export function avanceMapa(p = leerProgreso()) {
   let hecho = 0;
@@ -74,10 +97,11 @@ export function avanceMapa(p = leerProgreso()) {
   return { hecho, max: Math.min(TOTAL_NIVELES, hecho + 1) };
 }
 
-// Une dos progresos (para compartido/progreso.js → conectar): mejor marca de estrellas por nivel y el mayor «gastado».
+// Une dos progresos (para compartido/progreso.js → conectar): mejor marca de estrellas por nivel, el mayor «gastado» y la mejor marca de cada dificultad del modo libre.
 export function fusionar(local, remoto) {
   if (!local && !remoto) return null;
-  const a = limpiar(local), b = limpiar(remoto), e = { ...b.e };
+  const a = limpiar(local), b = limpiar(remoto), e = { ...b.e }, libre = { ...b.libre };
   for (const k in a.e) e[k] = Math.max(a.e[k], e[k] || 0);
-  return { e, gastado: Math.max(a.gastado, b.gastado), t: Math.max(a.t, b.t) };
+  for (const k in a.libre) libre[k] = Math.max(a.libre[k], libre[k] || 0);
+  return salida({ e, gastado: Math.max(a.gastado, b.gastado), libre, t: Math.max(a.t, b.t) });
 }
