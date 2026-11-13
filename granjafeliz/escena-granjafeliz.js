@@ -1,14 +1,15 @@
 // Ruta: granjafeliz/escena-granjafeliz.js
-// Aspecto de Granja feliz (cámara de 3/4 como Farm Frenzy): terreno de tierra rodeado de pasto, edificios en las orillas, almacén arriba al centro, pozo
+// Aspecto de Granja feliz (cámara de 3/4 como Farm Frenzy): terreno de tierra rodeado de pasto, edificios en las orillas, pozo arriba al centro, almacén (bodega)
 // y camión abajo. SOLO dibuja y define posiciones: no usa document, Firebase ni la lógica del juego (se puede probar en Node con node-canvas).
 // TAMAÑOS: la granja puede ser de 3 tamaños (TAMANOS): «pequeno» = el escenario ORIGINAL de 800×450 con 4 espacios de edificio (el de los niveles 1-10 de México),
 // «mediano» 960×540 con 6 y «grande» 1120×630 con 10. Todos 16:9. usarTamano(id) reacomoda TODO (ESCENA, CAMPO, CAJAS, LAYOUT, espacios y botones) cambiando los
 // objetos en el sitio, así que quien los importó los sigue viendo al día. Hay que llamarlo antes de empezar una partida (juego-granjafeliz.js → aplicarTamano).
 //   ESCENA   el cuadro de pasto con esquinas redondas (el resto del canvas queda transparente: se ve la madera del portal)
 //   CAMPO    por dónde caminan animales y osos y dónde se planta pasto (la parte central; los edificios quedan fuera)
-//   CAJAS    almacén (arriba al centro), pozo (abajo al centro), camión (abajo a la izquierda): arte arriba + franja ⬆ de 28 al pie
+//   CAJAS    pozo (ARRIBA al centro), almacén (abajo al centro, una bodega), camión (abajo a la izquierda): arte arriba + franja ⬆ de 28 al pie
+//   botonComprar(i)   botones de comprar animales: arriba a la izquierda, sobre la barra, como en Farm Frenzy (sesión 7)
 //   ranuraEdificio(i)   espacios: i par = columna izquierda, i impar = columna derecha, de arriba hacia abajo (0-1 primera fila, 2-3 segunda, 4-5 tercera, 6-7 cuarta);
-//                       8 y 9 (solo en «grande») = arriba, a los lados del almacén (arte arriba + franja ⬆ de 26 al pie)
+//                       8 y 9 (solo en «grande») = arriba, a los lados del pozo (arte arriba + franja ⬆ de 26 al pie)
 export const TAMANOS = {
   pequeno: { nombre: "Original", ANCHO: 800,  ALTO: 450, edificios: 4 },
   mediano: { nombre: "Mediano",  ANCHO: 960,  ALTO: 540, edificios: 6 },
@@ -19,8 +20,8 @@ export const LAYOUT = { id: "pequeno", ANCHO: 800, ALTO: 450, edificios: 4 };   
 export const ESCENA = { x: 20, y: 56, w: 770, h: 384 };
 export const CAMPO = { x: 172, y: 100, w: 456, h: 300 };
 export const CAJAS = {
-  almacen: { x: 342, y: 60, w: 116, h: 96 },    // en Farm Frenzy el almacén es la jaula alta de arriba
-  pozo:    { x: 342, y: 350, w: 116, h: 90 },   // la plataforma con techo de paja de abajo
+  pozo:    { x: 342, y: 70, w: 116, h: 96 },    // la plataforma con techo de paja, ARRIBA al centro (antes ahí estaba el almacén, que parecía una jaula)
+  almacen: { x: 342, y: 350, w: 116, h: 90 },   // la bodega, abajo al centro (donde estaba el pozo)
   camion:  { x: 176, y: 350, w: 116, h: 90 },
 };
 export function usarTamano(id) {
@@ -29,8 +30,8 @@ export function usarTamano(id) {
   Object.assign(ESCENA, { x: 20, y: 56, w: W - 30, h: H - 66 });
   const campoY = T.edificios > 8 ? 176 : 100;   // con espacios arriba a los lados del almacén, el campo empieza más abajo
   Object.assign(CAMPO, { x: 172, y: campoY, w: W - 344, h: H - 50 - campoY });
-  Object.assign(CAJAS.almacen, { x: W / 2 - 58, y: 60 });
-  Object.assign(CAJAS.pozo, { x: W / 2 - 58, y: H - 100 });
+  Object.assign(CAJAS.pozo, { x: W / 2 - 58, y: 70 });
+  Object.assign(CAJAS.almacen, { x: W / 2 - 58, y: H - 100 });
   Object.assign(CAJAS.camion, { x: 176, y: H - 100 });
   return LAYOUT;
 }
@@ -39,8 +40,10 @@ export const ranuraEdificio = (i) => {
   if (i >= 8) return { x: i === 8 ? W / 2 - 58 - 16 - 128 : W / 2 + 58 + 16, y: 64, w: 128, h: 104 };
   return { x: i % 2 ? W - 146 : 28, y: 64 + paso * Math.floor(i / 2), w: 128, h: 104 };
 };
-// Botones de comprar animales: fila en la esquina de abajo a la derecha (como el panel de la esquina del original)
-export const botonComprar = (i, k) => { const w = k === 1 ? 96 : 70; return { x: LAYOUT.ANCHO - 18 - (k - i) * (w + 6) + 6, y: LAYOUT.ALTO - 100, w, h: 84 }; };
+// Botones de comprar animales: fila ARRIBA A LA IZQUIERDA (como en Farm Frenzy), sobre la barra de arriba. Cada uno mide 58×52: los 32 de arriba compran, los 20 de abajo venden.
+// Los 3 caben antes del dinero (x 26 a 212) y no tocan los espacios de edificio (empiezan en y = 64).
+export const BOTON_COMPRAR = { x0: 26, y: 9, w: 58, h: 52, paso: 64, alto_compra: 32 };
+export const botonComprar = (i) => ({ x: BOTON_COMPRAR.x0 + i * BOTON_COMPRAR.paso, y: BOTON_COMPRAR.y, w: BOTON_COMPRAR.w, h: BOTON_COMPRAR.h });
 
 const PI2 = Math.PI * 2;
 const acotar = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -58,8 +61,8 @@ function manchas(nEdif) {
   const W = LAYOUT.ANCHO, H = LAYOUT.ALTO;
   const m = [
     { cx: W / 2, cy: CAMPO.y + CAMPO.h / 2 + 6, rx: CAMPO.w / 2 + 34, ry: CAMPO.h / 2 },
-    { cx: W / 2, cy: 118, rx: 74, ry: 26 },                     // bajo el almacén
-    { cx: W / 2, cy: H - 54, rx: 74, ry: 24 },                  // bajo el pozo
+    { cx: W / 2, cy: 124, rx: 74, ry: 26 },                     // bajo el pozo (arriba)
+    { cx: W / 2, cy: H - 54, rx: 74, ry: 24 },                  // bajo el almacén (abajo)
     { cx: CAJAS.camion.x + 58, cy: H - 54, rx: 74, ry: 24 },    // bajo el camión
   ];
   for (let i = 0; i < nEdif; i++) { const r = ranuraEdificio(i); m.push({ cx: r.x + 64, cy: r.y + 66, rx: 86, ry: 50 }); }
@@ -121,7 +124,7 @@ function pintarFondo(ctx, nEdif) {
   // flores y arbustos en el pasto
   for (let i = 0, n = Math.round(70 * area); i < n; i++) {
     const x = S.x + 8 + R() * (S.w - 16), y = S.y + 90 + R() * (S.h - 96);
-    if (enMancha(m, x, y) || (x > W - 200 && y > H - 110)) continue;
+    if (enMancha(m, x, y)) continue;
     ctx.fillStyle = ["#fff", "#ffe05a", "#ff8fb1", "#c9a5ff"][Math.floor(R() * 4)]; ctx.beginPath(); ctx.arc(x, y, 1.8, 0, PI2); ctx.fill();
   }
   for (const [bx, by] of [[62, 372], [112, 392], [742, 322], [700, 306], [44, 316]]) { const x = bx * (W / 800), y = by * (H / 450); if (enMancha(m, x, y)) continue; sombra(ctx, x, y + 8, 22); for (const [dx, dy, r, c] of [[-9, 0, 11, "#3f8f3a"], [8, -2, 12, "#4aa043"], [0, -8, 11, "#58b24c"]]) { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x + dx, y + dy, r, 0, PI2); ctx.fill(); } }
@@ -156,18 +159,23 @@ export function dibujarCasa(ctx, r, id, emoji, alfa = 1) {
   ctx.restore();
 }
 
-// ----- Almacén (jaula alta con cajas), pozo (plataforma con techo de paja) y camión -----
+// ----- Almacén (bodega de madera con cajas), pozo (plataforma con techo de paja) y camión -----
 // c = CAJAS.x. llenado 0..1. El arte ocupa los ~56 de arriba; debajo va el rótulo y al pie la franja ⬆.
+// Bodega: frente de tablas, techo a dos aguas y puerta con tablones en X. Afuera, junto a la pared, se apilan de 0 a 3 cajas según lo lleno que esté.
 export function dibujarAlmacen(ctx, c, llenado) {
-  const cx = c.x + c.w / 2, y0 = c.y + 4, w = 48, h = 46, x0 = cx - w / 2;
-  sombra(ctx, cx, y0 + h + 2, 40, 0.25);
-  ctx.fillStyle = "rgba(60,40,20,.35)"; ctx.fillRect(x0 + 3, y0 + 3, w, h);
-  const filas = Math.round(acotar(llenado, 0, 1) * 3);
-  for (let k = 0; k < filas; k++) { ctx.fillStyle = k % 2 ? "#b9803f" : "#c98f4c"; ctx.fillRect(x0 + 4, y0 + h - 14 * (k + 1) - 1, w - 8, 13); ctx.strokeStyle = "#6e4720"; ctx.lineWidth = 1; ctx.strokeRect(x0 + 4, y0 + h - 14 * (k + 1) - 1, w - 8, 13); }
-  ctx.strokeStyle = "#3b3b42"; ctx.lineWidth = 3; ctx.strokeRect(x0, y0, w, h);
-  ctx.lineWidth = 2; for (let k = 1; k < 5; k++) { ctx.beginPath(); ctx.moveTo(x0 + (w / 5) * k, y0); ctx.lineTo(x0 + (w / 5) * k, y0 + h); ctx.stroke(); }
-  for (let k = 1; k < 4; k++) { ctx.beginPath(); ctx.moveTo(x0, y0 + (h / 4) * k); ctx.lineTo(x0 + w, y0 + (h / 4) * k); ctx.stroke(); }
-  ctx.fillStyle = "#55555e"; ctx.fillRect(x0 - 3, y0 - 5, w + 6, 6);                        // tapa
+  const cx = c.x + c.w / 2, by = c.y + 42, w = 62, h = 26, x0 = cx - w / 2;
+  sombra(ctx, cx + 8, by + 2, 56, 0.25);
+  ctx.fillStyle = "#b9803f"; ctx.fillRect(x0, by - h, w, h);                                                   // frente de tablas
+  ctx.strokeStyle = "rgba(60,30,10,.35)"; ctx.lineWidth = 1;
+  for (let k = 1; k < 6; k++) { ctx.beginPath(); ctx.moveTo(x0 + (w / 6) * k, by - h); ctx.lineTo(x0 + (w / 6) * k, by); ctx.stroke(); }
+  ctx.fillStyle = "rgba(0,0,0,.14)"; ctx.fillRect(x0, by - 5, w, 5);                                           // zócalo
+  ctx.fillStyle = "#a8472f"; ctx.beginPath(); ctx.moveTo(x0 - 7, by - h + 3); ctx.lineTo(cx, by - h - 19); ctx.lineTo(x0 + w + 7, by - h + 3); ctx.closePath(); ctx.fill(); // techo a dos aguas
+  ctx.strokeStyle = "#6f2c1c"; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = "#7a4d22"; ctx.fillRect(cx - 11, by - 19, 22, 19);                                           // puerta
+  ctx.strokeStyle = "#e6c48a"; ctx.lineWidth = 1.5; ctx.strokeRect(cx - 11, by - 19, 22, 19);
+  ctx.beginPath(); ctx.moveTo(cx - 11, by - 19); ctx.lineTo(cx + 11, by); ctx.moveTo(cx + 11, by - 19); ctx.lineTo(cx - 11, by); ctx.stroke();
+  const filas = Math.round(acotar(llenado, 0, 1) * 3);                                                          // cajas apiladas
+  for (let k = 0; k < filas; k++) { const y = by - 12 * (k + 1); ctx.fillStyle = k % 2 ? "#b9803f" : "#d19a55"; ctx.fillRect(x0 + w + 4, y, 15, 12); ctx.strokeStyle = "#6e4720"; ctx.lineWidth = 1; ctx.strokeRect(x0 + w + 4, y, 15, 12); }
 }
 export function dibujarPozo(ctx, c, agua, cap, llenando) {
   const cx = c.x + c.w / 2, by = c.y + 42;
@@ -192,6 +200,33 @@ export function dibujarCamion(ctx, c, listo, enCamino) {
   ctx.fillStyle = "#bfe3f7"; ctx.fillRect(cx + 24, by - 20, 10, 9);
   for (const x of [cx - 26, cx + 22]) { ctx.fillStyle = "#222"; ctx.beginPath(); ctx.arc(x, by - 2, 8, 0, PI2); ctx.fill(); ctx.fillStyle = "#bbb"; ctx.beginPath(); ctx.arc(x, by - 2, 3, 0, PI2); ctx.fill(); }
   ctx.restore();
+}
+// ----- Pasto: una ZONA de matas (no una mata suelta) y los puntitos de hambre -----
+// p = { x, y, v (usos que le quedan), crece (0..1: brota tras echarle agua) }. La zona es un óvalo de matas; al gastarse usos van desapareciendo matas (v / usos).
+const MATAS = [[0, 0], [-24, -5], [24, -5], [-13, 9], [13, 9], [0, -13], [-33, 6], [33, 6], [0, 16]];   // posiciones relativas (9 matas)
+export function dibujarPasto(ctx, p, usosMax = 3) {
+  const k = acotar(p.crece, 0, 1), n = Math.max(1, Math.ceil(MATAS.length * acotar(p.v / usosMax, 0, 1)));
+  ctx.save();
+  ctx.fillStyle = "rgba(64,140,40,.5)"; ctx.beginPath(); ctx.ellipse(p.x, p.y + 4, 40 * k, 21 * k, 0, 0, PI2); ctx.fill();   // suelo verde bajo las matas
+  ctx.lineCap = "round";
+  for (let i = 0; i < n; i++) {
+    const [dx, dy] = MATAS[i], x = p.x + dx * k, y = p.y + dy * k, a = 13 * k;
+    ctx.strokeStyle = "#2f8a2e"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(x - 4, y + 2); ctx.lineTo(x - 7, y - a * 0.8); ctx.moveTo(x, y + 2); ctx.lineTo(x, y - a); ctx.moveTo(x + 4, y + 2); ctx.lineTo(x + 7, y - a * 0.8); ctx.stroke();
+    ctx.strokeStyle = "#7bd24f"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x - 1, y + 2); ctx.lineTo(x - 3, y - a * 0.7); ctx.moveTo(x + 2, y + 2); ctx.lineTo(x + 3, y - a * 0.85); ctx.stroke();
+  }
+  ctx.restore();
+}
+// Puntitos de comida bajo un animal: llenos = cuántos quedan (0 a total). Verdes mientras no tiene hambre; rojos con hambre (≤ hambre).
+export function dibujarPuntos(ctx, x, y, llenos, total = 6, hambre = 2) {
+  const color = llenos <= hambre ? "#ff6a4d" : "#7be05a";
+  for (let i = 0; i < total; i++) {
+    const cx = x + (i - (total - 1) / 2) * 7;
+    ctx.beginPath(); ctx.arc(cx, y, 2.6, 0, PI2);
+    if (i < llenos) { ctx.fillStyle = color; ctx.fill(); }
+    ctx.lineWidth = 1; ctx.strokeStyle = i < llenos ? "rgba(0,0,0,.45)" : "rgba(255,255,255,.75)"; ctx.stroke();
+  }
 }
 // Rótulo oscuro con texto (estado de un edificio, carga, agua…)
 export function rotulo(ctx, texto, cx, cy, color = "#fff4c2", tam = 12) {

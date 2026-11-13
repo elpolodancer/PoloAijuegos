@@ -4,7 +4,16 @@ export const ANCHO = 800, ALTO = 450;   // tamaño lógico del escenario ORIGINA
 export const MAX_AGUA = 3;              // cargas de agua del pozo en su nivel base (= MEJORAS.pozo.capacidad[0]); con las mejoras la capacidad sale de MEJORAS.pozo
 export const SEG_POZO = 4;              // segundos que tarda el pozo en llenarse (siempre hasta su capacidad; no cambia con las mejoras)
 export const SEG_SUELO = 12;            // segundos que dura un producto en el suelo antes de desaparecer (decidido: más ágil que el original)
-export const MAX_PASTO = 16;            // matas de pasto a la vez
+export const MAX_PASTO = 12;            // zonas de pasto a la vez (cada toque con agua planta UNA zona = un área de matas; antes eran 16 matas sueltas)
+// HAMBRE y PASTO (sesión 7). Cada animal tiene 6 puntitos de comida bajo sus patas. Bajan de 6 a 2 en SEG_HAMBRE segundos; al llegar a 2 el animal tiene hambre y deja de
+// pasear al azar: CORRE (velocidad × CORRE) a la zona de pasto libre más cercana. Cada USOS_PASTO usos se acaba la zona; cada uso llena al animal (vuelve a 6 puntitos).
+// Si no hay pasto los puntitos siguen bajando hasta 0: ahí se queda quieto (😢) y su producción se pausa. Los números son de Polo (15 s, 6 → 2 puntitos, 3 usos); CORRE y SEG_CRECE_PASTO son míos.
+export const PUNTOS_COMIDA = 6;         // puntitos de un animal lleno
+export const PUNTOS_HAMBRE = 2;         // con 2 puntitos o menos va a comer corriendo
+export const SEG_HAMBRE = 15;           // segundos que tardan en bajar de PUNTOS_COMIDA a PUNTOS_HAMBRE (igual para todos los animales)
+export const USOS_PASTO = 3;            // veces que se puede comer de una zona de pasto (por animales distintos o el mismo)
+export const SEG_CRECE_PASTO = 2;       // segundos que tarda en crecer la zona de pasto tras echarle agua (hasta entonces nadie puede comer de ella)
+export const CORRE = 2.2;               // un animal con hambre que va hacia el pasto corre a esta vez su velocidad normal
 export const CAPACIDAD_ALMACEN = 30;    // PESO que cabe en el almacén (nivel base)
 export const CAPACIDAD_CAMION = 10;     // PESO que lleva el camión por viaje (nivel base)
 export const VENTA_ANIMAL = 0.5;        // al vender un animal te pagan esta fracción de su precio (propuesta mía; ajustar aquí)
@@ -27,15 +36,14 @@ export const PRODUCTOS = {
   // Faltan receta y peso confirmado: queso / mantequilla (vaca, ~$100,000, peso 80), pastel de pan ($300), ropa.
 };
 
-// Animales. Nunca mueren de hambre. segHambre = segundos produciendo hasta tener hambre; con hambre y SIN pasto se quedan quietos y su ciclo se PAUSA.
-// segCiclo = segundos de producción (solo corren mientras no tienen hambre); mordidas = mordidas de pasto para quedar llenos (cada pasto da 4; si un
-// pasto se acaba a mitad de comida, el animal sigue en otro sin perder lo comido); precio y max = comprar dentro del nivel; tam = tamaño del emoji.
+// Animales. Nunca mueren de hambre (ver HAMBRE y PASTO arriba: 6 puntitos, 15 s hasta tener hambre, 3 usos por zona de pasto).
+// segCiclo = segundos de producción (solo corren mientras el animal tenga algún puntito de comida); precio y max = comprar dentro del nivel; tam = tamaño del emoji; vel = velocidad al pasear.
 // PRECIOS de Farm Frenzy 1: pato/gallina $100, oveja $1,000, vaca $10,000 (se venden a la mitad). El pavo se QUITÓ porque no existe en la versión 1 (animales de la versión 1: gallina, oveja y vaca). Ciclo y producto de oveja y vaca vienen de la conversación con Gemini (sin confirmar contra el original). Mordidas, velocidad, max, tam y el emoji son MÍOS:
-// cada animal come 2 veces por hambre (segHambre = 2 × segCiclo) y los grandes comen más y caminan más lento. Se ajustan aquí.
+// Los grandes caminan más lento. Se ajustan aquí.
 export const ANIMALES = {
-  gallina: { nombre: "Gallina", emoji: "🐔", precio: 100,    max: 12, producto: "huevo",     mordidas: 2, segHambre: 10, segCiclo: 5,  vel: 34, tam: 30 },
-  oveja:   { nombre: "Oveja",   emoji: "🐑", precio: 1000,   max: 6,  producto: "lana",      mordidas: 4, segHambre: 24, segCiclo: 12, vel: 26, tam: 34 },
-  vaca:    { nombre: "Vaca",    emoji: "🐄", precio: 10000,  max: 4,  producto: "leche",     mordidas: 5, segHambre: 40, segCiclo: 20, vel: 22, tam: 38 },
+  gallina: { nombre: "Gallina", emoji: "🐔", precio: 100,    max: 12, producto: "huevo",     segCiclo: 5,  vel: 34, tam: 30 },
+  oveja:   { nombre: "Oveja",   emoji: "🐑", precio: 1000,   max: 6,  producto: "lana",      segCiclo: 12, vel: 26, tam: 34 },
+  vaca:    { nombre: "Vaca",    emoji: "🐄", precio: 10000,  max: 4,  producto: "leche",     segCiclo: 20, vel: 22, tam: 38 },
 };
 
 // Osos, perro y gato. Un nivel activa los osos con NIVELES[n].osos = { tipos: ["oso", ...] } (opcional: primero = segundos hasta el primero) y el gato con gato: true;
