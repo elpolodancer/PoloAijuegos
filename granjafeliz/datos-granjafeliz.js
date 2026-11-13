@@ -101,14 +101,14 @@ export const MEJORAS = {
 export const NIVELES = {
   // ===== Niveles 1-10 = niveles 1-10 de Farm Frenzy 1 (guía de Cyberly): mismas metas, mismo dinero y animales de inicio, mismos tiempos de oro / plata. =====
   // «Pato» = gallina, «cupcake» = pastelito (pan), «egg solids» = polvo de huevo. Los osos del original caen en momentos fijos; aquí el primero cae en «primero» y luego cada 35-50 s.
-  // El original compra las plantas en una tienda con estrellas; aquí se construyen dentro del nivel (planta $200, panadería $400). CALIBRACIÓN APROXIMADA: el original da oro/plata muy holgados para este juego (más ágil: camión 6 s, producto 12 s en el suelo). Niveles 5-8: tiempos del original; 1-4, 9 y 10: apretados según un jugador automático (ver README). Falta probarlos con personas.
-  1: { metas: [{ tipo: "producto", id: "huevo", n: 4 }], dineroInicial: 170, aguaInicial: 3, animales: { gallina: 2 }, perro: false, oroSeg: 40, plataSeg: 90,
+  // El original compra las plantas en una tienda con estrellas; aquí se construyen dentro del nivel (planta $200, panadería $400). CALIBRACIÓN APROXIMADA: el original da oro/plata muy holgados para este juego (más ágil: camión 6 s, producto 12 s en el suelo). Tiempos de oro/plata (segundos): niveles 1, 3 y 10 = originales de la guía (60/120, 180/240, 210/270); 5-8 ya eran los del original; 2, 4 y 9 son ESTIMADOS (la guía no los trae) entre los vecinos. Ya no se calibran con el jugador automático, que es más rápido que una persona: falta probarlos con personas.
+  1: { metas: [{ tipo: "producto", id: "huevo", n: 4 }], dineroInicial: 170, aguaInicial: 3, animales: { gallina: 2 }, perro: false, oroSeg: 60, plataSeg: 120,
        pista: "Toca el pozo y luego el campo para plantar pasto. Toca los huevos para recogerlos. Compra otra gallina." },
-  2: { metas: [{ tipo: "producto", id: "huevo", n: 10 }, { tipo: "animal", id: "gallina", n: 5 }], dineroInicial: 190, aguaInicial: 3, animales: { gallina: 2 }, osos: { tipos: ["oso"], horario: [31], cada: [30, 45] }, perro: false, oroSeg: 70, plataSeg: 130,
+  2: { metas: [{ tipo: "producto", id: "huevo", n: 10 }, { tipo: "animal", id: "gallina", n: 5 }], dineroInicial: 190, aguaInicial: 3, animales: { gallina: 2 }, osos: { tipos: ["oso"], horario: [31], cada: [30, 45] }, perro: false, oroSeg: 120, plataSeg: 180,
        pista: "Toca el camión para vender. Si cae un oso, tócalo varias veces para enjaularlo; la jaula también se vende." },
-  3: { metas: [{ tipo: "producto", id: "polvo", n: 4 }, { tipo: "dinero", n: 300 }], dineroInicial: 190, aguaInicial: 3, animales: { gallina: 3 }, edificios: ["panaderia"], osos: { tipos: ["oso"], horario: [50, 100], cada: [40, 55] }, perro: false, oroSeg: 100, plataSeg: 160,
+  3: { metas: [{ tipo: "producto", id: "polvo", n: 4 }, { tipo: "dinero", n: 300 }], dineroInicial: 190, aguaInicial: 3, animales: { gallina: 3 }, edificios: ["panaderia"], osos: { tipos: ["oso"], horario: [50, 100], cada: [40, 55] }, perro: false, oroSeg: 180, plataSeg: 240,
        pista: "Construye la planta de polvo ($200) tocando su espacio vacío. Luego tócala para convertir huevos en polvo." },
-  4: { metas: [{ tipo: "animal", id: "gallina", n: 2 }, { tipo: "producto", id: "polvo", n: 10 }, { tipo: "dinero", n: 500 }], dineroInicial: 290, aguaInicial: 3, animales: { gallina: 1 }, edificios: ["panaderia"], osos: { tipos: ["oso"], horario: [21, 105, 126, 153], cada: [30, 45] }, perro: false, oroSeg: 150, plataSeg: 220,
+  4: { metas: [{ tipo: "animal", id: "gallina", n: 2 }, { tipo: "producto", id: "polvo", n: 10 }, { tipo: "dinero", n: 500 }], dineroInicial: 290, aguaInicial: 3, animales: { gallina: 1 }, edificios: ["panaderia"], osos: { tipos: ["oso"], horario: [21, 105, 126, 153], cada: [30, 45] }, perro: false, oroSeg: 210, plataSeg: 270,
        pista: "La franja ⬆ de la planta la mejora: procesa 2 huevos de un toque." },
   5: { metas: [{ tipo: "producto", id: "pan", n: 3 }, { tipo: "animal", id: "gallina", n: 6 }], dineroInicial: 190, aguaInicial: 3, animales: { gallina: 2 }, edificios: ["panaderia", "horno"], osos: { tipos: ["oso"], horario: [8, 23, 23, 53, 96, 96, 126], cada: [20, 30] }, perro: false, oroSeg: 150, plataSeg: 240,
        pista: "Construye también la panadería ($400): convierte el polvo en pastelitos." },
@@ -117,9 +117,9 @@ export const NIVELES = {
        pista: "Ahora puedes comprar una oveja ($1,000): su lana vale más que los huevos." },
   8: { metas: [{ tipo: "producto", id: "pan", n: 2 }, { tipo: "animal", id: "gallina", n: 7 }], dineroInicial: 20, aguaInicial: 3, animales: { oveja: 1 }, comprables: ["gallina", "oveja"], edificios: ["panaderia", "horno"], osos: { tipos: ["oso"], horario: [12, 12], cada: [18, 30] }, perro: false, oroSeg: 170, plataSeg: 240,
        pista: "Empiezas casi sin dinero. Con el botón 💲 puedes vender la oveja para juntar dinero." },
-  9: { metas: [{ tipo: "animal", id: "oveja", n: 1 }], dineroInicial: 220, aguaInicial: 3, animales: {}, comprables: ["gallina", "oveja"], edificios: ["panaderia", "horno"], regalo: ["gato"], osos: { tipos: ["oso"], horario: [5, 15, 31, 31], cada: [20, 30] }, perro: false, oroSeg: 200, plataSeg: 280,
+  9: { metas: [{ tipo: "animal", id: "oveja", n: 1 }], dineroInicial: 220, aguaInicial: 3, animales: {}, comprables: ["gallina", "oveja"], edificios: ["panaderia", "horno"], regalo: ["gato"], osos: { tipos: ["oso"], horario: [5, 15, 31, 31], cada: [20, 30] }, perro: false, oroSeg: 210, plataSeg: 300,
        pista: "El gato recoge los productos del suelo por ti. Junta $1,000 para comprar la oveja." },
-  10: { metas: [{ tipo: "producto", id: "huevo", n: 20 }, { tipo: "producto", id: "polvo", n: 5 }, { tipo: "animal", id: "gallina", n: 8 }], dineroInicial: 40, aguaInicial: 3, animales: { gallina: 6 }, edificios: ["panaderia"], osos: { tipos: ["oso"], horario: [17, 17], cada: [25, 40] }, perro: false, oroSeg: 120, plataSeg: 200,
+  10: { metas: [{ tipo: "producto", id: "huevo", n: 20 }, { tipo: "producto", id: "polvo", n: 5 }, { tipo: "animal", id: "gallina", n: 8 }], dineroInicial: 40, aguaInicial: 3, animales: { gallina: 6 }, edificios: ["panaderia"], osos: { tipos: ["oso"], horario: [17, 17], cada: [25, 40] }, perro: false, oroSeg: 210, plataSeg: 270,
        pista: "Empiezas con 6 gallinas y casi sin dinero: vende jaulas de oso y gallinas (💲) para construir la planta." },
 };
 
