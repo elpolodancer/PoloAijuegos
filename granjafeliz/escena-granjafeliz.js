@@ -1,11 +1,21 @@
 // Ruta: granjafeliz/escena-granjafeliz.js
 // Aspecto de Granja feliz (cámara de 3/4 como Farm Frenzy): terreno de tierra rodeado de pasto, edificios en las orillas, almacén arriba al centro, pozo
 // y camión abajo. SOLO dibuja y define posiciones: no usa document, Firebase ni la lógica del juego (se puede probar en Node con node-canvas).
-// El escenario es de 800×450 (igual que D.ANCHO × D.ALTO). Todo se mueve cambiando las constantes de abajo.
+// TAMAÑOS: la granja puede ser de 3 tamaños (TAMANOS): «pequeno» = el escenario ORIGINAL de 800×450 con 4 espacios de edificio (el de los niveles 1-10 de México),
+// «mediano» 960×540 con 6 y «grande» 1120×630 con 10. Todos 16:9. usarTamano(id) reacomoda TODO (ESCENA, CAMPO, CAJAS, LAYOUT, espacios y botones) cambiando los
+// objetos en el sitio, así que quien los importó los sigue viendo al día. Hay que llamarlo antes de empezar una partida (juego-granjafeliz.js → aplicarTamano).
 //   ESCENA   el cuadro de pasto con esquinas redondas (el resto del canvas queda transparente: se ve la madera del portal)
 //   CAMPO    por dónde caminan animales y osos y dónde se planta pasto (la parte central; los edificios quedan fuera)
 //   CAJAS    almacén (arriba al centro), pozo (abajo al centro), camión (abajo a la izquierda): arte arriba + franja ⬆ de 28 al pie
-//   ranuraEdificio(i)   4 espacios: 0 izquierda-arriba, 1 derecha-arriba, 2 izquierda-abajo, 3 derecha-abajo (arte arriba + franja ⬆ de 26 al pie)
+//   ranuraEdificio(i)   espacios: i par = columna izquierda, i impar = columna derecha, de arriba hacia abajo (0-1 primera fila, 2-3 segunda, 4-5 tercera, 6-7 cuarta);
+//                       8 y 9 (solo en «grande») = arriba, a los lados del almacén (arte arriba + franja ⬆ de 26 al pie)
+export const TAMANOS = {
+  pequeno: { nombre: "Original", ANCHO: 800,  ALTO: 450, edificios: 4 },
+  mediano: { nombre: "Mediano",  ANCHO: 960,  ALTO: 540, edificios: 6 },
+  grande:  { nombre: "Grande",   ANCHO: 1120, ALTO: 630, edificios: 10 },
+};
+export const ORDEN_TAMANOS = ["pequeno", "mediano", "grande"];
+export const LAYOUT = { id: "pequeno", ANCHO: 800, ALTO: 450, edificios: 4 };   // tamaño actual (se actualiza en el sitio)
 export const ESCENA = { x: 20, y: 56, w: 770, h: 384 };
 export const CAMPO = { x: 172, y: 100, w: 456, h: 300 };
 export const CAJAS = {
@@ -13,9 +23,24 @@ export const CAJAS = {
   pozo:    { x: 342, y: 350, w: 116, h: 90 },   // la plataforma con techo de paja de abajo
   camion:  { x: 176, y: 350, w: 116, h: 90 },
 };
-export const ranuraEdificio = (i) => ({ x: i % 2 ? 654 : 28, y: i < 2 ? 64 : 190, w: 128, h: 104 });
+export function usarTamano(id) {
+  const clave = TAMANOS[id] ? id : "pequeno", T = TAMANOS[clave], W = T.ANCHO, H = T.ALTO;
+  Object.assign(LAYOUT, { id: clave, ANCHO: W, ALTO: H, edificios: T.edificios });
+  Object.assign(ESCENA, { x: 20, y: 56, w: W - 30, h: H - 66 });
+  const campoY = T.edificios > 8 ? 176 : 100;   // con espacios arriba a los lados del almacén, el campo empieza más abajo
+  Object.assign(CAMPO, { x: 172, y: campoY, w: W - 344, h: H - 50 - campoY });
+  Object.assign(CAJAS.almacen, { x: W / 2 - 58, y: 60 });
+  Object.assign(CAJAS.pozo, { x: W / 2 - 58, y: H - 100 });
+  Object.assign(CAJAS.camion, { x: 176, y: H - 100 });
+  return LAYOUT;
+}
+export const ranuraEdificio = (i) => {
+  const W = LAYOUT.ANCHO, paso = LAYOUT.id === "pequeno" ? 126 : 120;   // separación entre filas (el original: 126)
+  if (i >= 8) return { x: i === 8 ? W / 2 - 58 - 16 - 128 : W / 2 + 58 + 16, y: 64, w: 128, h: 104 };
+  return { x: i % 2 ? W - 146 : 28, y: 64 + paso * Math.floor(i / 2), w: 128, h: 104 };
+};
 // Botones de comprar animales: fila en la esquina de abajo a la derecha (como el panel de la esquina del original)
-export const botonComprar = (i, k) => { const w = k === 1 ? 96 : 70; return { x: 782 - (k - i) * (w + 6) + 6, y: 350, w, h: 84 }; };
+export const botonComprar = (i, k) => { const w = k === 1 ? 96 : 70; return { x: LAYOUT.ANCHO - 18 - (k - i) * (w + 6) + 6, y: LAYOUT.ALTO - 100, w, h: 84 }; };
 
 const PI2 = Math.PI * 2;
 const acotar = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -30,11 +55,12 @@ export function sombra(ctx, x, y, rx, alfa = 0.22) { ctx.fillStyle = "rgba(25,45
 // ----- Terreno -----
 // Manchas de tierra (elipses) que se juntan en una sola: la central y una por cada edificio, el almacén, el pozo y el camión.
 function manchas(nEdif) {
+  const W = LAYOUT.ANCHO, H = LAYOUT.ALTO;
   const m = [
-    { cx: 400, cy: 256, rx: 262, ry: 150 },
-    { cx: 400, cy: 118, rx: 74, ry: 26 },    // bajo el almacén
-    { cx: 400, cy: 396, rx: 74, ry: 24 },    // bajo el pozo
-    { cx: 234, cy: 396, rx: 74, ry: 24 },    // bajo el camión
+    { cx: W / 2, cy: CAMPO.y + CAMPO.h / 2 + 6, rx: CAMPO.w / 2 + 34, ry: CAMPO.h / 2 },
+    { cx: W / 2, cy: 118, rx: 74, ry: 26 },                     // bajo el almacén
+    { cx: W / 2, cy: H - 54, rx: 74, ry: 24 },                  // bajo el pozo
+    { cx: CAJAS.camion.x + 58, cy: H - 54, rx: 74, ry: 24 },    // bajo el camión
   ];
   for (let i = 0; i < nEdif; i++) { const r = ranuraEdificio(i); m.push({ cx: r.x + 64, cy: r.y + 66, rx: 86, ry: 50 }); }
   return m;
@@ -45,30 +71,30 @@ function trazarManchas(ctx, m, dy = 0) { ctx.beginPath(); for (const e of m) { c
 let cache = null, cacheClave = "";
 // Dibuja el fondo completo (cielo, colinas, valla, pasto, tierra, orilla con matas, sombreado de bordes). nEdif = cuántos espacios de edificio usa el nivel.
 export function dibujarFondo(ctx, nEdif = 0) {
-  const clave = String(nEdif);
+  const W = LAYOUT.ANCHO, H = LAYOUT.ALTO, clave = LAYOUT.id + ":" + nEdif;
   try { // el fondo no cambia: se pinta una vez en un lienzo aparte (a doble resolución) y luego solo se copia
     if (!cache || cacheClave !== clave) {
-      cache = document.createElement("canvas"); cache.width = 1600; cache.height = 900; cacheClave = clave;
+      cache = document.createElement("canvas"); cache.width = W * 2; cache.height = H * 2; cacheClave = clave;
       const c = cache.getContext("2d"); c.scale(2, 2); pintarFondo(c, nEdif);
     }
-    ctx.drawImage(cache, 0, 0, 800, 450);
+    ctx.drawImage(cache, 0, 0, W, H);
   } catch (e) { pintarFondo(ctx, nEdif); }
 }
 function pintarFondo(ctx, nEdif) {
-  const S = ESCENA, R = semilla(7), m = manchas(nEdif);
+  const S = ESCENA, R = semilla(7), m = manchas(nEdif), W = LAYOUT.ANCHO, H = LAYOUT.ALTO, kx = S.w / 770, area = (W * H) / (800 * 450);
   ctx.save();
   rr(ctx, S.x, S.y, S.w, S.h, 18); ctx.clip();
   // cielo y nubes
   let g = ctx.createLinearGradient(0, S.y, 0, S.y + 50); g.addColorStop(0, "#86ccfb"); g.addColorStop(1, "#d9f2ff");
   ctx.fillStyle = g; ctx.fillRect(S.x, S.y, S.w, 52);
   ctx.fillStyle = "rgba(255,255,255,.9)";
-  for (const [cx, cy, r] of [[110, 70, 15], [300, 66, 11], [585, 72, 17], [735, 68, 12]]) for (const [dx, k] of [[-0.9, 0.7], [0, 1], [0.9, 0.75]]) { ctx.beginPath(); ctx.ellipse(cx + dx * r, cy, r * k * 1.4, r * k * 0.7, 0, 0, PI2); ctx.fill(); }
+  for (const [cx, cy, r] of [[110, 70, 15], [300, 66, 11], [585, 72, 17], [735, 68, 12]]) for (const [dx, k] of [[-0.9, 0.7], [0, 1], [0.9, 0.75]]) { ctx.beginPath(); ctx.ellipse(cx * (W / 800) + dx * r, cy, r * k * 1.4, r * k * 0.7, 0, 0, PI2); ctx.fill(); }
   // colinas lejanas
-  ctx.fillStyle = "#79b650"; ctx.beginPath(); ctx.moveTo(S.x, S.y + 56); ctx.quadraticCurveTo(S.x + 120, S.y + 30, S.x + 250, S.y + 50); ctx.quadraticCurveTo(S.x + 400, S.y + 66, S.x + 540, S.y + 40); ctx.quadraticCurveTo(S.x + 680, S.y + 22, S.x + S.w, S.y + 48); ctx.lineTo(S.x + S.w, S.y + 70); ctx.lineTo(S.x, S.y + 70); ctx.fill();
+  ctx.fillStyle = "#79b650"; ctx.beginPath(); ctx.moveTo(S.x, S.y + 56); ctx.quadraticCurveTo(S.x + 120 * kx, S.y + 30, S.x + 250 * kx, S.y + 50); ctx.quadraticCurveTo(S.x + 400 * kx, S.y + 66, S.x + 540 * kx, S.y + 40); ctx.quadraticCurveTo(S.x + 680 * kx, S.y + 22, S.x + S.w, S.y + 48); ctx.lineTo(S.x + S.w, S.y + 70); ctx.lineTo(S.x, S.y + 70); ctx.fill();
   // pasto
   g = ctx.createLinearGradient(0, S.y + 50, 0, S.y + S.h); g.addColorStop(0, "#82c752"); g.addColorStop(1, "#5aa63a");
   ctx.fillStyle = g; ctx.fillRect(S.x, S.y + 56, S.w, S.h - 56);
-  for (let i = 0; i < 26; i++) { // manchas más claras y más oscuras
+  for (let i = 0, n = Math.round(26 * area); i < n; i++) { // manchas más claras y más oscuras
     const x = S.x + R() * S.w, y = S.y + 60 + R() * (S.h - 60), r = 30 + R() * 50, c = R() < 0.5 ? "rgba(150,215,90,.30)" : "rgba(40,120,40,.20)";
     const rg = ctx.createRadialGradient(x, y, 0, x, y, r); rg.addColorStop(0, c); rg.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = rg; ctx.fillRect(x - r, y - r, r * 2, r * 2);
   }
@@ -81,7 +107,7 @@ function pintarFondo(ctx, nEdif) {
   g = ctx.createRadialGradient(400, 250, 20, 400, 250, 290); g.addColorStop(0, "#e2bd88"); g.addColorStop(1, "#c99a63");
   ctx.fillStyle = g; trazarManchas(ctx, m); ctx.fill();
   ctx.save(); trazarManchas(ctx, m); ctx.clip(); // textura de la tierra
-  for (let i = 0; i < 260; i++) { const x = S.x + R() * S.w, y = S.y + 60 + R() * (S.h - 60); ctx.fillStyle = R() < 0.5 ? "rgba(120,80,40,.20)" : "rgba(255,235,190,.22)"; ctx.beginPath(); ctx.ellipse(x, y, 1.5 + R() * 3, 0.8 + R() * 1.4, 0, 0, PI2); ctx.fill(); }
+  for (let i = 0, n = Math.round(260 * area); i < n; i++) { const x = S.x + R() * S.w, y = S.y + 60 + R() * (S.h - 60); ctx.fillStyle = R() < 0.5 ? "rgba(120,80,40,.20)" : "rgba(255,235,190,.22)"; ctx.beginPath(); ctx.ellipse(x, y, 1.5 + R() * 3, 0.8 + R() * 1.4, 0, 0, PI2); ctx.fill(); }
   ctx.restore();
   // matas de pasto en la orilla de la tierra
   ctx.strokeStyle = "#3f8a2e"; ctx.lineWidth = 2; ctx.lineCap = "round";
@@ -93,12 +119,12 @@ function pintarFondo(ctx, nEdif) {
   // lecho de pasto detrás de cada edificio
   for (let i = 0; i < nEdif; i++) { const r = ranuraEdificio(i); ctx.fillStyle = "rgba(105,180,60,.95)"; ctx.beginPath(); ctx.ellipse(r.x + 64, r.y + 34, 70, 20, 0, 0, PI2); ctx.fill(); }
   // flores y arbustos en el pasto
-  for (let i = 0; i < 70; i++) {
+  for (let i = 0, n = Math.round(70 * area); i < n; i++) {
     const x = S.x + 8 + R() * (S.w - 16), y = S.y + 90 + R() * (S.h - 96);
-    if (enMancha(m, x, y) || (x > 600 && y > 340)) continue;
+    if (enMancha(m, x, y) || (x > W - 200 && y > H - 110)) continue;
     ctx.fillStyle = ["#fff", "#ffe05a", "#ff8fb1", "#c9a5ff"][Math.floor(R() * 4)]; ctx.beginPath(); ctx.arc(x, y, 1.8, 0, PI2); ctx.fill();
   }
-  for (const [x, y] of [[62, 372], [112, 392], [742, 322], [700, 306], [44, 316]]) { if (enMancha(m, x, y)) continue; sombra(ctx, x, y + 8, 22); for (const [dx, dy, r, c] of [[-9, 0, 11, "#3f8f3a"], [8, -2, 12, "#4aa043"], [0, -8, 11, "#58b24c"]]) { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x + dx, y + dy, r, 0, PI2); ctx.fill(); } }
+  for (const [bx, by] of [[62, 372], [112, 392], [742, 322], [700, 306], [44, 316]]) { const x = bx * (W / 800), y = by * (H / 450); if (enMancha(m, x, y)) continue; sombra(ctx, x, y + 8, 22); for (const [dx, dy, r, c] of [[-9, 0, 11, "#3f8f3a"], [8, -2, 12, "#4aa043"], [0, -8, 11, "#58b24c"]]) { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x + dx, y + dy, r, 0, PI2); ctx.fill(); } }
   // sombreado de los bordes
   g = ctx.createRadialGradient(S.x + S.w / 2, S.y + S.h / 2 + 20, S.h * 0.38, S.x + S.w / 2, S.y + S.h / 2 + 20, S.w * 0.62); g.addColorStop(0, "rgba(0,30,0,0)"); g.addColorStop(1, "rgba(0,30,0,.34)");
   ctx.fillStyle = g; ctx.fillRect(S.x, S.y, S.w, S.h);

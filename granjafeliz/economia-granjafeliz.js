@@ -5,7 +5,7 @@
 // - Cada nivel guarda su MEJOR cantidad de estrellas (0 = sin pasar).
 // - Monedas por nivel según las estrellas: 1★ = 15, 2★ = 30, 3★ = 45. Nunca más de 45 por nivel: si repites y mejoras, solo se paga la
 //   diferencia (de 1★ a 3★ pagan 30 más). Repetir sin mejorar no da nada, así no se puede «cultivar» monedas.
-// - El Modo libre NO da monedas ni estrellas (estándar del portal, sección 4A de ESTANDARES-juegos.md). Solo guarda una MARCA por dificultad en «libre»
+// - El Modo libre NO da monedas ni estrellas (estándar del portal, sección 4A de ESTANDARES-juegos.md). Solo guarda una MARCA por dificultad (y por modo y tamaño de granja) en «libre»
 //   (lo máximo vendido en una partida; registrarLibre). Va en el mismo progreso, así se sincroniza con la cuenta; si no hay marcas, «libre» no se guarda.
 // - Las monedas ganadas NO se guardan como número: salen de las estrellas (suma de pagos). Así, al unir el progreso de dos aparatos
 //   no se pierden monedas ganadas en cada uno. Solo se guarda lo GASTADO (para la tienda/boosts que vengan).
@@ -19,6 +19,9 @@ export const TOTAL_NIVELES = 22600;                   // 226 etapas × 100 (igua
 export const MONEDAS_POR_ESTRELLAS = [0, 15, 30, 45]; // índice = estrellas
 export const MONEDAS_MIN = 15, MONEDAS_MAX = 45;
 const MAX_MARCA = 1e12;                               // tope sensato de una marca del modo libre
+// Clave de una marca del modo libre. Juego original + tamaño Original = solo la dificultad («muyfacil», «facil»…: las marcas que ya existían); las demás combinaciones
+// llevan modo, tamaño y dificultad («polo_grande_normal», «original_mediano_facil»): cada una tiene su propia marca (ver claveLibre en juego-granjafeliz.js).
+const CLAVE_LIBRE = /^[a-z0-9_]{1,40}$/;
 
 const entero = (v) => Math.floor(Number(v)) || 0;
 const acotar = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -39,7 +42,7 @@ function limpiar(p) {
     if (n >= 1 && n <= TOTAL_NIVELES && s > 0) e[n] = s;
   }
   const libre = {};
-  for (const k in (p && p.libre) || {}) { const m = entero(p.libre[k]); if (/^[a-z]{1,20}$/.test(k) && m > 0) libre[k] = Math.min(m, MAX_MARCA); }
+  for (const k in (p && p.libre) || {}) { const m = entero(p.libre[k]); if (CLAVE_LIBRE.test(k) && m > 0) libre[k] = Math.min(m, MAX_MARCA); }
   return { e, gastado: Math.max(0, entero(p && p.gastado)), libre, t: Number(p && p.t) || 0 };
 }
 // Lo que se guarda: la misma forma de siempre (e, gastado, t) y «libre» solo si ya hay marcas
@@ -83,7 +86,7 @@ export const mejorLibre = (id, p = leerProgreso()) => p.libre[id] || 0;
 // Anota la marca si supera a la guardada. Devuelve { mejor, record } (record = true si esta venta la superó).
 export function registrarLibre(id, vendido) {
   const n = acotar(entero(vendido), 0, MAX_MARCA);
-  if (!/^[a-z]{1,20}$/.test(String(id))) return { mejor: 0, record: false };
+  if (!CLAVE_LIBRE.test(String(id))) return { mejor: 0, record: false };
   const p = leerProgreso(), antes = p.libre[id] || 0;
   if (n <= antes) return { mejor: antes, record: false };
   p.libre[id] = n; guardar(p);

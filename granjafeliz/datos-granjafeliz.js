@@ -1,6 +1,6 @@
 // Ruta: granjafeliz/datos-granjafeliz.js
 // Datos del juego (sin document): productos, animales, edificios, mejoras y niveles. Para agregar algo nuevo se agrega aquí; ver README-granjafeliz.md.
-export const ANCHO = 800, ALTO = 450;   // tamaño lógico del escenario (horizontal, 16:9)
+export const ANCHO = 800, ALTO = 450;   // tamaño lógico del escenario ORIGINAL (horizontal, 16:9). Los otros tamaños de granja (mediano, grande) están en TAMANOS de escena-granjafeliz.js
 export const MAX_AGUA = 3;              // cargas de agua del pozo en su nivel base (= MEJORAS.pozo.capacidad[0]); con las mejoras la capacidad sale de MEJORAS.pozo
 export const SEG_POZO = 4;              // segundos que tarda el pozo en llenarse (siempre hasta su capacidad; no cambia con las mejoras)
 export const SEG_SUELO = 12;            // segundos que dura un producto en el suelo antes de desaparecer (decidido: más ágil que el original)
@@ -146,3 +146,12 @@ export const LIBRE = {
               osos: { tipos: ["oso", "polar", "panda"], primero: 30, cada: [25, 40] },
               pista: "Osos, polares y pandas (12 toques) cada 25 a 40 segundos." },
 };
+
+// ===== MODOS DEL MODO LIBRE (♾️): se elige uno antes de la pantalla de ajustes (dificultad, tamaño de la granja y dinero inicial) =====
+// original = Farm Frenzy tal cual (tamaño de granja inicial «pequeno» = el de los niveles de México). polo = «Mod de Polo»: tamaño inicial «grande» (10 edificios).
+// Por ahora el Mod de Polo solo cambia eso; lo demás (más animales y productos, más almacén, segunda vista con bodegas y camiones por producto, ~20 mejoras por edificio) está en el README, «Mod de Polo».
+export const MODOS = {
+  original: { nombre: "Juego original", icono: "🌾", tam: "pequeno", nota: "Como Farm Frenzy: gallinas, ovejas y vacas, y 4 edificios." },
+  polo:     { nombre: "Mod de Polo",    icono: "🛠️", tam: "grande",  nota: "🚧 En construcción: por ahora trae la granja Grande (10 edificios). Después: más animales y productos, bodegas y camiones de un solo producto." },
+};
+export const DINERO_MAX = 1e9;   // tope del «dinero inicial» de pruebas del modo libre

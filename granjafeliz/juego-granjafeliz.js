@@ -1,5 +1,6 @@
 // Ruta: granjafeliz/juego-granjafeliz.js
-// Granja feliz (estilo Farm Frenzy), horizontal. Menú estándar + mapa de 22 600 niveles (por ahora existen los niveles 1 a 10 de Farm Frenzy 1) + ♾️ Modo libre (5 dificultades, sin metas ni tiempo, sin monedas; solo guarda una marca).
+// Granja feliz (estilo Farm Frenzy), horizontal. Menú estándar + mapa de 22 600 niveles (por ahora existen los niveles 1 a 10 de Farm Frenzy 1) + ♾️ Modo libre: dos modos (Juego original / Mod de Polo) y una pantalla de ajustes
+// con barra de dificultad (5 pasos), barra de tamaño de la granja (4, 6 o 10 espacios de edificio) y dinero inicial de pruebas; sin metas ni tiempo, sin monedas; solo guarda una marca.
 // Modelo del original: cada nivel tiene una lista de METAS (dinero, producto, animal, edificio; ver datos-granjafeliz.js); el tiempo no limita, solo da medalla (oro/plata/completado).
 // Id de puntos: "granjafeliz". Datos en datos-granjafeliz.js; estrellas y monedas en economia-granjafeliz.js.
 import { crearEtapas } from "../compartido/etapas-mapa.js";
@@ -10,14 +11,13 @@ import * as D from "./datos-granjafeliz.js";
 import * as ES from "./escena-granjafeliz.js";   // aspecto del escenario (terreno, edificios, posiciones)
 
 const ETAPAS = crearEtapas({ porEtapa: 100 });
-const DIFICULTADES = [["Muy fácil", "b-verde"], ["Fácil", "b-azul"], ["Normal", "b-morado"], ["Difícil", "b-oro"], ["Experto", "b-rojo"]];
 const $ = (id) => document.getElementById(id);
-const pantallas = { menu: $("pantalla-menu"), libre: $("pantalla-libre") };
+const pantallas = { menu: $("pantalla-menu"), libre: $("pantalla-libre"), config: $("pantalla-config") };
 const btnMenu = $("btn-menu"), cv = $("c"), ctx = cv.getContext("2d"), cajaFin = $("fin");
-cv.width = D.ANCHO * 2; cv.height = D.ALTO * 2;
+const L = ES.LAYOUT;   // tamaño actual de la granja (800×450 el original; ver TAMANOS en escena-granjafeliz.js): se actualiza con aplicarTamano()
 
 let donde = "menu", J = null, nube = null, tAviso = 0;
-const pintarMonedas = () => { $("n-monedas").textContent = eco.saldo().toLocaleString("es-MX"); };
+const pintarMonedas = () => { $("n-monedas").textContent = eco.saldo().toLocaleString("es-MX"); if (donde === "juego") medirReserva(); };
 function avisar(t, ms = 2600) { const a = $("aviso-granja"); a.textContent = t; a.hidden = false; clearTimeout(tAviso); tAviso = setTimeout(() => { a.hidden = true; }, ms); }
 
 // ---------- Navegación ----------
@@ -28,7 +28,7 @@ function ir(nombre) {
   document.body.classList.toggle("en-juego", nombre === "juego");
   btnMenu.hidden = nombre === "menu";
   $("txt-menu").textContent = nombre === "juego" ? "Pausa" : "Menú principal"; // dentro de la partida: Pausa (estándar)
-  if (nombre === "libre") pintarLibre();
+  if (nombre === "config") pintarConfig();
   if (nombre === "juego") ajustar();
 }
 function abrirMapa(n) { ir("menu"); for (const k in pantallas) pantallas[k].hidden = true; btnMenu.hidden = false; $("txt-menu").textContent = "Menú principal"; donde = "mapa"; mapa.abrir(n); }
@@ -44,23 +44,46 @@ const pausa = crearMenuPausa({
   puedeAbrir: () => donde === "juego" && J && !J.fin,
   alAbrir: () => { J.pausa = true; }, alContinuar: () => { J.pausa = false; },
   extras: () => (J.libre
-    ? [{ icono: "🏁", texto: "Terminar partida", clase: "b-oro", ayuda: "Tu récord ya está guardado", alElegir: terminarLibre }, { icono: "🔄", texto: "Empezar de nuevo", clase: "b-azul", alElegir: () => empezarLibre(J.libre) }]
+    ? [{ icono: "🏁", texto: "Terminar partida", clase: "b-oro", ayuda: J.sinRecord ? "Partida de prueba: no cuenta para el récord" : "Tu récord ya está guardado", alElegir: terminarLibre }, { icono: "🔄", texto: "Empezar de nuevo", clase: "b-azul", alElegir: () => empezarLibre() }]
     : [{ icono: "🔄", texto: "Repetir nivel", clase: "b-azul", alElegir: () => empezar(J.n) }]),
-  alSalir: () => (J.libre ? ir("libre") : abrirMapa(J.n)),
+  alSalir: () => (J.libre ? ir("config") : abrirMapa(J.n)),
 });
 btnMenu.addEventListener("click", () => (donde === "juego" ? pausa.abrir() : ir("menu")));
 
-// ♾️ Modo libre: una dificultad por cada entrada de D.LIBRE (mismo orden y colores que DIFICULTADES). Cada botón muestra tu marca (lo máximo vendido en una partida).
-const botonesLibre = [];
-Object.keys(D.LIBRE).forEach((id, i) => {
-  const b = document.createElement("button");
-  b.type = "button"; b.className = "b3d txt grande " + DIFICULTADES[i][1]; b.innerHTML = '<span class="b-ico">🐔</span> <span></span>';
-  b.addEventListener("click", () => empezarLibre(id));
-  $("lista-dificultad").appendChild(b); botonesLibre.push({ id, b });
-});
-function pintarLibre() {
-  for (const { id, b } of botonesLibre) { const m = eco.mejorLibre(id); b.lastElementChild.textContent = D.LIBRE[id].nombre + " · " + (m ? "récord $" + m.toLocaleString("es-MX") : "sin récord"); }
+// ♾️ Modo libre. Paso 1: elegir el modo (D.MODOS: Juego original / Mod de Polo). Paso 2 (pantalla «config»): barra de DIFICULTAD (los 5 pasos de D.LIBRE), barra de TAMAÑO de la granja
+// (ES.TAMANOS: 4, 6 o 10 espacios de edificio) y DINERO inicial (solo pruebas: si no es el de la dificultad, la partida NO guarda récord). Las elecciones se recuerdan mientras la página esté abierta.
+const DIF_IDS = Object.keys(D.LIBRE), TAM_IDS = ES.ORDEN_TAMANOS;
+const AJ = { modo: "original", dif: 2, tam: 0, dinero: null };   // dinero: null = el de la dificultad
+const fmt = (n) => Number(n).toLocaleString("es-MX");
+const dineroBase = () => D.LIBRE[DIF_IDS[AJ.dif]].dineroInicial;
+const dineroInicial = () => (AJ.dinero == null ? dineroBase() : AJ.dinero);
+// Clave de la marca (eco.registrarLibre): Juego original + tamaño Original = solo la dificultad (las marcas de antes); las demás combinaciones llevan modo_tamaño_dificultad
+const claveLibre = () => (AJ.modo === "original" && AJ.tam === 0 ? DIF_IDS[AJ.dif] : [AJ.modo, TAM_IDS[AJ.tam], DIF_IDS[AJ.dif]].join("_"));
+function elegirModo(modo) { AJ.modo = modo; AJ.tam = TAM_IDS.indexOf(D.MODOS[modo].tam); ir("config"); }
+function pintarConfig() {
+  const M = D.MODOS[AJ.modo], base = D.LIBRE[DIF_IDS[AJ.dif]], T = ES.TAMANOS[TAM_IDS[AJ.tam]], prueba = dineroInicial() !== dineroBase(), inD = $("cfg-dinero");
+  $("cfg-titulo").textContent = M.icono + " " + M.nombre;
+  $("cfg-dif").value = AJ.dif; $("cfg-dif-txt").textContent = base.nombre; $("cfg-dif-ayuda").textContent = base.pista || "";
+  $("cfg-tam").value = AJ.tam; $("cfg-tam-txt").textContent = T.nombre;
+  $("cfg-tam-ayuda").textContent = T.edificios + " espacios para edificios" + (AJ.tam === 0 ? " · el tamaño de los niveles" : "");
+  if (document.activeElement !== inD) inD.value = dineroInicial();   // sin pisar lo que se está escribiendo
+  $("cfg-dinero-ayuda").textContent = prueba ? "Partida de prueba: no guarda récord" : "El de esta dificultad";
+  const m = eco.mejorLibre(claveLibre());
+  $("cfg-record").textContent = prueba ? "🧪 Prueba · sin récord" : "🏆 Récord con estos ajustes: " + (m ? "$" + fmt(m) : "sin récord");
+  $("cfg-aviso").hidden = AJ.modo !== "polo"; $("cfg-aviso").textContent = M.nota;
 }
+$("cfg-dif").oninput = (e) => { AJ.dif = Number(e.target.value); pintarConfig(); };
+$("cfg-tam").oninput = (e) => { AJ.tam = Number(e.target.value); pintarConfig(); };
+$("cfg-dinero").oninput = (e) => {
+  const v = e.target.value.trim(), n = Math.min(D.DINERO_MAX, Math.max(0, Math.floor(Number(v))));
+  AJ.dinero = v === "" || !isFinite(n) || n === dineroBase() ? null : n;
+  pintarConfig();
+};
+$("cfg-dinero").onblur = () => { $("cfg-dinero").value = dineroInicial(); };
+$("cfg-reset").onclick = () => { AJ.dinero = null; $("cfg-dinero").value = dineroBase(); pintarConfig(); };
+$("cfg-jugar").onclick = () => empezarLibre();
+$("btn-original").onclick = () => elegirModo("original");
+$("btn-polo").onclick = () => elegirModo("polo");
 $("btn-libre").onclick = () => ir("libre");
 $("btn-niveles").onclick = () => abrirMapa(eco.avanceMapa().max);
 $("btn-mapa").onclick = () => abrirMapa();
@@ -70,31 +93,56 @@ $("btn-mapa").onclick = () => abrirMapa();
 const { CAMPO, CAJAS } = ES;
 // Franja «⬆ mejorar» al pie de las cajas de Pozo, Almacén y Camión (28 de alto para que se pueda tocar bien en el celular)
 const franja = (c) => ({ x: c.x, y: c.y + c.h - 28, w: c.w, h: 28 });
-const FRANJAS = { pozo: franja(CAJAS.pozo), almacen: franja(CAJAS.almacen), camion: franja(CAJAS.camion) };
-// Edificios (nivel con NIVELES[n].edificios, máx. 4): 0 izquierda-arriba, 1 derecha-arriba, 2 izquierda-abajo, 3 derecha-abajo. Arriba la casa (se toca para procesar), abajo la franja «⬆ mejorar» (26).
+const FRANJAS = {};
+const recalcularFranjas = () => { for (const q in CAJAS) FRANJAS[q] = franja(CAJAS[q]); };
+// Cambia el tamaño de la granja (ES.usarTamano reacomoda escena, cajas, espacios y botones) y el del lienzo. Los niveles usan siempre «pequeno» (el original).
+function aplicarTamano(id) { ES.usarTamano(id); cv.width = L.ANCHO * 2; cv.height = L.ALTO * 2; recalcularFranjas(); }
+aplicarTamano("pequeno");
+// Edificios (nivel con NIVELES[n].edificios; hasta 4 en el tamaño original, 6 en el mediano y 10 en el grande, ver ES.ranuraEdificio): 0 izquierda-arriba, 1 derecha-arriba, 2 izquierda-segunda fila, 3 derecha-segunda fila… Arriba la casa (se toca para procesar), abajo la franja «⬆ mejorar» (26).
 const espacio = (i) => ES.ranuraEdificio(i);
 const espacioMejora = (r) => ({ x: r.x, y: r.y + r.h - 26, w: r.w, h: 26 });
 const limiteY = () => CAMPO.y + CAMPO.h - 6; // hasta dónde caminan los animales
 const dentro = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 const azar = (a, b) => a + Math.random() * (b - a);
 
+let limiteDer = 0;   // x (en unidades del escenario) hasta donde puede llegar el reloj de la barra sin quedar tapado por el chip de monedas del portal
+function medirReserva() {
+  const h = document.querySelector(".hud-der"), r = cv.getBoundingClientRect();
+  limiteDer = L.ANCHO - 28;
+  if (!h || !r.width) return;
+  const c = h.getBoundingClientRect();
+  if (c.bottom > r.top && c.top < r.top + 48 * (r.height / L.ALTO) && c.left < r.right) limiteDer = Math.min(limiteDer, (c.left - r.left) / (r.width / L.ANCHO) - 10);
+}
 function ajustar() { // el escenario 16:9 ocupa el espacio libre (deja libres las esquinas de los botones fijos)
-  const aw = innerWidth - 150, ah = innerHeight - 12, s = Math.min(aw / D.ANCHO, ah / D.ALTO);
-  cv.style.width = D.ANCHO * s + "px"; cv.style.height = D.ALTO * s + "px";
-  cv.style.left = 140 + (aw - D.ANCHO * s) / 2 + "px"; cv.style.top = (innerHeight - D.ALTO * s) / 2 + "px";
+  const aw = innerWidth - 150, ah = innerHeight - 12, s = Math.min(aw / L.ANCHO, ah / L.ALTO);
+  cv.style.width = L.ANCHO * s + "px"; cv.style.height = L.ALTO * s + "px";
+  cv.style.left = 140 + (aw - L.ANCHO * s) / 2 + "px"; cv.style.top = (innerHeight - L.ALTO * s) / 2 + "px";
+  medirReserva();
   if (J && J.fin) colocarFin();
 }
 addEventListener("resize", ajustar);
 
 function nuevoAnimal(tipo) { return { tipo, x: azar(CAMPO.x + 30, CAMPO.x + CAMPO.w - 30), y: azar(CAMPO.y + 40, limiteY() - 10), hambre: azar(0, 0.4), prod: azar(0, 0.5), est: "vaga", t: 0, dest: null, objetivo: null, mord: 0 }; }
 const empezar = (n) => arrancar(n, D.NIVELES[n], null);
-// Modo libre: la dificultad es un «nivel» a medida (D.LIBRE[id]) sin metas ni tiempo; J.libre guarda el id de la dificultad (null en los niveles)
-function empezarLibre(id) { arrancar(0, { ...D.LIBRE[id], metas: [] }, id); }
-function arrancar(n, N, libre) {
-  J = { n, N, libre, mejorInicial: libre ? eco.mejorLibre(libre) : 0, avisoRecord: false, t: 0, dinero: N.dineroInicial, ventas: 0, rec: {}, agua: N.aguaInicial, pozo: 0, pasto: [], animales: [], suelo: [], almacen: {}, camion: 0, pago: 0, mejoras: { almacen: (N.mejoras && N.mejoras.almacen) || 0, camion: (N.mejoras && N.mejoras.camion) || 0, pozo: (N.mejoras && N.mejoras.pozo) || 0 }, osos: [], proxOso: N.osos ? (N.osos.horario ? Infinity : (N.osos.primero ?? D.PRIMER_OSO)) : Infinity, horario: N.osos && N.osos.horario ? [...N.osos.horario] : null, perro: null, gato: (N.regalo || []).includes("gato") ? { x: CAMPO.x + 20, y: CAMPO.y + 60, dest: null } : null, edif: (N.edificios || []).map((id) => ({ id, nivel: (N.construidos || []).includes(id) ? 0 : -1, trab: 0, lote: 0, cola: [] })), flot: [], fin: false, pausa: false };
+// Modo libre: la dificultad es un «nivel» a medida (D.LIBRE[id]) sin metas ni tiempo. J.libre guarda la clave de la marca (claveLibre; null en los niveles); J.sinRecord = el dinero inicial se cambió (prueba).
+// Tamaño original: los edificios son los de la dificultad. Mediano y grande: se llenan todos los espacios repitiendo los edificios de la dificultad en orden (por ahora solo hay 4 tipos; los nuevos llegan con el Mod de Polo).
+function edificiosLibre(base, tam) {
+  const propios = base.edificios || [], n = ES.TAMANOS[tam].edificios;
+  if (tam === "pequeno") return propios;
+  const tipos = propios.length ? propios : Object.keys(D.EDIFICIOS);
+  return Array.from({ length: n }, (_, i) => tipos[i % tipos.length]);
+}
+function empezarLibre() {
+  const base = D.LIBRE[DIF_IDS[AJ.dif]], tam = TAM_IDS[AJ.tam], T = ES.TAMANOS[tam], M = D.MODOS[AJ.modo], dinero = dineroInicial();
+  const N = { ...base, metas: [], dineroInicial: dinero, edificios: edificiosLibre(base, tam), nombre: base.nombre + " · " + M.nombre + (tam === "pequeno" ? "" : " · " + T.nombre) };
+  arrancar(0, N, claveLibre(), { tam, modo: AJ.modo, prueba: dinero !== base.dineroInicial });
+}
+function arrancar(n, N, libre, opc = {}) {
+  aplicarTamano(libre ? opc.tam : "pequeno");
+  J = { n, N, libre, modo: opc.modo || null, sinRecord: !!opc.prueba, mejorInicial: libre && !opc.prueba ? eco.mejorLibre(libre) : 0, avisoRecord: false, t: 0, dinero: N.dineroInicial, ventas: 0, rec: {}, agua: N.aguaInicial, pozo: 0, pasto: [], animales: [], suelo: [], almacen: {}, camion: 0, pago: 0, mejoras: { almacen: (N.mejoras && N.mejoras.almacen) || 0, camion: (N.mejoras && N.mejoras.camion) || 0, pozo: (N.mejoras && N.mejoras.pozo) || 0 }, osos: [], proxOso: N.osos ? (N.osos.horario ? Infinity : (N.osos.primero ?? D.PRIMER_OSO)) : Infinity, horario: N.osos && N.osos.horario ? [...N.osos.horario] : null, perro: null, gato: (N.regalo || []).includes("gato") ? { x: CAMPO.x + 20, y: CAMPO.y + 60, dest: null } : null, edif: (N.edificios || []).map((id) => ({ id, nivel: (N.construidos || []).includes(id) ? 0 : -1, trab: 0, lote: 0, cola: [] })), flot: [], fin: false, pausa: false };
   for (const tipo in N.animales) for (let i = 0; i < N.animales[tipo]; i++) J.animales.push(nuevoAnimal(tipo));
   ir("juego");
-  if (libre) avisar("♾️ Modo libre · " + N.nombre + ": sin metas ni tiempo; tu récord es lo que vendes en una partida.\n" + (N.pista || ""), 7000);
+  if (libre) avisar("♾️ Modo libre · " + N.nombre + ": sin metas ni tiempo; " + (opc.prueba ? "partida de prueba: no guarda récord." : "tu récord es lo que vendes en una partida.") + "\n" + (N.pista || ""), 7000);
   else avisar("Metas: " + N.metas.map(textoMeta).join(" · ") + (N.pista ? "\n" + N.pista : ""), N.pista ? 7000 : 3500);
 }
 
@@ -328,14 +376,14 @@ function tocar(x, y) {
     if (J.agua < 1) flotar(x, y, "Sin agua 💧"); else if (J.pasto.length >= D.MAX_PASTO) flotar(x, y, "Mucho pasto"); else { J.agua--; J.pasto.push({ x, y, v: 4 }); }
   }
 }
-cv.addEventListener("pointerdown", (e) => { const r = cv.getBoundingClientRect(); tocar((e.clientX - r.left) / r.width * D.ANCHO, (e.clientY - r.top) / r.height * D.ALTO); });
+cv.addEventListener("pointerdown", (e) => { const r = cv.getBoundingClientRect(); tocar((e.clientX - r.left) / r.width * L.ANCHO, (e.clientY - r.top) / r.height * L.ALTO); });
 
 function actualizar(dt) {
   J.t += dt;
   if (J.pozo > 0) { J.pozo -= dt; if (J.pozo <= 0) { J.pozo = 0; J.agua = capPozo(); } }
   actualizarEdificios(dt);
   actualizarOsos(dt); actualizarPerro(dt); actualizarGato(dt);
-  if (J.camion > 0) { J.camion -= dt; if (J.camion <= 0) { J.camion = 0; J.dinero += J.pago; J.ventas += J.pago; flotar(715, 250, "+$" + J.pago); J.pago = 0; marcaLibre(); } }
+  if (J.camion > 0) { J.camion -= dt; if (J.camion <= 0) { J.camion = 0; J.dinero += J.pago; J.ventas += J.pago; flotar(CAJAS.camion.x + CAJAS.camion.w / 2, CAJAS.camion.y + 6, "+$" + J.pago); J.pago = 0; marcaLibre(); } }
   for (const a of J.animales) {
     const A = D.ANIMALES[a.tipo];
     a.t += dt;
@@ -418,17 +466,19 @@ function pintarFranja(f, costo, nv, niveles) {
 
 function dibujar() {
   ctx.setTransform(2, 0, 0, 2, 0, 0);
-  ctx.clearRect(0, 0, D.ANCHO, D.ALTO); // transparente: se ve la madera
+  ctx.clearRect(0, 0, L.ANCHO, L.ALTO); // transparente: se ve la madera
   if (!J) return;
-  caja({ x: 20, y: 8, w: 770, h: 40 }, "rgba(20,20,24,.78)");
-  txt("💵 $" + J.dinero, 36, 28, 18, "#fff4c2");
+  caja({ x: 20, y: 8, w: L.ANCHO - 30, h: 40 }, "rgba(20,20,24,.78)");
+  const textoDinero = "💵 $" + fmt(J.dinero);
+  txt(textoDinero, 36, 28, 18, "#fff4c2");
+  const x0 = Math.max(120, 36 + ctx.measureText(textoDinero).width + 18);   // los chips de metas empiezan después del dinero (que puede ser enorme en las pruebas)
   { // panel de metas: un chip por meta, de izquierda a derecha entre 💵 y los botones 🐕 🐈 (x 120 a 470); la letra se achica si no caben
     const items = J.libre
-      ? [{ t: "💰 Vendido $" + J.ventas.toLocaleString("es-MX"), ok: false }, { t: "🏆 Récord $" + Math.max(J.ventas, J.mejorInicial).toLocaleString("es-MX"), ok: J.ventas > 0 && J.ventas >= J.mejorInicial }]
+      ? [{ t: "💰 Vendido $" + J.ventas.toLocaleString("es-MX"), ok: false }, J.sinRecord ? { t: "🧪 Prueba (sin récord)", ok: false } : { t: "🏆 Récord $" + Math.max(J.ventas, J.mejorInicial).toLocaleString("es-MX"), ok: J.ventas > 0 && J.ventas >= J.mejorInicial }]
       : J.N.metas.map((m) => { const a = avanceMeta(m), ok = a.actual >= a.objetivo; return { t: a.icono + " " + Math.min(a.actual, a.objetivo).toLocaleString("es-MX") + "/" + a.objetivo.toLocaleString("es-MX"), ok }; });
     let tam = 15; const medir = () => { ctx.font = "700 " + tam + "px system-ui,sans-serif"; return items.reduce((s, i) => s + ctx.measureText(i.t).width + 16, 0); };
-    while (tam > 10 && medir() > 350) tam--;
-    let x = 120;
+    while (tam > 10 && medir() > 470 - x0) tam--;
+    let x = x0;
     for (const i of items) { txt(i.t, x, 28, tam, i.ok ? "#9dffb0" : "#fff"); x += ctx.measureText(i.t).width + 16; }
   }
   for (const b of botonesAyuda()) {
@@ -438,7 +488,7 @@ function dibujar() {
     emo(b.id === "gato" ? "🐈" : "🐕", b.x + 16, b.y + b.h / 2, 20);
     txt(hecho ? "✔ tienes" : ocupado ? "en camino" : costo ? "$" + costo.toLocaleString("es-MX") : "gratis", b.x + 32, b.y + b.h / 2, 12, "#fff4c2");
   }
-  { const med = J.libre ? 0 : medallaAhora(); txt("⏱ " + mmss(J.t) + " " + (["", "🥉", "🥈", "🥇"][med]), 772, 28, 17, med === 3 ? "#ffe27a" : med === 2 ? "#e4e8ee" : "#f0c9a0", "right"); } // sube; el emoji es la medalla que llevas
+  { const med = J.libre ? 0 : medallaAhora(); txt("⏱ " + mmss(J.t) + " " + (["", "🥉", "🥈", "🥇"][med]), limiteDer, 28, 17, med === 3 ? "#ffe27a" : med === 2 ? "#e4e8ee" : "#f0c9a0", "right"); } // sube; el emoji es la medalla que llevas
   ES.dibujarFondo(ctx, J.edif.length); // cielo, valla, pasto y tierra (se pinta una vez y se copia)
   dibujarObjetos();
   if (J.edif.length) dibujarEdificios();
@@ -485,7 +535,7 @@ function colocarFin() {
 }
 // Modo libre: cada venta del camión puede superar tu marca (se guarda sola; no hace falta terminar la partida)
 function marcaLibre() {
-  if (!J.libre) return;
+  if (!J.libre || J.sinRecord) return;   // en una partida de prueba (dinero inicial cambiado) no se guarda récord
   const r = eco.registrarLibre(J.libre, J.ventas);
   if (r.record) {
     if (nube) nube.guardado();
@@ -494,15 +544,15 @@ function marcaLibre() {
 }
 function terminarLibre() {
   J.fin = true;
-  const nuevo = J.ventas > 0 && J.ventas >= eco.mejorLibre(J.libre) && J.ventas > J.mejorInicial;
+  const nuevo = !J.sinRecord && J.ventas > 0 && J.ventas >= eco.mejorLibre(J.libre) && J.ventas > J.mejorInicial;
   const texto = document.createElement("div"); texto.className = "sobre-texto";
   texto.innerHTML = "<h2></h2><div></div>";
   texto.firstChild.textContent = "♾️ Partida terminada · " + J.N.nombre;
-  texto.lastChild.textContent = "Vendiste $" + J.ventas.toLocaleString("es-MX") + " en " + mmss(Math.ceil(J.t)) + " · " + (nuevo ? "🏆 ¡nuevo récord!" : "récord $" + eco.mejorLibre(J.libre).toLocaleString("es-MX"));
+  texto.lastChild.textContent = "Vendiste $" + J.ventas.toLocaleString("es-MX") + " en " + mmss(Math.ceil(J.t)) + " · " + (J.sinRecord ? "🧪 partida de prueba (sin récord)" : nuevo ? "🏆 ¡nuevo récord!" : "récord $" + eco.mejorLibre(J.libre).toLocaleString("es-MX"));
   const b = (c, t, f) => { const x = document.createElement("button"); x.type = "button"; x.className = "b3d txt " + c; x.textContent = t; x.onclick = f; return x; };
   const fila = document.createElement("div"); fila.className = "sobre-fila";
-  fila.append(b("b-gris", "Dificultades", () => ir("libre")));
-  cajaFin.replaceChildren(texto, b("grande b-verde", "Jugar otra vez ▶", () => empezarLibre(J.libre)), fila);
+  fila.append(b("b-gris", "Ajustes", () => ir("config")));
+  cajaFin.replaceChildren(texto, b("grande b-verde", "Jugar otra vez ▶", () => empezarLibre()), fila);
   cajaFin.hidden = false; colocarFin();
 }
 function terminar(gano) {
