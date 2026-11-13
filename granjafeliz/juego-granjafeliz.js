@@ -7,6 +7,7 @@ import { montarMapa } from "../compartido/mapa-niveles.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
 import * as eco from "./economia-granjafeliz.js";
 import * as D from "./datos-granjafeliz.js";
+import * as ES from "./escena-granjafeliz.js";   // aspecto del escenario (terreno, edificios, posiciones)
 
 const ETAPAS = crearEtapas({ porEtapa: 100 });
 const DIFICULTADES = [["Muy fácil", "b-verde"], ["Fácil", "b-azul"], ["Normal", "b-morado"], ["Difícil", "b-oro"], ["Experto", "b-rojo"]];
@@ -65,17 +66,15 @@ $("btn-niveles").onclick = () => abrirMapa(eco.avanceMapa().max);
 $("btn-mapa").onclick = () => abrirMapa();
 
 // ---------- Escenario ----------
-const CAMPO = { x: 20, y: 60, w: 600, h: 370 };
-const CAJAS = { pozo: { x: 640, y: 60, w: 150, h: 75 }, almacen: { x: 640, y: 145, w: 150, h: 75 }, camion: { x: 640, y: 230, w: 150, h: 75 }, comprar: { x: 640, y: 315, w: 150, h: 75 } };
+// Posiciones y dibujo del escenario (cámara 3/4 como Farm Frenzy): ver escena-granjafeliz.js. CAMPO = por dónde caminan animales y osos y dónde se planta.
+const { CAMPO, CAJAS } = ES;
 // Franja «⬆ mejorar» al pie de las cajas de Pozo, Almacén y Camión (28 de alto para que se pueda tocar bien en el celular)
 const franja = (c) => ({ x: c.x, y: c.y + c.h - 28, w: c.w, h: 28 });
 const FRANJAS = { pozo: franja(CAJAS.pozo), almacen: franja(CAJAS.almacen), camion: franja(CAJAS.camion) };
-// Edificios (nivel con NIVELES[n].edificios): ocupan una franja al pie del campo; los animales y el pasto quedan por encima de ella.
-// Cada espacio: arriba el edificio (se toca para procesar) y abajo la franja «⬆ mejorar» (28 de alto en las cajas; aquí 26 para que quepa).
-const FRANJA_EDIF = { x: CAMPO.x, y: 350, w: CAMPO.w, h: CAMPO.y + CAMPO.h - 350 };
-const espacio = (i) => ({ x: 30 + i * 146, y: 356, w: 138, h: 70 });
+// Edificios (nivel con NIVELES[n].edificios, máx. 4): 0 izquierda-arriba, 1 derecha-arriba, 2 izquierda-abajo, 3 derecha-abajo. Arriba la casa (se toca para procesar), abajo la franja «⬆ mejorar» (26).
+const espacio = (i) => ES.ranuraEdificio(i);
 const espacioMejora = (r) => ({ x: r.x, y: r.y + r.h - 26, w: r.w, h: 26 });
-const limiteY = () => (J && J.edif.length ? FRANJA_EDIF.y - 8 : CAMPO.y + CAMPO.h - 10); // hasta dónde caminan los animales
+const limiteY = () => CAMPO.y + CAMPO.h - 6; // hasta dónde caminan los animales
 const dentro = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 const azar = (a, b) => a + Math.random() * (b - a);
 
@@ -292,11 +291,9 @@ function actualizarEdificios(dt) {
   });
 }
 // Botones de compra (columna derecha, bajo el camión): uno por animal de NIVELES[n].comprables (por defecto solo la gallina, como en el nivel 1)
-function botonesCompra() {
+function botonesCompra() { // fila de botones en la esquina de abajo a la derecha (ES.botonComprar); zona «Vender» en los 24 de abajo
   const t = (J && J.N.comprables) || ["gallina"], k = t.length;
-  if (k === 1) { const b = { tipo: t[0], ...CAJAS.comprar }; return [{ ...b, venta: { x: b.x, y: b.y + b.h - 26, w: b.w, h: 26 } }]; } // botón grande: franja «Vender» al pie
-  const h = (122 - 4 * (k - 1)) / k; // 122 de alto en total; con 4 animales cada botón mide ~27
-  return t.map((tipo, i) => { const b = { tipo, x: CAJAS.comprar.x, y: CAJAS.comprar.y + i * (h + 4), w: CAJAS.comprar.w, h }; return { ...b, venta: { x: b.x + b.w - 34, y: b.y, w: 34, h: b.h } }; }); // botones chicos: zona 💲 a la derecha
+  return t.map((tipo, i) => { const b = { tipo, ...ES.botonComprar(i, k) }; return { ...b, venta: { x: b.x, y: b.y + b.h - 24, w: b.w, h: 24 } }; });
 }
 const cuantos = (tipo) => J.animales.filter((a) => a.tipo === tipo).length;
 function comprar(b) {
@@ -316,7 +313,7 @@ function tocar(x, y) {
   if (dentro(CAJAS.camion, x, y)) {
     if (J.camion) return;
     const c = cargaCamion();
-    if (!c.pago) { if (pesoAlmacen() > 0) flotar(715, 250, "No cabe en el camión"); return; }
+    if (!c.pago) { if (pesoAlmacen() > 0) flotar(CAJAS.camion.x + 58, CAJAS.camion.y + 20, "No cabe en el camión"); return; }
     for (const k in c.lleva) J.almacen[k] -= c.lleva[k];
     J.pago = c.pago; J.camion = segCamion(); return;
   }
@@ -327,7 +324,6 @@ function tocar(x, y) {
     if (J.edif[i].nivel >= 0 && dentro(espacioMejora(r), x, y)) mejorarEdificio(i); else tocarEdificio(i);
     return;
   }
-  if (J.edif.length && y >= FRANJA_EDIF.y) return; // la franja de edificios no es campo: ahí no se planta
   if (dentro(CAMPO, x, y)) { // plantar pasto con 1 de agua
     if (J.agua < 1) flotar(x, y, "Sin agua 💧"); else if (J.pasto.length >= D.MAX_PASTO) flotar(x, y, "Mucho pasto"); else { J.agua--; J.pasto.push({ x, y, v: 4 }); }
   }
@@ -379,27 +375,36 @@ function txt(t, x, y, tam = 16, color = "#fff", al = "left") { ctx.font = "700 "
 function emo(e, x, y, tam) { ctx.font = tam + "px system-ui,'Apple Color Emoji','Segoe UI Emoji',sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(e, x, y); }
 const mmss = (s) => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
 
-// Franja de edificios: espacio vacío (construir), edificio con su estado y barra de avance, y la franja ⬆ mejorar
+// Edificios: casa dibujada en su espacio (sin construir: casa transparente y precio), rótulo de estado sobre el frente y franja ⬆ mejorar
 function dibujarEdificios() {
-  caja(FRANJA_EDIF, "rgba(70,45,20,.35)");
   J.edif.forEach((e, i) => {
-    const E = D.EDIFICIOS[e.id], r = espacio(i);
+    const E = D.EDIFICIOS[e.id], r = espacio(i), cx = r.x + 58, cy = r.y + 60, f = espacioMejora(r);
     if (e.nivel < 0) { // sin construir
       const puede = J.dinero >= E.costo;
-      caja(r, puede ? "rgba(160,100,10,.55)" : "rgba(20,20,24,.45)");
-      ctx.save(); ctx.setLineDash([6, 4]); ctx.strokeStyle = "rgba(255,255,255,.7)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect(r.x, r.y, r.w, r.h, 12); ctx.stroke(); ctx.restore();
-      ctx.globalAlpha = 0.55; emo(E.emoji, r.x + 28, r.y + 26, 28); ctx.globalAlpha = 1;
-      txt(E.nombre, r.x + 52, r.y + 20, 13); txt("🏗️ Construir", r.x + 52, r.y + 38, 12, "#fff4c2"); txt("$" + E.costo.toLocaleString("es-MX"), r.x + 52, r.y + 55, 12, puede ? "#fff4c2" : "#c9c9d0");
+      ES.dibujarCasa(ctx, r, e.id, E.emoji, 0.4);
+      ES.rotulo(ctx, E.nombre, cx, cy, "#fff");
+      ctx.fillStyle = puede ? "rgba(214,150,20,.96)" : "rgba(52,52,58,.95)"; ctx.beginPath(); ctx.roundRect(f.x, f.y, f.w, f.h, 10); ctx.fill();
+      txt("🏗️ Construir $" + E.costo.toLocaleString("es-MX"), f.x + f.w / 2, f.y + f.h / 2, 12, puede ? "#fff" : "#c9c9d0", "center");
       return;
     }
     const hay = J.almacen[E.entra] || 0, ocupado = e.trab > 0;
-    caja(r, ocupado ? "rgba(40,100,160,.88)" : hay ? "rgba(40,120,50,.9)" : "rgba(20,20,24,.78)");
-    emo(E.emoji, r.x + 24, r.y + 18, 28);
-    txt(E.nombre, r.x + 46, r.y + 12, 13);
-    txt(ocupado ? "⏳ " + Math.ceil(e.trab) + " s · ×" + e.lote + (e.cola.length ? " +" + e.cola.length : "") : hay ? D.PRODUCTOS[E.entra].emoji + "×" + Math.min(hay, loteEdif(e)) + " → " + D.PRODUCTOS[E.sale].emoji : "Falta " + D.PRODUCTOS[E.entra].emoji, r.x + 46, r.y + 28, 12, "#fff4c2");
-    if (ocupado) { ctx.fillStyle = "rgba(255,255,255,.25)"; ctx.fillRect(r.x + 8, r.y + 38, r.w - 16, 4); ctx.fillStyle = "#ffe27a"; ctx.fillRect(r.x + 8, r.y + 38, (r.w - 16) * (1 - e.trab / E.seg), 4); }
-    pintarFranja(espacioMejora(r), costoEdif(e), e.nivel + 1, D.EDIFICIOS[e.id].costos.length);
+    ES.dibujarCasa(ctx, r, e.id, E.emoji);
+    const t = ocupado ? "⏳ " + Math.ceil(e.trab) + " s · ×" + e.lote + (e.cola.length ? " +" + e.cola.length : "") : hay ? D.PRODUCTOS[E.entra].emoji + "×" + Math.min(hay, loteEdif(e)) + " → " + D.PRODUCTOS[E.sale].emoji : "Falta " + D.PRODUCTOS[E.entra].emoji;
+    ES.rotulo(ctx, t, cx, cy, ocupado ? "#bfe4fb" : hay ? "#9dffb0" : "#c9c9d0");
+    if (ocupado) { ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.fillRect(r.x + 22, r.y + 70, 72, 5); ctx.fillStyle = "#ffe27a"; ctx.fillRect(r.x + 22, r.y + 70, 72 * (1 - e.trab / E.seg), 5); }
+    pintarFranja(f, costoEdif(e), e.nivel + 1, D.EDIFICIOS[e.id].costos.length);
   });
+}
+
+// Almacén (jaula de arriba), pozo y camión dibujados en el escenario, cada uno con su rótulo y su franja ⬆ mejorar
+function dibujarObjetos() {
+  const a = CAJAS.almacen, p = CAJAS.pozo, c = CAJAS.camion, carga = cargaCamion(), listo = carga.pago > 0 && !J.camion;
+  ES.dibujarAlmacen(ctx, a, pesoAlmacen() / capAlmacen());
+  ES.rotulo(ctx, "⚖️ " + pesoAlmacen() + " / " + capAlmacen(), a.x + a.w / 2, a.y + 58); franjaMejora("almacen");
+  ES.dibujarPozo(ctx, p, J.agua, capPozo(), J.pozo > 0);
+  ES.rotulo(ctx, J.pozo > 0 ? "Llenando… " + Math.ceil(J.pozo) : "💧 " + J.agua + " / " + capPozo(), p.x + p.w / 2, p.y + 52, "#bfe4fb"); franjaMejora("pozo");
+  ES.dibujarCamion(ctx, c, listo, J.camion > 0);
+  ES.rotulo(ctx, J.camion > 0 ? "En camino… " + Math.ceil(J.camion) : "🚚 $" + carga.pago + " · máx " + capCamion(), c.x + c.w / 2, c.y + 52, listo ? "#9dffb0" : "#fff4c2"); franjaMejora("camion");
 }
 
 // Franja inferior de Almacén / Camión: costo de la siguiente mejora y nivel (dorada si alcanza el dinero)
@@ -407,7 +412,7 @@ function franjaMejora(que) { pintarFranja(FRANJAS[que], costoMejora(que), J.mejo
 function pintarFranja(f, costo, nv, niveles) {
   const puede = costo != null && J.dinero >= costo;
   ctx.fillStyle = costo == null ? "rgba(70,70,76,.95)" : puede ? "rgba(214,150,20,.96)" : "rgba(52,52,58,.95)";
-  ctx.beginPath(); ctx.roundRect(f.x, f.y, f.w, f.h, [0, 0, 12, 12]); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(f.x, f.y, f.w, f.h, 10); ctx.fill();
   txt(costo == null ? "Nivel máx. " + nv + "/" + niveles : "⬆ $" + costo.toLocaleString("es-MX") + " · Nv " + nv + "/" + niveles, f.x + f.w / 2, f.y + f.h / 2, 12, puede ? "#fff" : "#c9c9d0", "center");
 }
 
@@ -434,11 +439,13 @@ function dibujar() {
     txt(hecho ? "✔ tienes" : ocupado ? "en camino" : costo ? "$" + costo.toLocaleString("es-MX") : "gratis", b.x + 32, b.y + b.h / 2, 12, "#fff4c2");
   }
   { const med = J.libre ? 0 : medallaAhora(); txt("⏱ " + mmss(J.t) + " " + (["", "🥉", "🥈", "🥇"][med]), 772, 28, 17, med === 3 ? "#ffe27a" : med === 2 ? "#e4e8ee" : "#f0c9a0", "right"); } // sube; el emoji es la medalla que llevas
-  caja(CAMPO, "rgba(88,160,60,.88)");
-  for (const p of J.pasto) emo(p.v >= 3 ? "🌿" : "🌱", p.x, p.y, 22);
+  ES.dibujarFondo(ctx, J.edif.length); // cielo, valla, pasto y tierra (se pinta una vez y se copia)
+  dibujarObjetos();
   if (J.edif.length) dibujarEdificios();
+  for (const p of J.pasto) emo(p.v >= 3 ? "🌿" : "🌱", p.x, p.y, 22);
   for (const h of J.suelo) {
     if (!(h.t > 3 || Math.floor(h.t * 6) % 2)) continue;
+    ES.sombra(ctx, h.x, h.y + 12, 10);
     if (D.PRODUCTOS[h.tipo].jaula) { // jaula: barrotes sobre el oso
       ctx.save(); ctx.strokeStyle = "#3a3a40"; ctx.lineWidth = 2; ctx.strokeRect(h.x - 18, h.y - 18, 36, 36);
       for (let k = -9; k <= 9; k += 9) { ctx.beginPath(); ctx.moveTo(h.x + k, h.y - 18); ctx.lineTo(h.x + k, h.y + 18); ctx.stroke(); } ctx.restore();
@@ -446,35 +453,27 @@ function dibujar() {
     } else emo(D.PRODUCTOS[h.tipo].emoji, h.x, h.y, 20);
   }
   for (const a of J.animales.slice().sort((p, q) => p.y - q.y)) {
-    emo(D.ANIMALES[a.tipo].emoji, a.x, a.y + Math.sin(J.t * 8 + a.x) * (a.est === "vaga" ? 1.5 : 0), D.ANIMALES[a.tipo].tam);
-    if (a.hambre >= 1) emo("😢", a.x + D.ANIMALES[a.tipo].tam / 2, a.y - D.ANIMALES[a.tipo].tam / 2, 14);
+    const tam = D.ANIMALES[a.tipo].tam * ES.escalaProf(a.y); // más abajo = un poco más grande (perspectiva)
+    ES.sombra(ctx, a.x, a.y + tam * 0.4, tam * 0.45);
+    emo(D.ANIMALES[a.tipo].emoji, a.x, a.y + Math.sin(J.t * 8 + a.x) * (a.est === "vaga" ? 1.5 : 0), tam);
+    if (a.hambre >= 1) emo("😢", a.x + tam / 2, a.y - tam / 2, 14);
   }
-  if (J.gato) emo("🐈", J.gato.x, J.gato.y, 26);
+  if (J.gato) { const k = ES.escalaProf(J.gato.y); ES.sombra(ctx, J.gato.x, J.gato.y + 11 * k, 12 * k); emo("🐈", J.gato.x, J.gato.y, 26 * k); }
   for (const o of J.osos) {
     const O = D.OSOS[o.tipo];
-    emo(O.emoji, o.x, o.y + Math.sin(J.t * 6 + o.x) * (o.bloqueo > 0 ? 0 : 1.5), 42);
+    const k = ES.escalaProf(o.y); ES.sombra(ctx, o.x, o.y + 17 * k, 19 * k);
+    emo(O.emoji, o.x, o.y + Math.sin(J.t * 6 + o.x) * (o.bloqueo > 0 ? 0 : 1.5), 42 * k);
     ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.fillRect(o.x - 18, o.y - 30, 36, 5); ctx.fillStyle = "#ffe27a"; ctx.fillRect(o.x - 18, o.y - 30, 36 * o.golpes / O.golpes, 5); // avance de captura
   }
-  if (J.perro) emo("🐕", J.perro.x, J.perro.y, 30);
-  caja(CAJAS.pozo, "rgba(20,20,24,.78)"); emo("⛲", 672, 84, 34);
-  txt("Pozo", 700, 72, 15); txt(J.pozo > 0 ? "Llenando… " + Math.ceil(J.pozo) : "💧 " + J.agua + " / " + capPozo(), 700, 92, 14, "#bfe4fb"); franjaMejora("pozo");
-  caja(CAJAS.almacen, "rgba(20,20,24,.78)"); emo("📦", 672, 170, 34);
-  txt("Almacén", 700, 157, 15); txt("⚖️ " + pesoAlmacen() + " / " + capAlmacen(), 700, 177, 14, "#fff4c2"); franjaMejora("almacen");
-  caja(CAJAS.camion, cargaCamion().pago > 0 && !J.camion ? "rgba(40,120,50,.9)" : "rgba(20,20,24,.78)"); emo("🚚", 672, 255, 34);
-  txt("Vender", 700, 241, 15); txt(J.camion > 0 ? "En camino… " + Math.ceil(J.camion) : "$" + cargaCamion().pago, 700, 258, 14, "#fff4c2"); txt("Carga máx. " + capCamion(), 700, 271, 11, "#d8d8d8"); franjaMejora("camion");
-  for (const b of botonesCompra()) {
-    const A = D.ANIMALES[b.tipo], n = cuantos(b.tipo), puede = J.dinero >= A.precio && n < A.max;
+  if (J.perro) { const k = ES.escalaProf(J.perro.y); ES.sombra(ctx, J.perro.x, J.perro.y + 12 * k, 14 * k); emo("🐕", J.perro.x, J.perro.y, 30 * k); }
+  for (const b of botonesCompra()) { // animales: fila abajo a la derecha (arriba «Comprar», emoji, precio y cuántos; abajo la franja de vender)
+    const A = D.ANIMALES[b.tipo], n = cuantos(b.tipo), puede = J.dinero >= A.precio && n < A.max, v = b.venta, cx = b.x + b.w / 2;
     caja(b, puede ? "rgba(160,100,10,.92)" : "rgba(20,20,24,.78)");
-    const v = b.venta;
     caja(v, n > 0 ? "rgba(150,50,40,.95)" : "rgba(60,60,66,.9)");
-    if (b.h > 60) { // botón grande: arriba comprar, abajo la franja de vender
-      emo(A.emoji, 672, b.y + 28, 30); txt("Comprar", 700, b.y + 16, 15); txt("$" + A.precio.toLocaleString("es-MX") + "  ·  " + n + "/" + A.max, 700, b.y + 36, 13, "#fff4c2");
-      txt("💲 Vender $" + precioVenta(b.tipo).toLocaleString("es-MX"), v.x + v.w / 2, v.y + v.h / 2, 12, n > 0 ? "#fff" : "#999", "center"); continue;
-    }
-    emo(A.emoji, b.x + 18, b.y + b.h / 2, Math.min(22, b.h - 4));
-    txt("$" + A.precio.toLocaleString("es-MX"), b.x + 36, b.y + b.h / 2, 12, "#fff4c2");
-    txt(n + "/" + A.max, v.x - 4, b.y + b.h / 2, 11, n >= A.max ? "#ff9a8c" : "#d8d8d8", "right");
-    emo("💲", v.x + v.w / 2, v.y + v.h / 2, Math.min(16, b.h - 8));
+    txt("Comprar", cx, b.y + 9, 10, "#fff", "center"); emo(A.emoji, cx, b.y + 27, 26);
+    txt("$" + A.precio.toLocaleString("es-MX"), cx, b.y + 44, 12, "#fff4c2", "center");
+    txt(n + "/" + A.max, cx, b.y + 56, 11, n >= A.max ? "#ff9a8c" : "#d8d8d8", "center");
+    txt("💲 $" + precioVenta(b.tipo).toLocaleString("es-MX"), cx, v.y + v.h / 2, 11, n > 0 ? "#fff" : "#999", "center");
   }
   for (const f of J.flot) { ctx.globalAlpha = Math.min(1, f.t); txt(f.txt, f.x, f.y - (1.2 - f.t) * 30, 16, "#fff", "center"); ctx.globalAlpha = 1; }
 }
