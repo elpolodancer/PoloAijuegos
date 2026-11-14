@@ -113,6 +113,7 @@
       <!-- Juego escondido: «Reflejos» (carpeta ejemplo/), ya no está en juegos.js -->
       <a class="mini" href="ejemplo/index-ejemplo.html">Juego de prueba</a>
       <button class="btn" id="instalar" hidden>📲 Instalar</button>
+      <button class="btn" id="copias" type="button" title="Guardar o cargar una copia de tu progreso">💾 Copias</button>
       <span id="sinred" hidden>Sin conexión</span>
     </div>
     <div id="sesion"></div>
@@ -231,6 +232,38 @@
 
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
+    // ----- Copias de seguridad y protección del almacenamiento (compartido/almacen.js; no usa Firebase, funciona sin internet) -----
+    let alm = null;
+    try { alm = await import("./compartido/almacen.js"); } catch (e) {}
+    if (alm) {
+      $("copias").addEventListener("click", () => alm.abrirPanelCopias());
+      // Se pide con el primer toque (Firefox muestra un permiso y así no aparece de golpe al abrir la página)
+      addEventListener("pointerdown", () => alm.pedirPersistencia(), { once: true });
+    } else {
+      $("copias").hidden = true;
+    }
+
+    // ----- Modo pruebas SIN consola (para ver los botones de trampas en el celular) -----
+    // Dos formas: abrir el portal con  ?pruebas=1  (para quitarlo  ?pruebas=0)  o tocar 5 veces seguidas la pestaña «en desarrollo».
+    // Solo decide si se VEN las trampas; la protección real está en el servidor (ver compartido/configs.js, modoPruebas).
+    const fijarPruebas = (activo) => {
+      try { activo ? localStorage.setItem("modo_pruebas", "1") : localStorage.removeItem("modo_pruebas"); } catch (e) {}
+      alert(activo ? "Modo pruebas ACTIVADO en este dispositivo" : "Modo pruebas DESACTIVADO en este dispositivo");
+    };
+    const pedido = new URLSearchParams(location.search).get("pruebas");
+    if (pedido === "1" || pedido === "0") fijarPruebas(pedido === "1");
+    let toquesDev = [];
+    $("tabDev").addEventListener("click", () => {
+      const ahora = Date.now();
+      toquesDev = toquesDev.filter((t) => ahora - t < 4000);
+      toquesDev.push(ahora);
+      if (toquesDev.length < 5) return;
+      toquesDev = [];
+      let activo = false;
+      try { activo = localStorage.getItem("modo_pruebas") === "1"; } catch (e) {}
+      fijarPruebas(!activo);
+    });
+
     const instalada = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
     const esIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
     let evento = null;
@@ -264,15 +297,18 @@
       const { alCambiarSesion, entrar, salir, leerPerfil } = await import("./compartido/jugador.js");
       import("./compartido/progreso.js").catch(() => {}); // envía los puntos pendientes al entrar o al volver la conexión
       alCambiarSesion(async (u) => {
-        zona.innerHTML = "";
+        zona.replaceChildren();
         const b = document.createElement("button");
         b.className = "btn";
         if (!u) {
           b.textContent = "Entrar con Google";
           b.addEventListener("click", () => entrar().catch((e) => alert(e.message)));
           zona.appendChild(b);
+          // Invitación suave (máx. 1 vez por semana y solo si hay puntos guardados solo en este dispositivo)
+          if (alm) alm.invitarASesion({ alAceptar: () => entrar().catch((e) => alert(e.message)) });
           return;
         }
+        if (alm) alm.cerrarInvitacion();
         const t = document.createElement("span");
         t.textContent = (u.displayName || "Jugador") + " · ";
         b.textContent = "Salir";

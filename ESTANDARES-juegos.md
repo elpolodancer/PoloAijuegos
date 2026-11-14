@@ -56,6 +56,8 @@ El menú de niveles **siempre es un mapa**:
 3. Cada estado o país es un punto: al tocarlo se ven sus niveles. Cuántos niveles tiene cada etapa lo decide cada juego (en Estacionamiento son 100; en Supermercado y Zuma, 10).
 4. Los niveles se abren en orden; se guarda «nivel más alto abierto» y «más alto terminado».
 
+**Menú de inicio.** Sustituido por el **menú principal estándar de la sección 7** (Modo libre · Niveles · Mapa · Salir). Lo que sigue describe cómo era antes, cuando el mapa era la pantalla principal; al tocar un juego se migra a la sección 7:
+
 **Menú de inicio** (el mapa es la pantalla principal) con estos botones, en este orden:
 
 `▶ Continuar · nivel N` · **`♾️ Juego libre`** (a la derecha de Continuar) · `ℹ️ Info` · `🌍 Mundo` (solo cuando ya se desbloqueó).
@@ -71,12 +73,13 @@ Código reutilizable (ya está en `compartido/`, anotado en `ARCHIVOS` de `sw.js
 | `compartido/mapa-niveles.js` | El mapa con agua. `montarMapa({ prefijo, etapas, progreso, jugarNivel, infoNivel, leyenda, botonesExtra, alInfo, avisoPrincipal, alCambiarVista })`. Sin Firebase ni red |
 | `compartido/etapas-mapa.js` | Orden de los 32 estados y 194 países y cuentas de progreso: `crearEtapas({ porEtapa, primeros })` |
 | `compartido/geografia-mapa.js` | Contornos de México, continentes y lagos |
+| `compartido/dificultad-niveles.js` | Reparto de dificultad de los niveles (sección 8): `dificultadDeNivel(n, total)` → `"facil"`, `"normal"` o `"dificil"` |
 
 El juego solo indica cuántos niveles tiene cada etapa (`porEtapa`), el progreso `{ max, hecho }` y qué hace `jugarNivel(n)`. Según `sw.js`, Estacionamiento todavía lista sus propias copias en `estacionamiento/` (`mapa-estacionamiento.js`, etc.).
 
 ### B) Juegos sin niveles (Rubik)
 
-**No llevan mapa ni niveles.** El menú principal tiene lo mínimo: el selector de lo que se juega (en Rubik, el modelo de cubo) y, dentro de la partida, el botón de revolver. Todo sobre el fondo de madera clara u oscura y con los botones fijos de la sección 1. Detalle en `rubik/README-rubik.md`.
+**No llevan mapa ni niveles.** Su menú principal sigue el orden de la sección 7 pero solo con «♾️ Modo libre» y «🚪 Salir» (no tienen Niveles ni Mapa). Antes tenía lo mínimo: el selector de lo que se juega (en Rubik, el modelo de cubo) y, dentro de la partida, el botón de revolver. Todo sobre el fondo de madera clara u oscura y con los botones fijos de la sección 1. Detalle en `rubik/README-rubik.md`.
 
 ## 5. Para registrar un juego nuevo o cambiado
 Anotarlo en `juegos.js`, en `JUEGOS` de `sw.js`, subir `VERSION`, y agregar su fila y nota «Estado» al README principal.
@@ -90,3 +93,36 @@ En todos los juegos con niveles, al terminar un nivel el botón **Siguiente nive
 - El juego pone la ventana encima del tablero asignando `left`, `top`, `width` y `height` (px) = rectángulo del tablero en pantalla, recortado a la ventana; si el tablero casi no se ve (muy acercado o muy movido), toda la ventana. Si el jugador mueve o acerca la vista con la ventana abierta, el juego la recoloca. Ejemplo: `colocarVictoria()` en `estacionamiento/juego-estacionamiento.js`.
 - En el último nivel del juego el botón «Siguiente» se oculta.
 
+## 7. Menú principal estándar (pantalla de inicio de TODOS los juegos)
+
+Cuando se pida «crear el menú como dicta el inmersivo», se crea **siempre** con los mismos botones, en el mismo orden y con los mismos nombres. Son botones grandes (`b3d txt grande`) en columna, centrados sobre la madera. La especificación también está en `compartido/inmersivo.css`.
+
+| # | Botón | Color | Qué hace |
+|---|---|---|---|
+| 1 | **♾️ Modo libre** | `b-verde` | **Siempre el primero.** Abre la pantalla de **dificultades**: 5 niveles (Muy fácil `b-verde`, Fácil `b-azul`, Normal `b-morado`, Difícil `b-oro`, Experto `b-rojo`) más las opciones propias del juego (por ejemplo, el tamaño del tablero) |
+| 2 | **🪜 Niveles** | `b-azul` | Lista de niveles de la etapa donde va el jugador (el mapa abierto en el nivel actual) |
+| 3 | **🗺️ Mapa** | `b-azul` | Vista principal del mapa estándar de México y del mundo |
+| 4 | **🚪 Salir** | `b-rojo` | **Siempre el último.** Vuelve al portal (`href="../"`) |
+
+- No se agregan botones entre estos cuatro ni se cambia su orden. Los extras (ℹ️ Info, ajustes…) van en ☰ Pausa o dentro de Modo libre.
+- Si el juego aún no tiene niveles, «Niveles» y «Mapa» se muestran igual y al tocar un nivel inexistente se avisa que todavía no están creados.
+- El ☰ no se ve en este menú; en Modo libre, Niveles y Mapa dice «Menú principal» y vuelve aquí.
+- Juegos sin niveles (sección 4B): solo «♾️ Modo libre» y «🚪 Salir».
+- Los juegos ya hechos (Estacionamiento, Supermercado, Batalla naval…) se pasan a este menú cuando se vuelvan a tocar.
+
+## 8. Dificultad de los niveles del mapa (reparto estándar)
+
+En los juegos por niveles (sección 4A), la dificultad de los niveles **sube poco a poco** a lo largo del mapa, con este reparto. Aplica a **la mayoría de los juegos**; un juego solo se aparta si su README lo explica.
+
+| Tramo de 100 niveles | Fáciles | Normales | Difíciles |
+|---|---|---|---|
+| **Primeros 100** (niveles 1-100) | **50 %** | **40 %** | **10 %** |
+| Mitad del mapa (≈ nivel 11 300 de 22 600) | ≈ 38 % | 40 % | ≈ 22 % |
+| **Últimos 100** (niveles 22 501-22 600) | **25 %** | **40 %** | **35 %** |
+
+- **Progresivo:** entre un extremo y otro el cambio es lineal, tramo por tramo (un tramo = 100 niveles seguidos). Los fáciles solo bajan, los difíciles solo suben y los normales se quedan en 40 %. Nunca hay saltos bruscos.
+- **Revueltos pero iguales para todos:** dentro de cada tramo los fáciles, normales y difíciles van mezclados (no todos los difíciles al final), con una semilla fija: todos los jugadores ven el mismo nivel con la misma dificultad.
+- **Código reutilizable:** `compartido/dificultad-niveles.js` (anotado en `ARCHIVOS` de `sw.js`). `dificultadDeNivel(n, ETAPAS.total)` devuelve la dificultad del nivel `n`; `repartoDeTramo(k, total)` da cuántos de cada tipo tiene el tramo `k`. Funciona con cualquier total (22 600, 3 200, 2 260…) y con cualquier `porEtapa`: el tramo siempre es de 100 niveles, no de una etapa.
+- **Qué significa cada nivel de dificultad lo decide el juego** (tamaño del tablero, tiempo, enemigos, movimientos…) y lo explica en su README. Es independiente de las 5 dificultades del Modo libre (Muy fácil … Experto): aquí son 3 tipos de nivel dentro del mapa.
+- **No cambiar después de publicar:** si ya hay jugadores con progreso, cambiar los porcentajes o la semilla cambia la dificultad de niveles que ya jugaron.
+- Totales de referencia con 22 600 niveles: ≈ 37.5 % fáciles (8 475), 40 % normales (9 040) y ≈ 22.5 % difíciles (5 085).

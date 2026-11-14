@@ -34,7 +34,10 @@ if (raiz.classList.contains("inmersivo")) {
 
   function aplicar(esOscura) {
     raiz.classList.toggle("oscura", esOscura);
-    b.innerHTML = '<span class="b-ico">' + (esOscura ? "☀️" : "🌙") + "</span>";
+    const ico = document.createElement("span");
+    ico.className = "b-ico";
+    ico.textContent = esOscura ? "☀️" : "🌙";
+    b.replaceChildren(ico);
     const t = esOscura ? "Cambiar a madera clara" : "Cambiar a madera oscura (modo oscuro)";
     b.title = t; b.setAttribute("aria-label", t); b.setAttribute("aria-pressed", String(esOscura));
     if (meta) meta.setAttribute("content", esOscura ? "#1d2024" : "#d9a866");
