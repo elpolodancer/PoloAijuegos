@@ -1,19 +1,22 @@
 // Ruta: 2048/juego-2048.js
-// El clásico 2048: desliza para juntar números iguales. Tablero de 4×4 (también 5×5 y 6×6), deshacer,
+// El clásico 2048: desliza para juntar números iguales. Tablero de 4×4 hasta 8×8, deshacer,
 // mejor puntaje por tamaño y la partida se guarda sola en el navegador.
 // Ajustes rápidos aquí arriba:
 import { encolarPuntos } from "../compartido/cola-puntos.js";
+import { crearMenuPausa } from "../compartido/menu-pausa.js";
 
-const TAMANOS = [4, 5, 6];
+const TAMANOS = [4, 5, 6, 7, 8];
 const META = 2048;            // al crear este número aparece el aviso de victoria (puedes seguir jugando)
 const PROB_4 = 0.1;           // probabilidad de que salga un 4 en vez de un 2
 const MAX_DESHACER = 30;
+const MS_DESLIZA = 150;       // lo que tarda una ficha en deslizarse a su lugar (también lo usa el CSS, por --desliza)
 const PUNTOS_POR_PERFIL = 25; // al perfil se envía 1 punto por cada 25 del juego (jugador.js limita a 1000 por envío)
 const ID_JUEGO = "2048";
-const COLOR_TAM = { 4: "b-verde", 5: "b-azul", 6: "b-morado" }; // color del botón de cada tamaño (más grande = más difícil)
+const COLOR_TAM = { 4: "b-verde", 5: "b-azul", 6: "b-morado", 7: "b-oro", 8: "b-rojo" }; // color del botón de cada tamaño
 
 const $ = (id) => document.getElementById(id);
 const tablero = $("tablero");
+document.documentElement.style.setProperty("--desliza", MS_DESLIZA + "ms");
 
 let N = 4, celda = 80, hueco = 10;
 let fichas = [], puntos = 0, mejor = 0, historial = [];
@@ -44,10 +47,10 @@ function colorDe(v) {
 // ----- Tamaño del tablero (se ajusta a la pantalla) -----
 const apaisado = matchMedia("(orientation: landscape) and (max-height: 520px)"); // mismo corte que el CSS de la página
 function ajustar() {
-  // En horizontal el tablero va al lado de los controles: se descuenta su columna (280) y el margen del ← (56)
+  // En horizontal el tablero va al lado de los controles: se descuenta su columna (280), el hueco (22) y la zona de 🎮 Juegos / ☰ (130)
   const lado = apaisado.matches
-    ? Math.max(140, Math.min(innerHeight - 24, innerWidth - 370, 520))
-    : Math.max(220, Math.min(innerWidth - 24, innerHeight - 280, 520));
+    ? Math.max(140, Math.min(innerHeight - 24, innerWidth - 450, 520))
+    : Math.max(220, Math.min(innerWidth - 24, innerHeight - 360, 520));
   document.documentElement.style.setProperty("--ancho", lado + "px");
   hueco = Math.max(6, Math.round(lado * (N > 4 ? 0.02 : 0.03)));
   celda = (lado - hueco * (N + 1)) / N;
@@ -102,7 +105,7 @@ function nuevaFicha() {
 
 // ----- Movimiento: 0 arriba, 1 derecha, 2 abajo, 3 izquierda -----
 function mover(dir) {
-  if (terminado || !$("velo").hidden) return false;
+  if (pantalla !== "juego" || pausa.abierto() || terminado || !$("velo").hidden) return false;
   const rejilla = Array.from({ length: N }, () => Array(N).fill(null));
   for (const t of fichas) rejilla[t.r][t.c] = t;
   const antes = instantanea();
@@ -142,7 +145,7 @@ function mover(dir) {
   setTimeout(() => {
     for (const t of absorbidas) t.el.remove();
     for (const t of sumadas) { pintar(t); t.el.classList.remove("suma"); void t.el.offsetWidth; t.el.classList.add("suma"); }
-  }, 120);
+  }, MS_DESLIZA);
   for (const t of fichas) delete t.fusion;
   nuevaFicha();
   marcador(); guardar();
@@ -233,7 +236,7 @@ function cambiarTamano(n) {
   enviar();
   N = n;
   try { localStorage.setItem("2048-tam", String(n)); } catch (e) {}
-  marcarTamanos(); cargarTamano();
+  mostrar("juego"); cargarTamano();
 }
 function cargarTamano() {
   cerrarVelo(); construirTablero();
@@ -247,12 +250,28 @@ function cargarTamano() {
     if (terminado) revisar();
   } else nueva();
 }
-function marcarTamanos() { document.querySelectorAll("#tamanos .b3d").forEach((b) => b.classList.toggle("on", +b.dataset.n === N)); }
-
+// ----- Pantallas: menú principal → elegir tablero → partida (ESTANDARES-juegos.md, secciones 1 y 7) -----
+let pantalla = "menu";
+function mostrar(p) {
+  pantalla = p;
+  $("pantalla-menu").hidden = p !== "menu";
+  $("pantalla-tamanos").hidden = p !== "tamanos";
+  $("juego").hidden = p !== "juego";
+  $("btn-menu").hidden = p === "menu";                                  // en el menú principal el ☰ no se muestra
+  $("txt-menu").textContent = $("btn-menu").title = p === "juego" ? "Pausa" : "Menú principal";
+  try { document.querySelector("#" + (p === "juego" ? "deshacer" : "pantalla-" + p + " .b3d")).focus({ preventScroll: true }); } catch (e) {}
+}
+const pausa = crearMenuPausa({
+  puedeAbrir: () => pantalla === "juego" && $("velo").hidden,
+  ayudaSalir: "Tu partida queda guardada en este dispositivo.",
+  alSalir: () => { enviar(); mostrar("menu"); },
+});
+$("btn-menu").addEventListener("click", () => { if (pantalla === "juego") pausa.abrir(); else if (pantalla === "tamanos") mostrar("menu"); });
+$("btn-jugar").addEventListener("click", () => mostrar("tamanos"));
 for (const n of TAMANOS) {
   const b = document.createElement("button");
-  b.className = "b3d chico txt " + COLOR_TAM[n]; b.dataset.n = n; b.textContent = n + "×" + n;
-  b.addEventListener("click", () => n !== N && cambiarTamano(n));
+  b.className = "b3d txt grande " + COLOR_TAM[n]; b.type = "button"; b.textContent = n + "×" + n;
+  b.addEventListener("click", () => cambiarTamano(n));
   $("tamanos").appendChild(b);
 }
 $("nueva").addEventListener("click", () => (puntos > 0 && !terminado ? velo("¿Nueva partida?", "Se pierde la partida actual.", [["Sí, empezar", nueva, true], ["Seguir", cerrarVelo]]) : nueva()));
@@ -262,7 +281,7 @@ $("deshacer").addEventListener("click", deshacer);
 const TECLAS = { arrowup: 0, w: 0, arrowright: 1, d: 1, arrowdown: 2, s: 2, arrowleft: 3, a: 3 };
 addEventListener("keydown", (e) => {
   const d = TECLAS[e.key.toLowerCase()];
-  if (d === undefined) return;
+  if (d === undefined || pantalla !== "juego") return;
   e.preventDefault(); mover(d);
 });
 let p0 = null;
@@ -277,8 +296,7 @@ addEventListener("pointercancel", () => (p0 = null));
 addEventListener("resize", ajustar);
 document.addEventListener("visibilitychange", () => { if (document.hidden) enviar(); });
 
-marcarTamanos();
-cargarTamano();
+mostrar("menu");
 
 // Sincroniza los mejores puntajes con la cuenta (se queda el mayor de cada tamaño). La partida en curso queda en este dispositivo.
 import("../compartido/progreso.js").then((m) => {
