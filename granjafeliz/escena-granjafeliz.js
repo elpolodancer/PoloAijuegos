@@ -7,7 +7,7 @@
 //   ESCENA   el cuadro de pasto con esquinas redondas (el resto del canvas queda transparente: se ve la madera del portal)
 //   CAMPO    por dónde caminan animales y osos y dónde se planta pasto (la parte central; los edificios quedan fuera)
 //   CAJAS    pozo (ARRIBA al centro), almacén (abajo al centro, una bodega), camión (abajo a la izquierda): arte arriba + franja ⬆ de 28 al pie
-//   botonComprar(i)   botones de comprar animales: arriba a la izquierda, sobre la barra, como en Farm Frenzy (sesión 7)
+//   botonComprar(i)   cuadros de animales (comprar / vender): DENTRO del escenario, arriba a la izquierda, entre el primer edificio y el pozo; sin fondo (se ve el paisaje). Siempre salen los 3 animales (los que el nivel no permite, bloqueados)
 //   ranuraEdificio(i)   espacios: i par = columna izquierda, i impar = columna derecha, de arriba hacia abajo (0-1 primera fila, 2-3 segunda, 4-5 tercera, 6-7 cuarta);
 //                       8 y 9 (solo en «grande») = arriba, a los lados del pozo (arte arriba + franja ⬆ de 26 al pie)
 export const TAMANOS = {
@@ -40,9 +40,10 @@ export const ranuraEdificio = (i) => {
   if (i >= 8) return { x: i === 8 ? W / 2 - 58 - 16 - 128 : W / 2 + 58 + 16, y: 64, w: 128, h: 104 };
   return { x: i % 2 ? W - 146 : 28, y: 64 + paso * Math.floor(i / 2), w: 128, h: 104 };
 };
-// Botones de comprar animales: fila ARRIBA A LA IZQUIERDA (como en Farm Frenzy), sobre la barra de arriba. Cada uno mide 58×52: los 32 de arriba compran, los 20 de abajo venden.
-// Los 3 caben antes del dinero (x 26 a 212) y no tocan los espacios de edificio (empiezan en y = 64).
-export const BOTON_COMPRAR = { x0: 26, y: 9, w: 58, h: 52, paso: 64, alto_compra: 32 };
+// Cuadros de animales: fila ARRIBA A LA IZQUIERDA pero DENTRO del escenario (sobre el cielo y las colinas), sin fondo propio. Cada uno es un cuadrado de 48×48 (la cara del animal y su precio: toca para COMPRAR)
+// con una tira de 16 debajo (💲 precio de venta: toca para VENDER). Van entre el primer espacio de edificio (termina en x = 156) y el pozo (empieza en x = W/2 - 58 ≥ 342): x 164 a 324.
+// En el tamaño Grande el espacio 8 empieza en x = 358, así que tampoco choca. Siempre hay uno por cada animal de D.ANIMALES, en el orden de ese objeto.
+export const BOTON_COMPRAR = { x0: 164, y: 58, w: 48, h: 48, paso: 56, alto_venta: 16 };
 export const botonComprar = (i) => ({ x: BOTON_COMPRAR.x0 + i * BOTON_COMPRAR.paso, y: BOTON_COMPRAR.y, w: BOTON_COMPRAR.w, h: BOTON_COMPRAR.h });
 
 const PI2 = Math.PI * 2;
@@ -141,6 +142,8 @@ export const ESTILOS = {
   horno:      { pared: "#f6e6cb", lado: "#d8bf98", techo: "#3f9a5f", techoOsc: "#2c7044" },   // panadería
   hilanderia: { pared: "#d9e8f6", lado: "#aebfd6", techo: "#3f68c9", techoOsc: "#2c4a96" },
   tejeduria:  { pared: "#f1d6ea", lado: "#cfaac4", techo: "#8e4fbd", techoOsc: "#693a8c" },
+  batidora:   { pared: "#e3f3f1", lado: "#b4d3cf", techo: "#2f9fa8", techoOsc: "#217178" },   // verde azulado (leche → mantequilla)
+  queseria:   { pared: "#fbe9bd", lado: "#dcc088", techo: "#e0911f", techoOsc: "#aa6a12" },   // ámbar (mantequilla → queso)
 };
 // r = espacio del edificio; el arte ocupa los 78 de arriba (los 26 de abajo son la franja ⬆). Deja libre el frente (y+38 a y+76) para el rótulo de estado.
 export function dibujarCasa(ctx, r, id, emoji, alfa = 1) {
@@ -201,7 +204,7 @@ export function dibujarCamion(ctx, c, listo, enCamino) {
   for (const x of [cx - 26, cx + 22]) { ctx.fillStyle = "#222"; ctx.beginPath(); ctx.arc(x, by - 2, 8, 0, PI2); ctx.fill(); ctx.fillStyle = "#bbb"; ctx.beginPath(); ctx.arc(x, by - 2, 3, 0, PI2); ctx.fill(); }
   ctx.restore();
 }
-// ----- Pasto: una ZONA de matas (no una mata suelta) y los puntitos de hambre -----
+// ----- Pasto: una ZONA de matas (no una mata suelta) -----
 // p = { x, y, v (usos que le quedan), crece (0..1: brota tras echarle agua) }. La zona es un óvalo de matas; al gastarse usos van desapareciendo matas (v / usos).
 const MATAS = [[0, 0], [-24, -5], [24, -5], [-13, 9], [13, 9], [0, -13], [-33, 6], [33, 6], [0, 16]];   // posiciones relativas (9 matas)
 export function dibujarPasto(ctx, p, usosMax = 3) {
@@ -218,15 +221,11 @@ export function dibujarPasto(ctx, p, usosMax = 3) {
   }
   ctx.restore();
 }
-// Puntitos de comida bajo un animal: llenos = cuántos quedan (0 a total). Verdes mientras no tiene hambre; rojos con hambre (≤ hambre).
-export function dibujarPuntos(ctx, x, y, llenos, total = 6, hambre = 2) {
-  const color = llenos <= hambre ? "#ff6a4d" : "#7be05a";
-  for (let i = 0; i < total; i++) {
-    const cx = x + (i - (total - 1) / 2) * 7;
-    ctx.beginPath(); ctx.arc(cx, y, 2.6, 0, PI2);
-    if (i < llenos) { ctx.fillStyle = color; ctx.fill(); }
-    ctx.lineWidth = 1; ctx.strokeStyle = i < llenos ? "rgba(0,0,0,.45)" : "rgba(255,255,255,.75)"; ctx.stroke();
-  }
+// Barra de vida bajo un animal (dura D.SEG_VIDA = 20 s): frac = lo que le queda (0 a 1). Verde si está normal, roja con hambre, azul mientras come (se va llenando).
+export function dibujarBarraVida(ctx, x, y, frac, hambre = false, come = false) {
+  const w = 34, h = 6, x0 = x - w / 2, f = acotar(frac, 0, 1);
+  rr(ctx, x0 - 1, y - h / 2 - 1, w + 2, h + 2, 4); ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fill();
+  if (f > 0) { rr(ctx, x0, y - h / 2, w * f, h, 3); ctx.fillStyle = come ? "#6fb6e8" : hambre ? "#ff6a4d" : "#7be05a"; ctx.fill(); }
 }
 // Rótulo oscuro con texto (estado de un edificio, carga, agua…)
 export function rotulo(ctx, texto, cx, cy, color = "#fff4c2", tam = 12) {

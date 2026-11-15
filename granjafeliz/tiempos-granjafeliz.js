@@ -11,7 +11,7 @@ export const PISO_ORO = 45, TOPE_ORO = 420;              // ningún oro por deba
 export const TIPO_FACTOR = { facil: 1.15, normal: 1, dificil: 0.9 }; // opcional: el tipo de nivel mueve un poco los tiempos
 
 // «Segundos de trabajo» de cada cosa que piden las metas (aproximación; el ritmo de una persona normal con camión base)
-const S_PRODUCTO = { huevo: 2, polvo: 4, pan: 8, lana: 6, hilo: 8, tela: 14, leche: 20 };
+const S_PRODUCTO = { huevo: 2, polvo: 4, pan: 8, lana: 6, hilo: 8, tela: 14, leche: 20, mantequilla: 28, queso: 40 };
 const S_ANIMAL_NUEVO = { gallina: 3, oveja: 25, vaca: 60 };
 const S_EDIFICIO = 20, S_BASE = 50;
 

@@ -1,47 +1,51 @@
 // Ruta: granjafeliz/datos-granjafeliz.js
 // Datos del juego (sin document): productos, animales, edificios, mejoras y niveles. Para agregar algo nuevo se agrega aquí; ver README-granjafeliz.md.
 export const ANCHO = 800, ALTO = 450;   // tamaño lógico del escenario ORIGINAL (horizontal, 16:9). Los otros tamaños de granja (mediano, grande) están en TAMANOS de escena-granjafeliz.js
-export const MAX_AGUA = 3;              // cargas de agua del pozo en su nivel base (= MEJORAS.pozo.capacidad[0]); con las mejoras la capacidad sale de MEJORAS.pozo
+export const MAX_AGUA = 5;              // cargas de agua del pozo en su nivel base (= MEJORAS.pozo.capacidad[0]); con las mejoras la capacidad sale de MEJORAS.pozo
 export const SEG_POZO = 4;              // segundos que tarda el pozo en llenarse (siempre hasta su capacidad; no cambia con las mejoras)
+export const SEG_JAULA = 15;            // segundos que una jaula de oso espera en el suelo para guardarla en el almacén; si no, el oso se escapa y desaparece
 export const SEG_SUELO = 12;            // segundos que dura un producto en el suelo antes de desaparecer (decidido: más ágil que el original)
 export const MAX_PASTO = 12;            // zonas de pasto a la vez (cada toque con agua planta UNA zona = un área de matas; antes eran 16 matas sueltas)
-// HAMBRE y PASTO (sesión 7). Cada animal tiene 6 puntitos de comida bajo sus patas. Bajan de 6 a 2 en SEG_HAMBRE segundos; al llegar a 2 el animal tiene hambre y deja de
-// pasear al azar: CORRE (velocidad × CORRE) a la zona de pasto libre más cercana. Cada USOS_PASTO usos se acaba la zona; cada uso llena al animal (vuelve a 6 puntitos).
-// Si no hay pasto los puntitos siguen bajando hasta 0: ahí se queda quieto (😢) y su producción se pausa. Los números son de Polo (15 s, 6 → 2 puntitos, 3 usos); CORRE y SEG_CRECE_PASTO son míos.
-export const PUNTOS_COMIDA = 6;         // puntitos de un animal lleno
-export const PUNTOS_HAMBRE = 2;         // con 2 puntitos o menos va a comer corriendo
-export const SEG_HAMBRE = 15;           // segundos que tardan en bajar de PUNTOS_COMIDA a PUNTOS_HAMBRE (igual para todos los animales)
+// HAMBRE y PASTO. Cada animal tiene una BARRA DE VIDA de SEG_VIDA segundos (20) bajo sus patas: llena cuando aparece y cada vez que termina de comer. Durante SEG_HAMBRE segundos (12) está normal y pasea al azar;
+// al llegar ahí tiene hambre y deja de pasear: CORRE (velocidad × CORRE) a la zona de pasto libre más cercana. Al llegar come SEG_COMER segundos (5; el reloj de hambre se detiene) y la barra vuelve a llenarse.
+// Si la barra llega a 0 sin que haya empezado a comer (SEG_VIDA segundos sin encontrar pasto) el animal MUERE. Cada USOS_PASTO usos se acaba la zona. Los números son de Polo; CORRE y SEG_CRECE_PASTO son míos.
+export const SEG_VIDA = 20;             // segundos que dura la barra de vida (sin comer, el animal muere al llegar a 0)
+export const SEG_HAMBRE = 12;           // segundos que pasan antes de que tenga hambre y vaya corriendo al pasto (a los 12 s de la barra)
+export const SEG_COMER = 5;             // segundos que tarda en comer una vez que llega al pasto (al terminar la barra vuelve a estar llena)
 export const USOS_PASTO = 3;            // veces que se puede comer de una zona de pasto (por animales distintos o el mismo)
 export const SEG_CRECE_PASTO = 2;       // segundos que tarda en crecer la zona de pasto tras echarle agua (hasta entonces nadie puede comer de ella)
 export const CORRE = 2.2;               // un animal con hambre que va hacia el pasto corre a esta vez su velocidad normal
-export const CAPACIDAD_ALMACEN = 30;    // PESO que cabe en el almacén (nivel base)
-export const CAPACIDAD_CAMION = 10;     // PESO que lleva el camión por viaje (nivel base)
 export const VENTA_ANIMAL = 0.5;        // al vender un animal te pagan esta fracción de su precio (propuesta mía; ajustar aquí)
-export const MAX_COLA_EDIF = 2;         // lotes que pueden esperar en un edificio mientras trabaja (además del que está en marcha)
 
-// Productos: valor = $ al venderlo, peso = lo que ocupa en el almacén y en el camión.
-// VALORES de Farm Frenzy 1 (guía de Cyberly): huevo 10, polvo 20, pastelito 80, lana 100, hilo 200, tela 800, leche 1,000, oso enjaulado 100. Los PESOS siguen siendo los del README (no existen en el original). Faltan mantequilla ($2,000) y queso ($8,000).
+// Productos: valor = $ al venderlo. Cada producto tiene DOS números (sesión 11):
+//   espacio = lo que ocupa en el ALMACÉN (escala donde la leche = 100; el almacén base guarda 100). Orden de la guía: huevo < polvo ≈ pastelito < lana ≈ hilo < tela < leche ≤ mantequilla ≈ queso; el oso = 65 % de la leche. Cifras mías dentro de ese orden.
+//   peso    = lo que pesa en el CAMIÓN. Sale de las CAJAS de Farm Frenzy 1: una caja = CAJA_CAMION (30) puntos y lleva un máximo de unidades por producto, así que peso = 30 / máximo por caja
+//             (huevo 5 → 6, polvo 10 → 3, pastelito 15 → 2, lana 3 → 10, hilo 5 → 6, tela 10 → 3, leche 2 → 15, mantequilla 5 → 6, queso 10 → 3, oso 1 → 30). Camión = cajas × 30 (ver MEJORAS.camion).
+//             Aquí NO hay «una caja = un solo producto»: el peso es de todo el camión, así que un oso (30) puede ir con huevos (por ejemplo 1 oso + 5 huevos = 60 = camión base).
+// VALORES de Farm Frenzy 1 (guía de Cyberly): huevo 10, polvo 20, pastelito 80, lana 100, hilo 200, tela 800, leche 1,000, mantequilla 2,000, queso 8,000, oso enjaulado 100 (igual aquí).
+export const CAJA_CAMION = 30;           // puntos de peso de UNA caja del camión de Farm Frenzy 1 (30 = múltiplo común de los máximos por caja 5, 10, 15, 3, 5, 10, 2, 5, 10 y 1: todos los pesos salen enteros)
 export const PRODUCTOS = {
-  huevo:     { nombre: "Huevo",          emoji: "🥚", valor: 10,    peso: 1 },
-  polvo:     { nombre: "Polvo de huevo", emoji: "🧂", valor: 20,    peso: 2 },
-  pan:       { nombre: "Pastelito",      emoji: "🧁", valor: 80,    peso: 10 },
-  lana:      { nombre: "Lana",           emoji: "🧶", valor: 100,   peso: 10 },
-  hilo:      { nombre: "Hilo",           emoji: "🧵", valor: 200,   peso: 20 },
-  tela:      { nombre: "Tela",           emoji: "🧣", valor: 800,   peso: 50 },
-  leche:     { nombre: "Leche",          emoji: "🥛", valor: 1000,  peso: 50 },
-  // Osos enjaulados (se recogen y se venden como un producto; «jaula» = se dibuja con barrotes). El oso (el único de la versión 1) vale $100 y pesa 10 para que quepa en el camión base (antes 15: no cabía y no se podía vender en los primeros niveles). Polar y panda NO existen en la versión 1: sus valores ($200 / $300) y pesos (25 / 30) son míos.
-  osoEnjaulado:   { nombre: "Oso enjaulado",       emoji: "🐻",   valor: 100, peso: 10, jaula: true },
-  polarEnjaulado: { nombre: "Oso polar enjaulado", emoji: "🐻‍❄️", valor: 200, peso: 25, jaula: true },
-  pandaEnjaulado: { nombre: "Panda enjaulado",     emoji: "🐼",   valor: 300, peso: 30, jaula: true },
-  // Faltan receta y peso confirmado: queso / mantequilla (vaca, ~$100,000, peso 80), pastel de pan ($300), ropa.
+  huevo:       { nombre: "Huevo",          emoji: "🥚", valor: 10,    espacio: 5,   peso: 6 },
+  polvo:       { nombre: "Polvo de huevo", emoji: "🧂", valor: 20,    espacio: 12,  peso: 3 },
+  pan:         { nombre: "Pastelito",      emoji: "🧁", valor: 80,    espacio: 12,  peso: 2 },
+  lana:        { nombre: "Lana",           emoji: "🧶", valor: 100,   espacio: 30,  peso: 10 },
+  hilo:        { nombre: "Hilo",           emoji: "🧵", valor: 200,   espacio: 30,  peso: 6 },
+  tela:        { nombre: "Tela",           emoji: "🧣", valor: 800,   espacio: 60,  peso: 3 },
+  leche:       { nombre: "Leche",          emoji: "🥛", valor: 1000,  espacio: 100, peso: 15 },
+  mantequilla: { nombre: "Mantequilla",    emoji: "🧈", valor: 2000,  espacio: 100, peso: 6 },
+  queso:       { nombre: "Queso",          emoji: "🧀", valor: 8000,  espacio: 100, peso: 3 },
+  // Osos enjaulados (se recogen y se venden como un producto; «jaula» = se dibuja con barrotes). Oso: 65 % de la leche en el almacén y UNA caja entera en el camión (1 por caja en la guía). Polar y panda NO existen en la versión 1: valores, espacios y pesos míos.
+  osoEnjaulado:   { nombre: "Oso enjaulado",       emoji: "🐻",   valor: 100, espacio: 65, peso: 30, jaula: true },
+  polarEnjaulado: { nombre: "Oso polar enjaulado", emoji: "🐻‍❄️", valor: 200, espacio: 80, peso: 30, jaula: true },
+  pandaEnjaulado: { nombre: "Panda enjaulado",     emoji: "🐼",   valor: 300, espacio: 90, peso: 30, jaula: true },
 };
 
-// Animales. Nunca mueren de hambre (ver HAMBRE y PASTO arriba: 6 puntitos, 15 s hasta tener hambre, 3 usos por zona de pasto).
-// segCiclo = segundos de producción (solo corren mientras el animal tenga algún puntito de comida); precio y max = comprar dentro del nivel; tam = tamaño del emoji; vel = velocidad al pasear.
+// Animales. Mueren si pasan SEG_VIDA segundos sin comer (ver HAMBRE y PASTO arriba: barra de 20 s, hambre a los 12 s, comen 5 s, 3 usos por zona de pasto).
+// segCiclo = segundos de producción (corren siempre mientras el animal esté vivo; la gallina pone un huevo cada 20 s); precio y max = comprar dentro del nivel; tam = tamaño del emoji; vel = velocidad al pasear.
 // PRECIOS de Farm Frenzy 1: pato/gallina $100, oveja $1,000, vaca $10,000 (se venden a la mitad). El pavo se QUITÓ porque no existe en la versión 1 (animales de la versión 1: gallina, oveja y vaca). Ciclo y producto de oveja y vaca vienen de la conversación con Gemini (sin confirmar contra el original). Mordidas, velocidad, max, tam y el emoji son MÍOS:
 // Los grandes caminan más lento. Se ajustan aquí.
 export const ANIMALES = {
-  gallina: { nombre: "Gallina", emoji: "🐔", precio: 100,    max: 12, producto: "huevo",     segCiclo: 5,  vel: 34, tam: 30 },
+  gallina: { nombre: "Gallina", emoji: "🐔", precio: 100,    max: 12, producto: "huevo",     segCiclo: 20, vel: 34, tam: 30 },
   oveja:   { nombre: "Oveja",   emoji: "🐑", precio: 1000,   max: 6,  producto: "lana",      segCiclo: 12, vel: 26, tam: 34 },
   vaca:    { nombre: "Vaca",    emoji: "🐄", precio: 10000,  max: 4,  producto: "leche",     segCiclo: 20, vel: 22, tam: 38 },
 };
@@ -56,7 +60,7 @@ export const RADIO_OSO = 2 * CASILLA;      // destruye pasto dentro de este radi
 export const PRIMER_OSO = 25;              // segundos hasta el primer oso
 export const OSOS_CADA = [35, 50];         // segundos entre un oso y el siguiente (al azar en este rango)
 export const OSOS = {
-  oso:   { nombre: "Oso",       emoji: "🐻",   golpes: 3,  vel: 38, producto: "osoEnjaulado" },
+  oso:   { nombre: "Oso",       emoji: "🐻",   golpes: 8,  vel: 38, producto: "osoEnjaulado" },
   polar: { nombre: "Oso polar", emoji: "🐻‍❄️", golpes: 9,  vel: 34, producto: "polarEnjaulado" },
   panda: { nombre: "Panda",     emoji: "🐼",   golpes: 12, vel: 30, producto: "pandaEnjaulado" },
 };
@@ -65,28 +69,35 @@ export const GATO = { costo: 2500, vel: 85 };                          // costo 
 
 // Edificios de procesamiento. entra → sale, seg = tiempo base de cada lote, costos = lo que cuesta construirlo (costos[0]) y subir a cada nivel (costos[1..4]); costo = costos[0]. COSTOS de Farm Frenzy 1.
 // Nombres como en el original: «panaderia» (id) es la PLANTA DE POLVO DE HUEVO y «horno» (id) es la PANADERÍA (los ids no cambian para no romper nada).
-// fabrica = qué fila de MEJORAS usa para subir de nivel (fabrica1 = panadería / hilandería, fabrica2 = horno / tejeduría).
-// Cada nivel que lo usa lista sus edificios en NIVELES[n].edificios (máx. 4, en ese orden, de izquierda a derecha).
+// fabrica = qué fila de MEJORAS usa para subir de nivel (fabrica1 = planta de polvo / hilandería / batidora, fabrica2 = panadería / tejeduría / quesería). Los costos de la batidora y la quesería son los de la versión 1 (construcción $20,000 y $40,000; la mejora 4 llega a $60,000 y $120,000).
+// Cada nivel que lo usa lista sus edificios en NIVELES[n].edificios (máx. 4 en el tamaño Original, 6 en el Mediano y 10 en el Grande, en ese orden: izquierda-derecha, de arriba abajo).
 // Se construyen tocando su espacio vacío (se paga con el dinero del nivel). Al tocar el edificio se descuenta del ALMACÉN hasta «lote» unidades
 // de «entra» (lote depende de su nivel, ver MEJORAS.fabricaN.lote) y empieza el temporizador; al terminar, el producto sale al suelo junto al edificio.
-// Si ya está trabajando, el siguiente toque forma una cola de hasta MAX_COLA_EDIF lotes (los insumos se descuentan al tocar).
+// MODELO DE FARM FRENZY 1: solo UN ciclo a la vez, sin cola (mientras trabaja, tocarlo avisa «Trabajando»). El tiempo del ciclo es IGUAL para todos los edificios y depende solo de su nivel de mejora
+// (MEJORAS.fabricaN.seg: 25 / 22 / 20 / 17 / 15 s), y procesar 5 unidades tarda lo mismo que 1. Se puede empezar el siguiente ciclo mientras la salida anterior sigue en el suelo sin recoger.
 export const EDIFICIOS = {
-  panaderia:  { nombre: "Planta de polvo", emoji: "🏭", entra: "huevo", sale: "polvo", seg: 3, costo: 200,  costos: [200, 300, 400, 500, 600],           fabrica: "fabrica1" },
-  horno:      { nombre: "Panadería",  emoji: "🧁", entra: "polvo", sale: "pan",   seg: 6, costo: 400,  costos: [400, 600, 800, 1000, 1200],         fabrica: "fabrica2" },
-  hilanderia: { nombre: "Hilandería", emoji: "🧵", entra: "lana",  sale: "hilo",  seg: 4, costo: 2000, costos: [2000, 3000, 4000, 5000, 6000],      fabrica: "fabrica1" },
-  tejeduria:  { nombre: "Tejeduría",  emoji: "🧣", entra: "hilo",  sale: "tela",  seg: 8, costo: 4000, costos: [4000, 6000, 8000, 10000, 12000],    fabrica: "fabrica2" },
+  panaderia:  { nombre: "Planta de polvo", emoji: "🏭", entra: "huevo", sale: "polvo", costo: 200,  costos: [200, 300, 400, 500, 600],           fabrica: "fabrica1" },
+  horno:      { nombre: "Panadería",  emoji: "🧁", entra: "polvo", sale: "pan",   costo: 400,  costos: [400, 600, 800, 1000, 1200],         fabrica: "fabrica2" },
+  hilanderia: { nombre: "Hilandería", emoji: "🧵", entra: "lana",  sale: "hilo",  costo: 2000, costos: [2000, 3000, 4000, 5000, 6000],      fabrica: "fabrica1" },
+  tejeduria:  { nombre: "Tejeduría",  emoji: "🧣", entra: "hilo",  sale: "tela",  costo: 4000, costos: [4000, 6000, 8000, 10000, 12000],    fabrica: "fabrica2" },
+  // Cadena de la leche (vaca): leche → mantequilla → queso. Costos de la versión 1; tiempos propios.
+  batidora:   { nombre: "Batidora",   emoji: "🥣", entra: "leche", sale: "mantequilla", costo: 20000, costos: [20000, 30000, 40000, 50000, 60000],     fabrica: "fabrica1" },
+  queseria:   { nombre: "Quesería",   emoji: "🧀", entra: "mantequilla", sale: "queso", costo: 40000, costos: [40000, 60000, 80000, 100000, 120000],   fabrica: "fabrica2" },
 };
 
 // Mejoras por nivel (índice 0 = base). costo[i] = lo que se paga por SUBIR al nivel i. Almacén, camión, pozo y fábricas (edificios) ya se aplican en el juego
-// (franja «⬆» de cada caja o edificio). El tiempo de viaje del camión (6 s en el nivel base, más ágil que el original) es camion.seg; ya no hay SEG_CAMION.
+// (franja «⬆» de cada caja o edificio). El tiempo de viaje del camión (20 s en el nivel base, como la guía) es camion.seg; ya no hay SEG_CAMION.
 export const MEJORAS = {
-  // COSTOS de Farm Frenzy 1 (almacén $150 / $500 / $1,000 / $2,000; camión $300 / $800 / $1,500 / $5,000; pozo $300 / $600 / $1,200 / $5,000). Las capacidades y tiempos son propios.
-  almacen: { capacidad: [30, 100, 300, 1000, 3000], costo: [0, 150, 500, 1000, 2000] },
-  camion:  { capacidad: [10, 30, 100, 500, 2000], seg: [6, 5, 4, 3, 2], costo: [0, 300, 800, 1500, 5000] },   // seg = viaje de ida y vuelta
-  pozo:    { capacidad: [3, 9, 15, 25, 50],          costo: [0, 300, 600, 1200, 5000] },   // capacidad = cargas de agua que guarda el pozo (cada pasto gasta 1). El nivel base es 3 (no 5) para no cambiar los niveles 1-10 ya calibrados. El original cobra $1 por rellenar; aquí el pozo es gratis y de 4 s
+  // COSTOS de Farm Frenzy 1 (almacén $150 / $500 / $1,000 / $12,000; camión $300 / $800 / $1,500 / $5,000; pozo $300 / $600 / $1,200 / $5,000). Las capacidades y tiempos son propios.
+  // capacidad = puntos de ESPACIO (PRODUCTOS[k].espacio; leche = 100). Base 100, luego ×3.3 por mejora. Costos de la guía de Farm Frenzy 1 (la mejora 4 cuesta $12,000, decidido el 15 nov 2026).
+  almacen: { capacidad: [100, 300, 1000, 3000, 10000], costo: [0, 150, 500, 1000, 12000] },
+  // capacidad = cajas de la guía × CAJA_CAMION (2, 3, 4, 5 y 7 cajas × 30) en puntos de PESO (PRODUCTOS[k].peso). seg = viaje de ida y vuelta, los de la guía (~20 / 15 / 12 / 10 / 4 s).
+  camion:  { capacidad: [60, 90, 120, 150, 210], seg: [20, 15, 12, 10, 4], costo: [0, 300, 800, 1500, 5000] },
+  pozo:    { capacidad: [5, 9, 15, 25, 50],          costo: [0, 300, 600, 1200, 5000], recarga: [19, 17, 15, 15, 7] },   // capacidad = cargas de agua que guarda el pozo (cada pasto gasta 1); el nivel base es 5. recarga[i] = $ que cuesta rellenarlo (se paga con el dinero del nivel) en el nivel i; en el nivel 4 (rociador automático) son $7 POR PARCHE de pasto y ya no se usa el agua. Llenarlo tarda SEG_POZO s. El pozo EMPIEZA LLENO y gratis en cada nivel (aguaInicial ya no se usa). Costos de Farm Frenzy 1; las capacidades son propias
   // lote[i] = unidades que procesa cada toque en el nivel i (mismo tiempo por lote): 1 a 5, igual que el original («usa 1, 2, 3, 4, 5 a la vez»). Los COSTOS de cada edificio están en EDIFICIOS.costos.
-  fabrica1: { lote: [1, 2, 3, 4, 5] },   // planta de polvo / hilandería
-  fabrica2: { lote: [1, 2, 3, 4, 5] },   // panadería / tejeduría
+  // seg[i] = segundos que dura un ciclo en el nivel i (igual para todos los edificios, como en la guía de Farm Frenzy 1: ~25 / 22 / 20 / 17 / 15 s).
+  fabrica1: { lote: [1, 2, 3, 4, 5], seg: [25, 22, 20, 17, 15] },   // planta de polvo / hilandería / batidora
+  fabrica2: { lote: [1, 2, 3, 4, 5], seg: [25, 22, 20, 17, 15] },   // panadería / tejeduría / quesería
 };
 
 // Niveles (el del mapa estándar es el número). MODELO DEL ORIGINAL (Farm Frenzy 1): el tiempo NO es un límite, solo da medalla.
@@ -95,7 +106,7 @@ export const MEJORAS = {
 //     { tipo: "producto", id: "huevo", n: 4 }       recoger n unidades de ese producto al almacén (cuenta lo recogido, aunque luego se venda; también lo que recoge el gato)
 //     { tipo: "animal",   id: "gallina", n: 5 }     tener n animales de ese tipo vivos a la vez
 //     { tipo: "edificio", id: "panaderia" }          construir ese edificio
-//   CONDICIONES DE INICIO (opcionales): dineroInicial, aguaInicial, animales ({ tipo: cantidad }), edificios (los que hay en el nivel),
+//   CONDICIONES DE INICIO (opcionales): dineroInicial, aguaInicial (YA NO SE USA: el pozo siempre empieza lleno y gratis), animales ({ tipo: cantidad }), edificios (los que hay en el nivel),
 //     construidos: [ids]   edificios que YA están construidos al empezar (deben estar también en «edificios»; nivel de mejora 0)
 //     regalo: ["gato", "perro"]   gato: empieza ya contigo; perro: sus llamadas son gratis (hace falta que el nivel tenga osos)
 //     mejoras: { almacen, camion, pozo }   niveles de mejora con los que empieza (0 = base)
@@ -111,7 +122,7 @@ export const NIVELES = {
   // «Pato» = gallina, «cupcake» = pastelito (pan), «egg solids» = polvo de huevo. Los osos del original caen en momentos fijos; aquí el primero cae en «primero» y luego cada 35-50 s.
   // El original compra las plantas en una tienda con estrellas; aquí se construyen dentro del nivel (planta $200, panadería $400). CALIBRACIÓN APROXIMADA: el original da oro/plata muy holgados para este juego (más ágil: camión 6 s, producto 12 s en el suelo). Tiempos de oro/plata (segundos): niveles 1, 3 y 10 = originales de la guía (60/120, 180/240, 210/270); 5-8 ya eran los del original; 2, 4 y 9 son ESTIMADOS (la guía no los trae) entre los vecinos. Ya no se calibran con el jugador automático, que es más rápido que una persona: falta probarlos con personas.
   1: { metas: [{ tipo: "producto", id: "huevo", n: 4 }], dineroInicial: 170, aguaInicial: 3, animales: { gallina: 2 }, perro: false, oroSeg: 60, plataSeg: 120,
-       pista: "Toca el pozo y luego el campo para plantar pasto. Toca los huevos para recogerlos. Compra otra gallina." },
+       pista: "Toca el campo para plantar pasto (cada parche gasta 1 de agua del pozo). Toca los huevos para recogerlos. Compra otra gallina." },
   2: { metas: [{ tipo: "producto", id: "huevo", n: 10 }, { tipo: "animal", id: "gallina", n: 5 }], dineroInicial: 190, aguaInicial: 3, animales: { gallina: 2 }, osos: { tipos: ["oso"], horario: [31], cada: [30, 45] }, perro: false, oroSeg: 120, plataSeg: 180,
        pista: "Toca el camión para vender. Si cae un oso, tócalo varias veces para enjaularlo; la jaula también se vende." },
   3: { metas: [{ tipo: "producto", id: "polvo", n: 4 }, { tipo: "dinero", n: 300 }], dineroInicial: 190, aguaInicial: 3, animales: { gallina: 3 }, edificios: ["panaderia"], osos: { tipos: ["oso"], horario: [50, 100], cada: [40, 55] }, perro: false, oroSeg: 180, plataSeg: 240,
@@ -144,13 +155,13 @@ export const LIBRE = {
   facil:    { nombre: "Fácil", dineroInicial: 500, aguaInicial: 3, animales: { gallina: 3 }, comprables: ["gallina", "oveja"], edificios: ["panaderia", "horno", "hilanderia"], gato: true, mejoras: { almacen: 1, camion: 1 },
               osos: { tipos: ["oso"], primero: 90, cada: [60, 90] },
               pista: "Un oso cada 1 o 1.5 minutos: tócalo varias veces para enjaularlo." },
-  normal:   { nombre: "Normal", dineroInicial: 250, aguaInicial: 3, animales: { gallina: 2 }, comprables: ["gallina", "oveja", "vaca"], edificios: ["panaderia", "horno", "hilanderia", "tejeduria"], gato: true,
+  normal:   { nombre: "Normal", dineroInicial: 250, aguaInicial: 3, animales: { gallina: 2 }, comprables: ["gallina", "oveja", "vaca"], edificios: ["panaderia", "horno", "hilanderia", "tejeduria", "batidora", "queseria"], gato: true,
               osos: { tipos: ["oso"], primero: 60, cada: [45, 60] },
-              pista: "Ya hay vacas y los cuatro edificios. La leche y la tela pesan 50: mejora el almacén y el camión." },
-  dificil:  { nombre: "Difícil", dineroInicial: 150, aguaInicial: 3, animales: { gallina: 1 }, comprables: ["gallina", "oveja", "vaca"], edificios: ["panaderia", "horno", "hilanderia", "tejeduria"], gato: true,
+              pista: "Ya hay vacas y los cuatro edificios (en granja Mediana o Grande, también batidora y quesería). La leche, la tela, la mantequilla y el queso pesan 50: mejora el almacén y el camión." },
+  dificil:  { nombre: "Difícil", dineroInicial: 150, aguaInicial: 3, animales: { gallina: 1 }, comprables: ["gallina", "oveja", "vaca"], edificios: ["panaderia", "horno", "hilanderia", "tejeduria", "batidora", "queseria"], gato: true,
               osos: { tipos: ["oso", "polar"], primero: 40, cada: [35, 50] },
               pista: "Aparecen osos polares (9 toques) y empiezas con una sola gallina." },
-  experto:  { nombre: "Experto", dineroInicial: 100, aguaInicial: 3, animales: { gallina: 1 }, comprables: ["gallina", "oveja", "vaca"], edificios: ["panaderia", "horno", "hilanderia", "tejeduria"], gato: true,
+  experto:  { nombre: "Experto", dineroInicial: 100, aguaInicial: 3, animales: { gallina: 1 }, comprables: ["gallina", "oveja", "vaca"], edificios: ["panaderia", "horno", "hilanderia", "tejeduria", "batidora", "queseria"], gato: true,
               osos: { tipos: ["oso", "polar", "panda"], primero: 30, cada: [25, 40] },
               pista: "Osos, polares y pandas (12 toques) cada 25 a 40 segundos." },
 };
