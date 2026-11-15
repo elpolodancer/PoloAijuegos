@@ -2,6 +2,7 @@
 // Lógica pura de «Dos» (sin document): casa de 2 pisos, objetos, colisiones y reparto al azar. Mundo de 800×450 por piso.
 //   COLISIONES[piso] = rectángulos sólidos (paredes y muebles) · CUARTOS[piso] · ESCALERA · BUNKER (centro de la planta baja) · PUERTA_BUNKER
 //   generarItems(rand) · mover(x, y, dx, dy, piso) · dentroBunker(x, y, piso) · nombreItem(it) · valorItem(it)
+//   REFUGIO (piso 2: la habitación de abajo del búnker) · ESTANTES · MESA · RANURAS · acomodarEnRefugio(lista) · ranuraLibre(tipo, x, y, ocupadas)
 export const W = 800, H = 450, TIEMPO = 120, ESPACIOS = 15, RADIO = 9, VEL = 125;
 export const ESCALERA = { x: 600, y: 60, w: 110, h: 50 };      // misma posición en los dos pisos
 export const LLEGADA = { x: 655, y: 140 };                      // dónde apareces al cambiar de piso
@@ -10,7 +11,8 @@ export const PUERTA_BUNKER = { x: 516, y: 215, w: 8, h: 50 };   // umbral en la 
 export const INICIO = { x: 600, y: 330, piso: 0 };
 
 // ---------- Objetos ----------
-// salas = dónde es más probable encontrarlo; n = cuántos hay en la casa; valor = puntos si lo llevas al búnker
+// salas = dónde es más probable encontrarlo; n = cuántos hay en la casa; valor = puntos si lo llevas al búnker;
+// zona = dónde se acomoda en el refugio: "estante" (por defecto) o "mesa" (cosas de ocio)
 export const TIPOS = {
   agua:      { nombre: "Agua",                  valor: 12, n: 5, salas: ["cocina", "bano", "bano1", "comedor", "almacen"] },
   atun:      { nombre: "Lata de atún",          valor: 9,  n: 4, salas: ["cocina", "comedor", "almacen"] },
@@ -23,13 +25,15 @@ export const TIPOS = {
   toallitas: { nombre: "Toallitas húmedas",     valor: 4,  n: 3, salas: ["bano", "bano1", "dorm1"] },
   dulces:    { nombre: "Dulces",                valor: 5,  n: 3, salas: ["sala", "juegos", "cocina", "dorm2"] },
   celular:   { nombre: "Celular",               valor: 3,  n: 2, salas: ["sala", "dorm1", "dorm2", "estudio", "pasillo"] },
-  cartas:    { nombre: "Cartas de mesa",        valor: 4,  n: 2, salas: ["sala", "juegos", "comedor"] },
-  juego:     { nombre: "Juego de mesa",         valor: 5,  n: 2, salas: ["juegos", "sala", "estudio"] },
+  cartas:    { nombre: "Cartas de mesa",        valor: 4,  n: 2, salas: ["sala", "juegos", "comedor"], zona: "mesa" },
+  juego:     { nombre: "Juego de mesa",         valor: 5,  n: 2, salas: ["juegos", "sala", "estudio"], zona: "mesa" },
   papel:     { nombre: "Papel de baño",         valor: 6,  n: 3, salas: ["bano", "bano1", "almacen"] },
   pasta:     { nombre: "Pasta de dientes",      valor: 5,  n: 2, salas: ["bano", "bano1"] },
   botiquin:  { nombre: "Botiquín",              valor: 15, n: 2, salas: ["bano", "bano1", "cocina", "almacen"] },
   extintor:  { nombre: "Extintor",              valor: 8,  n: 2, salas: ["cocina", "almacen", "pasillo", "rec1"] },
   mascara:   { nombre: "Máscara contra polvo",  valor: 8,  n: 2, salas: ["almacen", "estudio", "dorm3", "sala"] },
+  cigarros:  { nombre: "Cigarros",               valor: 4,  n: 2, salas: ["sala", "estudio", "dorm1", "cocina"], zona: "mesa" },
+  encendedor: { nombre: "Encendedor",            valor: 4,  n: 2, salas: ["cocina", "sala", "estudio", "pasillo"], zona: "mesa" },
 };
 export const nombreItem = (it) => TIPOS[it.tipo].nombre + (TIPOS[it.tipo].arma ? (it.carga ? " (con balas)" : " (sin balas)") : "");
 export const valorItem = (it) => { const t = TIPOS[it.tipo]; return t.arma && it.carga ? t.valorCarga : t.valor; };
@@ -108,7 +112,71 @@ export const PISOS = [
     ],
   },
 ];
-export const COLISIONES = PISOS.map((p) => [...p.paredes, ...p.muebles]);
+// ---------- Refugio: la habitación a la que se baja por las escaleras del búnker ----------
+// Es el «piso 2» (PISO_REFUGIO). No se llega caminando: se baja al terminar los 2 minutos estando dentro del búnker (bajarAlRefugio en juego-dos.js).
+// Todo lo que se va a cambiar con el tiempo está en estas constantes: cuántos estantes, tablas y huecos hay (ESTANTES), la mesa (MESA)
+// y qué va dónde (TIPOS[...].zona). Cada lugar donde puede quedar un objeto es una «ranura» (RANURAS).
+export const PISO_REFUGIO = 2;
+export const ESCALERA_REFUGIO = { x: 610, y: 120, w: 110, h: 50 };   // por donde bajaste (solo dibujo y sólido: no se puede volver a subir)
+export const LLEGADA_REFUGIO = { x: 665, y: 205 };                   // dónde apareces, al pie de la escalera
+// Estantes en fila contra la pared norte: n estantes, cada uno con «tablas» tablas y cada tabla con «huecos» objetos.
+// dx = separación entre objetos, margen = borde de la tabla, z0 = altura de la tabla de abajo, dz = altura entre tablas.
+export const ESTANTES = { n: 5, tablas: 5, huecos: 5, dx: 18, margen: 12, separacion: 10, x0: 70, y: 114, h: 18, z0: 6, dz: 17 };
+ESTANTES.w = 2 * ESTANTES.margen + (ESTANTES.huecos - 1) * ESTANTES.dx;   // el ancho sale de cuántos huecos tiene
+ESTANTES.paso = ESTANTES.w + ESTANTES.separacion;                           // de un estante al siguiente
+export const MESA = { x: 280, y: 270, w: 170, h: 44, cols: 8, filas: 2, z: 12 };   // mesa de ocio: cols × filas ranuras sobre la tapa
+export const rectEstante = (e) => ({ x: ESTANTES.x0 + e * ESTANTES.paso, y: ESTANTES.y, w: ESTANTES.w, h: ESTANTES.h });
+export const ALTO_ESTANTE = ESTANTES.z0 + (ESTANTES.tablas - 1) * ESTANTES.dz + 8;
+
+// Ranura = { i, zona: "estante"|"mesa", x, y, z, ... }. Orden: estante 0 (tabla de abajo, de izquierda a derecha, luego la siguiente tabla…), después la mesa.
+// tabla t = 0 es la de abajo. x, y = dónde queda el objeto en la casa plana; z = a qué altura.
+export const RANURAS = [];
+for (let e = 0; e < ESTANTES.n; e++) {
+  const r = rectEstante(e);
+  for (let t = 0; t < ESTANTES.tablas; t++) for (let h = 0; h < ESTANTES.huecos; h++)
+    RANURAS.push({ i: RANURAS.length, zona: "estante", e, t, h, x: r.x + ESTANTES.margen + h * ESTANTES.dx, y: r.y + 12, z: ESTANTES.z0 + t * ESTANTES.dz });
+}
+for (let f = 0; f < MESA.filas; f++) for (let c = 0; c < MESA.cols; c++)
+  RANURAS.push({ i: RANURAS.length, zona: "mesa", f, c, x: MESA.x + 12 + c * ((MESA.w - 24) / (MESA.cols - 1)), y: MESA.y + 10 + f * 22, z: MESA.z });
+
+export const REFUGIO = {
+  nombre: "Refugio",
+  paredes: [...paredH(110, 56, 744), ...paredH(400, 56, 744), ...paredV(60, 110, 400), ...paredV(740, 110, 400)],
+  muebles: [],
+  // sólidos que se dibujan aparte (estantes, mesa y escalera): solo cuentan para las colisiones
+  solidos: [...Array.from({ length: ESTANTES.n }, (_, e) => rectEstante(e)), { x: MESA.x, y: MESA.y, w: MESA.w, h: MESA.h }, ESCALERA_REFUGIO],
+  cuartos: [{ id: "refugio", nombre: "Refugio", x: 60, y: 110, w: 680, h: 290, color: "#8f8a82", rot: [8, 276] }],
+};
+export const ESCENAS = [...PISOS, REFUGIO];   // índice = piso (0, 1 y 2 = refugio). generarItems solo usa PISOS
+export const COLISIONES = ESCENAS.map((p) => [...p.paredes, ...p.muebles, ...(p.solidos || [])]);
+
+export const zonaDe = (tipo) => TIPOS[tipo].zona || "estante";
+// Acomoda la lista de objetos salvados en el refugio: los agrupa por tipo (orden de TIPOS) y llena estantes o mesa según su zona.
+// Si la mesa se llena, lo de ocio pasa a los estantes. Devuelve los que no cupieron (con el tamaño actual no pasa).
+export function acomodarEnRefugio(lista) {
+  const libres = { estante: RANURAS.filter((r) => r.zona === "estante"), mesa: RANURAS.filter((r) => r.zona === "mesa") };
+  const orden = Object.keys(TIPOS), sobran = [];
+  for (const it of [...lista].sort((a, b) => orden.indexOf(a.tipo) - orden.indexOf(b.tipo))) {
+    const r = libres[zonaDe(it.tipo)].shift() || libres.estante.shift();
+    if (!r) { sobran.push(it); continue; }
+    Object.assign(it, { piso: PISO_REFUGIO, ranura: r.i, x: r.x, y: r.y, z: r.z });
+  }
+  return sobran;
+}
+// Ranura libre más cercana a (x, y) de la zona de ese objeto (si no hay, de los estantes). ocupadas = Set con los índices en uso. null si no hay lugar.
+export function ranuraLibre(tipo, x, y, ocupadas) {
+  const zonas = zonaDe(tipo) === "mesa" ? ["mesa", "estante"] : ["estante"];
+  for (const z of zonas) {
+    let mejor = null, d = Infinity;
+    for (const r of RANURAS) {
+      if (r.zona !== z || ocupadas.has(r.i)) continue;
+      const k = Math.hypot(r.x - x, r.y - y) + r.z * 0.001;   // a igual distancia, la tabla más baja
+      if (k < d) { d = k; mejor = r; }
+    }
+    if (mejor) return mejor;
+  }
+  return null;
+}
 
 // ---------- Colisiones ----------
 export function choca(x, y, piso, r = RADIO) {
