@@ -1,7 +1,8 @@
 // Ruta: dos/logica-dos.js
 // Lógica pura de «Dos» (sin document): casa de 2 pisos, objetos, colisiones y reparto al azar. Mundo de 800×450 por piso.
 //   COLISIONES[piso] = rectángulos sólidos (paredes y muebles) · CUARTOS[piso] · ESCALERA · BUNKER (centro de la planta baja) · PUERTA_BUNKER
-//   generarItems(rand) · mover(x, y, dx, dy, piso) · dentroBunker(x, y, piso) · nombreItem(it) · valorItem(it)
+//   repartirEnMuebles(rand) → { idMueble: [objetos] } · MUEBLES / BUSCABLES (muebles con id, piso y cabe) · muebleCercano(x, y, piso) · distMueble(x, y, m)
+//   mover(x, y, dx, dy, piso) · dentroBunker(x, y, piso) · nombreItem(it) · valorItem(it)
 //   REFUGIO (piso 2: la habitación de abajo del búnker) · ESTANTES · MESA · RANURAS · acomodarEnRefugio(lista) · ranuraLibre(tipo, x, y, ocupadas)
 export const W = 800, H = 450, TIEMPO = 120, ESPACIOS = 15, RADIO = 9, VEL = 125;
 export const ESCALERA = { x: 600, y: 60, w: 110, h: 50 };      // misma posición en los dos pisos
@@ -11,29 +12,38 @@ export const PUERTA_BUNKER = { x: 516, y: 215, w: 8, h: 50 };   // umbral en la 
 export const INICIO = { x: 600, y: 330, piso: 0 };
 
 // ---------- Objetos ----------
-// salas = dónde es más probable encontrarlo; n = cuántos hay en la casa; valor = puntos si lo llevas al búnker;
-// zona = dónde se acomoda en el refugio: "estante" (por defecto) o "mesa" (cosas de ocio)
+// Los objetos NO están sueltos: cada uno empieza dentro de un mueble (ver «Muebles con contenido» más abajo).
+// en = en qué tipos de mueble suele estar (la «t» de cada mueble: "lavabo", "closet"…); n = cuántos hay en la casa; valor = puntos si lo llevas al búnker;
+// zona = dónde se acomoda en el refugio: "estante" (por defecto) o "mesa" (cosas de ocio); usos = cuántos usos tiene (todavía sin efecto en el juego)
 export const TIPOS = {
-  agua:      { nombre: "Agua",                  valor: 12, n: 5, salas: ["cocina", "bano", "bano1", "comedor", "almacen"] },
-  atun:      { nombre: "Lata de atún",          valor: 9,  n: 4, salas: ["cocina", "comedor", "almacen"] },
-  frijoles:  { nombre: "Lata de frijoles",      valor: 9,  n: 4, salas: ["cocina", "comedor", "almacen"] },
-  tomates:   { nombre: "Lata de tomates",       valor: 8,  n: 4, salas: ["cocina", "comedor", "almacen"] },
-  hacha:     { nombre: "Hacha",                 valor: 10, n: 2, salas: ["almacen", "sala", "juegos"] },
-  escopeta:  { nombre: "Escopeta",              valor: 6,  n: 2, salas: ["dorm1", "estudio", "almacen"], arma: true, valorCarga: 14 },
-  pistola:   { nombre: "Pistola",               valor: 5,  n: 2, salas: ["dorm2", "dorm3", "estudio"], arma: true, valorCarga: 12 },
-  cobija:    { nombre: "Cobija",                valor: 8,  n: 3, salas: ["dorm1", "dorm2", "dorm3", "sala"] },
-  toallitas: { nombre: "Toallitas húmedas",     valor: 4,  n: 3, salas: ["bano", "bano1", "dorm1"] },
-  dulces:    { nombre: "Dulces",                valor: 5,  n: 3, salas: ["sala", "juegos", "cocina", "dorm2"] },
-  celular:   { nombre: "Celular",               valor: 3,  n: 2, salas: ["sala", "dorm1", "dorm2", "estudio", "pasillo"] },
-  cartas:    { nombre: "Cartas de mesa",        valor: 4,  n: 2, salas: ["sala", "juegos", "comedor"], zona: "mesa" },
-  juego:     { nombre: "Juego de mesa",         valor: 5,  n: 2, salas: ["juegos", "sala", "estudio"], zona: "mesa" },
-  papel:     { nombre: "Papel de baño",         valor: 6,  n: 3, salas: ["bano", "bano1", "almacen"] },
-  pasta:     { nombre: "Pasta de dientes",      valor: 5,  n: 2, salas: ["bano", "bano1"] },
-  botiquin:  { nombre: "Botiquín",              valor: 15, n: 2, salas: ["bano", "bano1", "cocina", "almacen"] },
-  extintor:  { nombre: "Extintor",              valor: 8,  n: 2, salas: ["cocina", "almacen", "pasillo", "rec1"] },
-  mascara:   { nombre: "Máscara contra polvo",  valor: 8,  n: 2, salas: ["almacen", "estudio", "dorm3", "sala"] },
-  cigarros:  { nombre: "Cigarros",               valor: 4,  n: 2, salas: ["sala", "estudio", "dorm1", "cocina"], zona: "mesa" },
-  encendedor: { nombre: "Encendedor",            valor: 4,  n: 2, salas: ["cocina", "sala", "estudio", "pasillo"], zona: "mesa" },
+  agua:      { nombre: "Agua",                  valor: 12, n: 5, en: ["refri", "barra", "trinchador", "cajas", "estante"] },
+  atun:      { nombre: "Lata de atún",          valor: 9,  n: 4, en: ["barra", "trinchador", "estante", "cajas"] },
+  frijoles:  { nombre: "Lata de frijoles",      valor: 9,  n: 4, en: ["barra", "trinchador", "estante", "cajas"] },
+  tomates:   { nombre: "Lata de tomates",       valor: 8,  n: 4, en: ["barra", "trinchador", "estante", "cajas"] },
+  hacha:     { nombre: "Hacha",                 valor: 10, n: 2, en: ["cajas", "estante", "closet"] },
+  escopeta:  { nombre: "Escopeta",              valor: 6,  n: 2, en: ["closet", "cama", "librero"], arma: true, valorCarga: 14 },
+  pistola:   { nombre: "Pistola",               valor: 5,  n: 2, en: ["buró", "escritorio", "closet"], arma: true, valorCarga: 12 },
+  cobija:    { nombre: "Cobija",                valor: 8,  n: 3, en: ["closet", "cama", "sofá"] },
+  toallitas: { nombre: "Toallitas húmedas",     valor: 4,  n: 3, en: ["lavabo", "bañera", "closet"], usos: 20 },
+  dulces:    { nombre: "Dulces",                valor: 5,  n: 3, en: ["mesita", "barra", "trinchador", "buró", "sofá"] },
+  celular:   { nombre: "Celular",               valor: 3,  n: 2, en: ["mesita", "escritorio", "buró", "sofá", "cama"] },
+  cartas:    { nombre: "Cartas de mesa",        valor: 4,  n: 2, en: ["mesita", "mesa", "trinchador", "librero", "repisa"], zona: "mesa" },
+  juego:     { nombre: "Juego de mesa",         valor: 5,  n: 2, en: ["librero", "repisa", "closet", "estante"], zona: "mesa" },
+  papel:     { nombre: "Papel de baño",         valor: 6,  n: 3, en: ["inodoro", "lavabo", "estante", "cajas"] },
+  pasta:     { nombre: "Pasta de dientes",      valor: 5,  n: 2, en: ["lavabo", "bañera"] },
+  botiquin:  { nombre: "Botiquín",              valor: 15, n: 2, en: ["lavabo", "barra", "cajas", "closet"] },
+  extintor:  { nombre: "Extintor",              valor: 8,  n: 2, en: ["barra", "cajas", "estante"] },
+  mascara:   { nombre: "Máscara contra polvo",  valor: 8,  n: 2, en: ["cajas", "escritorio", "closet"] },
+  cigarros:  { nombre: "Cigarros",              valor: 4,  n: 2, en: ["mesita", "buró", "escritorio", "barra"], zona: "mesa" },
+  encendedor: { nombre: "Encendedor",           valor: 4,  n: 2, en: ["mesita", "barra", "escritorio", "buró", "trinchador"], zona: "mesa" },
+  // ----- cosas de baño y aseo -----
+  cepillo:    { nombre: "Cepillo de dientes",   valor: 3,  n: 2, en: ["lavabo", "bañera"] },
+  jabon:      { nombre: "Jabón",                valor: 4,  n: 3, en: ["lavabo", "bañera"] },
+  shampoo:    { nombre: "Shampoo",              valor: 4,  n: 2, en: ["bañera", "lavabo"] },
+  desodorante: { nombre: "Desodorante",         valor: 4,  n: 2, en: ["lavabo", "closet", "buró"] },
+  toalla:     { nombre: "Toalla de baño",       valor: 6,  n: 3, en: ["bañera", "closet", "lavabo"] },
+  perfume:    { nombre: "Perfume",              valor: 3,  n: 2, en: ["lavabo", "buró", "closet"] },
+  bolsa:      { nombre: "Bolsa de basura",      valor: 5,  n: 3, en: ["barra", "cajas", "estante", "lavabo"] },
 };
 export const nombreItem = (it) => TIPOS[it.tipo].nombre + (TIPOS[it.tipo].arma ? (it.carga ? " (con balas)" : " (sin balas)") : "");
 export const valorItem = (it) => { const t = TIPOS[it.tipo]; return t.arma && it.carga ? t.valorCarga : t.valor; };
@@ -94,7 +104,7 @@ export const PISOS = [
     muebles: [
       caja(70, 58, 60, 90, "cama"), caja(225, 58, 28, 60, "closet"),
       caja(330, 58, 70, 90, "cama"), caja(410, 60, 24, 24, "buró"),
-      caja(468, 58, 100, 34, "bañera"), caja(556, 120, 22, 22, "inodoro"),
+      caja(468, 58, 100, 34, "bañera"), caja(556, 120, 22, 22, "inodoro"), caja(468, 150, 40, 20, "lavabo"),
       caja(68, 236, 60, 14, "repisa"),
       caja(70, 340, 90, 50, "cama"), caja(262, 268, 32, 50, "closet"),
       caja(310, 370, 120, 24, "escritorio"), caja(490, 268, 24, 100, "librero"),
@@ -196,25 +206,51 @@ export const dentroDe = (x, y, r) => x >= r.x && x <= r.x + r.w && y >= r.y && y
 // Dentro del búnker = con el centro del personaje pasado el umbral (un poco adentro de las paredes)
 export const dentroBunker = (x, y, piso) => piso === 0 && dentroDe(x, y, { x: BUNKER.x + 4, y: BUNKER.y + 4, w: BUNKER.w - 8, h: BUNKER.h - 8 });
 
+// ---------- Muebles con contenido ----------
+// Cada mueble recibe un id («piso:posición», por ejemplo "0:14"), su piso y «cabe» = cuántos objetos guarda. Se abren tocándolos (ver juego-dos.js).
+// CABE: cuántos caben en cada tipo de mueble. Los tipos que no aparecen (tele, literas) no se abren. Los muebles del BÚNKER tampoco: ahí solo queda lo que sueltas.
+export const CABE = { estante: 6, cajas: 6, mesa: 3, trinchador: 6, barra: 5, refri: 5, "bañera": 4, lavabo: 6, inodoro: 3, mesita: 3, "sofá": 3,
+  cama: 3, closet: 6, "buró": 3, repisa: 4, escritorio: 5, librero: 6 };
+export const NOMBRE_MUEBLE = { estante: "Estante", cajas: "Cajas", mesa: "Mesa", trinchador: "Trinchador", barra: "Barra de cocina", refri: "Refrigerador",
+  "bañera": "Bañera", lavabo: "Lavabo", inodoro: "Inodoro", mesita: "Mesita", "sofá": "Sofá", cama: "Cama", closet: "Clóset", "buró": "Buró", repisa: "Repisa",
+  escritorio: "Escritorio", librero: "Librero", tele: "Mueble de la tele", literas: "Literas" };
+export const ALCANCE_MUEBLE = 26;          // distancia máxima (del centro del personaje al borde del mueble) para abrirlo
+export const PROB_FUERA_DE_LUGAR = 0.1;    // 0.1 = 1 de cada 10 objetos cae en un mueble cualquiera (no en el suyo); 0 = todo estricto
+export const MUEBLES = [];
+PISOS.forEach((p, piso) => p.muebles.forEach((m, i) => {
+  const enBunker = piso === 0 && m.x >= BUNKER.x && m.y >= BUNKER.y && m.x + m.w <= BUNKER.x + BUNKER.w && m.y + m.h <= BUNKER.y + BUNKER.h;
+  Object.assign(m, { id: piso + ":" + i, piso, cabe: enBunker ? 0 : CABE[m.t] || 0 });
+  MUEBLES.push(m);
+}));
+export const BUSCABLES = MUEBLES.filter((m) => m.cabe > 0);
+
+// Distancia del punto (x, y) al borde del mueble (0 si está dentro)
+export const distMueble = (x, y, m) => Math.hypot(Math.max(m.x - x, 0, x - (m.x + m.w)), Math.max(m.y - y, 0, y - (m.y + m.h)));
+// Mueble que se puede abrir y está más cerca (dentro de «alcance»), o null
+export function muebleCercano(x, y, piso, alcance = ALCANCE_MUEBLE) {
+  let mejor = null, d = alcance;
+  for (const m of BUSCABLES) { if (m.piso !== piso) continue; const k = distMueble(x, y, m); if (k < d) { d = k; mejor = m; } }
+  return mejor;
+}
+
 // ---------- Reparto al azar ----------
-export function generarItems(rand = Math.random) {
-  const items = [];
-  const cuartos = PISOS.flatMap((p, piso) => p.cuartos.filter((c) => c.id !== "bunker").map((c) => ({ ...c, piso })));
+// Devuelve { idMueble: [objetos] }: cada objeto { id, tipo, carga? } va dentro de un mueble donde tiene sentido (TIPOS[...].en);
+// con probabilidad PROB_FUERA_DE_LUGAR (o si sus muebles ya están llenos) cae en cualquier mueble con lugar. Nunca pasa de «cabe».
+export function repartirEnMuebles(rand = Math.random) {
+  const cont = {};
+  for (const m of BUSCABLES) cont[m.id] = [];
+  const hayLugar = (m) => cont[m.id].length < m.cabe;
   let id = 0;
   for (const [tipo, t] of Object.entries(TIPOS)) {
     for (let k = 0; k < t.n; k++) {
-      const pref = cuartos.filter((c) => t.salas.includes(c.id));
-      for (let intento = 0; intento < 200; intento++) {
-        const c = rand() < 0.7 && pref.length ? pref[Math.floor(rand() * pref.length)] : cuartos[Math.floor(rand() * cuartos.length)];
-        const x = c.x + 14 + rand() * (c.w - 28), y = c.y + 14 + rand() * (c.h - 28);
-        if (choca(x, y, c.piso, 13)) continue;
-        if (dentroDe(x, y, { x: ESCALERA.x - 14, y: ESCALERA.y - 14, w: ESCALERA.w + 28, h: ESCALERA.h + 28 })) continue;
-        if (items.some((o) => o.piso === c.piso && Math.hypot(o.x - x, o.y - y) < 26)) continue;
-        const it = { id: id++, tipo, x, y, piso: c.piso };
-        if (t.arma) it.carga = rand() < 0.5;
-        items.push(it); break;
-      }
+      const propios = BUSCABLES.filter((m) => t.en.includes(m.t) && hayLugar(m));
+      const lista = rand() >= PROB_FUERA_DE_LUGAR && propios.length ? propios : BUSCABLES.filter(hayLugar);
+      if (!lista.length) break;
+      const m = lista[Math.floor(rand() * lista.length)];
+      const it = { id: id++, tipo };
+      if (t.arma) it.carga = rand() < 0.5;
+      cont[m.id].push(it);
     }
   }
-  return items;
+  return cont;
 }

@@ -1,6 +1,7 @@
 // Ruta: dos/juego-dos.js
 // «Dos» (id de puntos: "dos"). Fase 1: 2 minutos para recoger objetos en una casa de 2 pisos (inventario de 15 espacios).
-// Recoger: tecla E/espacio, botón «Recoger», o clic/toque sobre un objeto muy cercano.
+// Los objetos están DENTRO de los muebles: se toca el mueble (o E / botón «Abrir») y se abre un panel con lo que guarda; tocar un objeto del panel lo lleva a la mochila.
+// Los objetos que sueltas quedan en el piso y se recogen con E/espacio, el botón «Recoger», o clic/toque sobre ellos cuando estás muy cerca.
 // Al llegar a cero solo sobrevives si estás dentro del búnker: entonces bajas al REFUGIO (escena nueva con estantes y una mesa, ver «Fin»).
 // La casa, el refugio y el reparto están en logica-dos.js.
 // Vista: desde arriba y al centro de la casa, inclinada (proyección en la sección «Dibujo»; la lógica sigue siendo plana).
@@ -8,11 +9,13 @@ import { encolarPuntos } from "../compartido/cola-puntos.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
 import { W, H, TIEMPO, ESPACIOS, RADIO, VEL, ESCALERA, LLEGADA, BUNKER, PUERTA_BUNKER, INICIO, ESCENAS, TIPOS,
   PISO_REFUGIO, ESCALERA_REFUGIO, LLEGADA_REFUGIO, ESTANTES, MESA, RANURAS, rectEstante, ALTO_ESTANTE, acomodarEnRefugio, ranuraLibre,
-  generarItems, mover, dentroDe, dentroBunker, nombreItem, valorItem } from "./logica-dos.js";
+  repartirEnMuebles, BUSCABLES, NOMBRE_MUEBLE, ALCANCE_MUEBLE, distMueble, muebleCercano,
+  mover, dentroDe, dentroBunker, nombreItem, valorItem } from "./logica-dos.js";
 
 const ID = "dos", CLAVE = "dos_progreso_v1", BONO_VIVO = 50, ALCANCE = 30;
 const RADIO_TOQUE = 18; // qué tan cerca del dibujo del objeto debe caer el clic o el toque (unidades del lienzo 800×450)
 const $ = (id) => document.getElementById(id);
+const txtRecoger = $("txt-recoger");
 const lienzo = $("lienzo"), ctx = lienzo.getContext("2d");
 lienzo.width = 1280; lienzo.height = 720;
 
@@ -58,6 +61,13 @@ function icono(c, tipo, cx, cy, s, carga) {
     case "extintor": R(-4, -5, 8, 13, "#e53935"); R(-2, -8, 4, 3, "#222"); R(2, -8, 5, 1.5, "#222"); O(0, 2, 2, "#fff"); break;
     case "mascara": O(0, 0, 7, "#aeb6bf"); O(-3, 2, 2.4, "#6b7480"); O(3, 2, 2.4, "#6b7480"); R(-3, -3, 6, 1.4, "#7b8591"); break;
     case "cigarros": R(-3.2, -9, 2.2, 6, "#f6e7c8"); R(0.4, -8, 2.2, 5, "#f6e7c8"); R(-3.2, -5.2, 2.2, 2.2, "#e08a3c"); R(0.4, -4.2, 2.2, 1.2, "#e08a3c"); R(-6, -3, 12, 11, "#c62828"); R(-6, -3, 12, 3, "#fff"); R(-6, 4, 12, 1.6, "#8e1b1b"); break;
+    case "cepillo": c.rotate(-0.7); R(-9, -1.3, 13, 2.6, "#2fa7e0"); R(3.5, -2.4, 6, 4.8, "#fff"); for (let i = 0; i < 4; i++) R(4 + i * 1.5, -5, 0.9, 2.6, "#59d68a"); break;
+    case "jabon": R(-8, -4.5, 16, 9, "#f7b6d2"); R(-8, -4.5, 16, 2.6, "#fbd2e4"); O(-3, 0.8, 1.5, "#fff"); O(2.5, 2.2, 1, "#fff"); O(5, -1, 0.8, "#fff"); break;
+    case "shampoo": R(-4, -5, 8, 13, "#7e57c2"); R(-2.5, -9, 5, 4, "#d1c4e9"); R(-4, -1, 8, 5, "#fff"); O(0, 1.5, 1.5, "#7e57c2"); break;
+    case "desodorante": R(-4, -2, 8, 11, "#26a69a"); R(-3.2, -9, 6.4, 7, "#eceff1"); R(-4, 2, 8, 2, "#fff"); break;
+    case "toalla": R(-8, -5, 16, 10, "#26c6da"); R(-8, -5, 16, 2, "#00acc1"); R(-8, 3, 16, 2, "#00acc1"); R(-8, -1, 16, 1, "#b2ebf2"); break;
+    case "perfume": R(-5, -3, 10, 11, "#f48fb1"); R(-3, -6, 6, 3, "#fce4ec"); R(-1.5, -9, 3, 3, "#ad1457"); R(-3, 0, 6, 4, "#fff"); break;
+    case "bolsa": P("#37474f", [-6, -4], [6, -4], [8, 8], [-8, 8]); R(-3, -7, 6, 3.4, "#455a64"); R(-4.5, -4.4, 9, 1.6, "#90a4ae"); break;
     case "encendedor": R(-3.5, -1, 7, 10, "#2b8fd6"); R(-3.5, -4, 7, 3, "#b0b6bd"); P("#ff9f1c", [0, -10], [3, -6], [0, -4.4], [-3, -6]); P("#ffe27a", [0, -8], [1.4, -5.8], [0, -5], [-1.4, -5.8]); break;
   }
   if (carga) O(7, -7, 2.2, "#ffd23c");   // punto amarillo = arma con balas
@@ -66,7 +76,9 @@ function icono(c, tipo, cx, cy, s, carga) {
 
 // ---------- Estado ----------
 let modo = "menu", pausado = false;
-let items, mochila, jx, jy, piso, tiempo, aviso, avisoT, bloqueoEscalera, ojo, hacia;
+let items, mochila, jx, jy, piso, tiempo, aviso, avisoT, bloqueoEscalera, ojo, hacia;   // items = objetos SUELTOS (los que soltaste y los del refugio)
+let contenido = {}, abierto = null;   // contenido = { idMueble: [objetos] }; abierto = el mueble cuyo panel está a la vista
+const visitados = new Set();          // ids de muebles que ya abriste (si quedan vacíos se marcan con ✓)
 const teclas = new Set();
 let tran = 0, salvo = [], puntosBajada = 0; // transición al refugio: segundos que lleva, objetos que se salvan y puntos que dio
 const activo = () => (modo === "juego" || modo === "refugio") && !pausado;   // se puede caminar, recoger y soltar
@@ -94,13 +106,14 @@ function pintarInventario() {
 function decir(t) { aviso = t; avisoT = 1.8; }
 
 function iniciar() {
-  items = generarItems(); mochila = new Array(ESPACIOS).fill(null);
+  items = []; contenido = repartirEnMuebles(); visitados.clear(); cerrarMueble(); mochila = new Array(ESPACIOS).fill(null);
   jx = INICIO.x; jy = INICIO.y; piso = INICIO.piso; tiempo = TIEMPO; aviso = ""; avisoT = 0; bloqueoEscalera = 0; ojo = 0; hacia = 1;
   joy = null; teclas.clear(); pausado = false; modo = "juego";
   ocultar($("menu")); ocultar($("fin")); mostrar(inv); mostrar($("btn-recoger")); $("btn-menu").hidden = false;
   pintarInventario(); decir("¡Rápido! Tienes 2 minutos");
 }
 function armarMenu() {
+  cerrarMueble();
   modo = "menu"; $("btn-menu").hidden = true; ocultar(inv); ocultar($("btn-recoger")); ocultar($("btn-cerrar")); ocultar($("fin")); mostrar($("menu"));
   for (const c of ["chip-piso", "chip-mochila", "chip-tiempo"]) $(c).textContent = "";
   $("record").textContent = prog.partidas ? "Mejor puntaje: " + prog.mejor + " · Partidas: " + prog.partidas : "";
@@ -113,7 +126,7 @@ $("btn-cerrar").onclick = () => { if (modo === "juego" && !pausado && dentroBunk
 const pausa = crearMenuPausa({
   boton: $("btn-menu"),
   puedeAbrir: activo,
-  alAbrir: () => { pausado = true; joy = null; teclas.clear(); },
+  alAbrir: () => { cerrarMueble(); pausado = true; joy = null; teclas.clear(); },
   alContinuar: () => { pausado = false; },
   extras: () => [{ icono: "🔁", texto: "Reiniciar partida", clase: "b-oro", alElegir: iniciar }],
   alSalir: () => { pausado = false; armarMenu(); },
@@ -150,11 +163,53 @@ function soltar(i) {
   it.piso = piso; it.x = jx + 14 * hacia; it.y = jy + 6; it.z = 0; it.ranura = null;
   items.push(it); pintarInventario(); decir("Soltaste: " + nombreItem(it));
 }
-$("btn-recoger").addEventListener("click", () => recoger());
+// ----- Muebles: se abren y se saca lo que hay dentro -----
+const panelM = $("mueble"), tituloM = $("mueble-titulo"), listaM = $("mueble-lista");
+$("mueble-cerrar").addEventListener("click", () => cerrarMueble());
+function abrirMueble(m) {
+  if (modo !== "juego" || pausado) return;
+  abierto = m; visitados.add(m.id); pintarMueble(); mostrar(panelM);
+}
+function cerrarMueble() { abierto = null; ocultar(panelM); }
+const alternarMueble = (m) => (abierto === m ? cerrarMueble() : abrirMueble(m));
+// Panel: una tarjeta por objeto (no dice si un arma trae balas: eso se sabe al recogerla)
+function pintarMueble() {
+  if (!abierto) return;
+  const lista = contenido[abierto.id] || [];
+  tituloM.textContent = NOMBRE_MUEBLE[abierto.t] + " · " + lista.length + (lista.length === 1 ? " objeto" : " objetos");
+  listaM.replaceChildren();
+  if (!lista.length) { const v = document.createElement("p"); v.className = "vacio"; v.textContent = "Está vacío"; listaM.appendChild(v); return; }
+  lista.forEach((it, i) => {
+    const nombre = TIPOS[it.tipo].nombre, b = document.createElement("button"), cv = document.createElement("canvas"), t = document.createElement("span");
+    b.type = "button"; b.className = "obj"; b.dataset.n = i + 1; b.title = nombre + " (toca o pulsa " + (i + 1) + " para llevártelo)"; b.setAttribute("aria-label", nombre + ", toca para llevártelo");
+    cv.width = 48; cv.height = 48; icono(cv.getContext("2d"), it.tipo, 24, 24, 20);
+    t.textContent = nombre; b.append(cv, t);
+    b.addEventListener("click", () => sacar(it));
+    listaM.appendChild(b);
+  });
+}
+function sacar(it) {
+  if (!it || !abierto || modo !== "juego" || pausado) return;
+  const lista = contenido[abierto.id] || [], k = lista.indexOf(it), i = mochila.indexOf(null);
+  if (k < 0) return;
+  if (i < 0) { decir("Inventario lleno: toca un objeto para soltarlo"); return; }
+  lista.splice(k, 1); mochila[i] = it;
+  pintarInventario(); pintarMueble(); decir("Recogiste: " + nombreItem(it));
+}
+// E / espacio / botón: primero el objeto suelto más cercano; si no hay, el mueble más cercano (abre o cierra su panel)
+function accion() {
+  if (!activo()) return;
+  const it = cercano();
+  if (it) { recoger(it); return; }
+  const m = muebleCercano(jx, jy, piso);
+  if (m) alternarMueble(m);
+}
+$("btn-recoger").addEventListener("click", accion);
 
 // ---------- Fin ----------
 // Al llegar a cero (o al cerrar la puerta): fuera del búnker pierdes; dentro, bajas al refugio (escena nueva, ver más abajo).
 function terminar() {
+  cerrarMueble();
   if (dentroBunker(jx, jy, piso)) { bajarAlRefugio(); return; }
   const llevados = mochila.filter(Boolean);
   const cuenta = {}; for (const it of llevados) { const n = nombreItem(it); cuenta[n] = (cuenta[n] || 0) + 1; }
@@ -172,6 +227,7 @@ function terminar() {
 // cambio de escena a la mitad (armarRefugio) y fundido de vuelta; después modo = "refugio" (sin tiempo: se camina, se recoge y se deja).
 const T_CORTE = 1.3, T_BAJADA = 3.0;   // segundos: a los 1.3 s la pantalla está negra y se cambia de escena; a los 3.0 s termina el fundido
 function bajarAlRefugio() {
+  cerrarMueble();
   const sueltos = items.filter((it) => it.piso === 0 && dentroBunker(it.x, it.y, 0));
   salvo = [...mochila.filter(Boolean), ...sueltos];
   puntosBajada = salvo.reduce((s, it) => s + valorItem(it), 0) + BONO_VIVO;
@@ -197,7 +253,8 @@ addEventListener("keydown", (e) => {
   if (!activo()) return;
   const k = e.key.toLowerCase();
   if (["arrowup", "arrowdown", "arrowleft", "arrowright", "w", "a", "s", "d"].includes(k)) { teclas.add(k); e.preventDefault(); }
-  else if ((k === "e" || k === " ") && !e.repeat) { e.preventDefault(); recoger(); }
+  else if ((k === "e" || k === " ") && !e.repeat) { e.preventDefault(); accion(); }
+  else if (abierto && /^[1-9]$/.test(k) && !e.repeat) { e.preventDefault(); sacar((contenido[abierto.id] || [])[+k - 1]); }   // con el panel abierto, el número lleva ese objeto
 });
 addEventListener("keyup", (e) => teclas.delete(e.key.toLowerCase()));
 addEventListener("blur", () => { teclas.clear(); joy = null; });
@@ -214,24 +271,40 @@ function itemEnPunto(p) {
   return mejor;
 }
 const estaAlAlcance = (it) => Math.hypot(it.x - jx, it.y - jy) < ALCANCE;
+const muebleAlAlcance = (m) => distMueble(jx, jy, m) < ALCANCE_MUEBLE;
+// Mueble (de los que se abren) del piso actual cuya figura está bajo el puntero; si hay varios encimados, el más cercano a la cámara
+function muebleEnPunto(p) {
+  let mejor = null;
+  for (const m of BUSCABLES) {
+    if (m.piso !== piso) continue;
+    const alto = ALTO_MUEBLE[m.t] || 12, pts = [...rectProy(m.x, m.y, m.w, m.h), ...rectProy(m.x, m.y, m.w, m.h, alto)];
+    const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
+    if (p.x >= Math.min(...xs) - 2 && p.x <= Math.max(...xs) + 2 && p.y >= Math.min(...ys) - 2 && p.y <= Math.max(...ys) + 2 && (!mejor || m.y + m.h > mejor.y + mejor.h)) mejor = m;
+  }
+  return mejor;
+}
 lienzo.addEventListener("pointerdown", (e) => {
   if (!activo()) return;
   const p = punto(e), it = itemEnPunto(p);
   e.preventDefault();
-  if (it && estaAlAlcance(it)) { recoger(it); return; }   // toque sobre un objeto muy cercano: se recoge, sin joystick
-  joy = { ox: p.x, oy: p.y, x: p.x, y: p.y, lejos: !!it };  // si tocó un objeto lejano, se avisa al soltar (si no arrastró)
+  if (it && estaAlAlcance(it)) { recoger(it); return; }   // toque sobre un objeto suelto muy cercano: se recoge, sin joystick
+  // Un toque sobre un mueble lo abre al SOLTAR, y solo si no arrastraste: así el joystick sigue funcionando encima de los muebles
+  joy = { ox: p.x, oy: p.y, x: p.x, y: p.y, lejos: !!it, mueble: it ? null : muebleEnPunto(p) };
   lienzo.setPointerCapture(e.pointerId);
 });
 lienzo.addEventListener("pointermove", (e) => {
   const p = punto(e);
   if (joy) { joy.x = p.x; joy.y = p.y; return; }
-  if (e.pointerType === "mouse") { // la manita aparece solo sobre un objeto que sí se puede recoger
-    const it = activo() ? itemEnPunto(p) : null;
-    lienzo.style.cursor = it && estaAlAlcance(it) ? "pointer" : "";
+  if (e.pointerType === "mouse") { // la manita aparece solo sobre algo que sí se puede recoger o abrir
+    const it = activo() ? itemEnPunto(p) : null, m = activo() && !it ? muebleEnPunto(p) : null;
+    lienzo.style.cursor = (it && estaAlAlcance(it)) || (m && muebleAlAlcance(m)) ? "pointer" : "";
   }
 });
 lienzo.addEventListener("pointerup", () => {
-  if (joy && joy.lejos && Math.hypot(joy.x - joy.ox, joy.y - joy.oy) < 8) decir("Acércate más para recogerlo");
+  if (joy && Math.hypot(joy.x - joy.ox, joy.y - joy.oy) < 8) {
+    if (joy.lejos) decir("Acércate más para recogerlo");
+    else if (joy.mueble) { if (muebleAlAlcance(joy.mueble)) alternarMueble(joy.mueble); else decir("Acércate más para abrirlo"); }
+  }
   joy = null;
 });
 lienzo.addEventListener("pointercancel", () => { joy = null; });
@@ -259,6 +332,9 @@ function actualizar(dt) {
   if (enJuego && bloqueoEscalera <= 0 && dentroDe(jx, jy, ESCALERA)) {
     piso = 1 - piso; jx = LLEGADA.x; jy = LLEGADA.y; bloqueoEscalera = 0.5; decir(ESCENAS[piso].nombre);
   }
+  if (abierto && (abierto.piso !== piso || distMueble(jx, jy, abierto) > ALCANCE_MUEBLE + 14)) cerrarMueble();   // te alejaste o cambiaste de piso
+  const verbo = cercano() || !muebleCercano(jx, jy, piso) ? "Recoger" : "Abrir";
+  if (txtRecoger.textContent !== verbo) txtRecoger.textContent = verbo;
   if (enJuego) $("btn-cerrar").hidden = !dentroBunker(jx, jy, piso);
   $("chip-piso").textContent = ESCENAS[piso].nombre;
   $("chip-mochila").textContent = "🎒 " + mochila.filter(Boolean).length + "/" + ESPACIOS;
@@ -289,10 +365,19 @@ function caja3d(b, alto, top, frente, lado) {
   else if (b.x + b.w < CX) poli([B[1], B[2], T[2], T[1]], lado, borde);
   poli(T, top, borde);
 }
-function mueble3d(b, alto) {
+function mueble3d(b, alto, resaltado = false) {
   caja3d(b, alto, "#a06a3a", "#6e4522", "#5a3718");
   ctx.font = "8px system-ui, sans-serif";
   if (b.w >= 24 && b.h >= 12 && ctx.measureText(b.t).width <= b.w * ESC - 4) { const [x, y] = proy(b.x + b.w / 2, b.y + b.h / 2, alto); ctx.fillStyle = "rgba(255,240,210,.8)"; ctx.textAlign = "center"; ctx.fillText(b.t, x, y + 3); }
+  if (resaltado) { // contorno blanco: es el mueble que se abre con E / el botón / un toque
+    const T = rectProy(b.x, b.y, b.w, b.h, alto);
+    ctx.beginPath(); T.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath();
+    ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.lineWidth = 2.5; ctx.stroke();
+  }
+  if (b.cabe && visitados.has(b.id) && !(contenido[b.id] || []).length) { // ya lo abriste y lo vaciaste
+    const [x, y] = proy(b.x + b.w - 5, b.y + 6, alto);
+    ctx.fillStyle = "#c9f5d2"; ctx.font = "bold 9px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText("✓", x, y + 3);
+  }
 }
 function dibujarSuelo() {
   const P = ESCENAS[piso];
@@ -439,10 +524,10 @@ function ladoBunker(x1, y1, x2, y2) {
   ctx.restore();
 }
 // Paredes, muebles, objetos y jugador van ordenados de atrás hacia delante (por su borde sur).
-function dibujarEscena(cerca) {
+function dibujarEscena(cerca, mCerca) {
   const P = ESCENAS[piso], lista = [];
   for (const b of P.paredes) lista.push({ y: b.y + b.h, f: () => caja3d(b, ALTO_PARED, "#8a6a4c", "#4b3626", "#3b2a1c") });
-  for (const b of P.muebles) lista.push({ y: b.y + b.h, f: () => mueble3d(b, ALTO_MUEBLE[b.t] || 12) });
+  for (const b of P.muebles) lista.push({ y: b.y + b.h, f: () => mueble3d(b, ALTO_MUEBLE[b.t] || 12, b === mCerca) });
   const enRefugio = piso === PISO_REFUGIO;   // allí los objetos los dibujan los estantes y la mesa
   if (!enRefugio) for (const it of items) if (it.piso === piso) lista.push({ y: it.y, f: () => dibujarItem(it, it === cerca, true) });
   const EE = enRefugio ? ESCALERA_REFUGIO : ESCALERA;
@@ -473,7 +558,13 @@ function dibujar() {
   if (modo === "menu") return;
   dibujarSuelo();
   const cerca = modo === "juego" || modo === "refugio" ? cercano() : null;
-  dibujarEscena(cerca);
+  const mCerca = modo === "juego" && !cerca ? muebleCercano(jx, jy, piso) : null;   // sin objeto suelto a la mano, se resalta el mueble que se puede abrir
+  dibujarEscena(cerca, mCerca);
+  if (mCerca) {
+    const [lx, ly] = proy(mCerca.x + mCerca.w / 2, mCerca.y + mCerca.h / 2, ALTO_MUEBLE[mCerca.t] || 12), t = NOMBRE_MUEBLE[mCerca.t] + " · abrir";
+    ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "center"; const w = ctx.measureText(t).width + 12;
+    ctx.fillStyle = "rgba(20,20,24,.85)"; ctx.fillRect(lx - w / 2, ly - 30, w, 18); ctx.fillStyle = "#fff"; ctx.fillText(t, lx, ly - 17);
+  }
   if (cerca) { const [lx, ly] = proy(cerca.x, cerca.y, cerca.z || 0); ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "center"; const t = TIPOS[cerca.tipo].nombre; const w = ctx.measureText(t).width + 12; ctx.fillStyle = "rgba(20,20,24,.85)"; ctx.fillRect(lx - w / 2, ly - 36, w, 18); ctx.fillStyle = "#fff"; ctx.fillText(t, lx, ly - 23); }
   if (joy) {
     ctx.strokeStyle = "rgba(255,255,255,.8)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(joy.ox, joy.oy, 30, 0, 7); ctx.stroke();
