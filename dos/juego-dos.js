@@ -1,13 +1,15 @@
 // Ruta: dos/juego-dos.js
 // «Dos» (id de puntos: "dos"). Fase 1: 2 minutos para recoger objetos en una casa de 2 pisos (inventario de 15 espacios).
+// Recoger: tecla E/espacio, botón «Recoger», o clic/toque sobre un objeto muy cercano.
 // Al llegar a cero solo sobrevives si estás dentro del búnker. La casa y el reparto están en logica-dos.js.
 // Vista: desde arriba y al centro de la casa, inclinada (proyección en la sección «Dibujo»; la lógica sigue siendo plana).
 import { encolarPuntos } from "../compartido/cola-puntos.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
-import { W, H, TIEMPO, ESPACIOS, RADIO, VEL, ESCALERA, LLEGADA, BUNKER, INICIO, PISOS, TIPOS,
+import { W, H, TIEMPO, ESPACIOS, RADIO, VEL, ESCALERA, LLEGADA, BUNKER, PUERTA_BUNKER, INICIO, PISOS, TIPOS,
   generarItems, mover, dentroDe, dentroBunker, nombreItem, valorItem } from "./logica-dos.js";
 
 const ID = "dos", CLAVE = "dos_progreso_v1", BONO_VIVO = 50, ALCANCE = 30;
+const RADIO_TOQUE = 18; // qué tan cerca del dibujo del objeto debe caer el clic o el toque (unidades del lienzo 800×450)
 const $ = (id) => document.getElementById(id);
 const lienzo = $("lienzo"), ctx = lienzo.getContext("2d");
 lienzo.width = 1280; lienzo.height = 720;
@@ -118,9 +120,9 @@ function cercano() {
   for (const it of items) { if (it.piso !== piso) continue; const k = Math.hypot(it.x - jx, it.y - jy); if (k < d) { d = k; mejor = it; } }
   return mejor;
 }
-function recoger() {
-  if (modo !== "juego" || pausado) return;
-  const it = cercano(); if (!it) return;
+// Sin argumento recoge el objeto más cercano (tecla E/espacio y botón «Recoger»); con argumento, ese objeto (clic o toque sobre él)
+function recoger(it = cercano()) {
+  if (modo !== "juego" || pausado || !it) return;
   const i = mochila.indexOf(null);
   if (i < 0) { decir("Inventario lleno: toca un objeto para soltarlo"); return; }
   mochila[i] = it; items.splice(items.indexOf(it), 1);
@@ -132,7 +134,7 @@ function soltar(i) {
   it.piso = piso; it.x = jx + 14 * hacia; it.y = jy + 6;
   items.push(it); pintarInventario(); decir("Soltaste: " + nombreItem(it));
 }
-$("btn-recoger").addEventListener("click", recoger);
+$("btn-recoger").addEventListener("click", () => recoger());
 
 // ---------- Fin ----------
 function terminar() {
@@ -166,11 +168,39 @@ addEventListener("keydown", (e) => {
 addEventListener("keyup", (e) => teclas.delete(e.key.toLowerCase()));
 addEventListener("blur", () => { teclas.clear(); joy = null; });
 const punto = (e) => { const r = lienzo.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; };
-lienzo.addEventListener("pointerdown", (e) => { if (modo !== "juego" || pausado) return; const p = punto(e); joy = { ox: p.x, oy: p.y, x: p.x, y: p.y }; lienzo.setPointerCapture(e.pointerId); e.preventDefault(); });
-lienzo.addEventListener("pointermove", (e) => { if (!joy) return; const p = punto(e); joy.x = p.x; joy.y = p.y; });
-const sueltaDedo = () => { joy = null; };
-lienzo.addEventListener("pointerup", sueltaDedo);
-lienzo.addEventListener("pointercancel", sueltaDedo);
+// Objeto del piso actual cuyo dibujo está bajo el puntero (el más cercano al punto tocado), o null
+function itemEnPunto(p) {
+  let mejor = null, d = RADIO_TOQUE;
+  for (const it of items) {
+    if (it.piso !== piso) continue;
+    const [x, y] = proy(it.x, it.y);
+    const k = Math.hypot(p.x - x, p.y - (y - 5)); // el icono se dibuja 5 px arriba de su posición (ver dibujarItem)
+    if (k < d) { d = k; mejor = it; }
+  }
+  return mejor;
+}
+const estaAlAlcance = (it) => Math.hypot(it.x - jx, it.y - jy) < ALCANCE;
+lienzo.addEventListener("pointerdown", (e) => {
+  if (modo !== "juego" || pausado) return;
+  const p = punto(e), it = itemEnPunto(p);
+  e.preventDefault();
+  if (it && estaAlAlcance(it)) { recoger(it); return; }   // toque sobre un objeto muy cercano: se recoge, sin joystick
+  joy = { ox: p.x, oy: p.y, x: p.x, y: p.y, lejos: !!it };  // si tocó un objeto lejano, se avisa al soltar (si no arrastró)
+  lienzo.setPointerCapture(e.pointerId);
+});
+lienzo.addEventListener("pointermove", (e) => {
+  const p = punto(e);
+  if (joy) { joy.x = p.x; joy.y = p.y; return; }
+  if (e.pointerType === "mouse") { // la manita aparece solo sobre un objeto que sí se puede recoger
+    const it = modo === "juego" && !pausado ? itemEnPunto(p) : null;
+    lienzo.style.cursor = it && estaAlAlcance(it) ? "pointer" : "";
+  }
+});
+lienzo.addEventListener("pointerup", () => {
+  if (joy && joy.lejos && Math.hypot(joy.x - joy.ox, joy.y - joy.oy) < 8) decir("Acércate más para recogerlo");
+  joy = null;
+});
+lienzo.addEventListener("pointercancel", () => { joy = null; });
 
 // ---------- Actualizar ----------
 function actualizar(dt) {
@@ -234,22 +264,71 @@ function dibujarSuelo() {
     for (let x = c.x; x < c.x + c.w; x += 20) { const [x1, y1] = proy(x, c.y), [x2, y2] = proy(x, c.y + c.h); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); }
     ctx.stroke();
   }
-  if (piso === 0) { // puerta de acero del búnker
-    poli(rectProy(186, 300, 8, 40), "#5d6470");
-    for (let y = 302; y < 338; y += 10) poli(rectProy(187, y, 6, 4), "#ffd23c");
+  if (piso === 0) { // umbral de acero del búnker (franjas amarillas y negras)
+    const P = PUERTA_BUNKER;
+    poli(rectProy(P.x - 3, P.y, P.w + 6, P.h), "#2b2d33");
+    for (let y = P.y + 2; y < P.y + P.h - 4; y += 10) poli(rectProy(P.x - 2, y, P.w + 4, 5), "#ffd23c");
   }
-  // escalera
-  poli(rectProy(ESCALERA.x, ESCALERA.y, ESCALERA.w, ESCALERA.h), "#9a7448", "#5c3512");
-  ctx.strokeStyle = "#5c3512"; ctx.lineWidth = 1.5; ctx.beginPath();
-  for (let x = ESCALERA.x + 8; x < ESCALERA.x + ESCALERA.w; x += 10) { const [x1, y1] = proy(x, ESCALERA.y), [x2, y2] = proy(x, ESCALERA.y + ESCALERA.h); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); }
-  ctx.stroke();
-  const [ex, ey] = proy(ESCALERA.x + ESCALERA.w / 2, ESCALERA.y + ESCALERA.h / 2);
-  ctx.fillStyle = "#4a2a10"; ctx.font = "bold 10px system-ui, sans-serif"; ctx.textAlign = "center";
-  ctx.fillText(piso === 0 ? "▲ subir" : "▼ bajar", ex, ey + 4);
+  if (piso === 1) escaleraHueco(); // arriba la escalera es un hueco por donde se baja; abajo se dibuja en dibujarEscena
+}
+// ----- Escalera -----
+// Abajo (piso 0): peldaños que suben hacia el norte (cada uno más alto que el anterior), con zancas y pasamanos a los lados.
+// Arriba (piso 1): un hueco oscuro con peldaños que bajan y barandales a los lados. Ocupa el rectángulo ESCALERA de logica-dos.js (la lógica no cambia).
+const N_PELDANOS = 7, SUBE = 3.4, ALTURA_ESCALERA = N_PELDANOS * SUBE;
+function linea(p, q, col, ancho) { ctx.strokeStyle = col; ctx.lineWidth = ancho; ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); }
+function escaleraHueco() {
+  const E = ESCALERA, d = E.h / N_PELDANOS, yF = E.y + E.h;
+  poli(rectProy(E.x, E.y, E.w, E.h), "#1b1009", "#3a2210");
+  for (let i = 0; i < N_PELDANOS; i++) { // cada peldaño queda más abajo y más oscuro que el anterior
+    const z = -(i + 1) * 0.9, yb = yF - (i + 1) * d;
+    poli(rectProy(E.x + 3, yb, E.w - 6, d - 0.6, z), "hsl(30,38%," + (50 - i * 5.5) + "%)", "rgba(0,0,0,.45)");
+    linea(proy(E.x + 3, yb + d - 0.6, z), proy(E.x + E.w - 3, yb + d - 0.6, z), "rgba(255,235,190," + (0.5 - i * 0.06) + ")", 1.5); // filo de cada peldaño
+  }
+}
+function escaleraEscena() {
+  const E = ESCALERA, d = E.h / N_PELDANOS, yF = E.y + E.h, xi = E.x, xd = E.x + E.w;
+  if (piso === 1) { // barandales a los lados del hueco
+    caja3d({ x: xi - 4, y: E.y, w: 4, h: E.h }, 12, "#8a5a2c", "#5a3718", "#3e2410");
+    caja3d({ x: xd, y: E.y, w: 4, h: E.h }, 12, "#8a5a2c", "#5a3718", "#3e2410");
+    return;
+  }
+  // peldaños: del más alto (al fondo) al más bajo (al frente), para que cada uno tape lo que va detrás
+  for (let i = N_PELDANOS - 1; i >= 0; i--) {
+    const yf = yF - i * d, yb = yf - d, z0 = i * SUBE, z1 = (i + 1) * SUBE;
+    poli([proy(xi, yf, z0), proy(xd, yf, z0), proy(xd, yf, z1), proy(xi, yf, z1)], "#6b4423", "rgba(0,0,0,.5)");   // contrahuella (frente)
+    poli(rectProy(xi, yb, E.w, d, z1), "hsl(32,46%," + (50 + i * 2.2) + "%)", "#5c3512");                          // huella (donde se pisa)
+    linea(proy(xi, yf, z1), proy(xd, yf, z1), "rgba(255,240,205,.65)", 1.5);                                       // filo
+  }
+  // zanca izquierda (la que mira al centro) y cara superior de la derecha
+  poli([proy(xi, yF, 0), proy(xi, E.y, 0), proy(xi, E.y, ALTURA_ESCALERA), proy(xi, yF, SUBE)], "#5a3718", "#2e1b0a");
+  poli([proy(xd, yF, SUBE), proy(xd + 4, yF, SUBE), proy(xd + 4, E.y, ALTURA_ESCALERA), proy(xd, E.y, ALTURA_ESCALERA)], "#7a4e26", "#2e1b0a");
+  // pasamanos con postes (siguen la pendiente)
+  for (const x of [xi + 2, xd - 2]) {
+    const alto = 7;
+    linea(proy(x, yF - 1, SUBE + alto), proy(x, E.y + 1, ALTURA_ESCALERA + alto), "#3b2210", 3);
+    for (const t of [0, 0.5, 1]) {
+      const y = yF - 1 + (E.y + 1 - (yF - 1)) * t, z = SUBE + (ALTURA_ESCALERA - SUBE) * t;
+      linea(proy(x, y, z), proy(x, y, z + alto), "#3b2210", 2);
+    }
+  }
+}
+function rotuloEscalera() { // letrero pequeño frente a la escalera
+  const E = ESCALERA, [x, y] = proy(E.x + E.w / 2, E.y + E.h + 9), t = piso === 0 ? "▲ Subir" : "▼ Bajar";
+  ctx.font = "bold 10px system-ui, sans-serif"; ctx.textAlign = "center";
+  const w = ctx.measureText(t).width + 12;
+  ctx.fillStyle = "rgba(30,20,10,.75)"; ctx.fillRect(x - w / 2, y - 9, w, 15);
+  ctx.fillStyle = "#fff"; ctx.fillText(t, x, y + 2);
 }
 function dibujarRotulos() {
+  rotuloEscalera();
   ctx.font = "bold 11px system-ui, sans-serif"; ctx.textAlign = "left";
-  for (const c of PISOS[piso].cuartos) { const [lx, ly] = proy(c.x + (c.id === "bunker" ? 46 : 8), c.y + 17); ctx.fillStyle = c.id === "bunker" ? "rgba(20,20,20,.7)" : "rgba(60,35,15,.55)"; ctx.fillText(c.nombre, lx, ly); }
+  for (const c of PISOS[piso].cuartos) {
+    const esEsc = c.id === "rec1";                       // su rótulo va abajo para no quedar bajo la escalera
+    const [dx, dy] = c.rot || (esEsc ? [8, c.h - 12] : [8, 17]), [lx, ly] = proy(c.x + dx, c.y + dy);
+    ctx.font = c.id === "bunker" ? "bold 16px system-ui, sans-serif" : "bold 11px system-ui, sans-serif";
+    ctx.fillStyle = c.id === "bunker" ? "rgba(20,20,20,.75)" : "rgba(60,35,15,.55)";
+    ctx.fillText(c.nombre, lx, ly);
+  }
 }
 function dibujarItem(it, resaltado, conBase) {
   const [x, y] = proy(it.x, it.y);
@@ -268,12 +347,32 @@ function dibujarJugador(sombra = true) {
   ctx.fillStyle = "#111"; ctx.fillRect(hacia * 2.5 - 1, -11, 2, 2); ctx.fillRect(hacia * 2.5 - 5 * hacia - 1, -11, 2, 2);
   ctx.restore();
 }
+// ----- Contorno rojo parpadeante del búnker -----
+// Un trazo rojo sobre el borde de sus paredes, para que se vea de lejos cuál es. Parpadea (prende y apaga); con «reducir movimiento» queda fijo.
+const SIN_MOVIMIENTO = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+function brilloBunker() { return SIN_MOVIMIENTO || modo !== "juego" || pausado ? 1 : (ojo % 0.9) < 0.55 ? 1 : 0.1; }
+function ladoBunker(x1, y1, x2, y2) {
+  const [ax, ay] = proy(x1, y1, ALTO_PARED), [bx, by] = proy(x2, y2, ALTO_PARED);
+  ctx.save();
+  ctx.globalAlpha = brilloBunker(); ctx.lineCap = "round";
+  ctx.shadowColor = "#ff2a1a"; ctx.shadowBlur = 14;
+  ctx.strokeStyle = "#ff2a1a"; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+  ctx.restore();
+}
 // Paredes, muebles, objetos y jugador van ordenados de atrás hacia delante (por su borde sur).
 function dibujarEscena(cerca) {
   const P = PISOS[piso], lista = [];
   for (const b of P.paredes) lista.push({ y: b.y + b.h, f: () => caja3d(b, ALTO_PARED, "#8a6a4c", "#4b3626", "#3b2a1c") });
   for (const b of P.muebles) lista.push({ y: b.y + b.h, f: () => mueble3d(b, ALTO_MUEBLE[b.t] || 12) });
   for (const it of items) if (it.piso === piso) lista.push({ y: it.y, f: () => dibujarItem(it, it === cerca, true) });
+  lista.push({ y: ESCALERA.y + ESCALERA.h, f: escaleraEscena });
+  if (piso === 0) { // los 4 lados del contorno van ordenados como las paredes sobre las que están
+    const B = BUNKER, x2 = B.x + B.w, y2 = B.y + B.h;
+    lista.push({ y: B.y + 4.5, f: () => ladoBunker(B.x, B.y, x2, B.y) });
+    lista.push({ y: y2 - 3.5, f: () => { ladoBunker(x2, B.y, x2, y2); ladoBunker(B.x, B.y, B.x, y2); } });
+    lista.push({ y: y2 + 4.5, f: () => ladoBunker(B.x, y2, x2, y2) });
+  }
   lista.push({ y: jy, f: () => dibujarJugador() });
   lista.sort((p, q) => p.y - q.y);
   for (const o of lista) o.f();

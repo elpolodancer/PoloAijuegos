@@ -1,11 +1,12 @@
 // Ruta: dos/logica-dos.js
 // Lógica pura de «Dos» (sin document): casa de 2 pisos, objetos, colisiones y reparto al azar. Mundo de 800×450 por piso.
-//   COLISIONES[piso] = rectángulos sólidos (paredes y muebles) · CUARTOS[piso] · ESCALERA · BUNKER
+//   COLISIONES[piso] = rectángulos sólidos (paredes y muebles) · CUARTOS[piso] · ESCALERA · BUNKER (centro de la planta baja) · PUERTA_BUNKER
 //   generarItems(rand) · mover(x, y, dx, dy, piso) · dentroBunker(x, y, piso) · nombreItem(it) · valorItem(it)
 export const W = 800, H = 450, TIEMPO = 120, ESPACIOS = 15, RADIO = 9, VEL = 125;
 export const ESCALERA = { x: 600, y: 60, w: 110, h: 50 };      // misma posición en los dos pisos
 export const LLEGADA = { x: 655, y: 140 };                      // dónde apareces al cambiar de piso
-export const BUNKER = { x: 60, y: 230, w: 130, h: 170 };        // planta baja
+export const BUNKER = { x: 280, y: 140, w: 240, h: 170 };       // planta baja: en el CENTRO de la casa (la casa va de 60 a 740 en x y de 50 a 400 en y)
+export const PUERTA_BUNKER = { x: 516, y: 215, w: 8, h: 50 };   // umbral en la pared este del búnker (se abre a la sala); debe coincidir con el hueco [215, 265] de la pared x = 520
 export const INICIO = { x: 600, y: 330, piso: 0 };
 
 // ---------- Objetos ----------
@@ -48,26 +49,38 @@ const marco = () => [...paredH(50, 56, 744), ...paredH(400, 56, 744), ...paredV(
 
 // Cada piso: paredes, muebles (sólidos) y cuartos { id, nombre, x, y, w, h, color }
 export const PISOS = [
-  { // planta baja: almacén, búnker, cocina, comedor, baño, recibidor (escalera) y sala
+  { // planta baja: el BÚNKER ocupa el centro de la casa y las demás habitaciones lo rodean
+    //   Almacén  |  Cocina    | Recibidor (escalera)
+    //            |------------|
+    //   ---------|  BÚNKER    |---------
+    //   Comedor  |------------|   Sala
+    //            |  Baño      |
+    // Puertas: almacén↔cocina, almacén↔comedor, comedor↔baño, baño↔sala, sala↔recibidor, recibidor↔cocina y sala↔búnker (la única del búnker).
     nombre: "Planta baja",
-    paredes: [...marco(), ...paredV(190, 50, 400, [[120, 160], [300, 340]]), ...paredV(430, 50, 400, [[100, 140], [290, 330]]),
-      ...paredH(230, 60, 190), ...paredH(230, 190, 430, [[280, 330]]), ...paredH(200, 430, 740, [[480, 530], [640, 690]]), ...paredV(580, 50, 200, [[100, 140]])],
+    paredes: [...marco(),
+      ...paredV(280, 50, 400, [[80, 120], [335, 375]]),
+      ...paredV(520, 50, 400, [[80, 120], [215, 265], [335, 375]]),   // [215, 265] = puerta del búnker
+      ...paredH(140, 280, 520), ...paredH(310, 280, 520),             // paredes norte y sur del búnker (sin puertas)
+      ...paredH(220, 60, 280, [[110, 160]]), ...paredH(200, 520, 740, [[630, 690]])],
     muebles: [
-      caja(70, 58, 110, 14, "estante"), caja(70, 190, 40, 30, "cajas"),
-      caja(68, 240, 36, 62, "literas"), caja(150, 366, 30, 28, "mesa"),
-      caja(200, 58, 190, 18, "barra"), caja(270, 130, 80, 50, "mesa"), caja(402, 80, 22, 36, "refri"),
-      caja(260, 300, 110, 50, "mesa"), caja(200, 382, 100, 14, "trinchador"),
-      caja(440, 58, 100, 34, "bañera"), caja(545, 160, 24, 24, "inodoro"), caja(440, 170, 40, 20, "lavabo"),
-      caja(720, 250, 14, 110, "tele"), caja(480, 362, 120, 30, "sofá"), caja(520, 290, 60, 34, "mesita"),
+      caja(70, 58, 110, 14, "estante"), caja(214, 58, 56, 14, "estante"), caja(70, 178, 40, 30, "cajas"), caja(218, 176, 40, 34, "cajas"),   // almacén
+      caja(100, 290, 110, 50, "mesa"), caja(70, 382, 100, 14, "trinchador"),                                                                  // comedor
+      caja(296, 58, 150, 14, "barra"), caja(492, 58, 22, 24, "refri"),                                                                                    // cocina
+      caja(288, 152, 44, 66, "literas"), caja(288, 228, 44, 66, "literas"), caja(350, 150, 120, 14, "estante"),                               // búnker
+      caja(385, 236, 80, 40, "mesa"), caja(474, 150, 38, 34, "cajas"),
+      caja(300, 316, 100, 30, "bañera"), caja(410, 318, 40, 20, "lavabo"), caja(460, 318, 24, 24, "inodoro"),                                // baño
+      caja(540, 150, 50, 30, "mesita"),                                                                                                      // recibidor
+      caja(722, 250, 14, 110, "tele"), caja(560, 362, 120, 30, "sofá"), caja(610, 280, 60, 34, "mesita"),                                    // sala
     ],
+    // rot = dónde va el rótulo dentro del cuarto (por defecto arriba a la izquierda)
     cuartos: [
-      { id: "almacen", nombre: "Almacén", x: 60, y: 50, w: 130, h: 180, color: "#b59b7a" },
-      { id: "bunker", nombre: "BÚNKER", x: 60, y: 230, w: 130, h: 170, color: "#8d9199" },
-      { id: "cocina", nombre: "Cocina", x: 190, y: 50, w: 240, h: 180, color: "#e6d8b8" },
-      { id: "comedor", nombre: "Comedor", x: 190, y: 230, w: 240, h: 170, color: "#d9b98a" },
-      { id: "bano", nombre: "Baño", x: 430, y: 50, w: 150, h: 150, color: "#bfe3ea" },
-      { id: "recibidor", nombre: "Recibidor", x: 580, y: 50, w: 160, h: 150, color: "#d6c3a3" },
-      { id: "sala", nombre: "Sala", x: 430, y: 200, w: 310, h: 200, color: "#c9a477" },
+      { id: "almacen", nombre: "Almacén", x: 60, y: 50, w: 220, h: 170, color: "#b59b7a" },
+      { id: "comedor", nombre: "Comedor", x: 60, y: 220, w: 220, h: 180, color: "#d9b98a" },
+      { id: "cocina", nombre: "Cocina", x: 280, y: 50, w: 240, h: 90, color: "#e6d8b8", rot: [100, 44] },
+      { id: "bunker", nombre: "BÚNKER", x: 280, y: 140, w: 240, h: 170, color: "#8d9199", rot: [100, 148] },
+      { id: "bano", nombre: "Baño", x: 280, y: 310, w: 240, h: 90, color: "#bfe3ea", rot: [108, 50] },
+      { id: "recibidor", nombre: "Recibidor", x: 520, y: 50, w: 220, h: 150, color: "#d6c3a3" },
+      { id: "sala", nombre: "Sala", x: 520, y: 200, w: 220, h: 200, color: "#c9a477" },
     ],
   },
   { // piso 1: tres dormitorios, baño, estudio, cuarto de juegos y pasillo
@@ -112,7 +125,8 @@ export function mover(x, y, dx, dy, piso) {
   return { x, y };
 }
 export const dentroDe = (x, y, r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
-export const dentroBunker = (x, y, piso) => piso === 0 && dentroDe(x, y, BUNKER);
+// Dentro del búnker = con el centro del personaje pasado el umbral (un poco adentro de las paredes)
+export const dentroBunker = (x, y, piso) => piso === 0 && dentroDe(x, y, { x: BUNKER.x + 4, y: BUNKER.y + 4, w: BUNKER.w - 8, h: BUNKER.h - 8 });
 
 // ---------- Reparto al azar ----------
 export function generarItems(rand = Math.random) {

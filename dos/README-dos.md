@@ -9,14 +9,20 @@ Juego de supervivencia inspirado en «60 Seconds», con casa, objetos y reglas p
 - `index-dos.html`: estándar inmersivo + inventario abajo al centro y botón «Recoger».
 
 ## Reglas
-- 2 minutos. Al llegar a cero solo sobrevives si estás dentro del búnker (planta baja, a la izquierda). También puedes cerrar la puerta antes con «Cerrar la puerta del búnker».
+- 2 minutos. Al llegar a cero solo sobrevives si estás dentro del búnker (planta baja, **en el centro de la casa**). También puedes cerrar la puerta antes con «Cerrar la puerta del búnker».
 - 15 espacios, 1 por objeto, sin apilar. Tocar un objeto del inventario lo suelta donde estás.
 - 49 objetos repartidos al azar en cada partida (70 % en cuartos donde tiene sentido, 30 % en cualquiera): agua, 3 tipos de latas, hacha, escopeta y pistola (cada una con o sin balas, no se sabe hasta recogerla), cobija, toallitas, dulces, celular, cartas, juego de mesa, papel de baño, pasta de dientes, botiquín, extintor y máscara.
 - Puntos (solo si sobrevives): suma del valor de lo que llevas + 50. Las armas con balas valen más. Se envían con `encolarPuntos`.
 - Progreso: `localStorage` `dos_progreso_v1` = `{ mejor, partidas }`, sincronizado con `conectar()` (gana el mayor de cada campo).
 
+## La casa (planta baja)
+El búnker (240×170, antes 130×170) está en el **centro** de la casa y las demás habitaciones lo rodean: almacén y comedor a la izquierda; cocina arriba y baño abajo; recibidor (con la escalera) y sala a la derecha. Su única puerta da a la sala (pared este, hueco `[215, 265]`; el umbral amarillo y negro se dibuja con `PUERTA_BUNKER`). Las demás puertas forman un circuito alrededor, así que se puede dar la vuelta a la casa. El piso de arriba no cambió. `BUNKER`, `PUERTA_BUNKER` y los cuartos están en `logica-dos.js`; `dentroBunker` pide estar un poco pasado el umbral.
+**Contorno rojo:** sobre el borde de las paredes del búnker parpadea un trazo rojo (`ladoBunker` y `brilloBunker` en `juego-dos.js`; ahí se cambia el ritmo del parpadeo). Con «reducir movimiento» del sistema queda fijo y encendido.
+
 ## Controles
-Flechas/WASD o arrastrar el dedo (joystick flotante); E, espacio o el botón «Recoger». Las escaleras (arriba a la derecha) cambian de piso al pisarlas.
+Flechas/WASD o arrastrar el dedo (joystick flotante); E, espacio, el botón «Recoger», o **clic/toque sobre el objeto** cuando estás muy cerca (menos de `ALCANCE` = 30; el objeto se resalta y con mouse sale la manita). Si tocas uno lejano avisa «Acércate más para recogerlo». Un toque sobre un objeto no mueve al personaje; en cualquier otro sitio funciona el joystick.
+
+Las escaleras (arriba a la derecha) cambian de piso al pisarlas. Abajo se dibujan como peldaños que suben, con zancas y pasamanos; arriba, como un hueco oscuro con peldaños que bajan y barandales (`escaleraEscena` y `escaleraHueco` en `juego-dos.js`; `N_PELDANOS` y `SUBE` ajustan cuántos y qué tan altos). Solo es dibujo: la zona que cambia de piso sigue siendo `ESCALERA`.
 
 ## Vista
 Cámara arriba y al **centro** de la casa, inclinada hacia el frente (no desde una esquina). La lógica sigue plana (`logica-dos.js` no cambió: posiciones, colisiones y reparto son los mismos); solo se proyecta al dibujar con `proy(x, y, z)` en `juego-dos.js`.
