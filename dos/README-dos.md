@@ -18,8 +18,14 @@ Juego de supervivencia inspirado en «60 Seconds», con casa, objetos y reglas p
 ## Controles
 Flechas/WASD o arrastrar el dedo (joystick flotante); E, espacio o el botón «Recoger». Las escaleras (arriba a la derecha) cambian de piso al pisarlas.
 
+## Vista
+Cámara arriba y al **centro** de la casa, inclinada hacia el frente (no desde una esquina). La lógica sigue plana (`logica-dos.js` no cambió: posiciones, colisiones y reparto son los mismos); solo se proyecta al dibujar con `proy(x, y, z)` en `juego-dos.js`.
+- Ajustes arriba de la sección «Dibujo»: `K` (inclinación: 1 = desde arriba, menos = más de frente), `ESC` (tamaño), `Q` (perspectiva desde el centro: 0 = sin perspectiva), `ALTO_PARED` y `ALTO_MUEBLE`.
+- Las paredes son bajas a propósito para no tapar objetos. Lo que aun así quede tapado por una pared o un mueble se ve como silueta fantasma encima.
+- Paredes, muebles, objetos y jugador se ordenan de atrás hacia delante por su borde sur (`dibujarEscena`). El joystick sigue usando coordenadas de pantalla: arriba en pantalla = norte en la casa.
+
 ## Pruebas
-La casa y el reparto se probaron en Node: en 300 partidas simuladas (14 700 objetos) todos quedaron alcanzables desde la llegada de cada piso, y el búnker y las escaleras también. La pantalla NO se ha probado en navegador/celular (joystick, tamaño del inventario en horizontal).
+La casa y el reparto se probaron en Node: en 300 partidas simuladas (14 700 objetos) todos quedaron alcanzables desde la llegada de cada piso, y el búnker y las escaleras también. La vista inclinada se dibujó en Node (node-canvas) en los dos pisos para revisar la imagen; la pantalla NO se ha probado en navegador/celular (joystick, tamaño del inventario en horizontal, cuánto tapan las paredes).
 
 ## Pendiente
 - Fase del búnker, más objetos y armas, más casas, sonido, imagen de tarjeta `imagenes/dos.webp`.
