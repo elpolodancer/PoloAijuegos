@@ -5,53 +5,118 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Burbujas</title>
-  <meta name="theme-color" content="#1d0e38" />
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
   <link rel="stylesheet" href="../compartido/estilos.css" />
   <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    html.inmersivo { --fondo-juego: radial-gradient(ellipse at 50% 20%, #3a1c6b, #1d0e38 75%); }
-    body.inmersivo { display: flex; flex-direction: column; align-items: center; font-family: system-ui, sans-serif; color: #fff; touch-action: none;
+    /* El fondo (madera clara u oscura) lo pone el estándar: aquí no se define fondo en html ni body */
+    body.inmersivo { display: flex; flex-direction: column; align-items: center; font-family: system-ui, sans-serif; color: var(--txt-fondo); touch-action: none;
       padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px); }
-    .sup { width: 100%; max-width: 640px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px 2px; }
+
+    /* Arriba a la derecha: marcadores (Nivel / Puntos / Récord), 🔊 y, SIEMPRE el último, «👤 Iniciar sesión» (solo en el menú principal).
+       Horizontal: esquina superior derecha (el lienzo vertical queda centrado y deja libres las esquinas).
+       Vertical: en una fila DEBAJO de «Portal de Juegos» + «Pausa» (zona reservada arriba-izquierda ≈ 190 × 92). */
+    .sup { position: fixed; z-index: 5; top: max(8px, env(safe-area-inset-top, 0px)); right: max(8px, env(safe-area-inset-right, 0px));
+      display: flex; align-items: center; gap: 8px; }
     .datos { display: flex; gap: 8px; }
-    .dato { min-width: 62px; padding: 3px 10px 4px; text-align: center; line-height: 1.05; font-size: 11px; opacity: .95; background: linear-gradient(180deg, #4a2a82, #2f1658); border: 2px solid #170a2c; border-radius: 12px; box-shadow: 0 3px 0 #170a2c, inset 0 2px 0 rgba(255,255,255,.2); }
+    .dato { min-width: 62px; padding: 3px 10px 4px; text-align: center; line-height: 1.05; font-size: 11px; color: #fff; opacity: .95; background: linear-gradient(180deg, #4a2a82, #2f1658); border: 2px solid #170a2c; border-radius: 12px; box-shadow: 0 3px 0 #170a2c, inset 0 2px 0 rgba(255,255,255,.2); }
     .dato b { display: block; font-size: 17px; }
+    body.en-menu .datos { display: none; }   /* sin partida no hay marcadores */
+
     #zona { position: relative; flex: 1; min-height: 0; width: 100%; display: flex; justify-content: center; align-items: center; container-type: size; }
     /* El lienzo mantiene su proporción (462×760) y cabe entero en la pantalla */
     canvas { width: min(100cqw, calc(100cqh * 462 / 760)); height: auto; aspect-ratio: 462 / 760; touch-action: none; }
-    .velo { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: flex-start; gap: 12px; overflow-y: auto; background: rgba(20, 8, 42, .82); text-align: center; padding: 24px; }
-    .velo > :first-child { margin-top: auto; }   /* centrado vertical que, si no cabe (celular acostado), se desplaza en vez de cortarse */
+    body.en-menu canvas { visibility: hidden; }
+
+    @media (max-aspect-ratio: 1/1) {
+      .sup { position: static; width: 100%; max-width: 640px; justify-content: center; padding: 0 10px;
+        margin-top: calc(max(8px, env(safe-area-inset-top, 0px)) - env(safe-area-inset-top, 0px) + 90px); }
+      /* deja libres 🌙 (abajo-izquierda) y ⛶ (abajo-derecha) para que no tapen la burbuja «siguiente» */
+      #zona { padding-bottom: calc(max(14px, env(safe-area-inset-bottom, 0px)) + 48px); }
+    }
+
+    /* MENÚ PRINCIPAL ESTÁNDAR: columna de botones grandes centrada sobre la madera (sin velo oscuro) */
+    .menu-principal { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: flex-start; gap: 12px; overflow-y: auto; text-align: center; padding: 24px 16px; }
+    .menu-principal.activo { display: flex; }
+    .menu-principal > :first-child { margin-top: auto; }   /* centrado vertical que, si no cabe (celular acostado), se desplaza en vez de cortarse */
+    .menu-principal > :last-child { margin-bottom: auto; }
+    .menu-principal h1 { margin: 0; font-size: 34px; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    .menu-principal .ayuda { margin: 0; max-width: 320px; font-size: 14px; line-height: 1.35; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
+    .menu-principal .ayuda:empty { display: none; }
+    .menu-principal .b3d.txt { width: min(300px, 86%); justify-content: center; }
+    .lista-dif { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+    .lista-dif[hidden] { display: none; }
+    .lista-dif .b3d.txt { width: min(240px, 70%); }
+    @media (max-height: 520px) { .menu-principal { gap: 8px; padding: 12px 16px; } .menu-principal h1 { font-size: 26px; } }
+
+    /* Paneles de derrota y de ayuda: oscuros, con texto claro */
+    .velo { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: flex-start; gap: 12px; overflow-y: auto; color: #fff; background: rgba(20, 8, 42, .82); text-align: center; padding: 24px; }
+    .velo > :first-child { margin-top: auto; }
     .velo > :last-child { margin-bottom: auto; }
     @media (max-height: 520px) { .velo { gap: 8px; padding: 12px 24px; } .velo h2 { font-size: 24px; } .velo p { max-width: 560px; font-size: 14px; line-height: 1.35; } }
     .velo.activo { display: flex; }
     .velo h2 { margin: 0; font-size: 30px; }
     .velo p { margin: 0; opacity: .9; max-width: 320px; line-height: 1.4; }
+    #info.velo { position: fixed; z-index: 9; }   /* se ve también sobre el mapa de niveles */
   </style>
 </head>
-<body class="inmersivo" data-pantalla-auto>
+<body class="inmersivo en-menu" data-pantalla-auto>
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Portal de Juegos</a>
+    <button class="b3d txt b-verde" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> Pausa</button>
+  </nav>
   <div class="sup">
-    <a class="b3d chico b-gris" href="../index.html" aria-label="Volver al portal"><span class="b-ico">←</span></a>
     <div class="datos">
-      <div class="dato">Nivel<b id="nivel">1</b></div>
+      <div class="dato"><span id="etNivel">Nivel</span><b id="nivel">1</b></div>
       <div class="dato">Puntos<b id="puntos">0</b></div>
       <div class="dato">Récord<b id="record">0</b></div>
     </div>
     <button id="sonido" class="b3d chico b-gris" type="button" aria-label="Silenciar">🔊</button>
+    <button id="btn-sesion" class="b3d txt b-azul" type="button" title="Iniciar sesión con Google"><span class="b-ico">👤</span> Iniciar sesión</button>
   </div>
   <div id="zona">
     <canvas id="lienzo"></canvas>
-    <div id="inicio" class="velo activo">
-      <h2>🫧 Burbujas</h2>
-      <p>Apunta con el dedo y suelta para disparar. Junta 3 o más del mismo color para reventarlas. Toca la burbuja de abajo a la izquierda para cambiarla.<br>Si revientas muchas de un tiro, haces caer varias o encadenas 3 tiros seguidos, ganas una bomba 💣, un arcoíris 🌈 o un rayo ⚡.<br>Las piedras grises no se revientan: deja que se queden sin apoyo para que caigan.</p>
-      <button class="b3d txt grande b-oro" id="jugar" type="button" style="--t:56px"><span class="b-ico">▶</span>&nbsp;Jugar</button>
+
+    <!-- Menú principal estándar: ♾️ Modo libre · 🪜 Niveles · 🗺️ Mapa · 🚪 Salir (mismo orden y nombres en todos los juegos) -->
+    <div id="inicio" class="menu-principal activo">
+      <h1>🫧 Burbujas</h1>
+      <p class="ayuda">Apunta con el dedo y suelta para disparar. Junta 3 o más del mismo color para reventarlas.</p>
+      <p class="ayuda" id="menu-msg" role="status"></p>
+      <button class="b3d txt grande b-verde" id="m-libre" type="button" aria-expanded="false" aria-controls="lista-dif"><span class="b-ico">♾️</span>&nbsp;Modo libre</button>
+      <div class="lista-dif" id="lista-dif" hidden></div>   <!-- las 5 dificultades las crea juego-burbujas.js (DIFICULTADES_LIBRE) -->
+      <button class="b3d txt grande b-azul" id="m-niveles" type="button"><span class="b-ico">🪜</span>&nbsp;Niveles</button>
+      <button class="b3d txt grande b-azul" id="m-mapa" type="button"><span class="b-ico">🗺️</span>&nbsp;Mapa</button>
+      <a class="b3d txt grande b-rojo" id="m-salir" href="../" title="Volver al portal de juegos"><span class="b-ico">🚪</span>&nbsp;Salir</a>
     </div>
+
     <div id="fin" class="velo">
       <h2 id="finTitulo">Se acabó</h2>
       <p id="finTexto"></p>
-      <button class="b3d txt grande b-oro" id="otra" type="button" style="--t:56px"><span class="b-ico">🔄</span>&nbsp;Jugar otra vez</button>
+      <button class="b3d txt grande b-oro" id="otra" type="button" style="--t:56px"><span class="b-ico">🔄</span>&nbsp;Intentar otra vez</button>
+      <button class="b3d txt b-rojo" id="fin-menu" type="button"><span class="b-ico">🚪</span>&nbsp;Menú principal</button>
     </div>
   </div>
+
+  <!-- Nivel terminado: «Siguiente nivel ▶» encima del tablero (estándar, sección 6); juego-burbujas.js le da left/top/width/height -->
+  <div id="victoria" class="sobre-tablero" hidden>
+    <div class="sobre-texto"><h2 id="vicTitulo">¡Nivel completado!</h2><div id="vicTexto"></div></div>
+    <button class="b3d txt grande b-verde" id="vic-sig" type="button">Siguiente nivel ▶</button>
+    <div class="sobre-fila">
+      <button class="b3d txt b-gris" id="vic-rep" type="button">🔄 Repetir nivel</button>
+      <button class="b3d txt b-azul" id="vic-mapa" type="button">🗺️ Mapa</button>
+    </div>
+  </div>
+
+  <!-- ℹ️ Cómo se juega (se abre desde ☰ Pausa) -->
+  <div id="info" class="velo" role="dialog" aria-label="Cómo se juega">
+    <h2>🫧 Cómo se juega</h2>
+    <p>Apunta con el dedo y suelta para disparar. Junta 3 o más del mismo color para reventarlas. Toca la burbuja de abajo a la izquierda para cambiarla.<br>Si revientas muchas de un tiro, haces caer varias o encadenas 3 tiros seguidos, ganas una bomba 💣, un arcoíris 🌈 o un rayo ⚡.<br>Las piedras grises no se revientan: deja que se queden sin apoyo para que caigan. Si una burbuja llega a la línea punteada, pierdes.</p>
+    <button class="b3d txt grande b-oro" id="info-cerrar" type="button" style="--t:56px"><span class="b-ico">▶</span>&nbsp;Entendido</button>
+  </div>
+
   <script type="module" src="juego-burbujas.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>

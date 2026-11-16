@@ -1,34 +1,29 @@
 // Ruta: burbujas/juego-burbujas.js
-// Juego «Burbujas» (estilo Bubble Shooter). Los ajustes están aquí arriba.
+// Juego «Burbujas» (estilo Bubble Shooter). Las REGLAS (rejilla, tiros, especiales, niveles del mapa y dificultades del Modo libre) viven en
+// logica-burbujas.js, que también usa el bot de backtracking (bot-burbujas.mjs). Aquí están la pantalla, el sonido, el menú y el progreso.
+//
+// Menú principal estándar (ESTANDARES-juegos.md, secciones 7 y 9): ♾️ Modo libre (despliega las 5 dificultades) · 🪜 Niveles · 🗺️ Mapa · 🚪 Salir.
+// Niveles: mapa estándar de México y del mundo, 22 600 niveles (100 por estado y por país) con el reparto de dificultad estándar.
+
+import {
+  R, COLS, ALTO, ANCHO, RH, LIMITE_FILA, TIRADOR, MIN_GRADOS, PIEDRA, DIFICULTADES_LIBRE,
+  posX, posY, nivelFijo, nivelLibre, sacarDeCola, cambiarCola, nuevoDisparo, pasoDisparo, chocaConTablero, resolverTiro, puntosDeTiro,
+} from "./logica-burbujas.js";
+import { encolarPuntos } from "../compartido/cola-puntos.js";
+import { crearMenuPausa } from "../compartido/menu-pausa.js";
+import { crearEtapas } from "../compartido/etapas-mapa.js";
+import { montarMapa } from "../compartido/mapa-niveles.js";
+import { dificultadDeNivel } from "../compartido/dificultad-niveles.js";
 
 const ID = "burbujas";
 
 // ---------- AJUSTES ----------
-const R = 22;                    // radio de cada burbuja
-const COLS = 10;                 // burbujas por fila (las formas de FORMAS deben medir esto)
-const ALTO = 760;                // alto lógico del lienzo
-const LIMITE_FILA = 13;          // si una burbuja llega a esta fila, pierdes
-const TIROS_POR_FILA_INICIO = 5; // tiros sin reventar para que baje el techo (nivel 1)
-const TIROS_POR_FILA_MIN = 3;    // ...y lo mínimo al que llega en niveles altos (baja 1 cada 3 niveles)
-const VELOCIDAD = 17;            // píxeles por cuadro del disparo
-const MIN_GRADOS = 12;           // ángulo mínimo respecto a la horizontal
-const PUNTOS_BASE = 10;          // por burbuja reventada
-const PUNTOS_CAIDA = 30;         // por burbuja que cae
 const PUNTOS_POR_PERFIL = 25;    // 1 punto al perfil por cada 25 del juego
-
-// Dificultad por nivel
-const COLORES_INICIO = 4;        // colores en el nivel 1 (sube 1 cada 2 niveles hasta 6)
-const MAX_FILAS_INICIO = 10;     // filas máximas con las que puede empezar un tablero
-const FILAS_EXTRA_MAX = 5;       // al subir de nivel se agregan filas llenas arriba de la forma (desde 1 en el nivel 1, +1 cada 2 niveles, hasta este máximo)
-const PIEDRAS_DESDE = 3;         // desde este nivel hay piedras 🪨: no se revientan, solo caen cuando se quedan sin apoyo (o con bomba/rayo)
-const MAX_PIEDRAS = 16;          // piedras máximas al empezar un nivel
-const PROB_PIEDRA_FILA = 0.08;   // probabilidad de que una celda de las filas nuevas del techo sea piedra (desde PIEDRAS_DESDE)
-
-// Especiales: cómo se ganan
-const REVENTAR_PARA_BOMBA = 6;   // reventar 6 o más de un tiro → bomba
-const CAIDAS_PARA_ARCOIRIS = 4;  // hacer caer 4 o más de un tiro → arcoíris
-const RACHA_PARA_RAYO = 3;       // 3 tiros seguidos que revientan → rayo
-const RADIO_BOMBA = 2;           // alcance de la bomba (en burbujas)
+const LIBRE_DA_PUNTOS = false;   // estándar: el Modo libre no da puntos al perfil (true = los da, como antes de tener niveles)
+const POR_ETAPA = 100;           // niveles por estado de México y por país (22 600 en total)
+const ETAPAS = crearEtapas({ porEtapa: POR_ETAPA });
+const TOTAL = ETAPAS.total;
+const NOMBRE_DIF = { facil: "Fácil", normal: "Normal", dificil: "Difícil" };
 
 const COLORES = [                // [luz, base, sombra]
   ["#ff9fb8", "#ff4f7b", "#b8184a"],
@@ -38,42 +33,13 @@ const COLORES = [                // [luz, base, sombra]
   ["#d9b0ff", "#a455ff", "#6420b8"],
   ["#ffc79a", "#ff8a2b", "#b8500a"],
 ];
-
-// Formas de los niveles: «#» burbuja, «.» vacío. Cada fila mide COLS (10) y debe quedar pegada al techo.
-// Al pasar la última, se repiten con más colores y menos tiros por fila. Para agregar una, copia un bloque.
-const FORMAS = [
-  { nombre: "Triángulo", filas: ["##########", ".########.", "..######..", "...####...", "....##...."] },
-  { nombre: "Corazón", filas: [".###..###.", "##########", "##########", ".########.", "..######..", "...####...", "....##...."] },
-  { nombre: "Rombo", filas: ["....##....", "...####...", "..######..", ".########.", "..######..", "...####...", "....##...."] },
-  { nombre: "Cortinas", filas: ["##.##.##.#", "##.##.##.#", "##.##.##.#", "##.##.##.#", "##########"] },
-  { nombre: "Cara sonriente", filas: ["##########", "##########", "##..##..##", "##########", "##########", "##.####.##", "###....###"] },
-  { nombre: "Ondas", filas: ["##########", "##########", "#.#.#.#.#.", "##########", "#.#.#.#.#.", "#.#.#.#.#."] },
-  { nombre: "Castillo", filas: ["#.##..##.#", "##########", "##########", "##########", ".###..###."] },
-  { nombre: "Reloj de arena", filas: ["##########", ".########.", "..######..", "...####...", "....##....", "...####...", "..######..", ".########.", "##########"] },
-];
-const FONDOS = [                 // [arriba, abajo] por nivel, en ciclo
-  ["#5b2a9e", "#d0589a"], ["#1b4fa0", "#4cc3d9"], ["#0f6b4a", "#9be37a"],
-  ["#a0391b", "#ffb24c"], ["#2a2a7a", "#c35cff"], ["#7a1b4f", "#ff7a8a"],
-];
-const PIEDRA = -1;                // valor de una piedra en la rejilla (los colores son 0..5)
+// El fondo es la madera estándar del portal (compartido/fondo-madera.js): el lienzo se deja transparente.
 const GRIS_PIEDRA = ["#d6d9df", "#8a8f99", "#454953"];
 const ESPECIALES = {
   bomba: { emoji: "💣", c: ["#8a8a8a", "#2d2d2d", "#050505"], texto: "¡Bomba!" },
   arcoiris: { emoji: "🌈", c: null, texto: "¡Arcoíris!" },
   rayo: { emoji: "⚡", c: ["#fff6a0", "#ffd400", "#b88a00"], texto: "¡Rayo!" },
 };
-
-// ---------- Perfil (puntos totales del portal) ----------
-// Los puntos se anotan al instante en el dispositivo (cola) y se envían cuando haya internet y sesión.
-import { encolarPuntos } from "../compartido/cola-puntos.js";
-let enviadosPerfil = 0;
-function enviarPerfil() {
-  const debe = Math.floor(puntos / PUNTOS_POR_PERFIL) - enviadosPerfil;
-  if (debe <= 0) return;
-  enviadosPerfil += debe;
-  encolarPuntos(ID, debe);
-  import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {});
-}
 
 // ---------- Sonidos (se generan con WebAudio, no hay archivos) ----------
 let audio = null, silencio = false;
@@ -137,15 +103,12 @@ function sonido(tipo, n = 1) {
 // ---------- Elementos ----------
 const lienzo = document.getElementById("lienzo");
 const ctx = lienzo.getContext("2d");
-const ANCHO = 2 * R * (COLS + 0.5);
-const RH = R * Math.sqrt(3);     // alto entre filas
-const TIRADOR = { x: ANCHO / 2, y: ALTO - 70 };
 const POS_SIGUIENTE = { x: 52, y: ALTO - 48 };
 lienzo.width = ANCHO * 2; lienzo.height = ALTO * 2;   // el doble para que se vea nítido
 ctx.scale(2, 2);
 
 const $ = (id) => document.getElementById(id);
-const elNivel = $("nivel"), elPuntos = $("puntos"), elRecord = $("record"), elSonido = $("sonido");
+const elNivel = $("nivel"), elEtNivel = $("etNivel"), elPuntos = $("puntos"), elRecord = $("record"), elSonido = $("sonido"), btnMenu = $("btn-menu"), btnSesion = $("btn-sesion");
 function pintarBotonSonido() { elSonido.textContent = silencio ? "🔇" : "🔊"; elSonido.setAttribute("aria-label", silencio ? "Activar sonido" : "Silenciar"); }
 pintarBotonSonido();
 elSonido.addEventListener("click", () => {
@@ -155,231 +118,202 @@ elSonido.addEventListener("click", () => {
 });
 
 // ---------- Estado ----------
-// Los colores son números (0..5). Los especiales son texto: "bomba", "arcoiris", "rayo" (nunca quedan en la rejilla).
-let grid, par, puntos, nivel, record, tiros, tirosPorFila, ncol, racha, estado; // estado: "inicio" | "jugando" | "fin"
-let actual, siguiente, disparo, apuntando, angulo;
+// estado: "inicio" (menú principal) | "mapa" (niveles / mapa) | "jugando" | "gano" (nivel terminado) | "fin" (perdiste)
+// T = el tablero (ver logica-burbujas.js). Los colores son números (0..5); los especiales son texto: "bomba", "arcoiris", "rayo".
+let T = null, estado = "inicio", modo = "libre", dif = "normal", ronda = 1, nivel = 1, puntos = 0;
+let disparo = null, apuntando = false, angulo = Math.PI / 2;
+let pausado = false;
 let caen = [], chispas = [], deslizar = 0, aviso = 0, avisoTexto = "", tic = 0;
 
-try { record = Number(localStorage.getItem("burbujas_record")) || 0; } catch (e) { record = 0; }
-elRecord.textContent = record;
-// El récord se sincroniza con la cuenta de Google (se queda el mayor entre este dispositivo y la nube)
+// ---------- Progreso: { record, max, hecho, t } ----------
+// record = mejor puntaje · max = nivel más alto abierto · hecho = nivel más alto terminado · t = cuándo se guardó.
+// Se guarda en el dispositivo y se sincroniza con la cuenta (gana el mayor de cada dato). Antes solo se guardaba el récord (clave «burbujas_record»).
+const CLAVE = "burbujas_progreso_v1";
+function normalizar(x) {
+  if (typeof x === "number") return { record: x, max: 1, hecho: 0, t: 0 };       // formato viejo: solo el récord
+  if (!x || typeof x !== "object") return null;
+  const hecho = Math.min(TOTAL, Math.max(0, Math.floor(Number(x.hecho)) || 0));
+  return { record: Math.max(0, Number(x.record) || 0), max: Math.min(TOTAL, Math.max(hecho + 1, Math.floor(Number(x.max)) || 1)), hecho, t: Number(x.t) || 0 };
+}
+function unir(a, b) {
+  a = normalizar(a); b = normalizar(b);
+  if (!a && !b) return null;
+  if (!a) return b;
+  if (!b) return a;
+  return { record: Math.max(a.record, b.record), max: Math.max(a.max, b.max), hecho: Math.max(a.hecho, b.hecho), t: Math.max(a.t, b.t) };
+}
+function leerProgreso() {
+  let nuevo = null, viejo = null;
+  try { nuevo = JSON.parse(localStorage.getItem(CLAVE)); } catch (e) {}
+  try { viejo = Number(localStorage.getItem("burbujas_record")) || 0; } catch (e) {}
+  return unir(nuevo, viejo ? { record: viejo } : null) || normalizar({});
+}
+let prog = leerProgreso();
+elRecord.textContent = prog.record;
 let nube = null;
+function guardarProgreso() {
+  prog.t = Date.now();
+  try { localStorage.setItem(CLAVE, JSON.stringify(prog)); } catch (e) {}
+  if (nube) nube.guardado();
+}
+// Se sincroniza con la cuenta de Google cuando hay sesión e internet; sin internet el juego funciona igual
 import("../compartido/progreso.js").then((m) => {
   nube = m.conectar(ID, {
-    clave: "burbujas_record",
-    fusionar: (a, b) => (a == null && b == null ? null : Math.max(Number(a) || 0, Number(b) || 0)),
-    alCambiar: (v) => { record = Number(v) || 0; elRecord.textContent = record; },
+    clave: CLAVE,
+    fusionar: unir,
+    alCambiar: (v) => { prog = normalizar(v) || prog; elRecord.textContent = prog.record; mapa.refrescar(); },
   });
 }).catch(() => {});
 
-// ---------- Rejilla hexagonal ----------
-const px = (r, c) => R + c * 2 * R + (((r + par) & 1) ? R : 0);
-const py = (r) => R + r * RH;
-
-function vecinos(r, c) {
-  const desp = (r + par) & 1;
-  const dc = desp ? [0, 1] : [-1, 0];
-  const lista = [[r, c - 1], [r, c + 1]];
-  for (const dr of [-1, 1]) for (const d of dc) lista.push([r + dr, c + d]);
-  return lista.filter(([rr, cc]) => rr >= 0 && rr < grid.length && cc >= 0 && cc < COLS);
+// ---------- Perfil (puntos totales del portal) ----------
+// Los puntos se anotan al instante en el dispositivo (cola) y se envían cuando haya internet y sesión.
+let enviadosPerfil = 0;
+function darPuntosPerfil(n) {
+  if (!(n > 0)) return;
+  encolarPuntos(ID, n);
+  import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {});
+}
+function enviarPerfilLibre() {   // solo si LIBRE_DA_PUNTOS
+  if (!LIBRE_DA_PUNTOS || modo !== "libre") return;
+  const debe = Math.floor(puntos / PUNTOS_POR_PERFIL) - enviadosPerfil;
+  if (debe <= 0) return;
+  enviadosPerfil += debe;
+  darPuntosPerfil(debe);
 }
 
-function coloresPresentes() {
-  const s = new Set();
-  for (const fila of grid) for (const v of fila) if (v !== null && v >= 0) s.add(v);
-  return [...s];
+// ---------- Sesión (👤 Iniciar sesión, arriba a la derecha del menú principal) ----------
+// compartido/jugador.js se carga con import() dinámico: sin internet el menú funciona igual (el botón avisa que no hay sesión disponible).
+let jug = null, usuario = null;
+function pintarSesion() {
+  const nombre = usuario ? String(usuario.displayName || "Mi cuenta").split(" ")[0].slice(0, 12) : "";
+  btnSesion.replaceChildren();
+  const ico = document.createElement("span"); ico.className = "b-ico"; ico.textContent = "👤";
+  btnSesion.append(ico, document.createTextNode(" " + (usuario ? nombre + " · Salir" : "Iniciar sesión")));
+  btnSesion.title = usuario ? "Cerrar la sesión de " + (usuario.displayName || "tu cuenta") : "Iniciar sesión con Google";
 }
-const colorAlAzar = () => { const p = coloresPresentes(); return p.length ? p[Math.floor(Math.random() * p.length)] : 0; };
+import("../compartido/jugador.js").then((m) => { jug = m; m.alCambiarSesion((u) => { usuario = u; pintarSesion(); }); }).catch(() => {});
+pintarSesion();
+btnSesion.addEventListener("click", async () => {
+  if (!jug) { mensajeMenu("Para iniciar sesión necesitas internet."); return; }
+  try { if (usuario) await jug.salir(); else await jug.entrar(); mensajeMenu(""); }
+  catch (e) { mensajeMenu("No se pudo iniciar sesión. Intenta de nuevo."); }
+});
+function mensajeMenu(t) { $("menu-msg").textContent = t || ""; }
 
-function filaNueva() {
-  return Array.from({ length: COLS }, () =>
-    nivel >= PIEDRAS_DESDE && Math.random() < PROB_PIEDRA_FILA ? PIEDRA : Math.floor(Math.random() * ncol));
+// ---------- Pantallas ----------
+function pintarUI() {
+  const menu = estado === "inicio", mapaAbierto = estado === "mapa";
+  document.body.classList.toggle("en-menu", menu || mapaAbierto);   // el lienzo se oculta en el menú y en el mapa
+  $("inicio").classList.toggle("activo", menu);
+  btnMenu.hidden = !(estado === "jugando" || mapaAbierto);          // ☰ Pausa: no se ve en el menú principal
+  btnSesion.hidden = !menu;                                          // 👤 solo en el menú principal
+  $("fin").classList.toggle("activo", estado === "fin");
+  $("victoria").hidden = estado !== "gano";
+  if (estado === "gano") colocarVictoria();
+  if (!menu) $("lista-dif").hidden = true, $("m-libre").setAttribute("aria-expanded", "false");
 }
-
-const hayColores = () => grid.some((f) => f.some((v) => v !== null && v >= 0));
-
-function nuevoNivel() {
-  par = 0;
-  const forma = FORMAS[(nivel - 1) % FORMAS.length];
-  ncol = Math.min(COLORES_INICIO + Math.floor((nivel - 1) / 2), COLORES.length);
-  tirosPorFila = Math.max(TIROS_POR_FILA_MIN, TIROS_POR_FILA_INICIO - Math.floor((nivel - 1) / 3));
-  // filas llenas extra ARRIBA de la forma (cuelgan del techo): más burbujas conforme subes de nivel
-  const extra = Math.max(0, Math.min(Math.ceil(nivel / 2), FILAS_EXTRA_MAX, MAX_FILAS_INICIO - forma.filas.length));
-  const filas = [...Array(extra).fill("#".repeat(COLS)), ...forma.filas];
-  grid = filas.map((s) => [...s].map((ch) => (ch === "#" ? Math.floor(Math.random() * ncol) : null)));
-  // piedras en lugares al azar
-  if (nivel >= PIEDRAS_DESDE) {
-    const celdas = [];
-    grid.forEach((fila, r) => fila.forEach((v, c) => { if (v !== null) celdas.push([r, c]); }));
-    for (let i = celdas.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [celdas[i], celdas[j]] = [celdas[j], celdas[i]]; }
-    const n = Math.min(MAX_PIEDRAS, 2 + (nivel - PIEDRAS_DESDE) * 2, Math.floor(celdas.length / 3));
-    celdas.slice(0, n).forEach(([r, c]) => { grid[r][c] = PIEDRA; });
-  }
-  soltarFlotantes(true);   // por si alguna forma quedó sin tocar el techo
-  tiros = 0; racha = 0; disparo = null; caen = []; chispas = [];
-  actual = colorAlAzar(); siguiente = colorAlAzar();
-  elNivel.textContent = nivel;
-  avisoTexto = "Nivel " + nivel + " · " + forma.nombre; aviso = 110;
+function etiquetaNivel() {
+  elEtNivel.textContent = modo === "niveles" ? "Nivel" : "Ronda";
+  elNivel.textContent = modo === "niveles" ? nivel : ronda;
 }
-
-function iniciar() {
+function empezar() {
   ac();
-  puntos = 0; nivel = 1; enviadosPerfil = 0; estado = "jugando";
-  elPuntos.textContent = 0;
-  nuevoNivel();
-  $("inicio").classList.remove("activo");
-  $("fin").classList.remove("activo");
+  estado = "jugando"; pausado = false; disparo = null; apuntando = false; caen = []; chispas = []; deslizar = 0;
+  elPuntos.textContent = puntos; etiquetaNivel();
+  avisoTexto = (modo === "niveles" ? "Nivel " + nivel + " · " + NOMBRE_DIF[T.dificultad] : "Ronda " + ronda) + " · " + T.nombre; aviso = 110;
+  pintarUI();
 }
+function iniciarLibre(id) {
+  mapa.cerrar();
+  modo = "libre"; dif = id; ronda = 1; puntos = 0; enviadosPerfil = 0;
+  T = nivelLibre(id, 1);
+  empezar();
+}
+function iniciarNivel(n) {
+  if (!(n >= 1 && n <= TOTAL) || n > prog.max) return;
+  mapa.cerrar();
+  modo = "niveles"; nivel = n; puntos = 0;
+  T = nivelFijo(n, TOTAL, dificultadDeNivel(n, TOTAL));
+  empezar();
+}
+function abrirMapa(n, alcanzado) {
+  estado = "mapa"; pausado = false; apuntando = false;
+  pintarUI();
+  mapa.abrir(n, alcanzado);
+}
+// «Salir» del menú de pausa: vuelve al menú principal. Se conservan el progreso y el récord.
+function volverAlMenu() {
+  pausado = false;
+  enviarPerfilLibre();
+  mapa.cerrar();
+  estado = "inicio"; apuntando = false; disparo = null; T = null; caen = []; chispas = [];
+  mensajeMenu("");
+  pintarUI();
+}
+
+// ---------- Mapa de niveles estándar (compartido/mapa-niveles.js) ----------
+const mapa = montarMapa({
+  prefijo: ID,
+  etapas: ETAPAS,
+  progreso: () => ({ max: prog.max, hecho: prog.hecho }),
+  jugarNivel: iniciarNivel,
+  infoNivel: (n) => ({ sub: NOMBRE_DIF[dificultadDeNivel(n, TOTAL)] }),
+  leyenda: "Limpia todas las burbujas de color. Las piedras no cuentan.",
+});
+
+// ---------- Pausa (menú estándar: compartido/menu-pausa.js; el botón ☰ Pausa está en .nav-juego) ----------
+const pausa = crearMenuPausa({
+  boton: btnMenu,
+  puedeAbrir: () => estado === "jugando" || estado === "mapa",
+  alAbrir: () => { if (estado === "jugando") { pausado = true; apuntando = false; } },
+  alContinuar: () => { pausado = false; btnMenu.blur(); },   // sin foco en ☰, la barra espaciadora no lo vuelve a abrir
+  extras: () => [{ icono: "ℹ️", texto: "Cómo se juega", clase: "b-azul", alElegir: () => $("info").classList.add("activo") }],
+  alSalir: volverAlMenu,
+  ayudaSalir: "Vuelves al menú principal. La partida en curso se pierde; tu progreso y tu récord se conservan.",
+});
+$("info-cerrar").addEventListener("click", () => { $("info").classList.remove("activo"); if (estado === "jugando") pausado = false; btnMenu.blur(); });
+
+// ---------- Menú principal ----------
+const listaDif = $("lista-dif");
+for (const d of DIFICULTADES_LIBRE) {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "b3d txt chico " + d.clase; b.textContent = d.nombre;
+  b.addEventListener("click", () => iniciarLibre(d.id));
+  listaDif.appendChild(b);
+}
+$("m-libre").addEventListener("click", () => {   // despliega o pliega las dificultades (no abre otra pantalla)
+  const abrir = listaDif.hidden;
+  listaDif.hidden = !abrir;
+  $("m-libre").setAttribute("aria-expanded", String(abrir));
+});
+$("m-niveles").addEventListener("click", () => abrirMapa(Math.min(prog.max, TOTAL)));
+$("m-mapa").addEventListener("click", () => abrirMapa());
+
+// ---------- Fin de nivel: «Siguiente nivel ▶» encima del tablero (estándar, sección 6) ----------
+function colocarVictoria() {
+  const v = $("victoria"), r = lienzo.getBoundingClientRect();
+  const x0 = Math.max(0, r.left), y0 = Math.max(0, r.top), x1 = Math.min(innerWidth, r.right), y1 = Math.min(innerHeight, r.bottom);
+  const poco = x1 - x0 < 120 || y1 - y0 < 120;   // el tablero casi no se ve: toda la ventana
+  v.style.left = poco ? "0" : x0 + "px"; v.style.top = poco ? "0" : y0 + "px";
+  v.style.width = poco ? "100%" : x1 - x0 + "px"; v.style.height = poco ? "100%" : y1 - y0 + "px";
+}
+addEventListener("resize", () => { if (estado === "gano") colocarVictoria(); });
+function mostrarVictoria() {
+  $("vicTitulo").textContent = "¡Nivel " + nivel + " completado!";
+  $("vicTexto").textContent = puntos + " puntos" + (puntos >= prog.record && puntos > 0 ? " · ¡Nuevo récord!" : "");
+  $("vic-sig").hidden = nivel >= TOTAL;   // en el último nivel no hay «Siguiente»
+  pintarUI();
+}
+$("vic-sig").addEventListener("click", () => { puntos = 0; iniciarNivelSiguiente(); });
+function iniciarNivelSiguiente() { iniciarNivel(Math.min(TOTAL, nivel + 1)); }
+$("vic-rep").addEventListener("click", () => { puntos = 0; iniciarNivel(nivel); });
+$("vic-mapa").addEventListener("click", () => { $("victoria").hidden = true; abrirMapa(nivel, true); });
 
 // ---------- Disparo ----------
 function disparar() {
-  if (disparo || estado !== "jugando") return;
-  disparo = { x: TIRADOR.x, y: TIRADOR.y, vx: Math.cos(angulo) * VELOCIDAD, vy: -Math.sin(angulo) * VELOCIDAD, color: actual };
-  actual = siguiente;
-  siguiente = colorAlAzar();
+  if (disparo || pausado || estado !== "jugando") return;
+  disparo = nuevoDisparo(angulo, sacarDeCola(T));
   sonido("disparo");
-}
-
-function chocaConTablero(x, y) {
-  if (y <= R + deslizar) return true;
-  for (let r = 0; r < grid.length; r++) {
-    const yy = py(r) - deslizar;
-    if (Math.abs(yy - y) > 2 * R) continue;
-    for (let c = 0; c < COLS; c++) {
-      if (grid[r][c] === null) continue;
-      const dx = px(r, c) - x, dy = yy - y;
-      if (dx * dx + dy * dy < (2 * R * 0.9) ** 2) return true;
-    }
-  }
-  return false;
-}
-
-function avanzar(b) {
-  // dos subpasos para que no atraviese burbujas
-  for (let i = 0; i < 2; i++) {
-    b.x += b.vx / 2; b.y += b.vy / 2;
-    if (b.x < R) { b.x = R; b.vx = Math.abs(b.vx); }
-    if (b.x > ANCHO - R) { b.x = ANCHO - R; b.vx = -Math.abs(b.vx); }
-    if (chocaConTablero(b.x, b.y)) return true;
-  }
-  return false;
-}
-
-// Busca la celda vacía más cercana; solo la ocupa si es una burbuja de color
-function acomodar(b, ocupar) {
-  const r0 = Math.round((b.y - R) / RH);
-  let mejor = null, mejorD = Infinity;
-  for (let rr = Math.max(0, r0 - 1); rr <= r0 + 1; rr++) {
-    while (grid.length <= rr) grid.push(Array(COLS).fill(null));
-    for (let c = 0; c < COLS; c++) {
-      if (grid[rr][c] !== null) continue;
-      const d = (px(rr, c) - b.x) ** 2 + (py(rr) - b.y) ** 2;
-      if (d < mejorD) { mejorD = d; mejor = [rr, c]; }
-    }
-  }
-  const [r, c] = mejor;
-  if (ocupar) grid[r][c] = b.color;
-  return [r, c];
-}
-
-function recortarFilasVacias() {
-  while (grid.length > 1 && grid[grid.length - 1].every((v) => v === null)) grid.pop();
-}
-
-// Quita una lista de celdas; devuelve cuántas había
-function quitar(celdas, color) {
-  let n = 0;
-  for (const [r, c] of celdas) {
-    if (grid[r][c] === null) continue;
-    soltarChispas(px(r, c), py(r) - deslizar, grid[r][c]);
-    grid[r][c] = null; n++;
-  }
-  return n;
-}
-
-function reventar(r, c) {
-  const color = grid[r][c];
-  const vistos = new Set([r + "," + c]);
-  const pila = [[r, c]];
-  while (pila.length) {
-    const [rr, cc] = pila.pop();
-    for (const [vr, vc] of vecinos(rr, cc)) {
-      const k = vr + "," + vc;
-      if (!vistos.has(k) && grid[vr][vc] === color) { vistos.add(k); pila.push([vr, vc]); }
-    }
-  }
-  if (vistos.size < 3) return 0;
-  const n = quitar([...vistos].map((k) => k.split(",").map(Number)));
-  puntos += n * PUNTOS_BASE + Math.max(0, n - 3) * PUNTOS_BASE;
-  return n;
-}
-
-// ---------- Especiales ----------
-function areaBomba(r, c) {
-  const marcadas = new Set([r + "," + c]);
-  let borde = [[r, c]];
-  for (let i = 0; i < RADIO_BOMBA; i++) {
-    const nuevo = [];
-    for (const [rr, cc] of borde) for (const [vr, vc] of vecinos(rr, cc)) {
-      const k = vr + "," + vc;
-      if (!marcadas.has(k)) { marcadas.add(k); nuevo.push([vr, vc]); }
-    }
-    borde = nuevo;
-  }
-  return [...marcadas].map((k) => k.split(",").map(Number));
-}
-
-function usarEspecial(tipo, r, c) {
-  let celdas = [];
-  if (tipo === "bomba") {
-    celdas = areaBomba(r, c);
-    sonido("bomba");
-  } else if (tipo === "rayo") {
-    for (let cc = 0; cc < COLS; cc++) celdas.push([r, cc]);
-    sonido("rayo");
-  } else {   // arcoíris: borra todas las burbujas del color que toca (o uno al azar si no toca ninguna)
-    const cuenta = {};
-    for (const [vr, vc] of vecinos(r, c)) {
-      const v = grid[vr][vc];
-      if (v !== null && v >= 0) cuenta[v] = (cuenta[v] || 0) + 1;
-    }
-    const claves = Object.keys(cuenta);
-    const objetivo = claves.length ? Number(claves.sort((a, b) => cuenta[b] - cuenta[a])[0]) : colorAlAzar();
-    for (let rr = 0; rr < grid.length; rr++) for (let cc = 0; cc < COLS; cc++) if (grid[rr][cc] === objetivo) celdas.push([rr, cc]);
-    sonido("arcoiris");
-  }
-  const n = quitar(celdas);
-  puntos += n * PUNTOS_BASE * 2;
-  return n;
-}
-
-function darEspecial(tipo) {
-  if (typeof actual === "string") siguiente = tipo;          // ya llevas uno: este queda de «siguiente»
-  else { siguiente = actual; actual = tipo; }
-  avisoTexto = ESPECIALES[tipo].texto; aviso = 60;
-  sonido("premio");
-}
-
-function soltarFlotantes(silencioso = false) {
-  const vistos = new Set();
-  const pila = [];
-  for (let c = 0; c < COLS; c++) if (grid[0][c] !== null) { vistos.add("0," + c); pila.push([0, c]); }
-  while (pila.length) {
-    const [r, c] = pila.pop();
-    for (const [vr, vc] of vecinos(r, c)) {
-      const k = vr + "," + vc;
-      if (!vistos.has(k) && grid[vr][vc] !== null) { vistos.add(k); pila.push([vr, vc]); }
-    }
-  }
-  let n = 0;
-  for (let r = 0; r < grid.length; r++) for (let c = 0; c < COLS; c++) {
-    if (grid[r][c] !== null && !vistos.has(r + "," + c)) {
-      if (!silencioso) caen.push({ x: px(r, c), y: py(r) - deslizar, vy: -2 - Math.random() * 3, vx: (Math.random() - 0.5) * 3, color: grid[r][c] });
-      grid[r][c] = null; n++;
-    }
-  }
-  if (!silencioso) puntos += n * PUNTOS_CAIDA;
-  return n;
 }
 
 function soltarChispas(x, y, color) {
@@ -389,75 +323,60 @@ function soltarChispas(x, y, color) {
   }
 }
 
-function bajarTecho() {
-  grid.unshift(filaNueva());
-  par ^= 1;
-  deslizar = RH;
+function terminarTiro(b) {
+  disparo = null;
+  const ev = resolverTiro(T, b.color, b.x, b.y);   // todas las reglas del tiro están en logica-burbujas.js
+  if (ev.esEspecial) sonido(b.color); else sonido("posar");
+  for (const q of ev.quitadas) soltarChispas(q.x, q.y - deslizar, q.v);
+  for (const q of ev.caidas) caen.push({ x: q.x, y: q.y - deslizar, vy: -2 - Math.random() * 3, vx: (Math.random() - 0.5) * 3, color: q.v });
+  puntos += puntosDeTiro(ev);
+  if (ev.n) {
+    if (!ev.esEspecial) sonido("reventar", ev.n);
+    if (ev.cayeron) sonido("caer", ev.cayeron);
+  }
+  if (ev.premio) { avisoTexto = ESPECIALES[ev.premio].texto; aviso = 60; sonido("premio"); }
+  if (ev.bajo) deslizar = RH;
+  if (ev.gano) { nivelLimpio(); return; }
+  actualizarMarcador();
+  if (ev.perdio) perder();
 }
 
-function terminarTiro(b) {
-  const esEspecial = typeof b.color === "string";
-  const [r, c] = acomodar(b, !esEspecial);
-  disparo = null;
-
-  let n = 0, cayeron = 0;
-  if (esEspecial) n = usarEspecial(b.color, r, c);
-  else { sonido("posar"); n = reventar(r, c); }
-
-  if (n) {
-    cayeron = soltarFlotantes();
-    tiros = 0; racha++;
-    if (!esEspecial) sonido("reventar", n);
-    if (cayeron) sonido("caer", cayeron);
-  } else { tiros++; racha = 0; }
-  recortarFilasVacias();
-
-  if (!hayColores()) {   // nivel limpio (las piedras que queden no cuentan)
-    puntos += 200 + nivel * 50;
-    actualizarMarcador();
-    sonido("nivel");
-    nivel++;
-    nuevoNivel();
+function nivelLimpio() {
+  puntos += 200 + Math.min(modo === "niveles" ? nivel : ronda, 40) * 50;
+  actualizarMarcador();
+  sonido("nivel");
+  if (modo === "libre") {   // el Modo libre sigue con otra ronda del mismo tipo
+    ronda++;
+    T = nivelLibre(dif, ronda);
+    disparo = null; caen = []; chispas = []; deslizar = 0;
+    etiquetaNivel();
+    avisoTexto = "Ronda " + ronda + " · " + T.nombre; aviso = 110;
     return;
   }
-
-  // premios por jugar bien
-  if (!esEspecial) {
-    if (cayeron >= CAIDAS_PARA_ARCOIRIS) darEspecial("arcoiris");
-    else if (n >= REVENTAR_PARA_BOMBA) darEspecial("bomba");
-    else if (racha >= RACHA_PARA_RAYO) { darEspecial("rayo"); racha = 0; }
-  }
-
-  if (tiros >= tirosPorFila) { bajarTecho(); tiros = 0; }
-
-  // los colores que siguen deben existir todavía en el tablero
-  const p = coloresPresentes();
-  if (typeof actual === "number" && !p.includes(actual)) actual = colorAlAzar();
-  if (typeof siguiente === "number" && !p.includes(siguiente)) siguiente = colorAlAzar();
-
-  actualizarMarcador();
-  for (let rr = LIMITE_FILA; rr < grid.length; rr++) {
-    if (grid[rr].some((v) => v !== null)) { perder(); return; }
-  }
+  const primera = nivel > prog.hecho;   // los puntos del perfil solo se dan la primera vez que se pasa un nivel
+  prog.hecho = Math.max(prog.hecho, nivel);
+  prog.max = Math.min(TOTAL, Math.max(prog.max, nivel + 1));
+  guardarProgreso();
+  if (primera) darPuntosPerfil(Math.max(1, Math.floor(puntos / PUNTOS_POR_PERFIL)));
+  estado = "gano"; apuntando = false;
+  mostrarVictoria();
 }
 
 function actualizarMarcador() {
   elPuntos.textContent = puntos;
-  if (puntos > record) {
-    record = puntos; elRecord.textContent = record;
-    try { localStorage.setItem("burbujas_record", String(record)); } catch (e) {}
-    if (nube) nube.guardado();
-  }
+  if (puntos > prog.record) { prog.record = puntos; elRecord.textContent = prog.record; guardarProgreso(); }
 }
 
 function perder() {
   estado = "fin";
   sonido("perder");
-  enviarPerfil();
+  enviarPerfilLibre();
   $("finTitulo").textContent = "Se acabó";
-  $("finTexto").textContent = "Llegaste al nivel " + nivel + " con " + puntos + " puntos" + (puntos >= record && puntos > 0 ? ". ¡Nuevo récord!" : ".");
-  $("fin").classList.add("activo");
+  $("finTexto").textContent = "Llegaste " + (modo === "niveles" ? "al nivel " + nivel : "a la ronda " + ronda) + " con " + puntos + " puntos" + (puntos >= prog.record && puntos > 0 ? ". ¡Nuevo récord!" : ".");
+  pintarUI();
 }
+$("otra").addEventListener("click", () => { if (modo === "niveles") { puntos = 0; iniciarNivel(nivel); } else iniciarLibre(dif); });
+$("fin-menu").addEventListener("click", volverAlMenu);
 
 // ---------- Entrada ----------
 function posicion(e) {
@@ -472,12 +391,12 @@ function apuntarA(p) {
 }
 function cambiar() {
   if (disparo) return;
-  [actual, siguiente] = [siguiente, actual];
+  cambiarCola(T);
   sonido("cambiar");
 }
 lienzo.addEventListener("pointerdown", (e) => {
   ac();
-  if (estado !== "jugando") return;
+  if (estado !== "jugando" || pausado) return;
   const p = posicion(e);
   if (Math.hypot(p.x - POS_SIGUIENTE.x, p.y - POS_SIGUIENTE.y) < 34) { cambiar(); return; }
   lienzo.setPointerCapture(e.pointerId);
@@ -487,15 +406,13 @@ lienzo.addEventListener("pointermove", (e) => { if (apuntando) apuntarA(posicion
 lienzo.addEventListener("pointerup", () => { if (apuntando) { apuntando = false; disparar(); } });
 lienzo.addEventListener("pointercancel", () => { apuntando = false; });
 window.addEventListener("keydown", (e) => {
-  if (estado !== "jugando") return;
+  if (estado !== "jugando" || pausado) return;
   if (e.key === "ArrowLeft") angulo = Math.min(Math.PI - (MIN_GRADOS * Math.PI) / 180, angulo + 0.05);
   if (e.key === "ArrowRight") angulo = Math.max((MIN_GRADOS * Math.PI) / 180, angulo - 0.05);
   if (e.key === " " || e.key === "ArrowUp") { e.preventDefault(); disparar(); }
   if (e.key === "x") cambiar();
 });
-document.addEventListener("visibilitychange", () => { if (document.hidden && estado === "jugando") enviarPerfil(); });
-$("jugar").addEventListener("click", iniciar);
-$("otra").addEventListener("click", iniciar);
+document.addEventListener("visibilitychange", () => { if (document.hidden && estado === "jugando") enviarPerfilLibre(); });
 
 // ---------- Dibujo ----------
 function burbuja(x, y, color, escala = 1) {
@@ -535,32 +452,33 @@ function burbuja(x, y, color, escala = 1) {
 function guia() {
   // trayectoria punteada con un rebote en pared
   const b = { x: TIRADOR.x, y: TIRADOR.y, vx: Math.cos(angulo) * 8, vy: -Math.sin(angulo) * 8 };
-  ctx.fillStyle = "rgba(255,255,255,.85)";
+  ctx.fillStyle = "rgba(255,255,255,.9)"; ctx.strokeStyle = "rgba(40,10,80,.6)"; ctx.lineWidth = 1.5;
   for (let i = 0; i < 160; i++) {
     b.x += b.vx; b.y += b.vy;
     if (b.x < R) { b.x = R; b.vx = Math.abs(b.vx); }
     if (b.x > ANCHO - R) { b.x = ANCHO - R; b.vx = -Math.abs(b.vx); }
-    if (chocaConTablero(b.x, b.y)) break;
-    if (i % 3 === 0 && i > 3) { ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI * 2); ctx.fill(); }
+    if (chocaConTablero(T, b.x, b.y, deslizar)) break;
+    if (i % 3 === 0 && i > 3) { ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
   }
 }
 
 function dibujar() {
-  const [arriba, abajo] = FONDOS[((nivel || 1) - 1) % FONDOS.length];
-  const fondo = ctx.createLinearGradient(0, 0, 0, ALTO);
-  fondo.addColorStop(0, arriba); fondo.addColorStop(1, abajo);
-  ctx.fillStyle = fondo; ctx.fillRect(0, 0, ANCHO, ALTO);
+  ctx.clearRect(0, 0, ANCHO, ALTO);   // transparente: se ve la madera del portal
 
   ctx.fillStyle = "rgba(20,5,50,.7)"; ctx.fillRect(0, 0, ANCHO, 4);   // techo
 
   // línea de peligro
-  const yl = py(LIMITE_FILA) - R;
-  ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.setLineDash([8, 8]); ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(0, yl); ctx.lineTo(ANCHO, yl); ctx.stroke(); ctx.setLineDash([]);
+  const yl = posY(LIMITE_FILA) - R;
+  ctx.setLineDash([8, 8]);   // doble trazo (oscuro y claro) para que se vea sobre madera clara y oscura
+  ctx.strokeStyle = "rgba(40,10,80,.45)"; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(0, yl); ctx.lineTo(ANCHO, yl); ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,.75)"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, yl); ctx.lineTo(ANCHO, yl); ctx.stroke();
+  ctx.setLineDash([]);
 
-  if (!grid) return;
-  for (let r = 0; r < grid.length; r++) for (let c = 0; c < COLS; c++) {
-    if (grid[r][c] !== null) burbuja(px(r, c), py(r) - deslizar, grid[r][c]);
+  if (!T) return;
+  for (let r = 0; r < T.grid.length; r++) for (let c = 0; c < COLS; c++) {
+    if (T.grid[r][c] !== null) burbuja(posX(T, r, c), posY(r) - deslizar, T.grid[r][c]);
   }
   for (const b of caen) burbuja(b.x, b.y, b.color);
   for (const s of chispas) {
@@ -573,20 +491,24 @@ function dibujar() {
   if (estado === "jugando") {
     if (!disparo) guia();
     // cuántos tiros faltan para que baje el techo
-    for (let i = 0; i < tirosPorFila; i++) {
-      ctx.fillStyle = i < tiros ? "#ffe27a" : "rgba(255,255,255,.25)";
-      ctx.beginPath(); ctx.arc(ANCHO - 20 - i * 14, ALTO - 20, 4.5, 0, Math.PI * 2); ctx.fill();
+    for (let i = 0; i < T.tirosPorFila; i++) {
+      const dx = ANCHO - 20 - i * 14;
+      ctx.fillStyle = "rgba(30,10,60,.7)";
+      ctx.beginPath(); ctx.arc(dx, ALTO - 20, 6.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = i < T.tiros ? "#ffe27a" : "rgba(255,255,255,.3)";
+      ctx.beginPath(); ctx.arc(dx, ALTO - 20, 4.5, 0, Math.PI * 2); ctx.fill();
     }
     // tirador
     ctx.save(); ctx.translate(TIRADOR.x, TIRADOR.y); ctx.rotate(Math.PI / 2 - angulo);
-    ctx.fillStyle = "#ffffff55"; ctx.beginPath(); ctx.roundRect(-9, -R - 22, 18, 40, 8); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.85)"; ctx.strokeStyle = "rgba(40,10,80,.7)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(-9, -R - 22, 18, 40, 8); ctx.fill(); ctx.stroke();
     ctx.restore();
     ctx.fillStyle = "#2a0d55"; ctx.beginPath(); ctx.arc(TIRADOR.x, TIRADOR.y, R + 8, 0, Math.PI * 2); ctx.fill();
-    if (!disparo) burbuja(TIRADOR.x, TIRADOR.y, actual);
+    if (!disparo) burbuja(TIRADOR.x, TIRADOR.y, T.actual);
     if (disparo) burbuja(disparo.x, disparo.y, disparo.color);
     // siguiente (se puede tocar para cambiar)
     ctx.fillStyle = "#2a0d55"; ctx.beginPath(); ctx.arc(POS_SIGUIENTE.x, POS_SIGUIENTE.y, R + 6, 0, Math.PI * 2); ctx.fill();
-    burbuja(POS_SIGUIENTE.x, POS_SIGUIENTE.y, siguiente, 0.85);
+    burbuja(POS_SIGUIENTE.x, POS_SIGUIENTE.y, T.siguiente, 0.85);
   }
 
   if (aviso > 0) {
@@ -602,7 +524,7 @@ function dibujar() {
 // ---------- Ciclo (paso fijo de 1/60 s, igual en pantallas de 60, 90 o 120 Hz) ----------
 function paso() {
   tic++;
-  if (estado === "jugando" && disparo && avanzar(disparo)) terminarTiro(disparo);
+  if (estado === "jugando" && disparo && pasoDisparo(T, disparo, deslizar)) terminarTiro(disparo);
   if (deslizar > 0) deslizar = Math.max(0, deslizar - 3);
   if (aviso > 0) aviso--;
   for (const b of caen) { b.vy += 0.6; b.y += b.vy; b.x += b.vx; }
@@ -617,10 +539,10 @@ function cuadro(ahora) {
   if (!ultimo) ultimo = ahora;
   acum = Math.min(acum + (ahora - ultimo), 100);
   ultimo = ahora;
-  while (acum >= 1000 / 60) { acum -= 1000 / 60; paso(); }
+  if (pausado) acum = 0;   // en pausa el reloj del juego no avanza
+  else while (acum >= 1000 / 60) { acum -= 1000 / 60; paso(); }
   dibujar();
 }
 
-angulo = Math.PI / 2;
-estado = "inicio";
+pintarUI();
 requestAnimationFrame(cuadro);
