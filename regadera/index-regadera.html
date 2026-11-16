@@ -1,0 +1,86 @@
+<!doctype html>
+<!-- Ruta: regadera/index-regadera.html -->
+<html lang="es" class="inmersivo">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#d9a866">
+<title>Regadera</title>
+<script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+<link rel="stylesheet" href="../compartido/estilos.css">
+<link rel="stylesheet" href="../compartido/inmersivo.css">
+<style>
+  .tablero { position: fixed; inset: 0; z-index: 1; width: 100%; height: 100%; display: block; touch-action: none; background: transparent; }
+  .pantalla { position: fixed; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 64px 16px 64px; overflow-y: auto; }
+  .pantalla h1 { margin: 0; font-size: clamp(2rem, 8vw, 3rem); color: var(--txt-fondo); text-shadow: var(--sombra-txt); text-align: center; }
+  .pantalla p { margin: 0; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); text-align: center; max-width: 34ch; font-weight: 600; }
+  .col { display: flex; flex-direction: column; gap: 12px; width: min(320px, 86vw); margin-top: 8px; }
+  .col .b3d { width: 100%; }
+  .col .b3d small { display: block; font-size: 11px; font-weight: 600; opacity: .9; }
+  .hud-der { flex-direction: column; align-items: flex-end; gap: 6px; }
+  .barra-compra { position: fixed; z-index: 5; left: 64px; right: 64px; bottom: max(14px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
+  .barra-compra > * { pointer-events: auto; }
+  .barra-compra small { padding: 3px 10px; border-radius: 999px; background: rgba(20,22,26,.72); color: #f1f2f4; font-size: 12px; text-align: center; }
+  .aviso { position: fixed; z-index: 7; left: 50%; top: 22%; transform: translateX(-50%); max-width: 86vw; padding: 10px 16px; border-radius: 14px; background: rgba(20,22,26,.9); color: #fff; font-weight: 700; text-align: center; pointer-events: none; }
+  #p-fin p { color: #f1f2f4; text-shadow: none; max-width: none; margin-bottom: 14px; }
+</style>
+</head>
+<body class="inmersivo">
+
+<nav class="nav-juego" aria-label="Navegación">
+  <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+  <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> Pausa</button>
+</nav>
+
+<canvas id="lienzo" class="tablero" hidden aria-label="Jardín circular con la regadera"></canvas>
+
+<div class="hud hud-der" id="hud" hidden>
+  <span class="chip chip-monedas" title="Monedas"><span class="moneda"></span><span id="v-monedas">0</span></span>
+  <span class="chip" title="Plantas puestas / espacios permitidos"><small>🌻</small><span id="v-plantas">0/2</span></span>
+  <span class="chip" title="Vida del centro"><small>❤️</small><span id="v-vida">30</span></span>
+  <span class="chip" title="Oleada"><small>Ola</small><span id="v-ola">1</span></span>
+</div>
+
+<div class="barra-compra" id="barra" hidden>
+  <button class="b3d txt b-oro" id="btn-espacio" type="button"><span class="b-ico">🌱</span> <span id="t-espacio">Más espacio · 100</span></button>
+  <small>Toca un pasto para plantar (50 monedas)</small>
+</div>
+
+<!-- Menú principal estándar (sección 7 de ESTANDARES-juegos.md) -->
+<section class="pantalla" id="p-menu">
+  <h1>🌻 Regadera</h1>
+  <p id="t-mejor"></p>
+  <div class="col">
+    <button class="b3d txt grande b-verde" id="b-libre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
+    <button class="b3d txt grande b-azul" id="b-niveles" type="button"><span class="b-ico">🪜</span> Niveles</button>
+    <button class="b3d txt grande b-azul" id="b-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+    <a class="b3d txt grande b-rojo" href="../" style="text-decoration:none"><span class="b-ico">🚪</span> Salir</a>
+  </div>
+</section>
+
+<!-- Dificultades del Modo libre -->
+<section class="pantalla" id="p-dif" hidden>
+  <h1>♾️ Modo libre</h1>
+  <p>Elige la dificultad. Aguanta cuantas olas puedas.</p>
+  <div class="col" id="lista-dif"></div>
+</section>
+
+<!-- Fin de la partida -->
+<div class="pausa-fondo" id="p-fin" hidden role="dialog" aria-modal="true" aria-label="Fin de la partida">
+  <div class="pausa-panel">
+    <h2>💥 ¡El centro cayó!</h2>
+    <p id="t-fin"></p>
+    <div class="pausa-opciones">
+      <button class="b3d txt b-verde" id="b-repetir" type="button"><span class="b-ico">🔁</span> <span>Jugar otra vez</span></button>
+      <button class="b3d txt b-rojo" id="b-fin-menu" type="button"><span class="b-ico">🚪</span> <span>Menú principal</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="aviso" id="aviso" hidden></div>
+
+<script type="module" src="juego-regadera.js"></script>
+<script type="module" src="../compartido/fondo-madera.js"></script>
+<script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
