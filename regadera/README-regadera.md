@@ -19,3 +19,21 @@ Archivos: `index-regadera.html`, `juego-regadera.js`, `README-regadera.md`. Id d
 - Niveles y Mapa estándar (por ahora avisan «🚧 Los niveles todavía no están creados»).
 - Registrar en `juegos.js` (y en `EN_DESARROLLO`), en `JUEGOS` de `sw.js` (`regadera: ["juego.js"]`) y subir `VERSION`; fila en el README principal.
 - Probar en celular (tamaño del jardín en horizontal, toques sobre las parcelas). Solo se revisó la sintaxis y la secuencia de riego en Node.
+
+## Niveles de plantas y monstruos (tablas `PLANTAS`, `COSTO_PLANTA` y `MONSTRUOS` en `juego-regadera.js`)
+- Los espacios desbloqueados se ponen **café**; solo ahí se planta. Con ◀ ▶ (abajo) eliges el nivel de planta; tocar una planta la sube de nivel pagando la diferencia de precio.
+
+| Nv | Planta | Precio | Daño del soldado | | Monstruo: vida | daño al centro | monedas |
+|---|---|---|---|---|---|---|---|
+| 1 | Girasol | 50 | 9 | | 22 | 10 | 20 |
+| 2 | Margarita | 120 | 15 | | 45 | 14 | 26 |
+| 3 | Tulipán | 250 | 24 | | 80 | 20 | 34 |
+| 4 | Orquídea | 450 | 36 | | 140 | 28 | 45 |
+| 5 | Flor de hielo | 750 | 52 | | 240 | 38 | 60 |
+| 6 | Flor de fuego | 1 200 | 75 | | 400 | 52 | 80 |
+| 7 | Loto | 1 900 | 105 | | 650 | 70 | 105 |
+| 8 | Flor de rayo | 3 000 | 145 | | 1 050 | 95 | 140 |
+| 9 | Flor de oro | 4 700 | 200 | | 1 700 | 130 | 185 |
+| 10 | Flor arcoíris | 7 500 | 280 | | 2 800 | 180 | 250 |
+
+- Cada 3 olas aparece un nivel de monstruo más alto (nivel 10 desde la ola 28); algunos siguen siendo de niveles anteriores. La vida se multiplica por la dificultad elegida.

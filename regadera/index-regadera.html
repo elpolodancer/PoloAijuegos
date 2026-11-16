@@ -21,6 +21,8 @@
   .barra-compra { position: fixed; z-index: 5; left: 64px; right: 64px; bottom: max(14px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
   .barra-compra > * { pointer-events: auto; }
   .barra-compra small { padding: 3px 10px; border-radius: 999px; background: rgba(20,22,26,.72); color: #f1f2f4; font-size: 12px; text-align: center; }
+  .sel { display: flex; align-items: center; gap: 8px; }
+  .info-planta { min-width: 150px; padding: 5px 12px; border-radius: 14px; background: rgba(20,22,26,.88); color: #fff; font-weight: 800; font-size: 13px; line-height: 1.25; text-align: center; white-space: pre-line; }
   .aviso { position: fixed; z-index: 7; left: 50%; top: 22%; transform: translateX(-50%); max-width: 86vw; padding: 10px 16px; border-radius: 14px; background: rgba(20,22,26,.9); color: #fff; font-weight: 700; text-align: center; pointer-events: none; }
   #p-fin p { color: #f1f2f4; text-shadow: none; max-width: none; margin-bottom: 14px; }
 </style>
@@ -38,11 +40,17 @@
   <span class="chip chip-monedas" title="Monedas"><span class="moneda"></span><span id="v-monedas">0</span></span>
   <span class="chip" title="Plantas puestas / espacios desbloqueados (máximo 24)"><small>🌻</small><span id="v-plantas">0/2</span></span>
   <span class="chip" title="Vida del centro"><small>❤️</small><span id="v-vida">500</span></span>
+  <span class="chip" title="Nivel de los monstruos que llegan ahora"><small>👹 Nv</small><span id="v-nm">1</span></span>
   <span class="chip" title="Oleada"><small>Ola</small><span id="v-ola">1</span></span>
 </div>
 
 <div class="barra-compra" id="barra" hidden>
-  <small>Toca un espacio libre para plantar (50) · toca un 🔒 para desbloquearlo (100)</small>
+  <div class="sel">
+    <button class="b3d chico b-gris" id="b-ant" type="button" aria-label="Planta anterior"><span class="b-ico">◀</span></button>
+    <span class="info-planta" id="t-planta"></span>
+    <button class="b3d chico b-gris" id="b-sig" type="button" aria-label="Planta siguiente"><span class="b-ico">▶</span></button>
+  </div>
+  <small>Toca un espacio café para plantar · toca una planta para subirla de nivel · toca un 🔒 para desbloquear (100)</small>
 </div>
 
 <!-- Menú principal estándar (sección 7 de ESTANDARES-juegos.md) -->
