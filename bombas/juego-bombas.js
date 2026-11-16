@@ -4,7 +4,7 @@
 // Niveles: el mapa estándar (32 estados + 194 países, 100 niveles cada uno) ya está armado, pero los niveles NO se generan todavía (sección 10):
 // al tocar uno se avisa «Los niveles todavía no están creados».
 
-import { COLS, FILAS, MECHA, DURACION_FUEGO, DIFICULTADES_LIBRE, nuevaRonda, paso } from "./logica-bombas.js";
+import { DURACION_FUEGO, DIFICULTADES_LIBRE, BOTS, MAX_BOMBAS, MAX_ALCANCE, PASO_JUGADOR, nuevaRonda, paso, puertaAbierta } from "./logica-bombas.js";
 import { encolarPuntos } from "../compartido/cola-puntos.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
 import { crearEtapas } from "../compartido/etapas-mapa.js";
@@ -20,7 +20,8 @@ const NIVELES_CREADOS = 0;       // cuántos niveles existen ya (0 = ninguno, ve
 const ETAPAS = crearEtapas({ porEtapa: POR_ETAPA });
 const TOTAL = ETAPAS.total;
 const TAM = 40;                  // píxeles lógicos por casilla
-const ANCHO = COLS * TAM, ALTO = FILAS * TAM;
+const VIS_C = 13, VIS_F = 11;    // casillas que se ven a la vez: los mapas más grandes (hasta 40×40) se siguen con una cámara
+const ANCHO = VIS_C * TAM, ALTO = VIS_F * TAM;
 
 // ---------- Sonidos (WebAudio, sin archivos) ----------
 let audio = null, silencio = false;
@@ -48,6 +49,7 @@ function sonido(tipo) {
     case "explota": tono(120, 0.35, { tipo: "sawtooth", hasta: 40, vol: 0.18 }); break;
     case "bloque": tono(300, 0.06, { tipo: "square", hasta: 150, vol: 0.05 }); break;
     case "enemigo": tono(500, 0.2, { tipo: "triangle", hasta: 200 }); break;
+    case "puerta": [392, 523, 659].forEach((f, i) => tono(f, 0.12, { tipo: "triangle", vol: 0.08, retraso: i * 0.07 })); break;
     case "item": [660, 880, 1100].forEach((f, i) => tono(f, 0.1, { tipo: "square", vol: 0.06, retraso: i * 0.06 })); break;
     case "muerte": tono(400, 0.5, { tipo: "sawtooth", hasta: 70, vol: 0.14 }); break;
     case "gano": [523, 659, 784, 1047].forEach((f, i) => tono(f, 0.2, { tipo: "triangle", retraso: i * 0.1 })); break;
@@ -153,7 +155,7 @@ function marcadores() {
 function empezar() {
   ac();
   estado = "jugando"; pausado = false; dirs.length = 0; quiereBomba = false;
-  marcadores(); pintarUI();
+  marcadores(); pintarUI(); centrarCamara(true);
 }
 function iniciarLibre(id) {
   mapa.cerrar();
@@ -192,7 +194,7 @@ const mapa = montarMapa({
   etapas: ETAPAS,
   progreso: () => ({ max: prog.max, hecho: prog.hecho }),
   jugarNivel: iniciarNivel,
-  leyenda: "Elimina a todos los monstruos sin quedar en la explosión.",
+  leyenda: "Encuentra la puerta 🚪 escondida bajo un bloque y entra cuando no quede ningún monstruo.",
   avisoPrincipal: () => (NIVELES_CREADOS ? "" : "🚧 Los niveles todavía no están creados"),
 });
 
@@ -256,14 +258,31 @@ $("bomba").addEventListener("pointerdown", (e) => { e.preventDefault(); ac(); qu
 
 // ---------- Dibujo ----------
 const MEJORAS = { bomba: "💣", fuego: "🔥", vel: "⚡" };
+const cam = { x: 0, y: 0 };   // esquina superior izquierda de lo que se ve, en casillas
 function rect(c, f, color, m = 0) { ctx.fillStyle = color; ctx.fillRect(c * TAM + m, f * TAM + m, TAM - 2 * m, TAM - 2 * m); }
 function emoji(txt, x, y, tam) { ctx.font = tam + "px system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(txt, x, y + 1); }
 const centro = (ente) => { const k = ente.paso ? ente.t / ente.paso : 0; return { x: (ente.x + (ente.ox - ente.x) * k + 0.5) * TAM, y: (ente.y + (ente.oy - ente.y) * k + 0.5) * TAM }; };
+// Hacia dónde mira la cámara: sigue al jugador y no se sale del mapa (si el mapa es más chico que la vista, queda centrado)
+function metaCamara() {
+  const p = centro(E.jugador);
+  const eje = (pos, vis, total) => (total <= vis ? (total - vis) / 2 : Math.max(0, Math.min(total - vis, pos / TAM - vis / 2)));
+  return { x: eje(p.x, VIS_C, E.cols), y: eje(p.y, VIS_F, E.filas) };
+}
+function centrarCamara(brusco) {
+  if (!E) return;
+  const m = metaCamara();
+  if (brusco) { cam.x = m.x; cam.y = m.y; } else { cam.x += (m.x - cam.x) * 0.18; cam.y += (m.y - cam.y) * 0.18; }
+}
 
 function dibujar() {
   ctx.clearRect(0, 0, ANCHO, ALTO);
   if (!E) return;
-  for (let f = 0; f < FILAS; f++) for (let c = 0; c < COLS; c++) {
+  centrarCamara(false);
+  ctx.save();
+  ctx.translate(-cam.x * TAM, -cam.y * TAM);
+  const c0 = Math.max(0, Math.floor(cam.x) - 1), c1 = Math.min(E.cols - 1, Math.ceil(cam.x + VIS_C) + 1);
+  const f0 = Math.max(0, Math.floor(cam.y) - 1), f1 = Math.min(E.filas - 1, Math.ceil(cam.y + VIS_F) + 1);
+  for (let f = f0; f <= f1; f++) for (let c = c0; c <= c1; c++) {
     const v = E.grid[f][c];
     if (v === 1) { rect(c, f, "#4b3f66"); rect(c, f, "#6f6190", 3); rect(c, f, "#5a4d7a", 7); }
     else {
@@ -271,10 +290,19 @@ function dibujar() {
       if (v === 2) { rect(c, f, "#8a5a2b", 2); rect(c, f, "#b67b3e", 5); ctx.fillStyle = "#8a5a2b"; ctx.fillRect(c * TAM + 5, f * TAM + TAM / 2 - 1, TAM - 10, 2); ctx.fillRect(c * TAM + TAM / 2 - 1, f * TAM + 5, 2, TAM - 10); }
     }
   }
+  // puerta: aparece al romper el bloque que la tapa; brilla cuando ya se puede entrar (sin monstruos vivos)
+  const P = E.puerta;
+  if (P.visible) {
+    const abierta = puertaAbierta(E);
+    ctx.globalAlpha = abierta ? 1 : 0.55;
+    if (abierta) { ctx.fillStyle = "rgba(255,230,120," + (0.35 + 0.2 * Math.sin(E.tic / 8)) + ")"; ctx.fillRect(P.x * TAM, P.y * TAM, TAM, TAM); }
+    emoji("🚪", (P.x + 0.5) * TAM, (P.y + 0.5) * TAM, 28);
+    ctx.globalAlpha = 1;
+  }
   for (const i of E.items) emoji(MEJORAS[i.tipo], (i.x + 0.5) * TAM, (i.y + 0.5) * TAM, 24);
   for (const b of E.bombas) {
     const late = 1 + 0.08 * Math.sin(b.t / 5) + (b.t < 40 ? 0.08 : 0);
-    ctx.fillStyle = "#1c1c22"; ctx.beginPath(); ctx.arc((b.x + 0.5) * TAM, (b.y + 0.55) * TAM, TAM * 0.36 * late, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = b.dueno ? "#5a1230" : "#1c1c22"; ctx.beginPath(); ctx.arc((b.x + 0.5) * TAM, (b.y + 0.55) * TAM, TAM * 0.36 * late, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "rgba(255,255,255,.55)"; ctx.beginPath(); ctx.arc((b.x + 0.4) * TAM, (b.y + 0.42) * TAM, 4, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = b.t % 10 < 5 ? "#ffd23f" : "#ff6b3d"; ctx.beginPath(); ctx.arc((b.x + 0.62) * TAM, (b.y + 0.18) * TAM, 4, 0, Math.PI * 2); ctx.fill();
   }
@@ -282,9 +310,15 @@ function dibujar() {
     const a = Math.min(1, q.t / (DURACION_FUEGO * 0.6));
     ctx.globalAlpha = a; rect(q.x, q.y, "#ff7a1a", 2); rect(q.x, q.y, "#ffd23f", 9); ctx.globalAlpha = 1;
   }
-  for (const e of E.enemigos) { const p = centro(e); emoji("👾", p.x, p.y, 28); }
-  const j = E.jugador, p = centro(j);
+  for (const e of E.enemigos) { const p = centro(e); emoji(BOTS[e.nivel].emoji, p.x, p.y, 28); }
+  const p = centro(E.jugador);
   if (E.inv % 12 < 8) emoji("🧑‍🚀", p.x, p.y, 28);   // parpadea mientras es invulnerable
+  ctx.restore();
+  // mejoras y monstruos que quedan (esquina de arriba a la izquierda del tablero)
+  ctx.fillStyle = "rgba(30,10,60,.75)"; ctx.fillRect(0, 0, 238, 26);
+  ctx.fillStyle = "#fff"; ctx.font = "700 14px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  const vel = Math.round(((PASO_JUGADOR - E.jugador.paso) / (PASO_JUGADOR - 7)) * 100);
+  ctx.fillText("💣 " + E.maxBombas + "/" + MAX_BOMBAS + "  🔥 " + E.alcance + "/" + MAX_ALCANCE + "  ⚡ " + vel + "%  👾 " + E.enemigos.length, 8, 14);
   if (destello > 0) { ctx.fillStyle = "rgba(255,255,255," + destello / 40 + ")"; ctx.fillRect(0, 0, ANCHO, ALTO); }
 }
 
@@ -298,7 +332,7 @@ function cuadro1() {
   for (const ev of eventos) {
     cambio = true;
     if (ev.tipo === "explota") destello = Math.max(destello, 6);
-    if (["poner", "explota", "bloque", "enemigo", "item", "muerte"].includes(ev.tipo)) sonido(ev.tipo);
+    if (["poner", "explota", "bloque", "enemigo", "item", "muerte", "puerta"].includes(ev.tipo)) sonido(ev.tipo);
     if (ev.tipo === "gano") { sonido("gano"); rondaLimpia(); }
     if (ev.tipo === "perdio") { sonido("perdio"); marcadores(); perder(); return; }
   }
@@ -309,7 +343,7 @@ function rondaLimpia() {
   ronda++;
   E = nuevaRonda(dif, ronda, Math.random, E);
   dirs.length = 0;
-  marcadores();
+  marcadores(); centrarCamara(true);
 }
 
 let ultimo = 0, acum = 0;

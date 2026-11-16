@@ -89,7 +89,7 @@
     <!-- Menú principal estándar: ♾️ Modo libre · 🪜 Niveles · 🗺️ Mapa · 🚪 Salir -->
     <div id="inicio" class="menu-principal activo">
       <h1>💣 Bombas</h1>
-      <p class="ayuda">Pon bombas, rompe bloques y deja fuera a todos los monstruos sin quedar en la explosión.</p>
+      <p class="ayuda">Pon bombas, rompe bloques, elimina a los monstruos y encuentra la puerta, sin quedar en la explosión.</p>
       <p class="ayuda" id="menu-msg" role="status"></p>
       <button class="b3d txt grande b-verde" id="m-libre" type="button" aria-expanded="false" aria-controls="lista-dif"><span class="b-ico">♾️</span>&nbsp;Modo libre</button>
       <div class="lista-dif" id="lista-dif" hidden></div>   <!-- las 5 dificultades las crea juego-bombas.js (DIFICULTADES_LIBRE) -->
@@ -118,7 +118,7 @@
   <!-- ℹ️ Cómo se juega (se abre desde ☰ Pausa) -->
   <div id="info" class="velo" role="dialog" aria-label="Cómo se juega">
     <h2>💣 Cómo se juega</h2>
-    <p>Muévete con las flechas o WASD (en el celular, con la cruz) y pon una bomba con el espacio o el botón 💣.<br>La bomba explota a los 2 segundos en cruz y rompe los bloques. ¡Aléjate!<br>Algunos bloques esconden mejoras: 💣 más bombas, 🔥 más alcance y ⚡ más velocidad.<br>Las explosiones activan otras bombas en cadena. Elimina a todos los monstruos para pasar de ronda.</p>
+    <p>Muévete con las flechas o WASD (en el celular, con la cruz) y pon una bomba con el espacio o el botón 💣.<br>La bomba explota a los 2 segundos en cruz y rompe los bloques. ¡Aléjate!<br>Algunos bloques esconden mejoras: 💣 (hasta 5 bombas a la vez), 🔥 (la llama llega hasta 5 casillas) y ⚡ (más velocidad).<br>Bajo un bloque se esconde la puerta 🚪: rómpelo, elimina a todos los monstruos y entra para pasar de ronda.<br>Hay 5 tipos de monstruos: 🎈 globo, 🐛 gusano, 👻 fantasma, 🤖 robot (huye de las bombas) y 😈 demonio (te busca y pone sus propias bombas).</p>
     <button class="b3d txt grande b-oro" id="info-cerrar" type="button" style="--t:56px"><span class="b-ico">▶</span>&nbsp;Entendido</button>
   </div>
 
