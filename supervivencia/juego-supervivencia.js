@@ -10,10 +10,15 @@ import { crearMenuPausa } from "../compartido/menu-pausa.js";   // menú ☰ Pau
 import { BORDE, COLOR_ANILLO, enExt, esAnillo, puedeConstruir, salida, devolverAdentro, crearEstadoViaje, puedeViajar, textoRazon, recargar } from "./mapa-general-supervivencia.js";
 // Pantalla del mapa general (se abre al cruzar el borde de la franja): el dibujo vive en su propio módulo
 import { dibujarMapaMundo, zonaEn } from "./dibujo-mapa-mundo.js";
+// Almacenamiento 🎒: la mochila con ranuras y el equipo (ropa, espalda, manos y bolsillos) reemplazan a los antiguos «inv» y «herr»
+import * as MO from "./mochila-supervivencia.js";
+import * as EQ from "./equipo-supervivencia.js";
+import { crearPanelMochila } from "./panel-mochila-supervivencia.js";
+import { modoPruebas } from "../compartido/configs.js";   // solo decide si se ve «🧪 Objetos de prueba» en el almacenamiento (no usa Firebase)
 
 // ---------- Ajustes ----------
 const N = 35;                       // el mapa es de N×N casillas
-const CLAVE = "supervivencia_mundo_v2";   // v1 era el mapa de 50×50 (sin recursos): ese guardado ya no se usa
+const CLAVE = "supervivencia_mundo_v2";   // el guardado ahora es «v: 3» (mochila y equipo); la clave se queda igual para que los mundos viejos se conviertan solos y la copia de seguridad los siga encontrando
 const VEL = 4;                      // velocidad del personaje, casillas por segundo
 const RADIO = 0.25;                 // radio del personaje para chocar con los árboles (casillas)
 const GROSOR = 4;                   // grosor de una losa de piso (px a escala 1)
@@ -40,6 +45,7 @@ const OBJ = {
 };
 const HERR_TXT = { hacha: "un hacha", pico: "un pico" };
 const NOMBRE_ITEM = { madera: "Madera", piedra: "Piedra", fibra: "Fibra", bayas: "Bayas" };
+const ID_ITEM = { madera: "leno-pino", piedra: "caliza", fibra: "fibra", bayas: "bayas" };   // nombre que usa el juego → id en datos-supervivencia.js
 // Herramientas que se fabrican en «🛠️ Fabricar» (no piden madera: al empezar solo hay piedras y fibra sueltas en el suelo)
 const RECETAS = [
   { id: "hacha", nombre: "Hacha", icono: "🪓", para: "Tala árboles (10 golpes cada uno).", costo: { piedra: 3, fibra: 3 } },
@@ -76,8 +82,11 @@ const ctxMundo = lienzoMundo.getContext("2d");
 const piso = new Uint8Array(N * N);        // 0 = sin piso; 1 madera; 2 piedra; 3 baldosa   (índice = j * N + i)
 const objetos = new Uint8Array(N * N);     // 0 = nada; 1 roble; 2 pino; 3 piedra suelta; 4 fibra; 5 arbusto de bayas; 6 vulto de piedra (ver OBJ)
 const dano = new Uint8Array(N * N);        // golpes que ya recibió cada casilla con recurso
-const inv = { madera: 0, piedra: 0, fibra: 0, bayas: 0 };
-const herr = { hacha: false, pico: false };
+const mochila = MO.crearMochila();         // 10 ranuras (+5/+10/+15 con mochila): aquí cae todo lo que recoges (mochila-supervivencia.js)
+const equipo = EQ.crearEquipo();           // lo que llevas puesto o en la mano: ropa, espalda, manos y bolsillos (equipo-supervivencia.js)
+const enMochila = (k) => MO.cuenta(mochila, ID_ITEM[k] || k);                 // cuántos hay en las ranuras de la mochila (de aquí se pagan las recetas)
+const tengo = (k) => EQ.cuentaTodo(mochila, equipo, ID_ITEM[k] || k);         // cuántos llevas en total (mochila + puesto)
+const tieneHerr = (h) => EQ.cuentaTodo(mochila, equipo, h) > 0;               // las herramientas valen desde la mochila, la mano o el bolsillo
 const jugador = { x: SPAWN.x, y: SPAWN.y, fx: 1, mov: false, paso: 0, golpeT: 0, herrA: null };
 let camX = jugador.x, camY = jugador.y;
 let W = 0, H = 0, dpr = 1, base = 64, zoom = 1, TW = 64, TH = 32, U = 1;
@@ -111,8 +120,7 @@ function mulberry32(a) {
 // El centro (donde empieza el personaje) queda despejado, pero cerca siempre hay piedras y fibra para fabricar las primeras herramientas.
 function generarMundo() {
   piso.fill(0); objetos.fill(0); dano.fill(0);
-  for (const k in inv) inv[k] = 0;
-  herr.hacha = herr.pico = false;
+  mochila.ranuras = MO.crearMochila().ranuras; Object.assign(equipo, EQ.crearEquipo());
   const rnd = mulberry32((Math.random() * 4294967296) >>> 0);
   const s = [rnd() * 6.28, rnd() * 6.28, rnd() * 6.28, rnd() * 6.28];
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
@@ -143,8 +151,8 @@ function generarMundo() {
 function guardar() {
   try {
     localStorage.setItem(CLAVE, JSON.stringify({
-      v: 2, n: N, piso: Array.from(piso).join(""), obj: Array.from(objetos).join(""), dano: Array.from(dano).join(""),
-      inv: { ...inv }, herr: Object.keys(herr).filter((h) => herr[h]),
+      v: 3, n: N, piso: Array.from(piso).join(""), obj: Array.from(objetos).join(""), dano: Array.from(dano).join(""),
+      mochila: { ranuras: mochila.ranuras }, equipo: { ...equipo },
       viaje: { energia: +viaje.energia.toFixed(2), energiaMax: viaje.energiaMax, nivel: viaje.nivel, t: viaje.t },
       x: +jugador.x.toFixed(2), y: +jugador.y.toFixed(2), t: Date.now(),
     }));
@@ -154,8 +162,9 @@ function guardar() {
 }
 function cargar() {
   try {
-    const d = JSON.parse(localStorage.getItem(CLAVE));
-    if (!d || d.v !== 2 || d.n !== N || typeof d.piso !== "string" || typeof d.obj !== "string" || typeof d.dano !== "string"
+    let d = JSON.parse(localStorage.getItem(CLAVE));
+    if (d && d.v === 2) d = MO.migrarV2aV3(d);   // mundo guardado antes de la mochila: sus recursos y herramientas pasan a las ranuras
+    if (!d || d.v !== 3 || d.n !== N || typeof d.piso !== "string" || typeof d.obj !== "string" || typeof d.dano !== "string"
       || d.piso.length !== N * N || d.obj.length !== N * N || d.dano.length !== N * N) return false;
     for (let k = 0; k < N * N; k++) {
       const p = +d.piso[k], o = +d.obj[k], g = +d.dano[k];
@@ -163,8 +172,8 @@ function cargar() {
       objetos[k] = o >= 0 && o <= 6 ? o : 0;
       dano[k] = objetos[k] && g > 0 && g < OBJ[objetos[k]].golpes ? g : 0;
     }
-    for (const k in inv) inv[k] = Math.max(0, Math.min(99999, Math.floor(Number(d.inv && d.inv[k])) || 0));
-    for (const h in herr) herr[h] = Array.isArray(d.herr) && d.herr.includes(h);
+    mochila.ranuras = EQ.sanearMochila(d.mochila).ranuras;
+    Object.assign(equipo, EQ.sanearEquipo(d.equipo, mochila));   // lo que no encaje en su lugar vuelve a la mochila
     if (d.viaje && typeof d.viaje === "object") {   // opcional: los guardados anteriores no lo traen
       const em = Number(d.viaje.energiaMax), e = Number(d.viaje.energia), nv = Number(d.viaje.nivel), t = Number(d.viaje.t);
       if (Number.isFinite(em) && em > 0 && em <= 100000) viaje.energiaMax = em;
@@ -268,7 +277,7 @@ function texto(x, y, txt, col) { textos.push({ x, y, t: 0, txt, col: col || "#ff
 function elegirObjetivo(i, j) {
   const o = OBJ[objetos[j * N + i]];
   if (!o) return;
-  if (o.herr && !herr[o.herr]) { avisar("Necesitas " + HERR_TXT[o.herr] + ": fabrícala en 🛠️ Fabricar."); return; }
+  if (o.herr && !tieneHerr(o.herr)) { avisar("Necesitas " + HERR_TXT[o.herr] + ": fabrícala en 🛠️ Fabricar."); return; }
   ruta = null; marca = null;
   objetivo = { i, j, cd: 0.15 };
   if (distA(i, j) <= (o.recoger ? ALCANCE_RECOGER : ALCANCE)) return;
@@ -292,19 +301,24 @@ function objetivoCercano() {   // para la tecla Espacio / E: el recurso más cer
   }
   return mejor;
 }
+function cabeBotin(o) {   // ¿cabe en la mochila lo máximo que suelta este recurso?
+  for (const it in o.da) if (!EQ.hayEspacio(mochila, ID_ITEM[it], o.da[it][1])) return false;
+  return true;
+}
 function romper(k) {
   const o = OBJ[objetos[k]], i = k % N, j = (k / N) | 0;
   objetos[k] = 0; dano[k] = 0; objetivo = null; barra = null;
   let n = 0;
   for (const it in o.da) {
     const [a, b] = o.da[it], c = a + Math.floor(Math.random() * (b - a + 1));
-    inv[it] += c; texto(i + 0.5, j + 0.5 + n * 0.0, "+" + c + " " + NOMBRE_ITEM[it], "#9dffb0"); n++;
+    MO.agregar(mochila, ID_ITEM[it], c); texto(i + 0.5, j + 0.5 + n * 0.0, "+" + c + " " + NOMBRE_ITEM[it], "#9dffb0"); n++;
   }
   pintarInv(); cambio();
 }
 function golpear(k) {
   const o = OBJ[objetos[k]];
-  if (o.herr && !herr[o.herr]) { objetivo = null; avisar("Necesitas " + HERR_TXT[o.herr] + "."); return; }
+  if (o.herr && !tieneHerr(o.herr)) { objetivo = null; avisar("Necesitas " + HERR_TXT[o.herr] + "."); return; }
+  if (dano[k] + 1 >= o.golpes && !cabeBotin(o)) { objetivo = null; avisar("La mochila está llena: haz espacio en 🎒."); return; }   // el último golpe suelta el botín
   jugador.golpeT = 0.3; jugador.herrA = o.herr;
   dano[k]++; sacudir = { k, t: 0 }; barra = { k, t: 2.5 };
   if (dano[k] >= o.golpes) romper(k); else cambio();
@@ -317,7 +331,10 @@ function trabajar(dt) {
     ruta = null;
     const sx = (i + 0.5 - jugador.x) - (j + 0.5 - jugador.y);
     if (Math.abs(sx) > 0.05) jugador.fx = sx > 0 ? 1 : -1;
-    if (o.recoger) { romper(k); return false; }
+    if (o.recoger) {
+      if (!cabeBotin(o)) { objetivo = null; avisar("La mochila está llena: haz espacio en 🎒."); return false; }
+      romper(k); return false;
+    }
     objetivo.cd -= dt;
     if (objetivo.cd <= 0) { objetivo.cd = ENFRIAR; golpear(k); }
     return true;
@@ -700,10 +717,10 @@ barraHerr.addEventListener("click", (ev) => {
 // ---------- Inventario y fabricar ----------
 const $ = (id) => document.getElementById(id);
 function pintarInv() {
-  for (const k in inv) $("inv-" + k).textContent = inv[k];
-  $("chipHacha").hidden = !herr.hacha; $("chipPico").hidden = !herr.pico;
+  for (const k of ["madera", "piedra", "fibra", "bayas"]) $("inv-" + k).textContent = tengo(k);
+  $("chipHacha").hidden = !tieneHerr("hacha"); $("chipPico").hidden = !tieneHerr("pico");
 }
-function tieneCosto(r) { return Object.keys(r.costo).every((it) => inv[it] >= r.costo[it]); }
+function tieneCosto(r) { return Object.keys(r.costo).every((it) => enMochila(it) >= r.costo[it]); }
 function pintarFab() {
   listaRecetas.replaceChildren();
   for (const r of RECETAS) {
@@ -715,26 +732,28 @@ function pintarFab() {
     const costo = document.createElement("small");
     for (const it of Object.keys(r.costo)) {
       const sp = document.createElement("span");
-      sp.className = inv[it] >= r.costo[it] ? "ok" : "falta";
-      sp.textContent = NOMBRE_ITEM[it] + " " + inv[it] + "/" + r.costo[it];
+      sp.className = enMochila(it) >= r.costo[it] ? "ok" : "falta";
+      sp.textContent = NOMBRE_ITEM[it] + " " + enMochila(it) + "/" + r.costo[it];
       costo.append(sp, " ");
     }
     info2.append(nombre, para, costo);
     const b = document.createElement("button"); b.type = "button"; b.className = "b3d txt b-verde";
-    const tengo = herr[r.id];
-    b.disabled = tengo || !tieneCosto(r);
-    b.textContent = tengo ? "Ya la tienes" : "Fabricar";
-    b.addEventListener("click", () => fabricar(r.id));
+    const ya = tieneHerr(r.id);
+    b.disabled = ya || !tieneCosto(r);
+    b.textContent = ya ? "Ya la tienes" : "Fabricar";
+    b.addEventListener("click", () => { if (!fabricar(r.id)) b.textContent = "Sin espacio en 🎒"; });
     fila.append(ic, info2, b);
     listaRecetas.appendChild(fila);
   }
 }
 function fabricar(id) {
   const r = RECETAS.find((x) => x.id === id);
-  if (!r || herr[id] || !tieneCosto(r)) return;
-  for (const it of Object.keys(r.costo)) inv[it] -= r.costo[it];
-  herr[id] = true; pintarInv(); pintarFab(); cambio();
+  if (!r || tieneHerr(id) || !tieneCosto(r)) return true;
+  const costo = Object.keys(r.costo).map((it) => [ID_ITEM[it] || it, r.costo[it]]);
+  if (!MO.convertir(mochila, costo, [id, 1])) return false;   // todo o nada: si la herramienta no cabe, no se gasta nada
+  pintarInv(); pintarFab(); cambio();
   texto(jugador.x, jugador.y, r.icono + " " + r.nombre, "#ffe08a");
+  return true;
 }
 function abrirFab() {
   if (pausado || !info.hidden) return;
@@ -744,6 +763,20 @@ function abrirFab() {
 }
 function cerrarFab() { if (fab.hidden) return; fab.hidden = true; pausado = false; }
 $("btnFab").addEventListener("click", abrirFab);
+
+// ---------- 🎒 Almacenamiento (panel-mochila-supervivencia.js): la mochila, la ropa, las manos y los bolsillos ----------
+const panelMochila = crearPanelMochila({
+  mochila, equipo, pruebas: modoPruebas(null),
+  alAbrir: () => { pausado = true; pulsando = false; ruta = null; marca = null; objetivo = null; for (const k in teclas) teclas[k] = false; },
+  alCerrar: () => { pausado = false; },
+  alCambiar: () => { pintarInv(); pintarFab(); cambio(); },
+});
+function abrirMochila() { if (pausado || !info.hidden || !fab.hidden || !mundoEl.hidden) return; panelMochila.abrir(); }
+$("btnMochila").addEventListener("click", abrirMochila);
+window.addEventListener("keydown", (ev) => {   // I o B abren el almacenamiento (el panel cierra con Esc, I o B)
+  const k = ev.key.toLowerCase();
+  if ((k === "i" || k === "b") && !ev.repeat && !ev.ctrlKey && !ev.metaKey && !ev.altKey) abrirMochila();
+});
 $("fabVolver").addEventListener("click", cerrarFab);
 window.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !fab.hidden) { ev.preventDefault(); cerrarFab(); } });
 
@@ -876,7 +909,7 @@ window.addEventListener("blur", () => { for (const k in teclas) teclas[k] = fals
 let armado = 0;   // «Mundo nuevo» pide tocar dos veces para no borrar por accidente
 const pausa = crearMenuPausa({
   boton: btnMenu,
-  puedeAbrir: () => info.hidden && fab.hidden && mundoEl.hidden,
+  puedeAbrir: () => info.hidden && fab.hidden && mundoEl.hidden && !panelMochila.abierto(),
   alAbrir: () => { pausado = true; pulsando = false; ruta = null; marca = null; objetivo = null; for (const k in teclas) teclas[k] = false; guardar(); },
   alContinuar: () => { pausado = false; },
   extras: () => [

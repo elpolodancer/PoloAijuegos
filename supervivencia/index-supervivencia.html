@@ -88,7 +88,7 @@
     <span class="chip" id="chipPico" title="Tienes el pico" hidden>⛏️ Pico</span>
   </div>
 
-  <div class="ayuda-mapa" id="ayudaMapa">Toca el suelo (o usa las flechas / WASD) para caminar. Toca un recurso para recogerlo o golpearlo. Fabrica herramientas en 🛠️.</div>
+  <div class="ayuda-mapa" id="ayudaMapa">Toca el suelo (o usa las flechas / WASD) para caminar. Toca un recurso para recogerlo o golpearlo. Fabrica herramientas en 🛠️. Tu mochila está en 🎒.</div>
 
   <!-- Herramientas: mover, tres tipos de piso, quitar piso, plantar árboles y fabricar -->
   <div class="hud hud-barra">
@@ -101,6 +101,7 @@
       <button class="b3d chico b-rojo" type="button" data-h="quitar" title="Quitar piso" aria-label="Quitar piso"><span class="b-ico">🧽</span></button>
       <button class="b3d chico b-verde" type="button" data-h="arbol" title="Plantar árbol" aria-label="Plantar árbol"><span class="b-ico">🌳</span></button>
       <button class="b3d chico b-morado" type="button" id="btnFab" title="Fabricar herramientas" aria-label="Fabricar herramientas"><span class="b-ico">🛠️</span></button>
+      <button class="b3d chico b-oro" type="button" id="btnMochila" title="Almacenamiento: mochila, ropa, manos y bolsillos (tecla I)" aria-label="Almacenamiento: mochila, ropa, manos y bolsillos"><span class="b-ico">🎒</span></button>
     </div>
   </div>
 
@@ -111,6 +112,7 @@
     <p>✋ <b>Mover:</b> toca o mantén el dedo sobre el suelo y el personaje camina rodeando los obstáculos. En computadora también sirven las flechas o WASD.</p>
     <p><b>Recursos:</b> toca uno y el personaje va hasta él. Las <b>piedras</b> y la <b>fibra</b> sueltas se recogen de un toque. El <b>arbusto de bayas</b> se talla a mano con 5 golpes. Los <b>árboles</b> aguantan 10 golpes y solo se talan con el <b>hacha</b>. Los <b>vultos de piedra</b> aguantan 8 golpes y solo se rompen con el <b>pico</b>. En computadora, Espacio o E golpea lo que tengas más cerca.</p>
     <p>🛠️ <b>Fabricar:</b> con piedras y fibra haces el hacha y el pico. Empieza juntando las que hay cerca de ti.</p>
+    <p>🎒 <b>Almacenamiento:</b> abre tu mochila (también con la tecla I). Toca un objeto y luego el lugar donde ponerlo: la ropa va en cabeza, torso, piernas y pies; la mochila, en la espalda; las armas y herramientas, en las manos o los bolsillos; la comida y las medicinas, en los bolsillos. «⚡ Equipar» lo pone solo. Si la mochila se llena no podrás recoger más.</p>
     <p>🟫 ⬜ 🟦 <b>Piso:</b> elige un tipo y toca o arrastra por el mapa para colocarlo (no se puede sobre un recurso). 🧽 lo quita. 🌳 planta un árbol en una casilla vacía; para quitarlo hay que talarlo.</p>
     <p>🗺️ <b>Mapa general:</b> el camino de tierra que rodea tu base se camina pero no se construye. Si llegas hasta su orilla se abre el mapa general con las zonas a las que podrás viajar.</p>
     <p>🔍 Con dos dedos (o la rueda del ratón) acercas y alejas. Tu mundo y tus cosas se guardan solos en este aparato.</p>
@@ -133,7 +135,7 @@
     <div class="jugar"><button class="b3d txt b-azul" id="mundoVolver" type="button"><span class="b-ico">⬅️</span> Volver a la base</button></div>
   </div>
 
-  <script type="module" src="juego-supervivencia.js?v=3"></script>
+  <script type="module" src="juego-supervivencia.js?v=4"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
   <script type="module" src="../compartido/fondo-madera.js"></script>
 </body>

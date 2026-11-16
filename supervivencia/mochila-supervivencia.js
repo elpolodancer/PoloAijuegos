@@ -3,7 +3,8 @@
 // Una mochila es { ranuras: [ {id, n} | null, … ] } (se guarda tal cual en JSON).
 import { item } from "./datos-supervivencia.js";
 
-export const RANURAS_INICIALES = 20;   // 💡 est: cámbialo; la mochila básica de 10.2 podría ampliarlo
+export const RANURAS_INICIALES = 10;   // lo que tiene el jugador sin mochila en la espalda; cada mochila suma `espacio` (ver capacidad() en equipo-supervivencia.js)
+export const RANURAS_MAX = 25;         // 10 base + 15 de la mochila nivel 3: lo máximo que puede tener (sirve para leer un guardado sin perder nada)
 
 export const crearMochila = (n = RANURAS_INICIALES) => ({ ranuras: Array.from({ length: n }, () => null) });
 
@@ -69,7 +70,7 @@ export function migrarV2aV3(mundo) {
   const cant = Array.isArray(inv) ? Object.fromEntries(ORDEN_V2.map((k, i) => [k, inv[i]])) : (inv || {});
   for (const k of ORDEN_V2) {
     const n = Math.floor(Number(cant[k])) || 0;
-    if (n > 0) agregar(m, V2_A_ITEM[k], n);   // 20 ranuras × 50 de apilado: lo de un mundo v2 siempre cabe
+    if (n > 0) agregar(m, V2_A_ITEM[k], n);   // OJO: con 10 ranuras de 20 caben 200 de cada tipo como máximo; lo que sobre de un mundo v2 muy cargado se pierde
   }
   const lista = Array.isArray(herr) ? herr : Object.keys(herr || {}).filter((k) => herr[k]);
   for (const h of lista) if (item(h) && item(h).tipo === "herramienta") agregar(m, h, 1);

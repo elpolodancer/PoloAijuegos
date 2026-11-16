@@ -9,15 +9,15 @@
 
 const I = (id, nombre, tipo, ico, apila, estado, o = {}) => ({ id, nombre, tipo, ico, apila, estado, ...o });
 
-export const TIPOS = ["recurso", "refinado", "componente", "herramienta", "arma", "armadura", "viejo", "comida", "medicina"];
+export const TIPOS = ["recurso", "refinado", "componente", "herramienta", "arma", "armadura", "mochila", "viejo", "comida", "medicina"];
 export const RANURAS_EQUIPO = ["cabeza", "torso", "piernas", "pies"];
 
 export const ITEMS = [
   // ---------- 5.1 Recursos naturales ----------
-  I("leno-pino",  "Leño de pino",  "recurso", "🪵", 50, "existe", { fuente: "5.1", nota: "Hoy es «Madera» (chip inv-madera). Los árboles pino y roble dan lo mismo." }),
-  I("leno-roble", "Leño de roble", "recurso", "🪵", 50, "nuevo",  { fuente: "5.1", nota: "❓ 5.9-2: ¿en qué se diferencia del pino? Por defecto solo el nombre." }),
-  I("caliza",     "Piedra caliza", "recurso", "🪨", 50, "existe", { fuente: "5.1", nota: "Hoy es «Piedra» (chip inv-piedra)." }),
-  I("hierro",     "Mineral de hierro", "recurso", "⛏️", 50, "nuevo", { fuente: "5.1", nota: "Vulto nuevo (pico). ❓ golpes y cantidad.", golpes: null, da: null }),
+  I("leno-pino",  "Leño de pino",  "recurso", "🪵", 20, "existe", { fuente: "5.1", nota: "Hoy es «Madera» (chip inv-madera). Los árboles pino y roble dan lo mismo." }),
+  I("leno-roble", "Leño de roble", "recurso", "🪵", 20, "nuevo",  { fuente: "5.1", nota: "❓ 5.9-2: ¿en qué se diferencia del pino? Por defecto solo el nombre." }),
+  I("caliza",     "Piedra caliza", "recurso", "🪨", 20, "existe", { fuente: "5.1", nota: "Hoy es «Piedra» (chip inv-piedra)." }),
+  I("hierro",     "Mineral de hierro", "recurso", "⛏️", 20, "nuevo", { fuente: "5.1", nota: "Vulto nuevo (pico). ❓ golpes y cantidad.", golpes: null, da: null }),
   I("cobre",      "Cobre",         "recurso", "🟠", 50, "nuevo",  { fuente: "5.1", nota: "❓ 5.9-3: para qué sirve. En 10.2 se usa como Copper Bar (Lámpara, Wiring, Circuito).", golpes: null, da: null }),
   I("piel",       "Piel de animal", "recurso", "🦌", 20, "nuevo", { fuente: "5.1", nota: "Necesita animales (sección 8). 10.2 la llama Animal Rawhide." }),
   I("fibra",      "Fibra",         "recurso", "🌿", 50, "existe", { fuente: "5.1", nota: "Ya existe y no estaba en la lista; 💡 sirve para la cuerda (5.9-1)." }),
@@ -71,6 +71,13 @@ export const ITEMS = [
   I("pantalon-tactico","Pantalones tácticos","armadura", "👖", 1, "nuevo", { fuente: "5.4", nivelArmadura: "militar", ranura: "piernas", defensa: null, nota: "Solo botín." }),
   I("kevlar",        "Traje Kevlar",        "armadura", "🛡️", 1, "nuevo", { fuente: "5.4", nivelArmadura: "especial", ranura: "cuerpo", defensa: null, nota: "Cuerpo completo; defensa «muy poderosa». No creable (10.5)." }),
   I("nrbq",          "Ropa NRBQ",           "armadura", "☢️", 1, "nuevo", { fuente: "5.4", nivelArmadura: "especial", ranura: "cuerpo", defensa: null, nota: "Antirradiación; pide Búnker Bravo (5.9-10)." }),
+
+  // ---------- Mochila (se pone en la ranura «espalda» del almacenamiento; receta de 10.2: nivel 2, 2 cuerda + 3 fibra) ----------
+  // `espacio` = ranuras que suma a la mochila mientras la llevas en la espalda (base: RANURAS_BASE = 10 en equipo-supervivencia.js).
+  // Nivel 1 → 15 ranuras · nivel 2 → 20 · nivel 3 → 25. Los nombres de los niveles 2 y 3 son provisionales (💡).
+  I("mochila-basica", "Mochila básica", "mochila", "🎒", 1, "nuevo", { fuente: "10.2", espacio: 5, nivelMochila: 1, nota: "Basic Backpack. Nivel 1: +5 espacios. Se pone en la ranura de la espalda." }),
+  I("mochila-nivel-2", "Mochila nivel 2", "mochila", "🎒", 1, "nuevo", { espacio: 10, nivelMochila: 2, est: true, nota: "Nivel 2: +10 espacios. Nombre y forma de conseguirla: 💡 por decidir." }),
+  I("mochila-nivel-3", "Mochila nivel 3", "mochila", "🎒", 1, "nuevo", { espacio: 15, nivelMochila: 3, est: true, nota: "Nivel 3: +15 espacios. Nombre y forma de conseguirla: 💡 por decidir." }),
 
   // ---------- 5.5 Objetos del Viejo Mundo ----------
   I("candado",    "Candado",    "viejo", "🔒", 10, "nuevo", { fuente: "5.5", nota: "Va con la construcción (puertas y cofres)." }),

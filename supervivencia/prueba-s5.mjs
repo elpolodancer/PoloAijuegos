@@ -7,12 +7,12 @@ console.log("items:", D.ITEMS.length, "| por tipo:", Object.fromEntries(D.TIPOS.
 for (const n of ["basica","resistente"]) assert.deepEqual(D.ITEMS.filter(x=>x.nivelArmadura===n).map(x=>x.ranura).sort(), ["cabeza","piernas","pies","torso"]);
 // mochila
 const m = M.crearMochila(2);
-assert.equal(M.agregar(m,"caliza",60), 0); assert.equal(M.cuenta(m,"caliza"),60);   // 50 + 10
-assert.equal(M.agregar(m,"caliza",100), 60);
-assert.equal(M.cuenta(m,"caliza"),100);
+assert.equal(M.agregar(m,"caliza",30), 0); assert.equal(M.cuenta(m,"caliza"),30);   // 20 + 10 (tope de apilado = 20)
+assert.equal(M.agregar(m,"caliza",100), 90);
+assert.equal(M.cuenta(m,"caliza"),40);
 assert.equal(M.agregar(m,"nada",1),1);
-assert.equal(M.quitar(m,"caliza",500), false); assert.equal(M.cuenta(m,"caliza"),100);
-assert.equal(M.quitar(m,"caliza",55), true);  assert.equal(M.cuenta(m,"caliza"),45);
+assert.equal(M.quitar(m,"caliza",500), false); assert.equal(M.cuenta(m,"caliza"),40);
+assert.equal(M.quitar(m,"caliza",15), true);  assert.equal(M.cuenta(m,"caliza"),25);
 // convertir: refinar cuerda 3 fibra → 1 cuerda; y todo-o-nada
 const b = M.crearMochila(); M.agregar(b,"fibra",7);
 const r = D.REFINAR.find(x=>x.da[0]==="cuerda");
