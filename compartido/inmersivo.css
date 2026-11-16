@@ -92,6 +92,10 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
      de la pantalla de Modo libre, nunca en medio. «Salir» siempre queda al final.
    • El ☰ no se muestra en este menú (es el menú principal); en Niveles, Mapa y dentro de una partida dice «Pausa»
      y abre compartido/menu-pausa.js, cuyo «Salir» vuelve aquí. Su color es verde claro (.b-verde).
+   • MAPA con México Y mundo armados desde el primer día (crearEtapas + montarMapa: 32 estados y 194 países). El mundo y el botón 🌍
+     están OCULTOS hasta terminar los 32 estados; después los países se abren de UNO EN UNO, en el orden de PAISES_BASE (los no
+     desbloqueados no se listan). Se deja funcionando aunque el juego aún no tenga niveles. Ver secciones 4A y 9 de ESTANDARES-juegos.md.
+   • NO se generan niveles hasta que los estándares del juego estén completos (sección 10 de ESTANDARES-juegos.md).
    • «👤 Iniciar sesión» (b3d txt b-azul): SIEMPRE en la esquina superior derecha del menú principal. Modo libre es un botón que, al
      tocarlo, despliega debajo la lista de dificultades (siempre disponibles); no abre otra pantalla. Ver sección 9 de ESTANDARES-juegos.md.
    =================================================================================================================== */

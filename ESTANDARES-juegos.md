@@ -53,7 +53,7 @@ Va en una zona libre: arriba-derecha con los demás chips (`.hud-der`) o, como e
 El menú de niveles **siempre es un mapa**:
 
 1. **México de cerca**, sobre fondo blanco, con la silueta del país. Cada estado terminado (**32 estados**, 100 niveles en Estacionamiento) hace **subir agua azul clara** dentro de la silueta, con oleaje (quieta con `prefers-reduced-motion`).
-2. Al terminar todos los de México aparece el **mapa del mundo** (**194 países**), con el mismo efecto de agua por país. Hasta entonces el jugador no sabe que existe.
+2. Al terminar los 32 estados aparece el **mapa del mundo** (**194 países**), con el mismo efecto de agua por país. Hasta entonces el jugador no sabe que existe. **El mundo viene siempre armado desde el principio** (con `crearEtapas`: 32 estados + 194 países, 100 niveles cada uno), pero **oculto**: no aparece ni el botón 🌍 ni la lista de países. Al terminar el estado 32 se revela el mundo y **los países se abren de uno en uno**, en el orden de `PAISES_BASE` (el país 1 al terminar los 3 200 niveles de México; cada país siguiente al terminar los 100 niveles del anterior). Los países sin desbloquear no se listan.
 3. Cada estado o país es un punto: al tocarlo se ven sus niveles. Cuántos niveles tiene cada etapa lo decide cada juego (en Estacionamiento son 100; en Supermercado y Zuma, 10).
 4. Los niveles se abren en orden; se guarda «nivel más alto abierto» y «más alto terminado».
 
@@ -102,7 +102,7 @@ Cuando se pida «crear el menú como dicta el inmersivo», se crea **siempre** c
 |---|---|---|---|
 | 1 | **♾️ Modo libre** | `b-verde` | **Siempre el primero.** Al tocarlo **despliega debajo una lista de botones de dificultad** (Muy fácil `b-verde`, Fácil `b-azul`, Normal `b-morado`, Difícil `b-oro`, Experto `b-rojo`) más las opciones propias del juego (por ejemplo, el tamaño del tablero). Se vuelve a tocar para plegarla. Las dificultades están **siempre disponibles** en el modo libre |
 | 2 | **🪜 Niveles** | `b-azul` | Lista de niveles de la etapa donde va el jugador (el mapa abierto en el nivel actual) |
-| 3 | **🗺️ Mapa** | `b-azul` | Vista principal del mapa estándar de México y del mundo |
+| 3 | **🗺️ Mapa** | `b-azul` | Vista principal del mapa estándar de México y del mundo. El mundo y sus 194 países ya vienen creados, **ocultos** hasta terminar los 32 estados; después se abren un país a la vez |
 | 4 | **🚪 Salir** | `b-rojo` | **Siempre el último.** Vuelve al portal (`href="../"`) |
 
 - No se agregan botones entre estos cuatro ni se cambia su orden. Los extras (ℹ️ Info, ajustes…) van en ☰ Pausa o dentro de Modo libre.
@@ -140,6 +140,18 @@ Cuando se pida crear el menú principal en un juego que no lo tiene o que está 
 4. **Zona de menú**: columna de botones grandes (`b3d txt grande`), de arriba hacia abajo y centrada, con los cuatro de la sección 7: **♾️ Modo libre · 🪜 Niveles · 🗺️ Mapa · 🚪 Salir**. Sin botones extra entre ellos.
 5. **Botón «👤 Iniciar sesión»** siempre en la **esquina superior derecha** (sección 7).
 6. **Modo libre con sus dificultades**: el botón despliega la lista de las 5 dificultades (Muy fácil, Fácil, Normal, Difícil, Experto), siempre disponibles (sección 7).
-7. **Lo demás de los estándares**: botón ⛶ de pantalla completa abajo a la derecha; ningún control del juego dentro de las zonas reservadas de las esquinas (medidas en `inmersivo.css`); y la pausa conectada con `crearMenuPausa`.
+7. **Mapa con México y mundo armados.** El juego usa `crearEtapas` + `montarMapa` con las dos zonas completas desde el primer día: 32 estados y 194 países, cada uno con su cantidad de niveles. Se comprueba que (a) el mundo y el botón 🌍 **no se ven** hasta terminar todos los niveles de México, (b) después aparece **un país a la vez**, en el orden de `PAISES_BASE`, y los no desbloqueados no se listan, y (c) el progreso guarda «más alto abierto» y «más alto terminado». Esto se deja funcionando aunque el juego todavía no tenga niveles creados.
+8. **Lo demás de los estándares**: botón ⛶ de pantalla completa abajo a la derecha; ningún control del juego dentro de las zonas reservadas de las esquinas (medidas en `inmersivo.css`); y la pausa conectada con `crearMenuPausa`.
 
 Al migrar un juego que ya tenía menú propio, **se conserva su lógica y su progreso** (claves de `localStorage`, `conectar()`, puntos pendientes): solo cambia la pantalla de inicio. Al terminar, se anota en el README del juego qué estaba desactualizado y qué se cambió, y se sube `VERSION` en `sw.js`.
+
+## 10. Orden de trabajo: primero los estándares, después los niveles
+
+**No se empiezan a generar los niveles de un juego hasta que estén completos sus estándares.** Si se generan antes, al cambiar una mecánica hay que borrarlos y rehacerlos. El orden es:
+
+1. **Estándares del juego completos**: la revisión de la sección 9 (madera, 🎮 Portal de Juegos, ☰ Pausa, menú de 4 botones, 👤 Iniciar sesión, Modo libre con 5 dificultades, mapa de México y mundo armado con los países ocultos, ⛶ y pausa conectada), más monedas/estrellas si el juego las usa (sección 3), y su registro (sección 5).
+2. **Mecánicas, metas y temas definidos como constantes** al inicio del archivo de lógica del juego, antes de cualquier generación: qué variantes existen, a partir de qué avance del mapa (`p`) aparecen y cómo se combinan por etapa. Se anotan en el README del juego.
+3. **El bot de comprobación soporta todo lo anterior** (cada mecánica y cada meta) y pasa una muestra de niveles de todo el mapa.
+4. **Solo entonces** se generan los 22 600 niveles (100 por estado y por país) con la dificultad de la sección 8.
+
+Mientras un juego está en `EN_DESARROLLO` y sin publicar, sus niveles se pueden borrar y regenerar. Después de publicar **no se cambian** (cambiaría niveles que ya se pasaron).

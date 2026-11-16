@@ -109,7 +109,7 @@
 
   <div id="escena">
     <canvas id="lienzo" aria-label="Paperio: mantén pulsado y arrastra para moverte"></canvas>
-    <div id="velo">
+    <div id="velo" hidden> <!-- panel de fin de partida: solo lo muestra el juego; si empieza visible se ve un instante al abrir -->
       <div class="panel">
         <h2 id="velTitulo">Paperio</h2>
         <div class="tienda">
@@ -129,7 +129,7 @@
         <div id="ranking" hidden></div>
       </div>
     </div>
-    <div id="inicio" hidden>
+    <div id="inicio"> <!-- menú principal: visible desde el principio (el JS lo vuelve a mostrar al cargar), así no hay un instante con otro panel -->
       <div class="panel">
         <h2>Paperio</h2>
         <div id="inicioBotones">

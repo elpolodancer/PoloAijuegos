@@ -116,7 +116,7 @@ function preparar() {
 function empezar(d) {
   dif = d || dif; cfg = DIFS[dif];
   preparar();
-  dir = 0; vivo = true; pausado = false; ultimo = performance.now();
+  dir = 0; soltarJoy(); vivo = true; pausado = false; ultimo = performance.now();
   $("velo").hidden = true;
   mostrar("juego");
   requestAnimationFrame(ciclo);
@@ -356,6 +356,7 @@ async function fin() {
 const PANTALLAS = ["menu", "libre", "niveles", "mapa", "mejoras"];
 function mostrar(n) {
   actual = n;
+  soltarJoy();
   for (const x of PANTALLAS) $("p-" + x).hidden = x !== n;
   $("escena").hidden = n !== "juego";
   if (n === "niveles") { vista = idxEtapa(S.max); pintarNiveles(); }
@@ -441,7 +442,7 @@ $("b-comprar").addEventListener("click", () => {
 // ---------- Menú de pausa estándar ----------
 const pausa = crearMenuPausa({
   puedeAbrir: () => vivo && actual === "juego",
-  alAbrir: () => { pausado = true; },
+  alAbrir: () => { pausado = true; soltarJoy(); },
   alContinuar: () => { pausado = false; ultimo = performance.now(); requestAnimationFrame(ciclo); },
   ayudaSalir: "Pierdes los puntos y las monedas de esta partida.",
   alSalir: () => { vivo = false; pausado = false; mostrar("menu"); },
@@ -467,10 +468,54 @@ addEventListener("keydown", (e) => {
   else if ((e.key === "g" || e.key === "G") && !e.repeat) usarGorro();
 });
 addEventListener("keyup", (e) => { if (teclas[e.key] === dir) dir = 0; });
-// Ratón: clic = disparar. Pantalla táctil: tocar la mitad izquierda/derecha = moverse (el disparo va en su botón)
-const lado = (e) => ((e.clientX - cv.getBoundingClientRect().left) / cv.getBoundingClientRect().width < 0.5 ? -1 : 1);
-cv.addEventListener("pointerdown", (e) => { if (e.pointerType === "mouse") disparar(); else dir = lado(e); });
-cv.addEventListener("pointermove", (e) => { if (e.pointerType !== "mouse") dir = lado(e); });
-addEventListener("pointerup", () => { dir = 0; });
+// Ratón: clic = disparar (el movimiento sigue con el teclado).
+cv.addEventListener("pointerdown", (e) => { if (e.pointerType === "mouse") disparar(); });
+
+// ----- Pantalla táctil: JOYSTICK FLOTANTE -----
+// Donde el jugador apoya el dedo (en cualquier parte de la pantalla) aparece una rueda; el botón interior sigue al dedo y el personaje se mueve
+// hacia ese lado, más rápido cuanto más lejos. Cada dedo se sigue por su «pointerId»: soltar OTRO dedo (por ejemplo el que toca el botón de
+// disparar) o hacer clic con el ratón ya no detiene el movimiento. Con un dedo en la rueda, tocar con otro dedo dispara.
+const JOY_R = 44, JOY_MUERTA = 8;       // radio del recorrido del botón (px) y zona central sin movimiento
+const estiloJoy = document.createElement("style");
+estiloJoy.textContent =
+  ".joy{position:fixed;z-index:8;width:104px;height:104px;margin:-52px 0 0 -52px;border-radius:50%;pointer-events:none;touch-action:none;" +
+  "background:radial-gradient(circle,rgba(255,255,255,.10) 0,rgba(0,0,0,.28) 100%);border:3px solid rgba(255,255,255,.6);box-shadow:0 0 0 2px rgba(0,0,0,.3),inset 0 0 14px rgba(0,0,0,.3)}" +
+  ".joy[hidden]{display:none}" +
+  ".joy i{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;border:2px solid #fff;" +
+  "background:radial-gradient(circle at 35% 30%,#fff,#9ec1ff 55%,#4a78d6);box-shadow:0 3px 6px rgba(0,0,0,.45)}";
+document.head.appendChild(estiloJoy);
+const joyEl = document.createElement("div");
+joyEl.className = "joy"; joyEl.hidden = true;
+const joyBola = document.createElement("i");
+joyEl.appendChild(joyBola);
+document.body.appendChild(joyEl);
+let joyId = null, joyX = 0, joyY = 0;
+
+function soltarJoy() {
+  if (joyId !== null) dir = 0;
+  joyId = null;
+  joyEl.hidden = true;
+}
+function moverJoy(e) {
+  let dx = e.clientX - joyX, dy = e.clientY - joyY;
+  const d = Math.hypot(dx, dy);
+  if (d > JOY_R) { dx *= JOY_R / d; dy *= JOY_R / d; }
+  joyBola.style.transform = "translate(" + dx + "px," + dy + "px)";
+  const ax = Math.abs(dx);
+  dir = ax < JOY_MUERTA ? 0 : Math.sign(dx) * Math.min(1, (ax - JOY_MUERTA) / (JOY_R - JOY_MUERTA));
+}
+addEventListener("pointerdown", (e) => {
+  if (e.pointerType === "mouse" || actual !== "juego" || !vivo || pausado) return;
+  if (e.target.closest && e.target.closest("button, a, .pausa-fondo, #velo")) return;   // los botones y menús funcionan solos
+  if (joyId !== null) { disparar(); return; }                                          // segundo dedo = disparar
+  joyId = e.pointerId; joyX = e.clientX; joyY = e.clientY;
+  joyEl.style.left = joyX + "px"; joyEl.style.top = joyY + "px";
+  joyEl.hidden = false;
+  moverJoy(e);
+});
+addEventListener("pointermove", (e) => { if (e.pointerId === joyId) moverJoy(e); });
+const finJoy = (e) => { if (e.pointerId === joyId) soltarJoy(); };
+addEventListener("pointerup", finJoy);
+addEventListener("pointercancel", finJoy);
 
 mostrar("menu");
