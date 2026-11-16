@@ -9,12 +9,14 @@ const CLAVE = "regadera_progreso_v1";      // { mejor: ola más alta, t: fecha }
 // ----- Reglas (todas en un solo lugar para poder ajustarlas) -----
 const VUELTA_S = 10;                        // segundos que tarda la regadera en dar una vuelta
 const COLUMNAS = 8, ANILLOS = 3;            // 8 zonas × 3 anillos = 24 espacios
-const ESPACIOS_INICIO = 2, ESPACIOS_MAX = COLUMNAS * ANILLOS;
+const ESPACIOS_MAX = COLUMNAS * ANILLOS;
+const ESPACIOS_INICIO = [[0, 1], [1, 1]];   // [zona, anillo] de los 2 espacios abiertos al empezar; los otros 22 están bloqueados
 const MONEDAS_INICIO = 100;
 const COSTO_PLANTA = 50;                    // poner una planta en un pasto
-const COSTO_ESPACIO = 100;                  // +1 espacio permitido para plantas
-const PREMIO_ENEMIGO = 15;                  // monedas por cada enemigo vencido
-const VIDA_CENTRO = 30;
+const COSTO_ESPACIO = 100;                  // desbloquear un espacio (la mayor mejora del juego: de 2 a 24 espacios)
+const PREMIO_ENEMIGO = 20;                  // monedas por cada enemigo vencido
+const VIDA_CENTRO = 500;                    // vida de la madera del centro
+const DANO_ENEMIGO = 10;                    // daño de cada golpe de un monstruo al centro
 const MAX_SOLDADOS = 40;
 const SEG_OLA = 25;                         // cada cuántos segundos empieza una ola nueva
 const DIFICULTADES = [
@@ -101,14 +103,17 @@ let G = { fin: true, pausa: false };
 function nueva() {
   G = {
     dif: difActual, t: 0, total: 0, ola: 1, fin: false, pausa: false,
-    monedas: MONEDAS_INICIO, cap: ESPACIOS_INICIO, vida: VIDA_CENTRO,
+    monedas: MONEDAS_INICIO, vida: VIDA_CENTRO,
+    abiertas: new Array(ESPACIOS_MAX).fill(false),     // false = espacio bloqueado
     plots: new Array(COLUMNAS * ANILLOS).fill(null),   // índice = zona * ANILLOS + anillo
     pasos: new Array(COLUMNAS).fill(0),                // cuántas pasadas lleva cada zona
     prev: new Array(COLUMNAS).fill(null),              // última planta regada de cada zona
     soldados: [], enemigos: [], gotas: [], pop: [],
     sig: 2,                                            // segundos para el próximo enemigo
   };
+  for (const [z, a] of ESPACIOS_INICIO) G.abiertas[z * ANILLOS + a] = true;
 }
+const abiertos = () => G.abiertas.filter(Boolean).length;
 const plantas = () => G.plots.filter(Boolean).length;
 
 // ----- Medidas -----
@@ -138,16 +143,14 @@ lienzo.addEventListener("pointerdown", (e) => {
   const r = lienzo.getBoundingClientRect();
   const i = parcelaEn(e.clientX - r.left, e.clientY - r.top);
   if (i == null || G.plots[i]) return;
-  if (plantas() >= G.cap) { aviso("No hay espacio: compra más por " + COSTO_ESPACIO); return; }
+  if (!G.abiertas[i]) {                      // espacio bloqueado: se desbloquea por 100 monedas
+    if (G.monedas < COSTO_ESPACIO) { aviso("🔒 Desbloquear cuesta " + COSTO_ESPACIO + " monedas"); return; }
+    G.monedas -= COSTO_ESPACIO; G.abiertas[i] = true;
+    return;
+  }
   if (G.monedas < COSTO_PLANTA) { aviso("Te faltan monedas (" + COSTO_PLANTA + ")"); return; }
   G.monedas -= COSTO_PLANTA;
   G.plots[i] = { zona: Math.floor(i / ANILLOS), anillo: i % ANILLOS, riegos: 0, pulso: 0 };
-});
-$("btn-espacio").addEventListener("click", () => {
-  if (G.fin || G.pausa) return;
-  if (G.cap >= ESPACIOS_MAX) return;
-  if (G.monedas < COSTO_ESPACIO) { aviso("Te faltan monedas (" + COSTO_ESPACIO + ")"); return; }
-  G.monedas -= COSTO_ESPACIO; G.cap++;
 });
 
 // ----- Riego -----
@@ -166,7 +169,7 @@ function regarZona(z) {
   const anterior = G.prev[z];
   if (anterior && G.plots[anterior.zona * ANILLOS + anterior.anillo] === anterior && G.soldados.length < MAX_SOLDADOS) {
     const p = posParcela(anterior.zona, anterior.anillo);
-    G.soldados.push({ x: p.x, y: p.y, hx: p.x, hy: p.y, vida: 34, max: 34, cd: 0 });
+    G.soldados.push({ x: p.x, y: p.y, hx: p.x, hy: p.y, cd: 0 });
     G.pop.push({ x: p.x, y: p.y, v: 0.4 });
     anterior.pulso = 1;
   }
@@ -201,19 +204,11 @@ function actualizar(dt) {
   if (G.sig <= 0) { nuevoEnemigo(); G.sig = Math.max(0.7, (3 - G.t * 0.012) * G.dif.ritmo); }
 
   const hubR = RADIOS[0] * R;
-  for (const e of G.enemigos) {
+  for (const e of G.enemigos) {              // los monstruos van directo a destruir el centro de madera
     e.cd -= dt;
-    // objetivo: el soldado más cercano si está cerca; si no, el centro
-    let obj = null, mejor = 120 * s;
-    for (const so of G.soldados) { const d = Math.hypot(so.x - e.x, so.y - e.y); if (d < mejor) { mejor = d; obj = so; } }
-    const tx = obj ? obj.x : cx, ty = obj ? obj.y : cy;
-    const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy) || 1;
-    const alcance = obj ? 20 * s : hubR + 10 * s;
-    if (d > alcance) { const v = e.vel * dt; e.x += dx / d * v; e.y += dy / d * v; }
-    else if (e.cd <= 0) {
-      e.cd = 0.8;
-      if (obj) obj.vida -= 6; else G.vida -= 3;
-    }
+    const dx = cx - e.x, dy = cy - e.y, d = Math.hypot(dx, dy) || 1;
+    if (d > hubR + 10 * s) { const v = e.vel * dt; e.x += dx / d * v; e.y += dy / d * v; }
+    else if (e.cd <= 0) { e.cd = 0.8; G.vida -= DANO_ENEMIGO; }
   }
   for (const so of G.soldados) {
     so.cd -= dt;
@@ -230,7 +225,6 @@ function actualizar(dt) {
   }
   for (const e of G.enemigos) if (e.vida <= 0) G.monedas += PREMIO_ENEMIGO;
   G.enemigos = G.enemigos.filter((e) => e.vida > 0);
-  G.soldados = G.soldados.filter((so) => so.vida > 0);
 
   if (G.vida <= 0) terminar();
 }
@@ -299,15 +293,20 @@ function dibujar() {
   ctx.fillStyle = "#e7c98f"; ctx.fillRect(cx - R * 0.17, 0, R * 0.34, cy - R * 0.8);
   // jardín
   ctx.beginPath(); ctx.arc(cx, cy, R + 8 * s, 0, PI2); ctx.fillStyle = "#6d9a3a"; ctx.fill();
-  const puedePlantar = plantas() < G.cap && G.monedas >= COSTO_PLANTA;
+  const puedePlantar = G.monedas >= COSTO_PLANTA, puedeAbrir = G.monedas >= COSTO_ESPACIO;
   for (let z = 0; z < COLUMNAS; z++) for (let a = 0; a < ANILLOS; a++) {
     const p = G.plots[z * ANILLOS + a];
     sector(z, a);
-    ctx.fillStyle = p ? "#8a5a32" : ((z + a) % 2 ? "#a9d46c" : "#9fcc60"); ctx.fill();
+    const abierto = G.abiertas[z * ANILLOS + a];
+    ctx.fillStyle = p ? "#8a5a32" : !abierto ? "#7e8a72" : ((z + a) % 2 ? "#a9d46c" : "#9fcc60"); ctx.fill();
     ctx.lineWidth = 3 * s; ctx.strokeStyle = p ? "#5c3a1c" : "#6d9a3a"; ctx.stroke();
-    if (!p && puedePlantar) {
+    if (!p && !abierto) {
       const q = posParcela(z, a);
-      ctx.fillStyle = "rgba(255,255,255,.55)"; ctx.font = "bold " + Math.round(18 * s + 6) + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.globalAlpha = puedeAbrir ? 0.95 : 0.5; ctx.font = Math.round(14 * s + 6) + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("🔒", q.x, q.y); ctx.globalAlpha = 1;
+    } else if (!p && puedePlantar) {
+      const q = posParcela(z, a);
+      ctx.fillStyle = "rgba(255,255,255,.6)"; ctx.font = "bold " + Math.round(18 * s + 6) + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText("+", q.x, q.y);
     }
   }
@@ -327,22 +326,19 @@ function dibujar() {
 
   for (const p of G.pop) { ctx.globalAlpha = p.v / 0.4; ctx.strokeStyle = "#fff"; ctx.lineWidth = 3 * s; ctx.beginPath(); ctx.arc(p.x, p.y, (0.4 - p.v) * 90 * s + 8 * s, 0, PI2); ctx.stroke(); }
   ctx.globalAlpha = 1;
-  for (const so of G.soldados) { flor(so.x, so.y, s * 0.95, false, 0, true); barra(so.x, so.y - 16 * s, 22 * s, so.vida / so.max); }
+  for (const so of G.soldados) { flor(so.x, so.y, s * 0.95, false, 0, true); }
   for (const e of G.enemigos) arana(e);
   hud();
 }
 let cache = "";
 function hud() {
-  const t = [G.monedas, plantas() + "/" + G.cap, Math.max(0, G.vida), G.ola, G.monedas >= COSTO_ESPACIO && G.cap < ESPACIOS_MAX, G.cap].join("|");
+  const t = [G.monedas, plantas(), abiertos(), Math.max(0, G.vida), G.ola].join("|");
   if (t === cache) return;
   cache = t;
   $("v-monedas").textContent = G.monedas;
-  $("v-plantas").textContent = plantas() + "/" + G.cap;
+  $("v-plantas").textContent = plantas() + "/" + abiertos();
   $("v-vida").textContent = Math.max(0, G.vida);
   $("v-ola").textContent = G.ola;
-  const b = $("btn-espacio");
-  b.disabled = G.cap >= ESPACIOS_MAX;
-  $("t-espacio").textContent = G.cap >= ESPACIOS_MAX ? "Espacios al máximo" : "Más espacio " + G.cap + "/" + ESPACIOS_MAX + " · " + COSTO_ESPACIO;
 }
 
 // ----- Bucle -----
