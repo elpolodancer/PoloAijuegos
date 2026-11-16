@@ -26,9 +26,12 @@
   #inv .ranura:focus-visible { outline: 2px solid #fff; }
   #inv canvas { display: block; width: 100%; height: 100%; pointer-events: none; }
   #btn-recoger { position: fixed; z-index: 5; right: max(10px, env(safe-area-inset-right)); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 62px); --t: 54px; }
-  #btn-cerrar { position: fixed; z-index: 5; left: 50%; transform: translateX(-50%); bottom: calc(max(10px, env(safe-area-inset-bottom)) + clamp(40px, 5.8vw, 54px)); }
-  #btn-cerrar:active:not(:disabled) { transform: translateX(-50%) translateY(4px); }
-  #btn-recoger[hidden], #btn-cerrar[hidden] { display: none; }
+  /* «Cerrar la puerta del búnker» (casa) y «Pasar al siguiente día» (refugio): arriba del inventario, al centro; nunca están a la vez */
+  #btn-cerrar, #btn-dia { position: fixed; z-index: 5; left: 50%; transform: translateX(-50%); bottom: calc(max(10px, env(safe-area-inset-bottom)) + clamp(40px, 5.8vw, 54px)); }
+  #btn-cerrar:active:not(:disabled), #btn-dia:active:not(:disabled) { transform: translateX(-50%) translateY(4px); }
+  /* «Soltar todo»: abajo a la izquierda, encima del 🌙 (igual que «Recoger» va encima del ⛶, a la derecha) */
+  #btn-soltar { position: fixed; z-index: 5; left: max(10px, env(safe-area-inset-left)); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 52px); --t: 44px; }
+  #btn-recoger[hidden], #btn-cerrar[hidden], #btn-soltar[hidden], #btn-dia[hidden] { display: none; }
   /* Panel de un mueble abierto: arriba al centro (entre ☰ y los chips); el tiempo sigue corriendo mientras está abierto */
   #mueble { position: fixed; z-index: 5; left: 50%; transform: translateX(-50%); top: clamp(48px, 13vh, 90px); width: min(360px, 62vw); padding: 8px;
     color: #f1f2f4; font-family: system-ui, sans-serif; background: rgba(30,32,37,.92); border: 2px solid #15171a; border-radius: 12px; box-shadow: 0 3px 0 #15171a; }
@@ -36,7 +39,7 @@
   #mueble .m-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: .9rem; }
   #mueble .m-x { flex: none; width: 30px; height: 30px; padding: 0; color: #fff; font-size: 1rem; line-height: 1; background: #3a3d45; border: 1px solid #15171a; border-radius: 8px; cursor: pointer; touch-action: manipulation; }
   #mueble .m-x:focus-visible, #mueble .obj:focus-visible { outline: 2px solid #fff; }
-  #mueble-lista { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  #mueble-lista { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-height: min(46vh, 300px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; }
   #mueble-lista .obj { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 58px; padding: 4px 2px; color: #f1f2f4; font: inherit; font-size: .64rem; line-height: 1.1; text-align: center;
     background: #3a3d45; border: 1px solid #15171a; border-radius: 8px; cursor: pointer; touch-action: manipulation; }
   #mueble-lista .obj::before { content: attr(data-n); position: absolute; top: 2px; left: 5px; color: #b0b4bd; font-size: .6rem; }
@@ -51,6 +54,7 @@
   </nav>
 
   <div class="hud hud-der" aria-live="off">
+    <span class="chip" id="chip-dia"></span>
     <span class="chip" id="chip-piso"></span>
     <span class="chip" id="chip-mochila"></span>
     <span class="chip" id="chip-tiempo"></span>
@@ -59,11 +63,13 @@
   <div class="escena">
     <div class="marco">
       <canvas id="lienzo" class="lienzo" aria-label="Casa de dos pisos"></canvas>
-      <p class="solo-lector">Mueve al superviviente con las flechas o WASD (o arrastrando el dedo), abre los muebles con E, con el botón Abrir o tocándolos cuando estés muy cerca, saca lo que hay dentro tocándolo o pulsando su número y llega al búnker antes de que se acaben los 2 minutos.</p>
+      <p class="solo-lector">Mueve al superviviente con las flechas o WASD (o arrastrando el dedo). El contenido de un mueble se muestra solo al acercarte; saca lo que quieras tocándolo o pulsando su número, y llega al búnker antes de que se acaben los 2 minutos. Con el botón Soltar todo dejas toda la mochila. En el refugio, el Almacén lista todo lo guardado y el botón Pasar al siguiente día cambia de día.</p>
     </div>
   </div>
 
   <button class="b3d txt b-rojo" id="btn-cerrar" type="button" hidden><span class="b-ico">🔒</span> Cerrar la puerta del búnker</button>
+  <button class="b3d txt b-morado" id="btn-dia" type="button" hidden><span class="b-ico">🌅</span> Pasar al siguiente día</button>
+  <button class="b3d txt b-azul" id="btn-soltar" type="button" title="Soltar todo lo que llevas" hidden><span class="b-ico">⬇️</span> Soltar todo</button>
   <button class="b3d txt b-verde" id="btn-recoger" type="button" hidden><span class="b-ico">✋</span> <span id="txt-recoger">Recoger</span></button>
   <div id="mueble" role="dialog" aria-label="Contenido del mueble" hidden>
     <div class="m-cab"><b id="mueble-titulo"></b><button class="m-x" id="mueble-cerrar" type="button" aria-label="Cerrar" title="Cerrar">✕</button></div>
@@ -74,8 +80,8 @@
   <div class="pausa-fondo" id="menu">
     <div class="pausa-panel">
       <h2 class="firma">Dos</h2>
-      <p>Tienes <b>2 minutos</b> para recoger lo que puedas en la casa de dos pisos. Todo está guardado <b>dentro de los muebles</b>: ábrelos y busca. Cabe poco: <b>15 espacios</b>. Cuando el tiempo llegue a cero, solo vives si estás dentro del búnker. Si lo logras, bajas por sus escaleras a un <b>refugio</b> con estantes y una mesa donde queda todo lo que salvaste.</p>
-      <p>Muévete con flechas/WASD o arrastrando el dedo. Abre un mueble con <b>E</b>, el botón, o <b>tocándolo</b> cuando estés pegado a él; toca lo que quieras llevarte (o pulsa su número). Toca un objeto del inventario para soltarlo.</p>
+      <p>Tienes <b>2 minutos</b> para recoger lo que puedas en la casa de dos pisos. Todo está guardado <b>dentro de los muebles</b>: acércate y su contenido aparece solo. Cabe poco: <b>15 espacios</b>. Cuando el tiempo llegue a cero, solo vives si estás dentro del búnker. Si lo logras, bajas por sus escaleras a un <b>refugio</b> con un baño, estantes y una mesa donde queda todo lo que salvaste.</p>
+      <p>Muévete con flechas/WASD o arrastrando el dedo. El panel de un mueble se abre solo al acercarte (con <b>E</b>, el botón o un toque lo cierras y lo abres); toca lo que quieras llevarte (o pulsa su número). Toca un objeto del inventario para soltarlo, o usa <b>Soltar todo</b>.</p>
       <button class="b3d txt b-verde" id="btn-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
       <p id="record"></p>
     </div>

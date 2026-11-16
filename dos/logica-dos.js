@@ -3,7 +3,7 @@
 //   COLISIONES[piso] = rectángulos sólidos (paredes y muebles) · CUARTOS[piso] · ESCALERA · BUNKER (centro de la planta baja) · PUERTA_BUNKER
 //   repartirEnMuebles(rand) → { idMueble: [objetos] } · MUEBLES / BUSCABLES (muebles con id, piso y cabe) · muebleCercano(x, y, piso) · distMueble(x, y, m)
 //   mover(x, y, dx, dy, piso) · dentroBunker(x, y, piso) · nombreItem(it) · valorItem(it)
-//   REFUGIO (piso 2: la habitación de abajo del búnker) · ESTANTES · MESA · RANURAS · acomodarEnRefugio(lista) · ranuraLibre(tipo, x, y, ocupadas)
+//   REFUGIO (piso 2: la habitación de abajo del búnker, con BAÑO, 4 estantes y una mesa) · ESTANTES · MESA · BANO · RANURAS · acomodarEnRefugio(lista) · ranuraLibre(tipo, x, y, ocupadas)
 export const W = 800, H = 450, TIEMPO = 120, ESPACIOS = 15, RADIO = 9, VEL = 125;
 export const ESCALERA = { x: 600, y: 60, w: 110, h: 50 };      // misma posición en los dos pisos
 export const LLEGADA = { x: 655, y: 140 };                      // dónde apareces al cambiar de piso
@@ -129,11 +129,15 @@ export const PISOS = [
 export const PISO_REFUGIO = 2;
 export const ESCALERA_REFUGIO = { x: 610, y: 120, w: 110, h: 50 };   // por donde bajaste (solo dibujo y sólido: no se puede volver a subir)
 export const LLEGADA_REFUGIO = { x: 665, y: 205 };                   // dónde apareces, al pie de la escalera
-// Estantes en fila contra la pared norte: n estantes, cada uno con «tablas» tablas y cada tabla con «huecos» objetos.
+// Estantes en fila contra la pared norte: n estantes (4), cada uno con «tablas» tablas y cada tabla con «huecos» objetos.
+// Empiezan en x0 = 188 porque el BAÑO ocupa el extremo izquierdo de la pared norte (x de 60 a 176).
 // dx = separación entre objetos, margen = borde de la tabla, z0 = altura de la tabla de abajo, dz = altura entre tablas.
-export const ESTANTES = { n: 5, tablas: 5, huecos: 5, dx: 18, margen: 12, separacion: 10, x0: 70, y: 114, h: 18, z0: 6, dz: 17 };
+export const ESTANTES = { n: 4, tablas: 5, huecos: 5, dx: 18, margen: 12, separacion: 10, x0: 188, y: 114, h: 18, z0: 6, dz: 17 };
 ESTANTES.w = 2 * ESTANTES.margen + (ESTANTES.huecos - 1) * ESTANTES.dx;   // el ancho sale de cuántos huecos tiene
 ESTANTES.paso = ESTANTES.w + ESTANTES.separacion;                           // de un estante al siguiente
+// Baño del refugio: cuarto pequeño en la esquina noroeste (x 60–176, y 110–200). Su única puerta es el hueco de la pared sur.
+// Por ahora solo tiene los muebles (inodoro, lavabo y regadera); su uso (necesidades, bolsas de basura, aseo) está en el README, sección «Plan».
+export const BANO = { x: 60, y: 110, w: 116, h: 90, puerta: [96, 146] };
 export const MESA = { x: 280, y: 270, w: 170, h: 44, cols: 8, filas: 2, z: 12 };   // mesa de ocio: cols × filas ranuras sobre la tapa
 export const rectEstante = (e) => ({ x: ESTANTES.x0 + e * ESTANTES.paso, y: ESTANTES.y, w: ESTANTES.w, h: ESTANTES.h });
 export const ALTO_ESTANTE = ESTANTES.z0 + (ESTANTES.tablas - 1) * ESTANTES.dz + 8;
@@ -151,11 +155,13 @@ for (let f = 0; f < MESA.filas; f++) for (let c = 0; c < MESA.cols; c++)
 
 export const REFUGIO = {
   nombre: "Refugio",
-  paredes: [...paredH(110, 56, 744), ...paredH(400, 56, 744), ...paredV(60, 110, 400), ...paredV(740, 110, 400)],
-  muebles: [],
+  paredes: [...paredH(110, 56, 744), ...paredH(400, 56, 744), ...paredV(60, 110, 400), ...paredV(740, 110, 400),
+    ...paredH(BANO.y + BANO.h, BANO.x, BANO.x + BANO.w, [BANO.puerta]), ...paredV(BANO.x + BANO.w, BANO.y, BANO.y + BANO.h)],   // paredes del baño
+  muebles: [caja(68, 116, 22, 22, "inodoro"), caja(100, 116, 36, 20, "lavabo"), caja(140, 116, 30, 50, "regadera")],   // baño (no se abren: no están en CABE)
   // sólidos que se dibujan aparte (estantes, mesa y escalera): solo cuentan para las colisiones
   solidos: [...Array.from({ length: ESTANTES.n }, (_, e) => rectEstante(e)), { x: MESA.x, y: MESA.y, w: MESA.w, h: MESA.h }, ESCALERA_REFUGIO],
-  cuartos: [{ id: "refugio", nombre: "Refugio", x: 60, y: 110, w: 680, h: 290, color: "#8f8a82", rot: [8, 276] }],
+  cuartos: [{ id: "refugio", nombre: "Refugio", x: 60, y: 110, w: 680, h: 290, color: "#8f8a82", rot: [8, 276] },
+    { id: "bano", nombre: "Baño", x: BANO.x, y: BANO.y, w: BANO.w, h: BANO.h, color: "#bfe3ea", rot: [8, 68] }],
 };
 export const ESCENAS = [...PISOS, REFUGIO];   // índice = piso (0, 1 y 2 = refugio). generarItems solo usa PISOS
 export const COLISIONES = ESCENAS.map((p) => [...p.paredes, ...p.muebles, ...(p.solidos || [])]);
