@@ -60,6 +60,12 @@
     .ovl p { margin: 0; max-width: 46ch; line-height: 1.4; font-size: 14px; }
     .ovl .jugar { position: sticky; bottom: 0; margin-top: auto; padding: 10px 0 16px; width: 100%; display: flex; justify-content: center; background: #101114; }
     .ovl .jugar .b3d { --t: 48px; font-size: 18px; }
+
+    /* 🗺️ Mapa general: el canvas ocupa el espacio que sobra y se dibuja a su tamaño real (así los textos se leen en el celular) */
+    #mundo { gap: 8px; }
+    #mundo h2 { font-size: 20px; }
+    #lienzoMundo { flex: 1 1 0; min-height: 220px; width: 100%; max-width: 900px; display: block; touch-action: manipulation; border-radius: 16px; }
+    #mundoMsg { min-height: 1.3em; font-size: 14px; font-weight: 700; color: #ffe08a; }
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>
@@ -106,6 +112,7 @@
     <p><b>Recursos:</b> toca uno y el personaje va hasta él. Las <b>piedras</b> y la <b>fibra</b> sueltas se recogen de un toque. El <b>arbusto de bayas</b> se talla a mano con 5 golpes. Los <b>árboles</b> aguantan 10 golpes y solo se talan con el <b>hacha</b>. Los <b>vultos de piedra</b> aguantan 8 golpes y solo se rompen con el <b>pico</b>. En computadora, Espacio o E golpea lo que tengas más cerca.</p>
     <p>🛠️ <b>Fabricar:</b> con piedras y fibra haces el hacha y el pico. Empieza juntando las que hay cerca de ti.</p>
     <p>🟫 ⬜ 🟦 <b>Piso:</b> elige un tipo y toca o arrastra por el mapa para colocarlo (no se puede sobre un recurso). 🧽 lo quita. 🌳 planta un árbol en una casilla vacía; para quitarlo hay que talarlo.</p>
+    <p>🗺️ <b>Mapa general:</b> el camino de tierra que rodea tu base se camina pero no se construye. Si llegas hasta su orilla se abre el mapa general con las zonas a las que podrás viajar.</p>
     <p>🔍 Con dos dedos (o la rueda del ratón) acercas y alejas. Tu mundo y tus cosas se guardan solos en este aparato.</p>
     <div class="jugar"><button class="b3d txt b-azul" id="infoVolver" type="button"><span class="b-ico">⬅️</span> Volver</button></div>
   </div>
@@ -118,7 +125,15 @@
     <div class="jugar"><button class="b3d txt b-azul" id="fabVolver" type="button"><span class="b-ico">⬅️</span> Volver</button></div>
   </div>
 
-  <script type="module" src="juego-supervivencia.js?v=2"></script>
+  <!-- 🗺️ Mapa general (se abre al cruzar el borde de la franja exterior; lo dibuja dibujo-mapa-mundo.js) -->
+  <div class="ovl" id="mundo" hidden>
+    <h2>🗺️ Mapa general</h2>
+    <canvas id="lienzoMundo" aria-label="Mapa general con las zonas"></canvas>
+    <div id="mundoMsg" role="status"></div>
+    <div class="jugar"><button class="b3d txt b-azul" id="mundoVolver" type="button"><span class="b-ico">⬅️</span> Volver a la base</button></div>
+  </div>
+
+  <script type="module" src="juego-supervivencia.js?v=3"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
   <script type="module" src="../compartido/fondo-madera.js"></script>
 </body>

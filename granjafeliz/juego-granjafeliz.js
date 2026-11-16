@@ -143,7 +143,7 @@ function empezarLibre() {
 }
 function arrancar(n, N, libre, opc = {}) {
   aplicarTamano(libre ? opc.tam : "pequeno");
-  J = { n, N, libre, modo: opc.modo || null, sinRecord: !!opc.prueba, mejorInicial: libre && !opc.prueba ? eco.mejorLibre(libre) : 0, avisoRecord: false, t: 0, dinero: N.dineroInicial, ventas: 0, rec: {}, agua: D.MEJORAS.pozo.capacidad[(N.mejoras && N.mejoras.pozo) || 0], pozo: 0, pasto: [], animales: [], suelo: [], almacen: {}, camion: 0, pago: 0, mejoras: { almacen: (N.mejoras && N.mejoras.almacen) || 0, camion: (N.mejoras && N.mejoras.camion) || 0, pozo: (N.mejoras && N.mejoras.pozo) || 0 }, osos: [], proxOso: N.osos ? (N.osos.horario ? Infinity : (N.osos.primero ?? D.PRIMER_OSO)) : Infinity, horario: N.osos && N.osos.horario ? [...N.osos.horario] : null, perro: null, gato: (N.regalo || []).includes("gato") ? { x: CAMPO.x + 20, y: CAMPO.y + 60, dest: null } : null, edif: (N.edificios || []).map((id) => ({ id, nivel: (N.construidos || []).includes(id) ? 0 : -1, trab: 0, dur: 0, lote: 0 })), flot: [], revisa: 0, sinSalidaSeg: 0, fin: false, pausa: false };
+  J = { n, N, libre, modo: opc.modo || null, sinRecord: !!opc.prueba, mejorInicial: libre && !opc.prueba ? eco.mejorLibre(libre) : 0, avisoRecord: false, t: 0, dinero: N.dineroInicial, ventas: 0, rec: {}, agua: D.MEJORAS.pozo.capacidad[(N.mejoras && N.mejoras.pozo) || 0], pozo: 0, pasto: [], animales: [], suelo: [], almacen: {}, camion: 0, pago: 0, mejoras: { almacen: (N.mejoras && N.mejoras.almacen) || 0, camion: (N.mejoras && N.mejoras.camion) || 0, pozo: (N.mejoras && N.mejoras.pozo) || 0 }, osos: [], proxOso: N.osos ? (N.osos.horario ? Infinity : (N.osos.primero ?? D.PRIMER_OSO)) : Infinity, horario: N.osos && N.osos.horario ? [...N.osos.horario] : null, perro: null, gato: (N.regalo || []).includes("gato") ? { x: CAMPO.x + 20, y: CAMPO.y + 60, dest: null } : null, edif: (N.edificios || []).map((id) => ({ id, nivel: (N.construidos || []).includes(id) ? 0 : -1, trab: 0, lote: 0, cola: [] })), flot: [], revisa: 0, sinSalidaSeg: 0, fin: false, pausa: false };
   J.tut = !libre && tutorialPendiente(n, eco.estrellasDeNivel(n)) ? crearTutorial(n) : null;   // tutorial guiado: solo la primera vez y mientras no se pase el nivel
   for (const tipo in N.animales) for (let i = 0; i < N.animales[tipo]; i++) J.animales.push(nuevoAnimal(tipo));
   ir("juego");
@@ -306,7 +306,7 @@ function golpear(o) {
 // Vender un animal: se va el que lleva menos producción a medias (pierdes lo menos posible) y te pagan VENTA_ANIMAL × precio. No cuenta para la meta de «dinero» (solo vale lo que vende el camión).
 const precioVenta = (tipo) => Math.floor(D.ANIMALES[tipo].precio * D.VENTA_ANIMAL);
 function venderAnimal(b) {
-  const lista = J.animales.filter((a) => a.tipo === b.tipo), cx = b.x + b.w / 2, cy = b.y + b.h + 30;
+  const lista = J.animales.filter((a) => a.tipo === b.tipo), cx = b.x + b.w / 2, cy = b.y + 34;
   if (!lista.length) { flotar(cx, cy, "No tienes"); return; }
   const a = lista.reduce((m, x) => (x.prod < m.prod ? x : m)), p = precioVenta(b.tipo);
   J.animales.splice(J.animales.indexOf(a), 1);
@@ -372,10 +372,9 @@ function actualizarGato(dt) {
 }
 // ----- Edificios de procesamiento (datos en D.EDIFICIOS y D.MEJORAS.fabricaN) -----
 // e.nivel: -1 = todavía sin construir; 0 a 4 = nivel de mejora. e.trab = segundos que faltan del lote en marcha; e.lote = cuántas unidades lleva;
-// e.dur = segundos que dura el ciclo en marcha (para la barra). Un solo ciclo a la vez, sin cola (modelo de Farm Frenzy 1). Todo se reinicia en cada nivel, igual que el dinero.
+// e.cola = lotes que esperan (cada uno es la cantidad ya descontada del almacén). Todo se reinicia en cada nivel, igual que el dinero.
 const filaEdif = (e) => D.MEJORAS[D.EDIFICIOS[e.id].fabrica];
 const loteEdif = (e) => filaEdif(e).lote[e.nivel];
-const segEdif = (e) => filaEdif(e).seg[e.nivel];   // segundos del ciclo según el nivel de mejora (igual para todos los edificios)
 const costoEdif = (e) => { const C = D.EDIFICIOS[e.id].costos; return e.nivel < C.length - 1 ? C[e.nivel + 1] : null; }; // null = nivel máximo
 function tocarEdificio(i) {
   const e = J.edif[i], E = D.EDIFICIOS[e.id], r = espacio(i), cx = r.x + r.w / 2;
@@ -383,12 +382,12 @@ function tocarEdificio(i) {
     if (J.dinero < E.costo) { flotar(cx, r.y - 6, "Falta dinero"); return; }
     J.dinero -= E.costo; e.nivel = 0; flotar(cx, r.y - 6, "¡Construido!"); return;
   }
-  if (e.trab > 0) { flotar(cx, r.y - 6, "Trabajando…"); return; }   // un solo ciclo a la vez, sin cola
   const hay = J.almacen[E.entra] || 0;
   if (!hay) { flotar(cx, r.y - 6, "Falta " + D.PRODUCTOS[E.entra].nombre.toLowerCase()); return; }
-  const n = Math.min(loteEdif(e), hay);   // procesa menos si hay menos que el lote (si el lote es 5 y hay 3, procesa 3)
+  if (e.trab > 0 && e.cola.length >= D.MAX_COLA_EDIF) { flotar(cx, r.y - 6, "Cola llena"); return; }
+  const n = Math.min(loteEdif(e), hay);
   J.almacen[E.entra] -= n;
-  e.lote = n; e.dur = e.trab = segEdif(e);
+  if (e.trab > 0) e.cola.push(n); else { e.lote = n; e.trab = E.seg; }
 }
 function mejorarEdificio(i) {
   const e = J.edif[i], r = espacio(i), cx = r.x + r.w / 2, costo = costoEdif(e);
@@ -403,24 +402,24 @@ function actualizarEdificios(dt) {
     if (e.trab > 0) return;
     const E = D.EDIFICIOS[e.id], r = espacio(i);
     for (let k = 0; k < e.lote; k++) J.suelo.push({ tipo: E.sale, x: r.x + 16 + Math.random() * (r.w - 32), y: r.y - 14 + azar(-4, 2), t: D.SEG_SUELO });
-    e.lote = 0; e.trab = 0; e.dur = 0;
+    e.lote = 0; e.trab = 0;
+    if (e.cola.length) { e.lote = e.cola.shift(); e.trab = E.seg; }
   });
 }
-// Cuadros de animales (dentro del escenario, arriba a la izquierda, ver ES.botonComprar): SIEMPRE uno por cada animal de D.ANIMALES. Los que NIVELES[n].comprables no incluye (por defecto solo la gallina, como en el nivel 1) salen bloqueados.
-const animalAbierto = (tipo) => !!J && ((J.N.comprables && J.N.comprables.length ? J.N.comprables : ["gallina"]).includes(tipo));
-function botonesCompra() { // el cuadrado compra; la tira de abajo («venta») vende
-  return Object.keys(D.ANIMALES).map((tipo, i) => { const b = { tipo, ...ES.botonComprar(i) }; return { ...b, venta: { x: b.x, y: b.y + b.h, w: b.w, h: ES.BOTON_COMPRAR.alto_venta } }; });
+// Botones de compra (arriba a la izquierda): uno por animal de NIVELES[n].comprables (por defecto solo la gallina, como en el nivel 1)
+function botonesCompra() { // fila de botones ARRIBA A LA IZQUIERDA (ES.botonComprar); los 32 de arriba compran y la zona «Vender» son los 20 de abajo
+  const t = (J && J.N.comprables) || ["gallina"], h = ES.BOTON_COMPRAR.alto_compra;
+  return t.map((tipo, i) => { const b = { tipo, ...ES.botonComprar(i) }; return { ...b, venta: { x: b.x, y: b.y + h, w: b.w, h: b.h - h } }; });
 }
 const cuantos = (tipo) => J.animales.filter((a) => a.tipo === tipo).length;
 function comprar(b) {
-  const A = D.ANIMALES[b.tipo], cx = b.x + b.w / 2, cy = b.y + b.h + 30;
-  if (!animalAbierto(b.tipo)) flotar(cx, cy, "Bloqueado en este nivel"); else if (cuantos(b.tipo) >= A.max) flotar(cx, cy, "Máximo"); else if (J.dinero < A.precio) flotar(cx, cy, "Falta dinero"); else { J.dinero -= A.precio; J.animales.push(nuevoAnimal(b.tipo)); }
+  const A = D.ANIMALES[b.tipo], cx = b.x + b.w / 2, cy = b.y + 34;
+  if (cuantos(b.tipo) >= A.max) flotar(cx, cy, "Máximo"); else if (J.dinero < A.precio) flotar(cx, cy, "Falta dinero"); else { J.dinero -= A.precio; J.animales.push(nuevoAnimal(b.tipo)); }
 }
 function tocar(x, y) {
   if (!J || J.fin || J.pausa) return;
   if (J.tut && J.tut.tocar(x, y)) return;   // «Saltar ✕» del tutorial
   for (const b of botonesAyuda()) if (dentro(b, x, y)) { usarAyuda(b.id); return; } // 🐕 perro / 🐈 gato (en la barra de arriba)
-  for (const b of botonesCompra()) { if (dentro(b.venta, x, y)) { venderAnimal(b); return; } if (dentro(b, x, y)) { comprar(b); return; } } // cuadros de animales: cuadrado = comprar, tira de abajo = vender
   for (const o of J.osos) if (Math.hypot(o.x - x, o.y - y) < 34) { golpear(o); return; } // capturar oso
   for (const h of J.suelo) if (Math.hypot(h.x - x, h.y - y) < 24) { // recoger producto
     if (pesoAlmacen() + pesoAlm(h.tipo) > capAlmacen()) { flotar(h.x, h.y, "Almacén lleno"); return; }
@@ -442,6 +441,7 @@ function tocar(x, y) {
     for (const k in c.lleva) J.almacen[k] -= c.lleva[k];
     J.pago = c.pago; J.camion = segCamion(); return;
   }
+  for (const b of botonesCompra()) if (dentro(b, x, y)) { if (dentro(b.venta, x, y)) venderAnimal(b); else comprar(b); return; }
   for (let i = 0; i < J.edif.length; i++) { // edificios: arriba procesar / construir, abajo mejorar
     const r = espacio(i);
     if (!dentro(r, x, y)) continue;
@@ -514,7 +514,7 @@ function estadoTutorial() {
     suelo: J.suelo.map((h) => ({ tipo: h.tipo, x: h.x, y: h.y, jaula: !!D.PRODUCTOS[h.tipo].jaula })),
     osos: J.osos.map((o) => ({ x: o.x, y: o.y })),
     camionViaje: J.camion > 0 || J.pago > 0, ventas: J.ventas, pagoListo: cargaCamion().pago,
-    edif: J.edif.map((x) => ({ id: x.id, nivel: x.nivel, trab: x.trab })),
+    edif: J.edif.map((x) => ({ id: x.id, nivel: x.nivel, trab: x.trab, cola: x.cola.length })),
     metasRect,
   };
 }
@@ -532,7 +532,7 @@ function estadoSalida() {
   return {
     dinero: J.dinero, animales: J.animales.length, comprables: J.N.comprables || ["gallina"],
     almacen: J.almacen, pesoCam, capCamion: capCamion(), costoMejoraCamion: costoMejora("camion"),
-    suelo: J.suelo.length, edificiosActivos: J.edif.some((e) => e.trab > 0), camionViaje: J.camion > 0 || J.pago > 0,
+    suelo: J.suelo.length, edificiosActivos: J.edif.some((e) => e.trab > 0 || e.cola.length > 0), camionViaje: J.camion > 0 || J.pago > 0,
     ososSueltos: J.osos.length, ososFuturos: !!J.N.osos, extraPasto: extraPasto(),
     pendientes: J.libre ? [] : metasPendientes(), libre: !!J.libre,
   };
@@ -552,13 +552,6 @@ function caja(r, ctxFill) { ctx.fillStyle = ctxFill; ctx.beginPath(); ctx.roundR
 function txt(t, x, y, tam = 16, color = "#fff", al = "left") { ctx.font = "700 " + tam + "px system-ui,sans-serif"; ctx.fillStyle = color; ctx.textAlign = al; ctx.textBaseline = "middle"; ctx.fillText(t, x, y); }
 // Igual que txt() pero achica la letra (hasta 9) si el texto no cabe en maxW: los costos de la batidora y la quesería llegan a $120,000
 function txtFit(t, x, y, tam, color, al, maxW) { ctx.font = "700 " + tam + "px system-ui,sans-serif"; while (tam > 9 && ctx.measureText(t).width > maxW) { tam--; ctx.font = "700 " + tam + "px system-ui,sans-serif"; } txt(t, x, y, tam, color, al); }
-// Texto con contorno oscuro (sin recuadro de fondo): se lee sobre cielo, colinas o pasto. Achica la letra (hasta 8) si no cabe en maxW.
-function txtBorde(t, x, y, tam, color, al = "center", maxW = 1e9) {
-  ctx.font = "700 " + tam + "px system-ui,sans-serif";
-  while (tam > 8 && ctx.measureText(t).width > maxW) { tam--; ctx.font = "700 " + tam + "px system-ui,sans-serif"; }
-  ctx.textAlign = al; ctx.textBaseline = "middle"; ctx.lineJoin = "round"; ctx.lineWidth = 3; ctx.strokeStyle = "rgba(20,20,24,.85)"; ctx.strokeText(t, x, y);
-  ctx.fillStyle = color; ctx.fillText(t, x, y);
-}
 function emo(e, x, y, tam) { ctx.fillStyle = "#000"; /* los emojis a color toman la transparencia de fillStyle: sin esto salían casi transparentes tras dibujar una sombra */ ctx.font = tam + "px system-ui,'Apple Color Emoji','Segoe UI Emoji',sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(e, x, y); }
 const mmss = (s) => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
 
@@ -576,9 +569,9 @@ function dibujarEdificios() {
     }
     const hay = J.almacen[E.entra] || 0, ocupado = e.trab > 0;
     ES.dibujarCasa(ctx, r, e.id, E.emoji);
-    const t = ocupado ? "⏳ " + Math.ceil(e.trab) + " s · ×" + e.lote : hay ? D.PRODUCTOS[E.entra].emoji + "×" + Math.min(hay, loteEdif(e)) + " → " + D.PRODUCTOS[E.sale].emoji : "Falta " + D.PRODUCTOS[E.entra].emoji;
+    const t = ocupado ? "⏳ " + Math.ceil(e.trab) + " s · ×" + e.lote + (e.cola.length ? " +" + e.cola.length : "") : hay ? D.PRODUCTOS[E.entra].emoji + "×" + Math.min(hay, loteEdif(e)) + " → " + D.PRODUCTOS[E.sale].emoji : "Falta " + D.PRODUCTOS[E.entra].emoji;
     ES.rotulo(ctx, t, cx, cy, ocupado ? "#bfe4fb" : hay ? "#9dffb0" : "#c9c9d0");
-    if (ocupado) { ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.fillRect(r.x + 22, r.y + 70, 72, 5); ctx.fillStyle = "#ffe27a"; ctx.fillRect(r.x + 22, r.y + 70, 72 * (1 - e.trab / (e.dur || 1)), 5); }
+    if (ocupado) { ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.fillRect(r.x + 22, r.y + 70, 72, 5); ctx.fillStyle = "#ffe27a"; ctx.fillRect(r.x + 22, r.y + 70, 72 * (1 - e.trab / E.seg), 5); }
     pintarFranja(f, costoEdif(e), e.nivel + 1, D.EDIFICIOS[e.id].costos.length);
   });
 }
@@ -608,7 +601,7 @@ function dibujar() {
   ctx.clearRect(0, 0, L.ANCHO, L.ALTO); // transparente: se ve la madera
   if (!J) return;
   caja({ x: 20, y: 8, w: L.ANCHO - 30, h: 40 }, "rgba(20,20,24,.78)");
-  const textoDinero = "💵 $" + fmt(J.dinero), xDin = 30;   // los animales ya no ocupan la barra (van dentro del escenario): el dinero empieza al borde izquierdo
+  const textoDinero = "💵 $" + fmt(J.dinero), xDin = ES.BOTON_COMPRAR.x0 + botonesCompra().length * ES.BOTON_COMPRAR.paso + 4;   // el dinero va después de los botones de comprar (arriba a la izquierda)
   txt(textoDinero, xDin, 28, 18, "#fff4c2");
   const x0 = xDin + ctx.measureText(textoDinero).width + 18;   // los chips de metas empiezan después del dinero (que puede ser enorme en las pruebas)
   { // panel de metas: un chip por meta, de izquierda a derecha entre 💵 y los botones 🐕 🐈 (hasta xAyuda); la letra se achica si no caben
@@ -659,19 +652,14 @@ function dibujar() {
     ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.fillRect(o.x - 18, o.y - 30, 36, 5); ctx.fillStyle = "#ffe27a"; ctx.fillRect(o.x - 18, o.y - 30, 36 * o.golpes / O.golpes, 5); // avance de captura
   }
   if (J.perro) { const k = ES.escalaProf(J.perro.y); ES.sombra(ctx, J.perro.x, J.perro.y + 12 * k, 14 * k); emo("🐕", J.perro.x, J.perro.y, 30 * k); }
-  for (const b of botonesCompra()) { // cuadros de animales dentro del escenario, SIN fondo: marco tenue, la cara del animal, cuántos hay, el precio y (debajo) lo que pagan al venderlo
-    const A = D.ANIMALES[b.tipo], n = cuantos(b.tipo), abierto = animalAbierto(b.tipo), lleno = n >= A.max, puede = abierto && !lleno && J.dinero >= A.precio, v = b.venta, cx = b.x + b.w / 2;
-    ctx.save();
-    ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, 10);
-    ctx.lineWidth = 2; ctx.setLineDash(abierto ? [] : [4, 3]); ctx.strokeStyle = puede ? "#ffe27a" : "rgba(255,255,255,.65)"; ctx.stroke(); ctx.setLineDash([]);
-    ctx.globalAlpha = !abierto ? 0.4 : puede ? 1 : 0.6;   // bloqueado o sin dinero: la cara se ve apagada (se sigue viendo el animal)
-    emo(A.emoji, cx, b.y + 20, 28);
-    ctx.globalAlpha = 1;
-    if (!abierto) emo("🔒", b.x + b.w - 11, b.y + 12, 15);
-    else txtBorde(n + "/" + A.max, b.x + b.w - 4, b.y + 9, 10, lleno ? "#ff9a8c" : "#fff", "right");
-    txtBorde("$" + A.precio.toLocaleString("es-MX"), cx, b.y + b.h - 8, 11, !abierto ? "#cfcfd6" : puede ? "#ffe27a" : "#fff", "center", b.w - 4);
-    txtBorde("💲$" + precioVenta(b.tipo).toLocaleString("es-MX"), cx, v.y + v.h / 2, 10, n > 0 ? "#fff" : "#c3c3ca", "center", b.w);
-    ctx.restore();
+  for (const b of botonesCompra()) { // animales: fila arriba a la izquierda (arriba emoji y cuántos, luego el precio; abajo la franja de vender)
+    const A = D.ANIMALES[b.tipo], n = cuantos(b.tipo), puede = J.dinero >= A.precio && n < A.max, v = b.venta, cx = b.x + b.w / 2, hc = ES.BOTON_COMPRAR.alto_compra;
+    caja({ x: b.x, y: b.y, w: b.w, h: hc - 2 }, puede ? "rgba(160,100,10,.95)" : "rgba(20,20,24,.85)");
+    caja(v, n > 0 ? "rgba(150,50,40,.95)" : "rgba(60,60,66,.9)");
+    emo(A.emoji, b.x + 16, b.y + 11, 17);
+    txt(n + "/" + A.max, b.x + 43, b.y + 10, 10, n >= A.max ? "#ff9a8c" : "#d8d8d8", "center");
+    txt("$" + A.precio.toLocaleString("es-MX"), cx, b.y + 25, 11, "#fff4c2", "center");
+    txt("💲$" + precioVenta(b.tipo).toLocaleString("es-MX"), cx, v.y + v.h / 2, 10, n > 0 ? "#fff" : "#999", "center");
   }
   for (const f of J.flot) { ctx.globalAlpha = Math.min(1, f.t); txt(f.txt, f.x, f.y - (1.2 - f.t) * 30, 16, "#fff", "center"); ctx.globalAlpha = 1; }
   if (J.tut && !J.fin) J.tut.dibujar(ctx);   // flecha y cuadro del tutorial, encima de todo

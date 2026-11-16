@@ -6,6 +6,10 @@
 //   x crece hacia abajo-derecha · y crece hacia abajo-izquierda · z es la altura en píxeles (a escala 1 = casilla de 64 px de ancho).
 // Todo lo ajustable está en las constantes de abajo. No usa Firebase ni puntos todavía (ver README-supervivencia.md).
 import { crearMenuPausa } from "../compartido/menu-pausa.js";   // menú ☰ Pausa estándar (no usa Firebase: funciona sin internet)
+// Franja exterior (2 casillas alrededor del mapa: se camina, no se construye) y salida al mapa general. NO se importa «dentro» de ahí: aquí ya existe una con 2 argumentos.
+import { BORDE, COLOR_ANILLO, enExt, esAnillo, puedeConstruir, salida, devolverAdentro, crearEstadoViaje, puedeViajar, textoRazon, recargar } from "./mapa-general-supervivencia.js";
+// Pantalla del mapa general (se abre al cruzar el borde de la franja): el dibujo vive en su propio módulo
+import { dibujarMapaMundo, zonaEn } from "./dibujo-mapa-mundo.js";
 
 // ---------- Ajustes ----------
 const N = 35;                       // el mapa es de N×N casillas
@@ -20,6 +24,9 @@ const AUTOGUARDADO_MS = 10000;      // si solo te moviste, se guarda la posició
 const ENFRIAR = 0.55;               // segundos entre un golpe y el siguiente
 const ALCANCE = 1.0;                // a qué distancia del borde de la casilla se puede golpear (casillas)
 const ALCANCE_RECOGER = 0.5;        // y a qué distancia se recoge algo del suelo
+const B = BORDE;                    // casillas de franja exterior a cada lado (2)
+const T = N + 2 * B;                // lado de la rejilla ampliada (39): la usa la búsqueda de rutas
+const MARGEN_SALIDA = 0.6;          // cuánto antes del borde exterior se sale al mapa general. DEBE ser mayor que RADIO: con 0.25 nunca se dispara
 
 // Recursos del mapa (código guardado en «objetos»). golpes = cuántos golpes aguanta; herr = herramienta que exige (null = a mano);
 // da = lo que suelta al romperse { item: [mínimo, máximo] }; bloquea = si el personaje no puede pasar por esa casilla
@@ -62,6 +69,8 @@ const ayuda = document.getElementById("ayudaMapa");
 const info = document.getElementById("info");
 const fab = document.getElementById("fab"), listaRecetas = document.getElementById("recetas");
 const raiz = document.documentElement;
+const mundoEl = document.getElementById("mundo"), lienzoMundo = document.getElementById("lienzoMundo"), mundoMsg = document.getElementById("mundoMsg");
+const ctxMundo = lienzoMundo.getContext("2d");
 
 // ---------- Estado ----------
 const piso = new Uint8Array(N * N);        // 0 = sin piso; 1 madera; 2 piedra; 3 baldosa   (índice = j * N + i)
@@ -80,10 +89,14 @@ let herramienta = "mover";
 let pausado = false, hover = null;
 let sucio = false, ultCambio = 0, ultGuardado = 0, movido = false;
 const teclas = {};
+const viaje = crearEstadoViaje();          // energía, energía máxima y nivel del jugador (para viajar a las zonas del mapa general)
+viaje.t = Date.now();                      // hora de la última recarga: la energía sube con el tiempo real, también con el juego cerrado
+let selMundo = null, hitsMundo = [];       // zona elegida en el mapa general y las zonas tocables del último dibujo
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const dentro = (i, j) => i >= 0 && j >= 0 && i < N && j < N;
-const bloqueado = (i, j) => !dentro(i, j) || (objetos[j * N + i] !== 0 && OBJ[objetos[j * N + i]].bloquea);
+// La franja exterior siempre se pisa; fuera de ella no se pasa; dentro del mapa bloquean los recursos que lo piden
+const bloqueado = (i, j) => !enExt(i, j, N) || (dentro(i, j) && objetos[j * N + i] !== 0 && OBJ[objetos[j * N + i]].bloquea);
 function hash(i, j) {
   let h = Math.imul(i + 1, 374761393) ^ Math.imul(j + 1, 668265263);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -132,6 +145,7 @@ function guardar() {
     localStorage.setItem(CLAVE, JSON.stringify({
       v: 2, n: N, piso: Array.from(piso).join(""), obj: Array.from(objetos).join(""), dano: Array.from(dano).join(""),
       inv: { ...inv }, herr: Object.keys(herr).filter((h) => herr[h]),
+      viaje: { energia: +viaje.energia.toFixed(2), energiaMax: viaje.energiaMax, nivel: viaje.nivel, t: viaje.t },
       x: +jugador.x.toFixed(2), y: +jugador.y.toFixed(2), t: Date.now(),
     }));
     sucio = false; movido = false; ultGuardado = performance.now();
@@ -151,6 +165,14 @@ function cargar() {
     }
     for (const k in inv) inv[k] = Math.max(0, Math.min(99999, Math.floor(Number(d.inv && d.inv[k])) || 0));
     for (const h in herr) herr[h] = Array.isArray(d.herr) && d.herr.includes(h);
+    if (d.viaje && typeof d.viaje === "object") {   // opcional: los guardados anteriores no lo traen
+      const em = Number(d.viaje.energiaMax), e = Number(d.viaje.energia), nv = Number(d.viaje.nivel), t = Number(d.viaje.t);
+      if (Number.isFinite(em) && em > 0 && em <= 100000) viaje.energiaMax = em;
+      if (Number.isFinite(e)) viaje.energia = clamp(e, 0, viaje.energiaMax);
+      if (Number.isFinite(nv) && nv >= 0) viaje.nivel = Math.floor(nv);
+      if (Number.isFinite(t) && t > 0 && t <= Date.now()) viaje.t = t;
+      recargarViaje();
+    }
     const x = Number(d.x), y = Number(d.y);
     if (Number.isFinite(x) && Number.isFinite(y) && libre(x, y)) { jugador.x = x; jugador.y = y; }
     else colocarEnLibre();
@@ -179,29 +201,30 @@ function lineaLibre(a, b) {
   return true;
 }
 const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-// Búsqueda en anchura (50×50 = 2500 casillas: es instantánea). Devuelve los centros de las casillas del camino o null
+// Búsqueda en anchura (39×39 = 1521 casillas con la franja: es instantánea). Devuelve los centros de las casillas del camino o null.
+// Trabaja en la rejilla ampliada: la casilla (i, j) del mapa es (i + B, j + B) aquí, así que la franja (i, j negativos) también cabe.
 function buscarRuta(ti, tj) {
   const si = Math.floor(jugador.x), sj = Math.floor(jugador.y);
   if (si === ti && sj === tj) return [{ x: ti + 0.5, y: tj + 0.5 }];
-  const prev = new Int16Array(N * N).fill(-2), cola = new Int16Array(N * N);
-  const s = sj * N + si, meta = tj * N + ti;
+  const prev = new Int16Array(T * T).fill(-2), cola = new Int16Array(T * T);
+  const s = (sj + B) * T + (si + B), meta = (tj + B) * T + (ti + B);
   let a = 0, b = 0;
   prev[s] = -1; cola[b++] = s;
   while (a < b) {
     const c = cola[a++];
     if (c === meta) break;
-    const ci = c % N, cj = (c / N) | 0;
+    const ci = (c % T) - B, cj = ((c / T) | 0) - B;
     for (const [di, dj] of D4) {
       const ni = ci + di, nj = cj + dj;
       if (bloqueado(ni, nj)) continue;
-      const k = nj * N + ni;
+      const k = (nj + B) * T + (ni + B);
       if (prev[k] !== -2) continue;
       prev[k] = c; cola[b++] = k;
     }
   }
   if (prev[meta] === -2) return null;
   const r = [];
-  for (let c = meta; c !== s; c = prev[c]) r.push({ x: (c % N) + 0.5, y: ((c / N) | 0) + 0.5 });
+  for (let c = meta; c !== s; c = prev[c]) r.push({ x: (c % T) - B + 0.5, y: ((c / T) | 0) - B + 0.5 });
   return r.reverse();
 }
 // Quita los zigzags de la cuadrícula: salta a la casilla más lejana a la que se llega en línea recta
@@ -217,7 +240,7 @@ function suavizar(r) {
 }
 function irA(wx, wy) {
   let ti = Math.floor(wx), tj = Math.floor(wy);
-  if (!dentro(ti, tj)) return false;
+  if (!enExt(ti, tj, N)) return false;
   if (bloqueado(ti, tj)) {   // tocaste un árbol: va a la casilla libre más cercana
     let mejor = null, d2 = 1e9;
     for (let r = 1; r <= 4 && !mejor; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
@@ -338,6 +361,8 @@ function actualizar(dt) {
     else { const p = Math.min(d, VEL * dt); mover((vx / d) * p, (vy / d) * p); }
     if (!ruta.length) { ruta = null; }
   }
+  const lado = salida(jugador.x, jugador.y, N, B, MARGEN_SALIDA);
+  if (lado) abrirMapaGeneral(lado);
   if (jugador.mov) jugador.paso += dt * VEL * 2.6;
   if (marca) { marca.t += dt; if (!ruta && marca.t > 0.7) marca = null; }
 }
@@ -390,6 +415,16 @@ function circulo(x, y, r, col) {
   ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
 }
 
+function dibujarAnillo(i, j) {   // casilla de la franja exterior: camino de tierra liso, sin objetos
+  const h = hash(i, j), col = COLOR_ANILLO.fondo;
+  diamante(i, j, 0);
+  ctx.fillStyle = h % 5 === 0 ? "#c39b62" : col; ctx.fill();
+  ctx.strokeStyle = h % 5 === 0 ? "#c39b62" : col; ctx.lineWidth = 1; ctx.stroke();   // el borde del mismo color tapa las rendijas
+  if (h % 9 === 0) {   // unas piedritas para que no se vea completamente liso
+    const x = SX(i + 0.5, j + 0.5), y = SY(i + 0.5, j + 0.5);
+    elipse(x + 6 * U, y, 3 * U, 1.6 * U, COLOR_ANILLO.borde);
+  }
+}
 function dibujarCesped(i, j, oscura) {
   const h = hash(i, j), col = (oscura ? CESPED_OSC : CESPED)[h % 3];
   diamante(i, j, 0);
@@ -573,16 +608,19 @@ function dibujar() {
   const oscura = raiz.classList.contains("oscura");
   const D = PROF_BORDE * U;
 
-  // Borde de tierra al sur del mapa (las dos caras que se ven)
-  poli([SX(N, 0), SY(N, 0), SX(N, N), SY(N, N), SX(N, N), SY(N, N) + D, SX(N, 0), SY(N, 0) + D], oscura ? "#4a3220" : "#6b4a2b", "rgba(0,0,0,.3)");
-  poli([SX(0, N), SY(0, N), SX(N, N), SY(N, N), SX(N, N), SY(N, N) + D, SX(0, N), SY(0, N) + D], oscura ? "#5c3f29" : "#85603a", "rgba(0,0,0,.3)");
+  // Borde de tierra al sur de la franja exterior (las dos caras que se ven)
+  const E = N + B, O = -B;
+  poli([SX(E, O), SY(E, O), SX(E, E), SY(E, E), SX(E, E), SY(E, E) + D, SX(E, O), SY(E, O) + D], oscura ? "#4a3220" : "#6b4a2b", "rgba(0,0,0,.3)");
+  poli([SX(O, E), SY(O, E), SX(E, E), SY(E, E), SX(E, E), SY(E, E) + D, SX(O, E), SY(O, E) + D], oscura ? "#5c3f29" : "#85603a", "rgba(0,0,0,.3)");
 
   // Suelo, de atrás hacia adelante (por diagonales); se anotan las casillas visibles y los árboles que se ven
   const visibles = [], ents = [];
-  for (let d = 0; d <= 2 * N - 2; d++) {
-    for (let i = Math.max(0, d - N + 1); i <= Math.min(N - 1, d); i++) {
+  const LO = -B, HI = N + B - 1;   // la rejilla ampliada va de -B a N+B-1
+  for (let d = 2 * LO; d <= 2 * HI; d++) {
+    for (let i = Math.max(LO, d - HI); i <= Math.min(HI, d - LO); i++) {
       const j = d - i, cx = SX(i + 0.5, j + 0.5), cy = SY(i + 0.5, j + 0.5);
       if (cx < -TW || cx > W + TW || cy < -TH * 4 || cy > H + TH * 4) continue;
+      if (esAnillo(i, j, N)) { dibujarAnillo(i, j); continue; }   // franja: sin objetos ni cuadrícula
       const k = j * N + i;
       visibles.push(i, j);
       if (piso[k]) dibujarPiso(i, j, piso[k]); else dibujarCesped(i, j, oscura);
@@ -631,7 +669,7 @@ function avisar(txt) {
   clearTimeout(avisoT); avisoT = setTimeout(() => ayuda.classList.add("fuera"), 2600);
 }
 function aplicar(i, j, inicio) {
-  if (!dentro(i, j)) return;
+  if (!puedeConstruir(i, j, N)) { if (inicio) avisar("Aquí no se puede construir."); return; }
   const k = j * N + i;
   if (herramienta in PISO_DE) {
     if (objetos[k]) { if (inicio) avisar("Hay algo ahí: recógelo o rómpelo primero."); return; }
@@ -709,18 +747,68 @@ $("btnFab").addEventListener("click", abrirFab);
 $("fabVolver").addEventListener("click", cerrarFab);
 window.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !fab.hidden) { ev.preventDefault(); cerrarFab(); } });
 
+// ---------- Mapa general (#mundo): se abre al cruzar el borde de la franja exterior ----------
+// El canvas se ajusta al tamaño REAL que ocupa en pantalla (y a la pantalla retina), así los textos se leen en el celular.
+// Un toque elige la zona (se ve su costo en la placa); un segundo toque sobre la misma intenta viajar.
+// TODAVÍA no hay mapas de zona: por eso el segundo toque no cobra energía ni entra, solo avisa (cuando existan, aquí va viajar() y la carga).
+function recargarViaje() {   // la energía sube con el tiempo real
+  const ahora = Date.now();
+  recargar(viaje, Math.max(0, (ahora - (Number(viaje.t) || ahora)) / 60000));
+  viaje.t = ahora;
+}
+function pintarMundo() {
+  const w = lienzoMundo.clientWidth, h = lienzoMundo.clientHeight;
+  if (!w || !h) return;
+  const d = Math.min(2, window.devicePixelRatio || 1);
+  if (lienzoMundo.width !== Math.round(w * d) || lienzoMundo.height !== Math.round(h * d)) { lienzoMundo.width = Math.round(w * d); lienzoMundo.height = Math.round(h * d); }
+  ctxMundo.setTransform(d, 0, 0, d, 0, 0);
+  hitsMundo = dibujarMapaMundo(ctxMundo, w, h, { estado: viaje, seleccion: selMundo });   // w y h en píxeles de CSS
+}
+function abrirMapaGeneral(lado) {
+  if (!mundoEl.hidden) return;
+  pausado = true; pulsando = false; ruta = null; marca = null; objetivo = null;
+  for (const k in teclas) teclas[k] = false;
+  Object.assign(jugador, devolverAdentro(jugador.x, jugador.y, N, B));   // se queda dentro de la franja: al volver no se dispara otra vez
+  recargarViaje(); guardar();
+  selMundo = null;
+  mundoMsg.textContent = "Toca una zona para ver su costo; tócala otra vez para viajar.";
+  mundoEl.hidden = false;
+  pintarMundo();
+}
+function cerrarMundo() {
+  if (mundoEl.hidden) return;
+  mundoEl.hidden = true; pausado = false; guardar();
+}
+lienzoMundo.addEventListener("click", (ev) => {
+  const r = lienzoMundo.getBoundingClientRect();
+  const id = zonaEn(hitsMundo, ev.clientX - r.left, ev.clientY - r.top, 10);
+  if (!id || id === "base") { selMundo = null; mundoMsg.textContent = ""; pintarMundo(); return; }
+  recargarViaje();
+  const v = puedeViajar(viaje, id), z = v.destino, otra = selMundo === id;
+  selMundo = id;
+  if (z.vacio) mundoMsg.textContent = "Todavía no tiene nada.";
+  else if (!v.ok) mundoMsg.textContent = textoRazon(v);
+  else mundoMsg.textContent = otra ? "Todavía no se puede entrar: el mapa de esta zona no está hecho. No se gastó energía." : "Toca otra vez para viajar.";
+  pintarMundo();
+});
+document.getElementById("mundoVolver").addEventListener("click", cerrarMundo);
+window.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !mundoEl.hidden) { ev.preventDefault(); cerrarMundo(); } });
+window.addEventListener("resize", () => { if (!mundoEl.hidden) pintarMundo(); });
+
 // ---------- Entrada ----------
 const punteros = new Map();
 let pinch = null, ignorar = false, pulsando = false, ultCasilla = -1, ultDestino = -1;
 const posRel = (ev) => { const r = lienzo.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; };
 function accion(ev, inicio) {
   const p = posRel(ev), w = aMundo(p.x, p.y), i = Math.floor(w.x), j = Math.floor(w.y);
-  if (!dentro(i, j)) return;
-  const k = j * N + i;
+  if (!enExt(i, j, N)) return;
+  if (herramienta !== "mover" && !dentro(i, j)) { if (inicio) avisar("Aquí no se puede construir."); return; }   // la franja exterior solo se camina
+  const k = j * N + i;   // (solo se usa dentro del mapa; en la franja la herramienta «mover» camina sin tocar objetos)
   if (herramienta === "mover") {
-    if (k === ultDestino) return;
-    ultDestino = k;
-    if (inicio && objetos[k]) { elegirObjetivo(i, j); pulsando = false; return; }   // un toque sobre un recurso: va y lo trabaja
+    const kd = (j + B) * T + (i + B);
+    if (kd === ultDestino) return;
+    ultDestino = kd;
+    if (inicio && dentro(i, j) && objetos[k]) { elegirObjetivo(i, j); pulsando = false; return; }   // un toque sobre un recurso: va y lo trabaja
     objetivo = null; irA(w.x, w.y);
   } else {
     hover = { i, j };
@@ -788,7 +876,7 @@ window.addEventListener("blur", () => { for (const k in teclas) teclas[k] = fals
 let armado = 0;   // «Mundo nuevo» pide tocar dos veces para no borrar por accidente
 const pausa = crearMenuPausa({
   boton: btnMenu,
-  puedeAbrir: () => info.hidden && fab.hidden,
+  puedeAbrir: () => info.hidden && fab.hidden && mundoEl.hidden,
   alAbrir: () => { pausado = true; pulsando = false; ruta = null; marca = null; objetivo = null; for (const k in teclas) teclas[k] = false; guardar(); },
   alContinuar: () => { pausado = false; },
   extras: () => [

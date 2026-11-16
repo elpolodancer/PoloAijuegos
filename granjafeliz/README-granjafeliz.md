@@ -7,37 +7,37 @@ Juego estilo Farm Frenzy 1, **solo horizontal** (en vertical pide girar el celul
 |---|---|
 | `index-granjafeliz.html` | Menús, canvas del escenario y aviso «gira el celular» |
 | `juego-granjafeliz.js` | Menú, mapa, **Modo libre (modos + pantalla de ajustes)**, partida (simulación + dibujo en canvas transparente), fin de nivel «Siguiente nivel ▶» sobre el tablero |
-| `escena-granjafeliz.js` | Aspecto y posiciones del escenario. **`TAMANOS`** (original / mediano / grande) y `usarTamano(id)`, que reacomoda campo, cajas, espacios de edificio y botones de compra; dibuja fondo, casas, **pozo (arriba al centro), almacén (bodega, abajo al centro)**, camión, **zonas de pasto** (`dibujarPasto`) y la **barra de vida** de cada animal (`dibujarBarraVida`); `botonComprar` = cuadros de animales **dentro del escenario**, arriba a la izquierda |
+| `escena-granjafeliz.js` | Aspecto y posiciones del escenario. **`TAMANOS`** (original / mediano / grande) y `usarTamano(id)`, que reacomoda campo, cajas, espacios de edificio y botones de compra; dibuja fondo, casas, **pozo (arriba al centro), almacén (bodega, abajo al centro)**, camión, **zonas de pasto** (`dibujarPasto`) y **puntitos de hambre** (`dibujarPuntos`); `botonComprar` = botones de compra arriba a la izquierda |
 | `tiempos-granjafeliz.js` | Fórmula de oro/plata para los niveles 11 en adelante (los 10 primeros llevan los tiempos escritos a mano) |
-| `datos-granjafeliz.js` | **Aquí se agrega lo nuevo**: `PRODUCTOS` (valor y peso), `ANIMALES`, `EDIFICIOS` (recetas y costos), `MEJORAS`, `OSOS`/`PERRO`/`GATO`, `NIVELES`, `LIBRE` (las 5 dificultades del modo libre), `MODOS` (Juego original / Mod de Polo) y constantes (incluidas las del **hambre y el pasto**: `SEG_VIDA`, `SEG_HAMBRE`, `SEG_COMER`, `USOS_PASTO`, `SEG_CRECE_PASTO`, `CORRE`, `MAX_PASTO`) |
-| `salida-granjafeliz.js` | **Condición de derrota** (`sinSalida`): función pura, sin DOM, que dice si el jugador ya no tiene forma de avanzar. La revisa `juego-granjafeliz.js` cada 1 s. Se prueba con `prueba-salida-granjafeliz.mjs` (`node prueba-salida-granjafeliz.mjs`). Los datos de los edificios se prueban con `prueba-edificios-granjafeliz.mjs` |
+| `datos-granjafeliz.js` | **Aquí se agrega lo nuevo**: `PRODUCTOS` (valor y peso), `ANIMALES`, `EDIFICIOS` (recetas y costos), `MEJORAS`, `OSOS`/`PERRO`/`GATO`, `NIVELES`, `LIBRE` (las 5 dificultades del modo libre), `MODOS` (Juego original / Mod de Polo) y constantes (incluidas las del **hambre y el pasto**: `PUNTOS_COMIDA`, `PUNTOS_HAMBRE`, `SEG_HAMBRE`, `USOS_PASTO`, `SEG_CRECE_PASTO`, `CORRE`, `MAX_PASTO`) |
+| `salida-granjafeliz.js` | **Condición de derrota** (`sinSalida`): función pura, sin DOM, que dice si el jugador ya no tiene forma de avanzar. La revisa `juego-granjafeliz.js` cada 1 s. Se prueba con `prueba-salida-granjafeliz.mjs` (`node prueba-salida-granjafeliz.mjs`) |
 | `economia-granjafeliz.js` | Estrellas y monedas por nivel y marca del modo libre; progreso `granjafeliz_progreso_v1` (`{ e: {nivel: estrellas}, gastado, libre?: {dificultad: marca}, t }`) sincronizado con `conectar()` |
 
 ## Fuente de las cifras
 Precios, valores, costos de mejoras y edificios, metas y tiempos de oro/plata de los **niveles 1-10** salen de una guía de fans de Farm Frenzy 1 (Cyberly, Sandy L., 2008): son cifras de una guía, no del juego mismo. Lo que dice «mío» en este README o en los comentarios de `datos-granjafeliz.js` (pesos, capacidades, tiempos, velocidades, cifras de polar y panda, etc.) es propuesta de este proyecto y se puede ajustar.
 
 ## Cómo se juega
-El **pozo** (arriba al centro) **empieza lleno y gratis**; cuando se vacía, tocarlo lo rellena (4 s, y cuesta $19 en el nivel base) → tocar el **campo** echa 1 de agua y brota una **zona de pasto** (un área de matas; máx. 12 zonas) → los animales con hambre corren a comerla y producen → tocar cada **producto del suelo** para llevarlo al **almacén** (la bodega de abajo; desaparece a los 12 s) → tocar el **camión** vende → **comprar** más animales (cuadros arriba a la izquierda, dentro del escenario). Con edificios, el producto se lleva a procesar antes de venderlo.
+El **pozo** (arriba al centro) **empieza lleno y gratis**; cuando se vacía, tocarlo lo rellena (4 s, y cuesta $19 en el nivel base) → tocar el **campo** echa 1 de agua y brota una **zona de pasto** (un área de matas; máx. 12 zonas) → los animales con hambre corren a comerla y producen → tocar cada **producto del suelo** para llevarlo al **almacén** (la bodega de abajo; desaparece a los 12 s) → tocar el **camión** vende → **comprar** más animales (botones arriba a la izquierda). Con edificios, el producto se lleva a procesar antes de venderlo.
 
 ## Niveles y metas
 - **Modelo del original:** el tiempo **no** hace perder el nivel. Cada nivel trae una lista de `metas` y termina al cumplir TODAS. Tipos: `dinero` (ventas del camión), `producto` (unidades recogidas al almacén; cuenta lo recogido aunque luego se venda, y lo que recoge el gato), `animal` (vivos a la vez), `edificio` (construido).
 - **Condiciones de inicio** (opcionales, ver el comentario de `NIVELES` en `datos-granjafeliz.js`): `dineroInicial`, `aguaInicial`, `animales`, `edificios`, `construidos`, `regalo: ["gato","perro"]`, `mejoras: { almacen, camion, pozo }`, `comprables`, `osos`, `perro: false` y `pista` (consejo de 7 s debajo de las metas al empezar).
 - **Existen los niveles 1 a 10 = niveles 1 a 10 de Farm Frenzy 1** (mismas metas, dinero y animales de inicio, y oro/plata; «pato» = gallina, «cupcake» = pastelito, «egg solids» = polvo). Del 11 en adelante avisa «todavía no está creado». Las plantas se construyen dentro del nivel (en el original se compran en una tienda con estrellas).
 
-| Nivel | Metas | Inicio | Oro / Plata (s) (los de `datos-granjafeliz.js`) |
+| Nivel | Metas | Inicio | Oro / Plata (s) |
 |---|---|---|---|
-| 1 | 4 huevos | $170, 2 gallinas | 60 / 120 |
-| 2 | 10 huevos, 5 gallinas | $190, 2 gallinas; osos | 120 / 180 |
-| 3 | 4 polvo, vender $300 | $190, 3 gallinas; planta de polvo | 180 / 240 |
-| 4 | 2 gallinas, 10 polvo, vender $500 | $290, 1 gallina | 210 / 270 |
+| 1 | 4 huevos | $170, 2 gallinas | 40 / 90 |
+| 2 | 10 huevos, 5 gallinas | $190, 2 gallinas; osos | 70 / 130 |
+| 3 | 4 polvo, vender $300 | $190, 3 gallinas; planta de polvo | 100 / 160 |
+| 4 | 2 gallinas, 10 polvo, vender $500 | $290, 1 gallina | 150 / 220 |
 | 5 | 3 pastelitos, 6 gallinas | $190, 2 gallinas; planta y panadería | 150 / 240 |
 | 6 | 5 gallinas, 15 polvo, 12 pastelitos | $240, 1 gallina | 270 / 330 |
 | 7 | 10 polvo, 30 huevos, 1 oveja | $290, 3 gallinas; se compra oveja | 240 / 340 |
 | 8 | 2 pastelitos, 7 gallinas | $20, 1 oveja (véndela por $500) | 170 / 240 |
-| 9 | 1 oveja | $220, sin animales, con gato | 210 / 300 |
-| 10 | 20 huevos, 5 polvo, 8 gallinas | $40, 6 gallinas; planta de polvo | 210 / 270 |
+| 9 | 1 oveja | $220, sin animales, con gato | 200 / 280 |
+| 10 | 20 huevos, 5 polvo, 8 gallinas | $40, 6 gallinas; planta de polvo | 120 / 200 |
 
-- **Tiempos: decisión pendiente.** La nota de la sesión 3 decía N1 40/90 · N2 70/130 · N3 100/160 · N4 150/220 · N9 200/280 · N10 120/200 (más apretados que la guía); `datos-granjafeliz.js` tiene hoy los de la tabla de arriba (N1, N3 y N10 son los de la guía; N2, N4 y N9, estimados). La tabla sigue al archivo de datos, que es lo que juega el código. Falta probarlos con personas.
+- **Calibración:** niveles 5-8 con los tiempos del original; 1-4, 9 y 10 más apretados porque este juego es más ágil (en el nivel 1 un jugador automático gana en ~9 s y el original da oro a los 60 s). **Falta probarlos con personas.**
 - Se quitó el nivel 3 de pruebas (todos los animales, osos polar/panda, gato): ya no hay un nivel para probar vaca, tejeduría y osos grandes hasta que existan los niveles 11+.
 
 ## Estrellas y monedas
@@ -101,25 +101,24 @@ Segundo botón del Modo libre. Es la versión «con más de todo»; lo que **ya 
 Decisión de Polo: la zona de **México** (32 estados × 100 niveles) debe quedar **igual a los niveles originales de Farm Frenzy, o lo más parecida posible**. Hoy están los niveles 1 a 10 tomados de la guía de la versión 1 (ver «Niveles y metas»). **Pendiente:** ver un gameplay del original para contrastar metas, dinero y animales de inicio, tiempos y calendario de osos, y ajustar `NIVELES`; después seguir con los niveles 11 en adelante manteniendo ese estilo (el reparto de dificultad del estándar, sección 8, se aplica sobre el mismo mapa). Todos usan el tamaño de granja Original.
 
 ## Animales
-Todo sale de `ANIMALES` (el juego los trata por datos).
+Todo sale de `ANIMALES` (el juego los trata por datos). Nunca mueren de hambre.
 
-**Hambre y pasto (constantes en `datos-granjafeliz.js`):**
-- Cada animal tiene una **barra de vida** de 20 s (`SEG_VIDA`) bajo las patas: llena al aparecer y cada vez que termina de comer. Durante 12 s (`SEG_HAMBRE`) está normal y pasea al azar; después **tiene hambre** (barra roja) y **corre** (`CORRE` = 2.2 × su velocidad) a la zona de pasto libre más cercana.
-- Al llegar **come 5 s** (`SEG_COMER`; el reloj de hambre se detiene, barra azul que se va llenando) y la barra vuelve a estar llena.
-- Si la barra llega a 0 sin haber empezado a comer, **el animal muere**. Sin pasto libre sigue paseando (😢 si no tiene a dónde ir).
-- Al **echar agua** brota una **zona de pasto** (óvalo de matas) que tarda 2 s en crecer (`SEG_CRECE_PASTO`; hasta entonces nadie come de ella). Cada zona se puede comer **3 veces** (`USOS_PASTO`) y va perdiendo matas; al 3.er uso desaparece. Máx. 12 zonas a la vez (`MAX_PASTO`).
-- Cada animal que va hacia una zona (o come de ella) **reserva un uso** (`pastoLibre()`). Los osos destruyen las zonas dentro de 2 casillas.
-- La producción corre mientras el animal esté vivo (no depende del hambre).
+**Hambre y pasto (sesión 7, como lo pidió Polo; constantes en `datos-granjafeliz.js`):**
+- Cada animal trae **6 puntitos de comida** bajo las patas (verdes; se vuelven **rojos** con hambre). Bajan de 6 a **2 en 15 s** (`SEG_HAMBRE`, igual para todos los animales).
+- Con **2 puntitos o menos** el animal deja de pasear al azar y **corre** (`CORRE` = 2.2 × su velocidad) hacia la zona de pasto libre más cercana. Si no hay pasto libre sigue paseando.
+- Al **echar agua** no brota una mata, sino una **zona de pasto** (óvalo de 9 matas) que tarda 2 s en crecer (`SEG_CRECE_PASTO`; hasta entonces nadie come de ella). Cada zona se puede comer **3 veces** (`USOS_PASTO`), por animales distintos o el mismo: cada uso llena al animal (**vuelve a 6 puntitos**) y quita matas de la zona; al 3.er uso desaparece.
+- Cada animal que va hacia una zona (o come de ella) **reserva un uso** (`pastoLibre()`): con 3 usos y 4 animales con hambre, solo 3 reservan.
+- Sin pasto los puntitos siguen bajando hasta **0**: ahí el animal se queda quieto (😢) y su producción se **pausa** (mientras le quede algún puntito, produce). Los osos destruyen las zonas dentro de 2 casillas.
 
-| Animal | Precio | Venta | Máx. | Ciclo | Producto |
-|---|---|---|---|---|---|
-| 🐔 Gallina | $100 | $50 | 12 | 20 s | huevo |
-| 🐑 Oveja | $1,000 | $500 | 6 | 12 s | lana |
-| 🐄 Vaca | $10,000 | $5,000 | 4 | 20 s | leche |
+| Animal | Precio | Máx. | Ciclo | Producto |
+|---|---|---|---|---|
+| 🐔 Gallina | $100 | 12 | 5 s | huevo |
+| 🐑 Oveja | $1,000 | 6 | 12 s | lana |
+| 🐄 Vaca | $10,000 | 4 | 20 s | leche |
 
-- **Solo hay estos tres animales** (los de la versión 1). **El pavo no existe**: se quitó junto con su huevo; no hay que volver a agregarlo. Precios de la guía; ciclo de oveja y vaca sin confirmar; velocidad, máximo, tamaño y emoji son míos.
-- **Cuadros de animales (sesión 14):** van **dentro del escenario, arriba a la izquierda** (`ES.botonComprar`, entre el primer edificio y el pozo), **sin fondo**: se ve el paisaje detrás, con un marco tenue. Cada animal siempre tiene su cuadro: **la cara del animal**, `cantidad/máx` y el precio. Si el nivel no lo permite (`NIVELES[n].comprables`, por defecto solo la gallina) sale **bloqueado**: cara apagada, 🔒, marco punteado, y al tocarlo avisa «Bloqueado en este nivel». Con poco dinero o en el máximo la cara también se apaga. El cuadrado de 48×48 **compra**; la tira de 16 debajo (💲) **vende** un animal por `VENTA_ANIMAL` (0.5) × precio ($50 / $500 / $5,000, como en la versión 1) y se puede usar aunque el animal esté bloqueado en ese nivel. La barra de arriba ya no lleva datos de animales (quedan dinero, metas, 🐕/🐈 y reloj); esos datos irán integrados en el escenario.
-- **Vender varios a la vez:** la ventana del almacén tiene la pestaña «🐾 Animales» (sesión 13).
+- Animales y precios como en la versión 1: gallina, oveja y vaca. **El pavo se quitó** (no existe en la versión 1), junto con su huevo. Ciclo y producto de oveja y vaca vienen de una conversación anterior con Gemini (sin confirmar); velocidad, máximo, tamaño y emoji son míos. Los campos `mordidas` y `segHambre` de cada animal **ya no existen** (ahora el hambre es igual para todos).
+- **Comprar:** cada nivel dice cuáles con `NIVELES[n].comprables` (por defecto solo la gallina). Los botones van **arriba a la izquierda**, sobre la barra, como en Farm Frenzy (`ES.botonComprar`): uno por animal, de 58×52; los 32 de arriba **compran** (emoji, `cantidad/máx` y precio) y los 20 de abajo **venden**. El dinero, las metas, 🐕/🐈 y el reloj se recorren a la derecha (el dinero empieza después del último botón).
+- **Vender animales:** cada botón de compra trae una zona 💲 que vende un animal por `VENTA_ANIMAL` (0.5) × precio. Coincide con la versión 1 ($50 / $500 / $5,000).
 
 ## Productos (valor / peso)
 Valores de la versión 1. **Sesión 11:** cada producto tiene dos números: `espacio` (en el almacén; leche = 100) y `peso` (en el camión). El peso sale de las cajas de Farm Frenzy 1: una caja = 30 puntos y lleva un máximo de unidades, así que peso = 30 / máximo por caja. El espacio sigue el orden de la guía (cifras mías).
@@ -161,22 +160,22 @@ Los costos son los de la versión 1; capacidades propias (sesión 11: el camión
 ## Edificios de procesamiento
 Cada nivel los lista en `NIVELES[n].edificios` (máx. 4 en los niveles, que usan el tamaño Original; el Modo libre llega a 6 en Mediano y 10 en Grande, ver «Tamaños de la granja») y aparecen como espacios vacíos en las columnas de los lados del campo (los animales y el pasto quedan entre ellas; ahí no se planta).
 
-| Edificio (id) | Entra → Sale | Construcción → mejoras (costos) |
-|---|---|---|
-| 🏭 Planta de polvo (`panaderia`) | huevo → polvo | $200 → 300 / 400 / 500 / 600 |
-| 🧁 Panadería (`horno`) | polvo → pastelito | $400 → 600 / 800 / 1,000 / 1,200 |
-| 🧵 Hilandería (`hilanderia`) | lana → hilo | $2,000 → 3,000 / 4,000 / 5,000 / 6,000 |
-| 🧣 Tejeduría (`tejeduria`) | hilo → tela | $4,000 → 6,000 / 8,000 / 10,000 / 12,000 |
-| 🥣 Batidora (`batidora`) | leche → mantequilla | $20,000 → 30,000 / 40,000 / 50,000 / 60,000 |
-| 🧀 Quesería (`queseria`) | mantequilla → queso | $40,000 → 60,000 / 80,000 / 100,000 / 120,000 |
+| Edificio (id) | Entra → Sale | Tiempo | Construcción → mejoras (costos) |
+|---|---|---|---|
+| 🏭 Planta de polvo (`panaderia`) | huevo → polvo | 3 s | $200 → 300 / 400 / 500 / 600 |
+| 🧁 Panadería (`horno`) | polvo → pastelito | 6 s | $400 → 600 / 800 / 1,000 / 1,200 |
+| 🧵 Hilandería (`hilanderia`) | lana → hilo | 4 s | $2,000 → 3,000 / 4,000 / 5,000 / 6,000 |
+| 🧣 Tejeduría (`tejeduria`) | hilo → tela | 8 s | $4,000 → 6,000 / 8,000 / 10,000 / 12,000 |
+| 🥣 Batidora (`batidora`) | leche → mantequilla | 10 s (mío) | $20,000 → 30,000 / 40,000 / 50,000 / 60,000 |
+| 🧀 Quesería (`queseria`) | mantequilla → queso | 12 s (mío) | $40,000 → 60,000 / 80,000 / 100,000 / 120,000 |
 
 Los nombres son los del original; **solo cambió el texto, los ids siguen siendo los de antes** (`panaderia` es la planta de polvo y `horno` la panadería). Los lotes 1 a 5 coinciden con el original. Costos de la batidora y la quesería: los de la versión 1; sus tiempos son propios (más largos mientras más arriba en la cadena).
 - **Cadena de la leche (sesión 10):** vaca → 🥛 leche → 🥣 batidora → 🧈 mantequilla → 🧀 quesería → queso ($8,000 cada uno). Cada edificio se construye y se mejora igual que los demás (franja ⬆, lote de 1 a 5). Sus costos de hasta $120,000 achican la letra de la franja para que quepa (`txtFit` en `juego-granjafeliz.js`). Colores: batidora verde azulado, quesería ámbar (`ESTILOS` en `escena-granjafeliz.js`).
 - **Dónde aparecen:** en los niveles solo si el nivel los lista en `edificios` (los niveles 1-10 no los usan). En el **Modo libre** van al final de la lista de Normal, Difícil y Experto (Fácil y Muy fácil no tienen vacas): el tamaño **Original** solo tiene 4 espacios, así que ahí no aparecen (`edificiosLibre` recorta la lista); en **Mediano** (6 espacios) salen los seis; en **Grande** (10) se repiten desde el principio.
 - **Construir:** tocar el espacio vacío (paga `EDIFICIOS.costos[0]` con el dinero del nivel). `construidos: [ids]` deja edificios ya construidos al empezar.
-- **Procesar (sesión 15, modelo de Farm Frenzy 1):** un toque en el edificio; descuenta del almacén hasta «lote» unidades (si hay menos, procesa las que haya), trabaja y el producto sale al suelo junto al edificio (se recoge con un toque; si el almacén está lleno se queda en el suelo y desaparece a los 12 s). **Solo un ciclo a la vez, sin cola:** mientras trabaja, tocarlo avisa «Trabajando…». El siguiente ciclo puede empezar aunque la salida anterior siga en el suelo.
-- **Tiempo del ciclo: igual para todos los edificios**, solo depende del nivel de mejora (`MEJORAS.fabricaN.seg`): **25 / 22 / 20 / 17 / 15 s** en los niveles 1 a 5, y procesar 5 unidades tarda lo mismo que 1. La barra amarilla del edificio avanza según la duración de ese ciclo.
-- **Mejorar:** franja «⬆ $costo · Nv N/5» al pie de cada edificio; sube el **lote** (`MEJORAS.fabricaN.lote`: 1, 2, 3, 4, 5 unidades por toque) y baja el tiempo del ciclo (25 → 15 s). `fabrica1` = planta de polvo, hilandería y batidora; `fabrica2` = panadería, tejeduría y quesería. Se reinicia en cada nivel.
+- **Procesar:** tocar el edificio; descuenta del almacén hasta «lote» unidades, trabaja `seg` segundos y el producto sale al suelo junto al edificio (se recoge con un toque; si el almacén está lleno se queda en el suelo y desaparece a los 12 s).
+- **Cola:** si ya está trabajando, cada toque agrega un lote (máx. 2, `MAX_COLA_EDIF`); los insumos se descuentan al tocar.
+- **Mejorar:** franja «⬆ $costo · Nv N/5» al pie de cada edificio; sube el **lote** (`MEJORAS.fabricaN.lote`: 1, 2, 3, 4, 5 unidades por toque, mismo tiempo). `fabrica1` = planta de polvo, hilandería y batidora; `fabrica2` = panadería, tejeduría y quesería. Se reinicia en cada nivel.
 
 ## Osos, perro y gato
 Un nivel activa los osos con `NIVELES[n].osos` y el gato con `regalo: ["gato"]`; el perro está en todo nivel con osos salvo que el nivel diga `perro: false` (los niveles 1-10 no lo tienen).
@@ -187,26 +186,28 @@ Un nivel activa los osos con `NIVELES[n].osos` y el gato con `regalo: ["gato"]`;
 - **Míos, para confirmar:** 1 casilla = 32 px (el escenario no tiene casillas), la velocidad de cada oso, el costo del perro, los valores y pesos de polar y panda (polar y panda no existen en la versión 1) y los emojis (🐻‍❄️ puede verse como dos símbolos en sistemas viejos).
 
 ## Decisiones confirmadas
-- **Tiempos: el viaje del camión (desde la sesión 11) y el ciclo de los edificios (desde la sesión 15) son los de la guía de Farm Frenzy 1.** El resto de tiempos sigue siendo propio (más ágil que el original de 2006). Producto en el suelo: 12 s antes de desaparecer. Así la partida es activa y de clics rápidos, estilo arcade.
+- **Tiempos: se quedan los propios del juego (más ágiles que el original de 2006), salvo el viaje del camión, que desde la sesión 11 es el de la guía (20 / 15 / 12 / 10 / 4 s).** Producto en el suelo: 12 s antes de desaparecer. Así la partida es activa y de clics rápidos, estilo arcade.
 - Costos de mejoras y edificios, precios y valores: los de la versión 1 (ver tablas de arriba). Capacidades, tiempos y pesos: propios.
 - Pozo: capacidad 5 / 9 / 15 / 25 / 50, llenado de 4 s; empieza lleno y gratis, rellenarlo cuesta $19 / $17 / $15 / $15 y con la mejora 4 hay rociador automático a $7 por parche (ver «Almacén, camión y mejoras»).
 
 ## Pruebas
-- **Lógica en Node** (juego real, DOM falso; **antes de la sesión 15, con edificios de 3 a 12 s: hay que repetirla**): un jugador automático (2.5 y 1.5 toques/s, 3 partidas por nivel) ganó los niveles 1-10 en todas las corridas (el N6, de ~200-250 s, es el más largo; el N1, de ~9 s, el más corto). 35 comprobaciones de precios, costos, calendario de osos, regalos, venta y metas, todas bien. Antes se probaron también los animales (los cuatro producen y nadie pasa ~13 s seguido con hambre), los edificios (construir, sin dinero, sin insumos, cola, salida al suelo, mejora y lote) y los osos, perro y gato.
+- **Lógica en Node** (juego real, DOM falso): un jugador automático (2.5 y 1.5 toques/s, 3 partidas por nivel) ganó los niveles 1-10 en todas las corridas (el N6, de ~200-250 s, es el más largo; el N1, de ~9 s, el más corto). 35 comprobaciones de precios, costos, calendario de osos, regalos, venta y metas, todas bien. Antes se probaron también los animales (los cuatro producen y nadie pasa ~13 s seguido con hambre), los edificios (construir, sin dinero, sin insumos, cola, salida al suelo, mejora y lote) y los osos, perro y gato.
 - **Pozo (sesión 4):** 13 comprobaciones con el juego real y un DOM falso, todas bien: base 3 / 3, la mejora cuesta $300 y no alcanza con $170, mejorar sube la capacidad sin dar agua, tocar la franja ⬆ no inicia el llenado, el llenado tarda 4 s hasta la nueva capacidad, plantar gasta agua, el nivel máximo dice «Nivel máx. 5/5» y se llena a 50 / 50, y `mejoras: { pozo: 2 }` empieza con capacidad 15.
-- **Sesión 5 (juego real con DOM falso, 39 comprobaciones, todas bien):** datos coherentes (metas, tiempos oro < plata, ids que existen, máx. 4 edificios y 4 comprables); estrellas y monedas (límites de medalla, 1★ → 3★ paga solo 30 más, repetir peor no paga ni baja la marca, tope de 45 por nivel, el mapa abre el siguiente nivel, gastar, fusionar dos progresos); modo libre (HUD sin metas ni medallas, no termina solo, la marca se guarda con la venta, no da estrellas ni monedas, Terminar partida, récord visible al volver y al empezar otra partida, Difícil y Experto con osos corren 45 s sin errores); y un nivel real jugado tres veces (2★ paga 30, 3★ paga 15 más, repetir con 2★ no baja ni paga).
+- **Sesión 5 (juego real con DOM falso, 39 comprobaciones, todas bien):** datos coherentes (metas, tiempos oro < plata, ids que existen, máx. 4 edificios y 4 comprables, el pavo ya no está); estrellas y monedas (límites de medalla, 1★ → 3★ paga solo 30 más, repetir peor no paga ni baja la marca, tope de 45 por nivel, el mapa abre el siguiente nivel, gastar, fusionar dos progresos); modo libre (HUD sin metas ni medallas, no termina solo, la marca se guarda con la venta, no da estrellas ni monedas, Terminar partida, récord visible al volver y al empezar otra partida, Difícil y Experto con osos corren 45 s sin errores); y un nivel real jugado tres veces (2★ paga 30, 3★ paga 15 más, repetir con 2★ no baja ni paga).
 - **Sesión 6 (navegador sin cabeza, 844×390):** pantallas de modos y ajustes sin errores de consola; la barra de dificultad y la de tamaño cambian los textos y el récord mostrado; con dinero distinto al de la dificultad sale «Prueba (sin récord)»; se jugó en los 3 tamaños y se construyó en todos los espacios (4 / 6 / 10); Pausa → Salir vuelve a los ajustes con lo elegido; el nivel 1 abre en el tamaño Original después de jugar en Grande. En Node: la geometría del tamaño Original es idéntica a la anterior y ningún tamaño tiene choques entre espacios, cajas, botones de compra y barra; las marcas con clave nueva se guardan, se fusionan y las claves inválidas se rechazan. **No se probó con dedos ni en un celular real** (tamaño táctil del punto de las barras y de las franjas ⬆ en el tamaño Grande).
-- **Sesión 7 (Chromium real, 1000×560):** capturas de los 3 tamaños, de los niveles 1 y 8 y de las dificultades Muy fácil, Normal y Difícil, sin errores de consola. (Las pruebas de hambre de esa sesión eran del sistema viejo de puntitos y ya no valen.)
-- **Sin probar en celular.** El jugador automático es mejor que una persona novata: falta probar los niveles con personas y **ver el dibujo en pantalla**: tamaño táctil de las franjas ⬆ (28 en cajas, 26 en edificios) y de los espacios de edificio (138×70), los 3 cuadros de animales de 48×48 dentro del escenario (sesión 14: texto con contorno sobre el cielo y las colinas, ¿se lee bien con la madera oscura?), los emojis grandes de vaca y oveja, la pista de 7 s, los nombres nuevos de edificios, el oso de 42 px con su jaula de barrotes, los botones 🐕/🐈 de 32 de alto la caja del pozo reacomodada (título arriba, agua en medio, franja ⬆ al pie) y los 5 botones de dificultad del modo libre en un celular horizontal (de poco alto se achican a 50 px).
+- **Sesión 7 (Chromium real, 1000×560; juego con un gancho de prueba que avanza el reloj a mano):** hambre de 6 a 2 puntitos en 15.0 s y a 0 ocho segundos después, con la producción pausada en 0; la zona de pasto nace con 3 usos y tarda 2 s en crecer; con 4 animales con hambre y una zona de 3 usos solo 3 reservan, corren a 74.8 px/s (2.2 × 34), quedan en 6 puntitos y la zona desaparece; sin zona libre el animal con hambre sigue paseando. Capturas de los 3 tamaños, de los niveles 1 y 8 y de las dificultades Muy fácil, Normal y Difícil, sin errores de consola. Un jugador automático simple (toca huevos, vende, compra gallinas, atrapa osos) ganó el **nivel 1 en ~8.6 s** y el **nivel 2 en ~32.5 s** (oro 60 y 120).
+- **Sin probar en celular.** El jugador automático es mejor que una persona novata: falta probar los niveles con personas y **ver el dibujo en pantalla**: tamaño táctil de las franjas ⬆ (28 en cajas, 26 en edificios) y de los espacios de edificio (138×70), los 3 botones de compra (gallina, oveja y vaca, ~38 de alto), los emojis grandes de vaca y oveja, la pista de 7 s, los nombres nuevos de edificios, el oso de 42 px con su jaula de barrotes, los botones 🐕/🐈 de 32 de alto la caja del pozo reacomodada (título arriba, agua en medio, franja ⬆ al pie) y los 5 botones de dificultad del modo libre en un celular horizontal (de poco alto se achican a 50 px).
 
 ## Por resolver
 1. **Pesos contra capacidades (sesión 11):** con camión base 60 caben todos los productos (el más pesado, la leche, pesa 15) y con el almacén base 100 cabe cualquiera (la leche, 100, llena el almacén). Falta volver a calibrar los niveles 1-10 con los números nuevos: el almacén base guarda 20 huevos (antes 30) y un polvo ocupa 12 contra 5 del huevo.
 2. **Perro:** $100 por llamada (propuesta) o $2,600 una sola vez como en la versión 1.
-3. **Edificios (sesión 15):** ya son un ciclo a la vez, sin cola y de 25 → 15 s. Con los valores actuales procesar multiplica el valor de cada huevo pero también su peso: el camión es el cuello de botella. Falta volver a probar los niveles 1-10 con estos tiempos (los de oro/plata de la guía se hicieron para ciclos lentos, así que ahora deberían ajustarse mejor) y revisar `tiempos-granjafeliz.js`, cuya carga de trabajo de polvo, hilo, etc. (4 a 40 s) se calculó con los ciclos viejos.
-4. **Tiempos de oro/plata de los niveles 1-10:** la nota de la sesión 3 y `NIVELES` no coinciden (ver «Niveles y metas»). Falta decidir cuáles valen.
-5. **Calibración:** los niveles 1-10 y sus tiempos se probaron con jugador automático y con sistemas anteriores (hambre vieja, almacén y camión sin pesos): hay que volver a pasarlos y probarlos con personas, sobre todo los que usan oveja.
-6. **Pasto:** por decidir si dos toques de agua cerca deben juntarse en una zona. `MAX_PASTO`, `SEG_CRECE_PASTO` y `CORRE` son cifras mías.
-7. **Almacén:** quedó como bodega abajo al centro; si se prefiere otro sitio o dibujo, se cambia en `CAJAS` y `dibujarAlmacen`.
+3. **Edificios:** la cola (2 lotes) y los lotes por nivel (1 a 5) son propuesta mía en el modelo de cola; confirmar o cambiar en `MAX_COLA_EDIF` y `MEJORAS.fabricaN.lote`. Con los valores actuales procesar multiplica el valor de cada huevo pero también su peso: el camión pasa a ser el cuello de botella.
+4. ~~**Pozo:** cobro por rellenar~~ **Resuelto (sesión 8):** el pozo cobra por rellenar ($19 / $17 / $15 / $15), empieza lleno gratis y la mejora 4 es un rociador automático a $7 por parche.
+5. **Tabla de niveles desactualizada:** la tabla de «Niveles y metas» (oro/plata N1 40/90, N2 70/130, N3 100/160, N4 150/220, N9 200/280, N10 120/200) no coincide con `NIVELES` en `datos-granjafeliz.js` (N1 60/120, N2 120/180, N3 180/240, N4 210/270, N9 210/300, N10 210/270). El archivo de datos manda; falta decidir cuál es el bueno y corregir el otro.
+
+6. **Calibración tras el nuevo hambre (sesión 7):** solo se re-probaron los niveles 1 y 2 con el jugador automático. Los niveles 3-10 y los tiempos de oro/plata se calibraron con el hambre vieja (por animal, con mordidas): hay que volver a pasarlos, sobre todo los que usan oveja y vaca (antes tenían hambre cada 24 y 40 s; ahora todos cada 15 s, y una vaca produce solo mientras le quede comida).
+7. **Cifras mías del pasto:** `MAX_PASTO` = 12 zonas (antes 16 matas), `SEG_CRECE_PASTO` = 2 s y `CORRE` = 2.2. Los 15 s, los 6 → 2 puntitos y los 3 usos son de Polo. Por decidir: si un animal con hambre debería dejar de producir (hoy produce hasta llegar a 0 puntitos) y si dos toques de agua cerca deben juntarse en una zona.
+8. **Almacén:** quedó como bodega abajo al centro en lugar de la jaula de arriba; si se prefiere otro sitio o dibujo, se cambia en `CAJAS` y `dibujarAlmacen` (`escena-granjafeliz.js`).
 
 ## Especificación de la versión original (notas del 14 nov 2026; para aplicar poco a poco)
 
@@ -244,8 +245,8 @@ Cadenas de producción (valor entre paréntesis):
 | Batidora (*Churn*) | 1 leche | 1 mantequilla | $20,000 | ✅ (sesión 10) |
 | Quesería (*Cheese Dairy*) | 1 mantequilla | 1 queso | $40,000 | ✅ (sesión 10) |
 
-- Tiempo de procesamiento: **de 25 a 15 s por ciclo** según el nivel de mejora. ✅ Aplicado en la sesión 15 (`MEJORAS.fabricaN.seg`).
-- Cada edificio se mejora hasta procesar **5 unidades a la vez** (en vez de 1). Los costos de mejora van de **$300 a $120,000** según el edificio: la tabla completa está en «Edificios por dentro» (más abajo). ✅ Los costos de `EDIFICIOS[id].costos` coinciden con la tabla completa (comprobado en `prueba-edificios-granjafeliz.mjs`).
+- Tiempo de procesamiento: **de 15 a 25 s por ciclo**, según el nivel de mejora. ◻️ revisar los tiempos de `EDIFICIOS`.
+- Cada edificio se mejora hasta procesar **5 unidades a la vez** (en vez de 1). Los costos de mejora van de **$300 a $120,000** según el edificio: la tabla completa está en «Edificios por dentro» (más abajo). ⚠️ hoy los costos de `EDIFICIOS[id].costos` van de $200 a $600 (planta), $400 a $1,200 (panadería), $2,000 a $6,000 (hilandería) y $4,000 a $12,000 (tejeduría): los extremos coinciden con la tabla (construcción → mejora 4); falta revisar los pasos intermedios.
 - En el código, el edificio que procesa solo huevos da **1 bolsa de polvo por huevo** (con mejoras, N huevos dan N bolsas).
 
 ### Pozo de agua
@@ -393,7 +394,7 @@ Máximo de unidades **por caja**:
 | Quesería | $40,000 | $60,000 | $80,000 | $100,000 | $120,000 |
 
 - **Las mejoras de fábrica no se conservan:** se reinician en cada nivel y se vuelven a comprar. (El pozo, el almacén y el carro tampoco: cada nivel empieza en su nivel base y se mejoran pagando monedas; la tienda de estrellas solo da el *permiso*. Excepción: la jaula.)
-- ✅ **Sesión 15:** un solo ciclo a la vez (sin cola), tiempo por ciclo 25 / 22 / 20 / 17 / 15 s igual para los 6 edificios, la salida cae al suelo, batidora y quesería (sesión 10). ◻️ Opcional (no hecho): clics rápidos sobre la fábrica la aceleran un poco, y clic en un producto del suelo y luego en una fábrica lo procesa sin pasar por el almacén.
+- ⚠️ Hoy hay **cola de 2 lotes** (`MAX_COLA_EDIF`); la guía dice 1 ciclo a la vez. ◻️ revisar que el tiempo por ciclo sea el de la tabla (25 → 15 s) en los 4 edificios que ya existen. ✅ la salida cae al suelo. ✅ Batidora y quesería (sesión 10).
 
 ### Tiempo y medallas (FF1)
 
@@ -446,7 +447,7 @@ Costos en estrellas:
 
 ### Interfaz y controles (FF1)
 
-- **Animales:** en el original van en la barra de arriba a la izquierda (gallina $100, oveja $1,000, vaca $10,000, perro $2,600, gato $2,500). **Aquí van dentro del escenario, arriba a la izquierda, sin fondo** (sesión 14); perro y gato siguen en la barra hasta pasarlos también. Los edificios, el pozo, el almacén y el carro se mejoran con su franja ⬆.
+- **Barra de arriba:** a la izquierda los 5 animales con su precio (gallina $100, oveja $1,000, vaca $10,000, perro $2,600, gato $2,500); también los iconos de los edificios, pozo, almacén y carro para mejorarlos pagando. Abajo: el almacén y el carro (con una animación del viaje a la ciudad).
 - **Comprar un animal:** un solo clic en su icono; si hay dinero cae al campo al instante y empieza a producir. Sin menú ni confirmación.
 - **Vender animales:** clic en el almacén o el carro → pestaña de **animales** → elegir cuál y cuántos → se venden al **50 %**. ✅ **Sesión 13:** la ventana del almacén tiene las pestañas «📦 Productos» y «🐾 Animales» (izquierda los de la granja, derecha los que vas a vender, botones «1» y «todo», total y «Vender ▶»); se vende primero el que lleva menos producción a medias. La zona 💲 de cada botón de compra se conserva.
 - **Controles:** todo es de **clic/toque** (regar tocando el suelo cerca del pozo, recoger tocando el producto, procesar tocando la fábrica, enjaular tocando repetidamente al oso, mejorar tocando el icono). Sin atajos de teclado, salvo **Esc** = pausa/menú. En móvil los toques equivalen al clic.
@@ -458,7 +459,7 @@ Costos en estrellas:
 
 - El nivel **nunca se pierde por tiempo.** Se pierde **solo si el jugador perdió toda forma de avanzar**. Código: `sinSalida()` en `salida-granjafeliz.js`; el juego la revisa cada `SEG_REVISAR` = 1 s (`revisarSalida`) y pide `SEG_CONFIRMAR` = **3 s seguidos** de «sin salida» antes de mostrar la pantalla (así un producto que acaba de desaparecer no causa una derrota de un instante). Con el juego en pausa o con la ventana «Enviar productos» abierta no se revisa. Si en el mismo instante se cumplen las metas, **gana la victoria**.
 - Se pierde cuando se cumplen **las tres**:
-  1. **No hay ingreso en camino:** nada en el camión de viaje (el pago pendiente cuenta), nada en el suelo (productos o jaulas), ningún edificio trabajando, y nada vendible en el almacén. Un producto más pesado que el camión (p. ej. leche de 50 con camión de 10) **no cuenta** como vendible, salvo que el dinero alcance para mejorar el camión.
+  1. **No hay ingreso en camino:** nada en el camión de viaje (el pago pendiente cuenta), nada en el suelo (productos o jaulas), ningún edificio trabajando o con cola, y nada vendible en el almacén. Un producto más pesado que el camión (p. ej. leche de 50 con camión de 10) **no cuenta** como vendible, salvo que el dinero alcance para mejorar el camión.
   2. **No queda ningún animal vivo** (cualquiera produce algo que vale dinero).
   3. **El dinero no alcanza para el mínimo indispensable:** el animal **más barato que se pueda comprar en el nivel** (`comprables`, por defecto la gallina) **más** lo que cuesta regar el pasto si no hay pasto con usos ni agua en el pozo (`extraPasto`: $19 de recarga, o $7 por parche con el rociador). Tampoco se pierde si las metas que faltan son solo animales/edificios y el dinero alcanza para pagarlas directo.
 - **Osos (decisión mía, cambiar en `salida-granjafeliz.js`):** un oso **suelto** en el campo cuenta como ingreso (se enjaula con 3 toques y su jaula vale dinero), así que mientras haya uno sin capturar no se pierde (`OSOS_SUELTOS_CUENTAN = true`). Los osos que **todavía no caen** no cuentan (`OSOS_FUTUROS_CUENTAN = false`): si no te queda nada, no se espera a un oso que quizá llegue. Con `true` ningún nivel con osos se perdería nunca, porque siempre vuelven a caer.
@@ -467,9 +468,26 @@ Costos en estrellas:
 - **Pantalla:** «Ya no hay forma de avanzar», con el motivo («Ya no te quedan animales ni nada que vender, y con $40 no alcanza para comprar una gallina ($100).»), el tiempo, **Reintentar ▶** y **Mapa**. No da estrellas ni monedas y no toca el progreso guardado.
 - **Modo libre:** también aplica (no tiene metas): la partida termina con el mismo mensaje, lo vendido y el récord (que ya se guardó con cada venta), con «Jugar otra vez ▶» y «Ajustes».
 
-### Niveles: los primeros 10 y de ahí en adelante
+### Niveles: los primeros 10, las ranuras de edificios y de ahí en adelante
 
-Los niveles 1-10 son los de la versión 1 (ver «Niveles y metas»); **la propuesta de «temario» sencillo y las «ranuras de edificios» que había aquí se quitaron** (ya no aplican: el juego muestra solo las zonas de tierra de los edificios que el nivel lista, y el Original tiene 4 espacios).
+**Primeros 10 niveles (decisión de Polo, 15 nov):** deben ser **muy sencillos** y servir para mostrar cómo funcionan las características principales. Esto **reemplaza** la idea de «Niveles de México = los del juego original» para los niveles 1 a 10 (del 11 en adelante se retoma).
+
+Propuesta mía de temario (para confirmar):
+
+| Nivel | Enseña | Edificios |
+|---|---|---|
+| 1 | gallinas, pasto, pozo, recoger huevos y vender con el camión | ninguno |
+| 2 | almacén y camión (mejorarlos) con meta de dinero | ninguno |
+| 3 | primer oso: enjaularlo y vender la jaula | ninguno |
+| 4 | planta de polvo: huevo → polvo | 1 |
+| 5 | panadería: polvo → cupcake | 2 |
+| 6 | gato (regalo) recogiendo solo | 1-2 |
+| 7 | oveja + hilandería: lana → hilo | 1 |
+| 8 | perro contra osos | 1 |
+| 9 | vaca y leche | ninguno |
+| 10 | «examen»: mezcla de lo anterior | 3 |
+
+**Ranuras de edificios:** hoy el campo siempre muestra 6 zonas de tierra (círculos) para 6 edificios. Nuevo: **solo aparecen las zonas de tierra de los edificios que el nivel necesita** (`edificios` + `construidos` de `NIVELES[n]`); donde no hay edificio el campo es un **círculo completo de pasto**. Un nivel de 1 o 2 edificios muestra 1 o 2 zonas; el nivel 1 ninguna. ◻️ por hacer en `escena-granjafeliz.js` (posiciones de `ranuraEdificio`) y en `NIVELES`.
 
 **Del nivel 11 en adelante:** retos variados repartidos al azar (con semilla fija, iguales para todos). La dificultad sube de **dos formas**:
 - **Pesados:** metas grandes o largas, que se sientan complicadas de lograr.
@@ -483,27 +501,50 @@ Los niveles 1-10 son los de la versión 1 (ver «Niveles y metas»); **la propue
 - Reglas: **oro** nunca por debajo del tiempo del bot óptimo con ≥ 10-15 % de margen y entre 45 y 420 s (`PISO_ORO` y `TOPE_ORO` de `tiempos-granjafeliz.js`: ni larguísimo ni absurdo); **plata** alcanzable por una persona normal con esfuerzo; **completar** siempre alcanzable. Para niveles de tiempo: oro ≈ el tiempo de un jugador ágil + un pequeño margen.
 - Ningún nivel se publica sin pasar el bot **y** una prueba humana de muestra. Los niveles son para público (juego algo infantil): reto sí, frustración no.
 
+### Modo libre: dificultades (cifras mías; Polo me dejó elegirlas)
+
+La dificultad sube/baja **precios, osos y toques para atrapar**. El modo libre sigue sin dar monedas ni estrellas.
+
+| | Muy fácil | Fácil | Normal | Difícil | Experto |
+|---|---|---|---|---|---|
+| Precio de animales, edificios y mejoras | ×0.5 | ×0.75 | ×1 | ×1.5 | ×2 |
+| Frecuencia de osos | ×0.5 | ×0.75 | ×1 | ×2 | ×3 |
+| Valor de la jaula del oso | $120 | $90 | $60 | $40 | $20 |
+| Toques para atrapar al oso | 3 | 4 | 8 | 15 | 20 |
+
+- Lógica: en Experto caen el triple de osos pero cada jaula vale tres veces menos (más pérdida de animales, el mismo ingreso por oso); en Muy fácil hay la mitad, valen el doble y casi no cuesta atraparlos. «Precio» no cambia el valor de lo que se vende (huevo, lana…), solo lo que se compra.
+- Ideas extra, opcionales y por confirmar: duración de los productos en el suelo (15 / 13 / 12 / 10 / 8 s), viaje del camión (más rápido en fácil, más lento en difícil), dinero inicial según la dificultad (ya existe).
+- ◻️ falta aplicar la tabla (hoy las 5 dificultades solo cambian el dinero inicial y la marca).
+
+### Mod de Polo (solo nota)
+
+Traerá una **granja más grande** por el aumento de edificios, además de **edificios y animales nuevos**. Por ahora no se planea (ver «Mod de Polo» más arriba); primero se termina el juego original.
+
 ### Datos contradictorios de la guía (resolver al aplicar)
 
 1. **Oso y edificios:** una respuesta dice que el oso escapado destruye edificios; el detalle de FF1 dice que **no** (eso es de FF2). Se toma «no destruye edificios».
-2. **Mejoras de gato y perro:** una respuesta dice que en FF1 el gato no tiene mejoras; otra que las de perro y gato se compran con estrellas. Por decidir (sugiero sin mejoras hasta el Mod de Polo).
-3. **Gato y jaulas:** se mantiene que no recoge jaulas pero sí productos.
+2. **Mejoras de gato y perro:** una respuesta dice que en FF1 el gato no tiene mejoras; otra que las de perro y gato se compran con estrellas. Por decidir (sugiero sin mejoras de gato/perro hasta el Mod de Polo).
+3. **Gato y jaulas:** «no recoge productos si hay osos enjaulados en el campo» no está claro; se mantiene que no recoge jaulas pero sí productos.
 4. **Capacidad de animales** (5 / 2 / 1 cajas): sin significado claro; no aplicar.
-5. ~~**Tiempo por ciclo de los edificios**~~ **Resuelto (sesión 15):** se aplicó el de la guía (25 → 15 s, igual para todos, sin cola).
-
-(Resueltos: camión 20 / 15 / 12 / 10 / 4 s como la guía, y oso = 65 % de la leche en el almacén.)
+5. **Tiempo del camión:** la guía ~20 s en el nivel base; Polo pidió 15 s.
+6. **Oso:** la guía 65 % de una leche en el almacén; hoy 40 % de la capacidad del almacén (pedido de Polo).
 
 ### Orden sugerido para aplicarlo
 
-1. **Niveles 11 a 22,600** (ver «Por construir»).
-2. Osos como en FF1 (caída con sombra, caminar al azar), perro de $2,600 como ancla y varios gatos.
-3. Producción de los animales: 15-25 s al azar (decidir contra los 20 s de hoy). *(Los edificios por dentro ya están, sesión 15.)*
-4. Almacén: decidir si el oso conserva 65.
-5. Tienda de estrellas con permisos.
-6. Bot de backtracking para medir los niveles.
+1. ~~**Condición de derrota** (`sinSalida` + pantalla)~~ **Hecha (sesión 9)**. Falta: **niveles 1 a 10** nuevos con las **ranuras de tierra** solo para los edificios necesarios.
+2. Pozo: recarga por nivel, empezar lleno gratis y riego automático.
+3. Osos como en FF1 (caída con sombra, caminar al azar), perro de $2,600 como ancla y varios gatos.
+4. Producción 15-25 s al azar (decidir contra los 20 s de hoy) y edificios por dentro (1 ciclo, tiempos 25 → 15 s, costos por paso).
+5. ~~Camión por cajas~~ **Hecho en la sesión 11 como pesos** (caja = 30 puntos; ver «Carro (camión)»). Falta la pestaña «Animales» en la ventana del almacén.
+6. ~~Batidora y quesería (mantequilla y queso).~~ **Hecho (sesión 10).**
+7. Almacén (mejora 4 y tamaños relativos, decidir el oso).
+8. Modo libre con la tabla de dificultades.
+9. Tienda de estrellas con permisos.
+10. Generador de niveles 11 a 22,600 y bot de backtracking.
 
 ## Por construir poco a poco
-1. **Paso siguiente (paso 6):** subir `compartido/dificultad-niveles.js` y escribir el generador de niveles 11 a 22 600 (reparto de dificultad de la sección 8 del estándar: 50/40/10 al inicio hasta 25/40/35 al final). No cambiar después de publicar.
+1. **Paso siguiente:** subir `compartido/dificultad-niveles.js` y escribir el generador de niveles 11 a 22 600 (reparto de dificultad de la sección 8 del estándar: 50/40/10 al inicio hasta 25/40/35 al final). No cambiar después de publicar.
+2. ~~Queso y mantequilla (vaca)~~ hechos en la sesión 10. Pastelería / sastrería cuando haya receta cerrada.
 3. Modo libre: ajustar las cifras de las 5 dificultades jugándolas. Ya tiene modos, barra de dificultad, tamaño y dinero de pruebas (sesión 6); falta el contenido del Mod de Polo (ver «Mod de Polo»).
 4. Tienda y boosts con `eco.gastar()`; más estrellas por otras metas.
 5. Confirmar cifras (ver «Por resolver») y un dibujo mejor que el emoji para los animales.
@@ -512,14 +553,12 @@ Los niveles 1-10 son los de la versión 1 (ver «Niveles y metas»); **la propue
 8. Aplicar poco a poco la lista de «Especificación de la versión original» (arriba) y, después, escribir la del Mod de Polo.
 
 ## Historial
-- **Sesión 15 (14 nov 2026):** **edificios como en Farm Frenzy 1:** un solo ciclo a la vez, **sin cola** (se quitó `MAX_COLA_EDIF`), con el **tiempo por nivel de mejora igual para los 6 edificios** (25 / 22 / 20 / 17 / 15 s en `MEJORAS.fabricaN.seg`; `EDIFICIOS` ya no lleva `seg`). Tocar un edificio ocupado avisa «Trabajando…»; la barra del edificio usa la duración real del ciclo (`e.dur`). Se quitó la cola del tutorial, de la derrota y del dibujo. Pruebas en Node: edificios (38 nuevas), derrota (43), almacén y camión (66), tutorial (57; se corrigió una que esperaba el botón de la gallina en la barra de arriba). **No se jugó en navegador.**
-- **Sesión 14 (14 nov 2026):** **cuadros de animales dentro del escenario**, arriba a la izquierda, sin fondo y con la cara del animal; los 3 animales siempre salen y los no permitidos en el nivel, bloqueados (`ES.BOTON_COMPRAR`, `botonesCompra()`, `animalAbierto()`, `txtBorde()`); la barra de arriba ya no lleva animales. **Limpieza del README:** se quitaron el hambre de puntitos, el temario de niveles 1-10, las «ranuras de edificios», la tabla de dificultades con multiplicadores, los puntos ya resueltos y la sección duplicada «Mod de Polo (solo nota)»; y de `escena-granjafeliz.js` el código muerto `dibujarPuntos`. Comprobado en Node: los cuadros no chocan con edificios ni cajas y caben en el escenario en los 3 tamaños. **No se vio en pantalla.**
 - **Sesión 13 (15 nov 2026):** **pestaña «Animales» en la ventana del almacén** (`panel-almacen-granjafeliz.js`: opción `alVender` y dato `animales`; `juego-granjafeliz.js`: `animalesDelPanel()` y `venderSeleccion()`, que vuelve a validar y paga `VENTA_ANIMAL` × precio por cada uno). La pestaña sale siempre que se abre la ventana (sin animales dice «No tienes animales»). Probado: el panel con jsdom (15 + 6 comprobaciones) y el juego real en Modo libre con DOM falso (abrir el almacén, ir a la pestaña, vender 2 gallinas: $250 → $350). **Pendiente:** varios gatos (hoy uno por nivel) y probarlo en navegador y celular.
 - **Sesión 12 (15 nov 2026):** cierre del almacenamiento. **Mejora 4 del almacén a $12,000** y **oso enjaulado a $100** (valores de la guía de Polo). La ventana «Enviar productos» ahora **explica siempre por qué algo no cabe** (texto fijo abajo: «No cabe más en el camión (60 / 60): Leche, Oso enjaulado…» o «El camión no puede con «Leche»… Mejora el camión»), porque los botones desactivados no reciben toques y los avisos de antes nunca salían. El rótulo del camión muestra «🚚 $pago · ⚖️ peso/capacidad» de lo que cargaría. Se quitaron las constantes sin uso `CAPACIDAD_ALMACEN` (30) y `CAPACIDAD_CAMION` (10). `sw.js` sube a la versión 178 (sin archivos nuevos). Pruebas: almacén y camión 66, derrota 43, tutorial 57 y el aviso de la ventana (6, con jsdom, no incluida). **Pendiente del almacén según la guía:** pestaña «Animales» (vender desde el almacén) y varios gatos; volver a calibrar los niveles 1-10 y probarlo todo en navegador y celular. Ojo: con el oso a $100 el nivel 10 (empieza con $40) se vuelve un poco más fácil; la tabla de dificultades del Modo libre (jaula $120 a $20) sigue siendo propuesta.
 - **Sesión 11:** **almacén y camión convertidos de las cajas de Farm Frenzy 1 a puntos** (decisión de Polo: no usar cajas; sí un inventario con valor numérico por producto). Cada producto tiene `espacio` (almacén, leche = 100) y `peso` (camión = 30 / máximo por caja; caja = `CAJA_CAMION` = 30). Camión = cajas × 30 (60 / 90 / 120 / 150 / 210) con los **tiempos de viaje de la guía** (20 / 15 / 12 / 10 / 4 s); almacén 100 / 300 / 1,000 / 3,000 / 10,000. El oso pesa 30 (una caja) pero ya se puede **mezclar** con otros productos (1 oso + 5 huevos = camión base). Se quitó `fraccionAlmacen`. Pruebas: `prueba-almacen-camion-granjafeliz.mjs` (64 comprobaciones), `prueba-salida` actualizada (43) y la ventana «Enviar productos» (oso + huevos, leches, envío; con jsdom). **Pendiente:** volver a calibrar los niveles 1-10 (el almacén base guarda 20 huevos, el viaje base dura 5 s más) y confirmar la mejora 4 del almacén ($2,000 hoy, $12,000 en la guía).
 - **Sesión 10:** **edificios que faltaban:** 🥣 Batidora (leche → mantequilla, $20,000 → $60,000) y 🧀 Quesería (mantequilla → queso, $40,000 → $120,000), con sus 4 mejoras (lote 1 a 5) y los productos 🧈 mantequilla ($2,000) y 🧀 queso ($8,000). Estilos de casa propios, textos de las franjas que se achican para costos de seis cifras, y en el Modo libre entran en Normal / Difícil / Experto (tamaños Mediano y Grande; el Original sigue con 4 espacios). Probado en Node con el juego real y DOM falso (54 comprobaciones: costos, cadena leche → mantequilla → queso, mejoras hasta el nivel máximo, lote de 5, sin dinero / sin insumos, espacios por tamaño). **Pendiente:** ningún nivel del mapa usa estos edificios todavía (los niveles 11 en adelante); los tiempos de 10 s y 12 s y el peso 50 son propuesta mía.
 - **Sesión 9:** **condición de derrota**: `salida-granjafeliz.js` (`sinSalida`, función pura) revisada cada 1 s por el juego con 3 s de confirmación; pantalla «Ya no hay forma de avanzar» con Reintentar y Mapa; también termina el Modo libre. Prueba en Node de la regla (43 comprobaciones) y del juego real con DOM falso (17: derrota a los 3 s, texto, botones, sin estrellas, camión en camino, oso suelto, nivel 8 y 9 no empiezan perdidos, Modo libre).
-- **Sesión 7:** **pasto en zonas** (el hambre de esta sesión se reemplazó después por la barra de vida de 20 s) (un área de matas con 3 usos, que crece en 2 s; cada uso llena al animal); el **pozo pasa arriba al centro** y el **almacén** es una bodega abajo al centro (se quita la jaula); botones de comprar animales arriba a la izquierda sobre la barra (en la sesión 14 pasaron al escenario); arreglo de los emojis de animales y productos, que se dibujaban casi transparentes (`emo()` ahora fija un `fillStyle` opaco).
+- **Sesión 7:** sistema de **hambre** (6 puntitos bajo cada animal: de 6 a 2 en 15 s; con 2 corre a comer) y **pasto en zonas** (un área de matas con 3 usos, que crece en 2 s; cada uso llena al animal); el **pozo pasa arriba al centro** y el **almacén** es una bodega abajo al centro (se quita la jaula); botones de **comprar animales arriba a la izquierda**, con 🐕/🐈 y las metas recorridos; arreglo de los emojis de animales y productos, que se dibujaban casi transparentes (`emo()` ahora fija un `fillStyle` opaco).
 - **Sesión 6:** Modo libre con dos botones (Juego original / Mod de Polo) y pantalla de ajustes: barra de dificultad con punto deslizante, barra de tamaño de la granja y dinero inicial de pruebas (sin récord); `TAMANOS` y `usarTamano()` en la escena (Original 4 / Mediano 6 / Grande 10 espacios de edificio); marcas del modo libre por modo, tamaño y dificultad; el reloj ya no queda bajo el chip de monedas; README con el plan del Mod de Polo y de los niveles de México.
 - **Sesión 1:** metas + medallas por tiempo (base = Farm Frenzy 1); el tiempo ya no hace perder el nivel.
 - **Sesión 2:** condiciones de inicio (`construidos`, `regalo`) y venta de animales.

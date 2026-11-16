@@ -16,6 +16,7 @@ export const USOS_PASTO = 3;            // veces que se puede comer de una zona 
 export const SEG_CRECE_PASTO = 2;       // segundos que tarda en crecer la zona de pasto tras echarle agua (hasta entonces nadie puede comer de ella)
 export const CORRE = 2.2;               // un animal con hambre que va hacia el pasto corre a esta vez su velocidad normal
 export const VENTA_ANIMAL = 0.5;        // al vender un animal te pagan esta fracción de su precio (propuesta mía; ajustar aquí)
+export const MAX_COLA_EDIF = 2;         // lotes que pueden esperar en un edificio mientras trabaja (además del que está en marcha)
 
 // Productos: valor = $ al venderlo. Cada producto tiene DOS números (sesión 11):
 //   espacio = lo que ocupa en el ALMACÉN (escala donde la leche = 100; el almacén base guarda 100). Orden de la guía: huevo < polvo ≈ pastelito < lana ≈ hilo < tela < leche ≤ mantequilla ≈ queso; el oso = 65 % de la leche. Cifras mías dentro de ese orden.
@@ -69,20 +70,19 @@ export const GATO = { costo: 2500, vel: 85 };                          // costo 
 
 // Edificios de procesamiento. entra → sale, seg = tiempo base de cada lote, costos = lo que cuesta construirlo (costos[0]) y subir a cada nivel (costos[1..4]); costo = costos[0]. COSTOS de Farm Frenzy 1.
 // Nombres como en el original: «panaderia» (id) es la PLANTA DE POLVO DE HUEVO y «horno» (id) es la PANADERÍA (los ids no cambian para no romper nada).
-// fabrica = qué fila de MEJORAS usa para subir de nivel (fabrica1 = planta de polvo / hilandería / batidora, fabrica2 = panadería / tejeduría / quesería). Los costos de la batidora y la quesería son los de la versión 1 (construcción $20,000 y $40,000; la mejora 4 llega a $60,000 y $120,000).
+// fabrica = qué fila de MEJORAS usa para subir de nivel (fabrica1 = planta de polvo / hilandería / batidora, fabrica2 = panadería / tejeduría / quesería). Los costos de la batidora y la quesería son los de la versión 1 (construcción $20,000 y $40,000; la mejora 4 llega a $60,000 y $120,000); los tiempos (10 s y 12 s) son MÍOS, más largos mientras más arriba en la cadena de la leche.
 // Cada nivel que lo usa lista sus edificios en NIVELES[n].edificios (máx. 4 en el tamaño Original, 6 en el Mediano y 10 en el Grande, en ese orden: izquierda-derecha, de arriba abajo).
 // Se construyen tocando su espacio vacío (se paga con el dinero del nivel). Al tocar el edificio se descuenta del ALMACÉN hasta «lote» unidades
 // de «entra» (lote depende de su nivel, ver MEJORAS.fabricaN.lote) y empieza el temporizador; al terminar, el producto sale al suelo junto al edificio.
-// MODELO DE FARM FRENZY 1: solo UN ciclo a la vez, sin cola (mientras trabaja, tocarlo avisa «Trabajando»). El tiempo del ciclo es IGUAL para todos los edificios y depende solo de su nivel de mejora
-// (MEJORAS.fabricaN.seg: 25 / 22 / 20 / 17 / 15 s), y procesar 5 unidades tarda lo mismo que 1. Se puede empezar el siguiente ciclo mientras la salida anterior sigue en el suelo sin recoger.
+// Si ya está trabajando, el siguiente toque forma una cola de hasta MAX_COLA_EDIF lotes (los insumos se descuentan al tocar).
 export const EDIFICIOS = {
-  panaderia:  { nombre: "Planta de polvo", emoji: "🏭", entra: "huevo", sale: "polvo", costo: 200,  costos: [200, 300, 400, 500, 600],           fabrica: "fabrica1" },
-  horno:      { nombre: "Panadería",  emoji: "🧁", entra: "polvo", sale: "pan",   costo: 400,  costos: [400, 600, 800, 1000, 1200],         fabrica: "fabrica2" },
-  hilanderia: { nombre: "Hilandería", emoji: "🧵", entra: "lana",  sale: "hilo",  costo: 2000, costos: [2000, 3000, 4000, 5000, 6000],      fabrica: "fabrica1" },
-  tejeduria:  { nombre: "Tejeduría",  emoji: "🧣", entra: "hilo",  sale: "tela",  costo: 4000, costos: [4000, 6000, 8000, 10000, 12000],    fabrica: "fabrica2" },
+  panaderia:  { nombre: "Planta de polvo", emoji: "🏭", entra: "huevo", sale: "polvo", seg: 3, costo: 200,  costos: [200, 300, 400, 500, 600],           fabrica: "fabrica1" },
+  horno:      { nombre: "Panadería",  emoji: "🧁", entra: "polvo", sale: "pan",   seg: 6, costo: 400,  costos: [400, 600, 800, 1000, 1200],         fabrica: "fabrica2" },
+  hilanderia: { nombre: "Hilandería", emoji: "🧵", entra: "lana",  sale: "hilo",  seg: 4, costo: 2000, costos: [2000, 3000, 4000, 5000, 6000],      fabrica: "fabrica1" },
+  tejeduria:  { nombre: "Tejeduría",  emoji: "🧣", entra: "hilo",  sale: "tela",  seg: 8, costo: 4000, costos: [4000, 6000, 8000, 10000, 12000],    fabrica: "fabrica2" },
   // Cadena de la leche (vaca): leche → mantequilla → queso. Costos de la versión 1; tiempos propios.
-  batidora:   { nombre: "Batidora",   emoji: "🥣", entra: "leche", sale: "mantequilla", costo: 20000, costos: [20000, 30000, 40000, 50000, 60000],     fabrica: "fabrica1" },
-  queseria:   { nombre: "Quesería",   emoji: "🧀", entra: "mantequilla", sale: "queso", costo: 40000, costos: [40000, 60000, 80000, 100000, 120000],   fabrica: "fabrica2" },
+  batidora:   { nombre: "Batidora",   emoji: "🥣", entra: "leche", sale: "mantequilla", seg: 10, costo: 20000, costos: [20000, 30000, 40000, 50000, 60000],     fabrica: "fabrica1" },
+  queseria:   { nombre: "Quesería",   emoji: "🧀", entra: "mantequilla", sale: "queso", seg: 12, costo: 40000, costos: [40000, 60000, 80000, 100000, 120000],   fabrica: "fabrica2" },
 };
 
 // Mejoras por nivel (índice 0 = base). costo[i] = lo que se paga por SUBIR al nivel i. Almacén, camión, pozo y fábricas (edificios) ya se aplican en el juego
@@ -95,9 +95,8 @@ export const MEJORAS = {
   camion:  { capacidad: [60, 90, 120, 150, 210], seg: [20, 15, 12, 10, 4], costo: [0, 300, 800, 1500, 5000] },
   pozo:    { capacidad: [5, 9, 15, 25, 50],          costo: [0, 300, 600, 1200, 5000], recarga: [19, 17, 15, 15, 7] },   // capacidad = cargas de agua que guarda el pozo (cada pasto gasta 1); el nivel base es 5. recarga[i] = $ que cuesta rellenarlo (se paga con el dinero del nivel) en el nivel i; en el nivel 4 (rociador automático) son $7 POR PARCHE de pasto y ya no se usa el agua. Llenarlo tarda SEG_POZO s. El pozo EMPIEZA LLENO y gratis en cada nivel (aguaInicial ya no se usa). Costos de Farm Frenzy 1; las capacidades son propias
   // lote[i] = unidades que procesa cada toque en el nivel i (mismo tiempo por lote): 1 a 5, igual que el original («usa 1, 2, 3, 4, 5 a la vez»). Los COSTOS de cada edificio están en EDIFICIOS.costos.
-  // seg[i] = segundos que dura un ciclo en el nivel i (igual para todos los edificios, como en la guía de Farm Frenzy 1: ~25 / 22 / 20 / 17 / 15 s).
-  fabrica1: { lote: [1, 2, 3, 4, 5], seg: [25, 22, 20, 17, 15] },   // planta de polvo / hilandería / batidora
-  fabrica2: { lote: [1, 2, 3, 4, 5], seg: [25, 22, 20, 17, 15] },   // panadería / tejeduría / quesería
+  fabrica1: { lote: [1, 2, 3, 4, 5] },   // planta de polvo / hilandería / batidora
+  fabrica2: { lote: [1, 2, 3, 4, 5] },   // panadería / tejeduría / quesería
 };
 
 // Niveles (el del mapa estándar es el número). MODELO DEL ORIGINAL (Farm Frenzy 1): el tiempo NO es un límite, solo da medalla.
