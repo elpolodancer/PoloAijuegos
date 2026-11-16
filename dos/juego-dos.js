@@ -457,7 +457,7 @@ function actualizar(dt) {
 // (perspectiva suave: Q = 0 da una vista de frente sin perspectiva); z es la altura. Las paredes son BAJAS a propósito para no tapar objetos,
 // y lo que aun así quede tapado se ve «fantasma» encima (ver dibujarEscena).
 const K = 0.8, ESC = 1.08, Q = 0.0012, ALTO_PARED = 14, CX = W / 2, CY = H / 2, OY = 232;
-const ALTO_MUEBLE = { estante: 22, cajas: 12, literas: 20, mesa: 10, barra: 12, refri: 26, trinchador: 12, "bañera": 8, inodoro: 8, lavabo: 10, tele: 14, "sofá": 10, mesita: 8, cama: 8, closet: 24, "buró": 8, repisa: 12, escritorio: 11, librero: 22, regadera: 20 };
+const ALTO_MUEBLE = { estante: 22, cajas: 12, literas: 20, mesa: 10, barra: 12, refri: 26, trinchador: 12, "bañera": 8, inodoro: 16, lavabo: 10, tele: 14, "sofá": 10, mesita: 8, cama: 8, closet: 24, "buró": 8, repisa: 12, escritorio: 11, librero: 22, regadera: 20 };
 function proy(x, y, z = 0) { const f = 1 + z * Q; return [CX + (x - CX) * ESC * f, OY + (y - CY) * ESC * K * f - z * ESC]; }
 function poli(pts, relleno, borde) {
   ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath();
@@ -479,9 +479,27 @@ function resaltarMueble(b, alto) { // contorno blanco: es el mueble que se abre 
   ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.lineWidth = 2.5; ctx.stroke();
 }
 const anchoRotulo = new Map();   // ancho del rótulo de cada tipo de mueble (medir texto cada cuadro es caro)
+// Elipse en el plano (cx, cy) a la altura z, con radios del mundo (se proyecta igual que el resto de la casa)
+function elipse(cx, cy, z, rx, ry, col, borde) {
+  const [x, y] = proy(cx, cy, z), f = 1 + z * Q;
+  ctx.beginPath(); ctx.ellipse(x, y, rx * ESC * f, ry * ESC * K * f, 0, 0, 7);
+  ctx.fillStyle = col; ctx.fill();
+  if (borde) { ctx.strokeStyle = borde; ctx.lineWidth = 1; ctx.stroke(); }
+}
+// Inodoro: tanque de porcelana atrás (con su botón de descarga), pedestal y taza al frente con aro, asiento y agua.
+// Usa la misma caja del mueble (b) para que la colisión y el área para tocarlo no cambien.
+function inodoro3d(b) {
+  const cx = b.x + b.w / 2, bordeS = "rgba(0,0,0,.35)", tanque = b.h * 0.34, taza = b.y + b.h * 0.66;
+  caja3d({ x: cx - b.w * 0.2, y: taza - b.h * 0.1, w: b.w * 0.4, h: b.h * 0.32 }, 8, "#d3d8de", "#b3bac2", "#9fa7b0");   // pedestal
+  caja3d({ x: b.x + 1, y: b.y, w: b.w - 2, h: tanque }, 16, "#f6f8fa", "#d2d8de", "#bec5cc");                              // tanque
+  elipse(cx, b.y + tanque / 2, 16, 2.4, 1.5, "#9aa3ad", bordeS);                                                           // botón de descarga
+  elipse(cx, taza, 9, b.w * 0.46, b.h * 0.36, "#e9edf1", bordeS);                                                          // borde de la taza
+  elipse(cx, taza + 0.5, 9.3, b.w * 0.35, b.h * 0.27, "#ffffff", "rgba(0,0,0,.28)");                                       // asiento
+  elipse(cx, taza + 1, 9.6, b.w * 0.2, b.h * 0.15, "#6db3d8", "rgba(0,0,0,.3)");                                           // agua
+}
 function mueble3d(b, alto, resaltado = false) {
-  caja3d(b, alto, "#a06a3a", "#6e4522", "#5a3718");
-  if (b.w >= 24 && b.h >= 12) {
+  if (b.t === "inodoro") inodoro3d(b); else caja3d(b, alto, "#a06a3a", "#6e4522", "#5a3718");
+  if (b.t !== "inodoro" && b.w >= 24 && b.h >= 12) {
     ctx.font = "8px system-ui, sans-serif";
     let w = anchoRotulo.get(b.t); if (w === undefined) { w = ctx.measureText(b.t).width; anchoRotulo.set(b.t, w); }
     if (w <= b.w * ESC - 4) { const [x, y] = proy(b.x + b.w / 2, b.y + b.h / 2, alto); ctx.fillStyle = "rgba(255,240,210,.8)"; ctx.textAlign = "center"; ctx.fillText(b.t, x, y + 3); }

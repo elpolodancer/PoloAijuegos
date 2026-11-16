@@ -1,0 +1,91 @@
+<!doctype html>
+<!-- Ruta: naves/index-naves.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Naves</title>
+  <meta name="theme-color" content="#d9a866" />
+  <link rel="manifest" href="../manifest.webmanifest" />
+  <link rel="icon" href="../iconos/icono-192.png" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <style>
+    /* El campo de juego se dibuja en un canvas transparente (se ve la madera a los lados); lo centra y escala juego-naves.js */
+    #lienzo { position: fixed; inset: 0; width: 100%; height: 100%; background: transparent; touch-action: none; display: block; }
+    /* Marcadores arriba a la derecha (estándar .hud-der); el chip de monedas va por encima del mapa de niveles.
+       «👤 Iniciar sesión» es SIEMPRE el último (el más a la derecha) */
+    #hud { z-index: 8; gap: 6px; }
+    #hud .chip { font-size: 14px; padding: 0 10px; }
+    #btn-sesion { max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
+
+    /* ----- Menú principal estándar (sección 7 de ESTANDARES-juegos.md): columna de botones grandes centrada sobre la madera ----- */
+    .menu-principal { position: fixed; inset: 0; z-index: 4; display: flex; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;
+      padding: calc(60px + env(safe-area-inset-top)) 12px calc(66px + env(safe-area-inset-bottom)); }
+    .menu-principal[hidden] { display: none; }
+    .menu-col { width: min(100%, 300px); margin: auto; display: flex; flex-direction: column; align-items: stretch; gap: 10px; text-align: center; }
+    .menu-col h1 { margin: 0 0 8px; font-size: 2.1rem; color: var(--txt-fondo, #4a2a10); text-shadow: var(--sombra-txt, 0 2px 0 rgba(255,240,210,.6)); }
+    .menu-col .b3d.txt { width: 100%; margin-bottom: 5px; }
+    .menu-col .b3d.grande { --t: 62px; font-size: 20px; }
+    .menu-dif { display: flex; flex-direction: column; gap: 8px; padding: 0 14px 4px; }
+    .menu-dif[hidden] { display: none; }
+    .menu-dif .b3d.txt { --t: 46px; font-size: 16px; }
+    .menu-dif small { display: block; text-align: center; color: var(--txt-fondo-suave, #6b4423); font-size: .78rem; }
+
+    /* Ventanas del juego (Taller, Info, resultado): usan el panel oscuro del menú de pausa, pero dejan libres las esquinas de los botones fijos */
+    .nv-fondo { position: fixed; inset: 0; z-index: 5; display: flex; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;
+      padding: calc(100px + env(safe-area-inset-top)) 12px calc(66px + env(safe-area-inset-bottom)); background: rgba(8,9,11,.72); }
+    @media (min-aspect-ratio: 1/1) { .nv-fondo { padding: 12px 130px; } }
+    .nv-panel { width: min(100%, 520px); text-align: left; }
+    .nv-panel h2 { text-align: center; }
+    .nv-panel p { margin: 6px 0; font-size: .9rem; line-height: 1.35; color: #d9dce2; }
+    .nv-fila { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 12px; }
+    .nv-fila .b3d.txt { --t: 46px; }
+    .nv-tarjeta { margin: 10px 0; padding: 10px 12px; background: rgba(255,255,255,.07); border: 2px solid rgba(255,255,255,.14); border-radius: 14px; }
+    .nv-tarjeta h3 { margin: 0 0 6px; font-size: 1.05rem; }
+    .nv-tarjeta h3 small { font-weight: 600; color: #b0b4bd; margin-left: 6px; }
+    .nv-datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 4px 12px; font-size: .85rem; color: #d9dce2; }
+    .nv-datos b { color: #fff; }
+    .nv-mas { color: #7dffb0; font-weight: 700; }
+    .nv-aviso { padding: 8px 10px; margin: 8px 0; font-size: .85rem; color: #ffe9a8; background: rgba(168,93,0,.35); border: 1px solid #a85d00; border-radius: 10px; }
+    .nv-armas { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; margin-top: 6px; }
+    .nv-arma { height: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: .7rem; font-weight: 800; border-radius: 10px; border: 2px solid rgba(255,255,255,.2); color: #fff; }
+    .nv-arma.no { opacity: .35; }
+    .nv-arma.act { box-shadow: 0 0 0 3px #fff; }
+    .nv-precio { display: inline-flex; align-items: center; }
+    .nv-precio .moneda { margin-right: 6px; }
+  </style>
+</head>
+<body class="inmersivo">
+  <canvas id="lienzo" aria-label="Campo de juego"></canvas>
+
+  <!-- Menú principal estándar: ♾️ Modo libre · 🪜 Niveles · 🗺️ Mapa · 🚪 Salir (en ese orden, sin botones en medio) -->
+  <main class="menu-principal" id="menu">
+    <div class="menu-col">
+      <h1>🚀 Naves</h1>
+      <button class="b3d txt grande b-verde" id="m-libre" type="button" aria-expanded="false" aria-controls="m-dif"><span class="b-ico">♾️</span> Modo libre</button>
+      <div class="menu-dif" id="m-dif" hidden></div>
+      <button class="b3d txt grande b-azul" id="m-niveles" type="button"><span class="b-ico">🪜</span> Niveles</button>
+      <button class="b3d txt grande b-azul" id="m-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+      <a class="b3d txt grande b-rojo" id="m-salir" href="../"><span class="b-ico">🚪</span> Salir</a>
+    </div>
+  </main>
+
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Portal de Juegos</a>
+    <button class="b3d txt b-verde" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> Pausa</button>
+  </nav>
+
+  <div class="hud hud-der" id="hud">
+    <span class="chip" id="c-vidas" hidden></span>
+    <span class="chip" id="c-base" hidden></span>
+    <span class="chip chip-monedas"><span class="moneda"></span><span id="c-monedas">0</span></span>
+    <button class="b3d txt chico b-azul" id="btn-sesion" type="button" disabled><span class="b-ico">👤</span> <span id="txt-sesion">Iniciar sesión</span></button>
+  </div>
+
+  <script type="module" src="juego-naves.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
