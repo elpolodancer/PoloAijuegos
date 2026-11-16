@@ -1,9 +1,11 @@
 // Ruta: rompecabezas/juego-rompecabezas.js
 // Rompecabezas con 4 pantallas (menú → categoría → ajustes → juego), piezas con lengüetas,
 // número de piezas con deslizador, rotación opcional, pausa, zoom opcional (nunca se ve menos que la vista inicial), guardar/continuar partida y subida segura a imgbb
-// mediante un Apps Script (la API key NUNCA va aquí).
+// mediante un Apps Script (la API key NUNCA va aquí; la subida a imgbb es solo para administradores).
+// Imágenes: «Niveles» (10 carpetas × 10, imagenes/1.webp … 100.webp, con miniaturas en imagenes/mini/), «Desde mi dispositivo»
+// (comprimidas y guardadas en IndexedDB de cada navegador, sin servidor) y «Mis imágenes» (imgbb, solo administrador).
 
-import { URL_SUBIDA_IMAGENES } from "../compartido/configs.js";
+import { URL_SUBIDA_IMAGENES, esAdmin } from "../compartido/configs.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";   // menú de pausa estándar (☰)
 import { encolarPuntos } from "../compartido/cola-puntos.js"; // no usa Firebase: anota puntos aunque no haya internet o sesión
 
@@ -34,13 +36,22 @@ const CLAVE_HUELLAS = "rompecabezas:huellas";   // «huella» de cada imagen ya 
 const HUELLAS_MAX = 200;
 const CLAVE_PARTIDAS = "rompecabezas:partidas";   // partidas guardadas (en este dispositivo); la imagen vive en imgbb
 const PARTIDAS_MAX = 12;        // cuántas partidas se recuerdan (las más viejas se olvidan)
+const CARPETAS = 10;            // «Niveles»: 10 carpetas…
+const POR_CARPETA = 10;         // …de 10 imágenes cada una (imagenes/1.webp … imagenes/100.webp)
+const RUTA_IMAGENES = "imagenes/";        // imagen completa: imagenes/N.webp (solo se descarga al abrirla)
+const RUTA_MINIS = "imagenes/mini/";      // miniatura: imagenes/mini/N.webp (unos 320 px; si no existe se usa la completa)
+const LADO_LOCAL = 1600;        // imágenes del dispositivo: lado máximo (px) al guardarlas
+const CALIDAD_LOCAL = 0.82;     // compresión (webp, o jpeg si el navegador no sabe webp)
+const MINI_LADO = 320;          // miniatura de las imágenes del dispositivo
+const LOCALES_MAX = 60;         // cuántas imágenes se guardan en el dispositivo (las más viejas se olvidan)
 
-// Categorías del menú. Tipos: «galeria» (tus imágenes guardadas en imgbb), «archivo» (elegir del dispositivo)
-// y «urls» (imágenes fijas de ibb.co):  { id: "familia", nombre: "Familia", tipo: "urls", urls: ["https://i.ibb.co/..."] }
+// Categorías del menú. Tipos: «niveles» (10 carpetas con las imágenes incluidas), «dispositivo» (imágenes guardadas en este navegador),
+// «partidas», «galeria» (imgbb; solo administrador) y «urls» (imágenes fijas de ibb.co):  { id: "x", nombre: "X", tipo: "urls", urls: ["https://i.ibb.co/..."] }
 const CATEGORIAS = [
-  { id: "mias", nombre: "Mis imágenes", tipo: "galeria", emoji: "📷" },
-  { id: "archivo", nombre: "Desde mi dispositivo", tipo: "archivo", emoji: "➕" },
+  { id: "niveles", nombre: "Niveles", tipo: "niveles", emoji: "🪜" },
+  { id: "dispositivo", nombre: "Desde mi dispositivo", tipo: "dispositivo", emoji: "➕" },
   { id: "partidas", nombre: "Partidas guardadas", tipo: "partidas", emoji: "💾" },
+  { id: "mias", nombre: "Mis imágenes ☁️", tipo: "galeria", emoji: "📷", soloAdmin: true },
 ];
 
 // ---------- ESTADO ----------
@@ -49,8 +60,11 @@ const lienzo = $("lienzo");
 const g = lienzo.getContext("2d");
 let dpr = 1;
 let fuente = null;              // canvas con la imagen (ya reducida)
-let origenImg = "";             // "archivo" (elegida del dispositivo) | "nube" (ya está en imgbb)
-let urlNube = null;
+let origenImg = "";             // "nivel" (incluida en el juego) | "local" (de este dispositivo) | "nube" (imgbb)
+let urlNube = null;             // enlace de imgbb, si la imagen está allí
+let refImg = null;              // «referencia» de la imagen: "p:37" (nivel), "l:abc123" (dispositivo) o enlace de ibb.co. Identifica la partida guardada
+let vistaCat = "otro";          // qué se ve en la pantalla de categoría: carpetas | carpeta | dispositivo | otro
+let admin = false;              // la sesión es de administrador: solo ella puede subir a imgbb
 let volverA = "menu";           // a dónde regresa la X de los ajustes
 let opciones = [], idx = 0, bordes = null;
 let cols = 0, rows = 0, rotacion = false;
@@ -194,34 +208,203 @@ function marcoImg(url) {
   return im;
 }
 
+// ---------- IMÁGENES: referencias, niveles incluidos y del dispositivo ----------
+// Cada imagen se identifica con una «referencia» (texto): "p:37" = imagenes/37.webp, "l:abc123" = guardada en este dispositivo,
+// o un enlace de ibb.co. Las partidas guardadas recuerdan esta referencia.
+const numNivel = (r) => { const m = typeof r === "string" ? /^p:(\d{1,3})$/.exec(r) : null; const n = m ? Number(m[1]) : 0; return n >= 1 && n <= CARPETAS * POR_CARPETA ? n : 0; };
+const esNivel = (r) => numNivel(r) > 0;
+const esLocal = (r) => typeof r === "string" && /^l:[a-z0-9]{6,32}$/.test(r);
+const refValida = (r) => esNivel(r) || esLocal(r) || (typeof r === "string" && urlValida(r));
+const origenDeRef = (r) => (esNivel(r) ? "nivel" : esLocal(r) ? "local" : "nube");
+const deDispositivo = () => origenImg === "local";
+
+function marcoNivel(n) {       // solo la miniatura; la imagen completa se descarga al abrirla. Sin miniatura, usa la completa
+  const im = document.createElement("img");
+  im.loading = "lazy"; im.decoding = "async"; im.alt = "";
+  im.onerror = () => { im.onerror = null; im.src = RUTA_IMAGENES + n + ".webp"; };
+  im.src = RUTA_MINIS + n + ".webp";
+  return im;
+}
+
+// Imágenes del dispositivo: IndexedDB del navegador. Todo ocurre aquí, no se sube a ningún servidor.
+//   tienda «imagenes»: { id, t, blob }  imagen comprimida (≤ LADO_LOCAL px)      tienda «minis»: { id, t, blob }  miniatura
+const DB_NOMBRE = "rompecabezas-imagenes";
+let dbPromesa = null;
+function abrirDB() {
+  if (!dbPromesa) {
+    dbPromesa = new Promise((ok, no) => {
+      if (!window.indexedDB) return no(new Error("Este navegador no permite guardar imágenes en el dispositivo"));
+      const q = indexedDB.open(DB_NOMBRE, 1);
+      q.onupgradeneeded = () => { const d = q.result; d.createObjectStore("imagenes", { keyPath: "id" }); d.createObjectStore("minis", { keyPath: "id" }); };
+      q.onsuccess = () => ok(q.result);
+      q.onerror = () => no(new Error("No se pudo abrir el almacenamiento del dispositivo"));
+      q.onblocked = () => no(new Error("El almacenamiento del dispositivo está ocupado"));
+    }).catch((e) => { dbPromesa = null; throw e; });
+  }
+  return dbPromesa;
+}
+async function idb(tiendas, modo, fn) {   // fn recibe las tiendas y puede devolver una petición (se devuelve su resultado al terminar)
+  const db = await abrirDB();
+  return new Promise((ok, no) => {
+    let tx;
+    try { tx = db.transaction(tiendas, modo); } catch (e) { return no(e); }
+    let r;
+    tx.oncomplete = () => ok(r && typeof r === "object" && "result" in r ? r.result : r);
+    tx.onerror = () => no(tx.error || new Error("Error al guardar en el dispositivo"));
+    tx.onabort = () => no(tx.error || new Error("No hay espacio para guardar la imagen"));
+    try { r = fn(...tiendas.map((t) => tx.objectStore(t))); } catch (e) { no(e); }
+  });
+}
+function escalar(c, lado) {
+  const k = Math.min(1, lado / Math.max(c.width, c.height));
+  if (k >= 1) return c;
+  const r = document.createElement("canvas");
+  r.width = Math.max(1, Math.round(c.width * k)); r.height = Math.max(1, Math.round(c.height * k));
+  const x = r.getContext("2d");
+  x.imageSmoothingQuality = "high";
+  x.drawImage(c, 0, 0, r.width, r.height);
+  return r;
+}
+async function aBlob(c, calidad) {        // webp; si el navegador no sabe codificarlo (Safari antiguo) usa jpeg
+  const hacer = (tipo) => new Promise((ok) => c.toBlob(ok, tipo, calidad));
+  let b = await hacer("image/webp");
+  if (!b || b.type !== "image/webp") b = await hacer("image/jpeg");
+  return b;
+}
+async function listarLocales() {
+  const l = await idb(["minis"], "readonly", (s) => s.getAll());
+  return (l || []).sort((a, b) => b.t - a.t);   // la más reciente primero
+}
+async function borrarLocal(id) {
+  await idb(["imagenes", "minis"], "readwrite", (a, b) => { a.delete(id); b.delete(id); });
+  const u = cacheMini.get(id);
+  if (u) { URL.revokeObjectURL(u); cacheMini.delete(id); }
+}
+async function guardarLocal(c) {           // comprime y guarda; devuelve el id
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const grande = await aBlob(escalar(c, LADO_LOCAL), CALIDAD_LOCAL);
+  const mini = await aBlob(escalar(c, MINI_LADO), 0.72);
+  if (!grande || !mini) throw new Error("No se pudo comprimir la imagen");
+  const t = Date.now();
+  await idb(["imagenes", "minis"], "readwrite", (a, b) => { a.put({ id, t, blob: grande }); b.put({ id, t, blob: mini }); });
+  try { for (const x of (await listarLocales()).slice(LOCALES_MAX)) await borrarLocal(x.id); } catch (e) {}   // se olvidan las más viejas
+  return id;
+}
+const cacheMini = new Map();               // id → enlace temporal de la miniatura (son pocos KB; se liberan al borrar la imagen)
+async function urlMini(id) {
+  if (cacheMini.has(id)) return cacheMini.get(id);
+  const r = await idb(["minis"], "readonly", (s) => s.get(id));
+  if (!r) return null;
+  const u = URL.createObjectURL(r.blob);
+  cacheMini.set(id, u);
+  return u;
+}
+// Miniatura de cualquier referencia
+function marcoRef(ref) {
+  if (esNivel(ref)) return marcoNivel(numNivel(ref));
+  if (esLocal(ref)) {
+    const im = document.createElement("img");
+    im.alt = "";
+    urlMini(ref.slice(2)).then((u) => { if (u) im.src = u; }).catch(() => {});
+    return im;
+  }
+  return marcoImg(ref);
+}
+// Dirección desde donde cargar la imagen completa: { url, liberar() }
+async function srcDeRef(ref) {
+  if (esNivel(ref)) return { url: RUTA_IMAGENES + numNivel(ref) + ".webp", liberar() {} };
+  if (esLocal(ref)) {
+    const r = await idb(["imagenes"], "readonly", (s) => s.get(ref.slice(2)));
+    if (!r) throw new Error("La imagen ya no está en este dispositivo");
+    const u = URL.createObjectURL(r.blob);
+    return { url: u, liberar: () => URL.revokeObjectURL(u) };
+  }
+  return { url: ref, liberar() {} };
+}
+
 function pintarMenu() {
   const cont = $("cats");
   cont.innerHTML = "";
   CATEGORIAS.forEach((c, i) => {
+    if (c.soloAdmin && !admin) return;
     let marco;
-    if (c.tipo === "galeria" && leerGaleria()[0]) marco = marcoImg(leerGaleria()[0]);   // vista previa: la más reciente
-    else if (c.tipo === "partidas" && leerPartidas()[0]) marco = marcoImg(leerPartidas()[0].url);   // vista previa: la más reciente
+    if (c.tipo === "niveles") marco = marcoNivel(1);                                           // vista previa: la primera imagen
+    else if (c.tipo === "galeria" && leerGaleria()[0]) marco = marcoImg(leerGaleria()[0]);   // vista previa: la más reciente
+    else if (c.tipo === "partidas" && leerPartidas()[0]) marco = marcoRef(leerPartidas()[0].url);   // vista previa: la más reciente
     else if (c.tipo === "urls" && c.urls && c.urls[0] && urlValida(c.urls[0])) marco = marcoImg(c.urls[0]);
     else marco = marcoEmoji(c.emoji || "🧩", i + 3);
     cont.appendChild(carta(marco, c.nombre, () => abrirCategoria(c)));
   });
 }
 
-function abrirCategoria(c) {
-  if (c.tipo === "archivo") { $("archivo").click(); return; }
+const vacioEn = (cont, t) => { const p = document.createElement("p"); p.className = "vacio"; p.textContent = t; cont.appendChild(p); };
+
+// «Niveles»: primero las 10 carpetas (solo miniatura de su primera imagen); al abrir una, sus 10 imágenes (también miniaturas)
+function llenarCarpetas() {
+  vistaCat = "carpetas";
   const cont = $("catImgs");
   cont.innerHTML = "";
+  $("catTitulo").textContent = "Niveles";
+  $("cat").scrollTop = 0;
+  for (let k = 1; k <= CARPETAS; k++) cont.appendChild(carta(marcoNivel((k - 1) * POR_CARPETA + 1), "Carpeta " + k, () => llenarCarpeta(k)));
+}
+function llenarCarpeta(k) {
+  vistaCat = "carpeta";
+  const cont = $("catImgs");
+  cont.innerHTML = "";
+  $("catTitulo").textContent = "Carpeta " + k;
+  $("cat").scrollTop = 0;
+  for (let n = (k - 1) * POR_CARPETA + 1; n <= k * POR_CARPETA; n++) cont.appendChild(carta(marcoNivel(n), "", () => elegirRef("p:" + n, "cat")));
+}
+
+// «Desde mi dispositivo»: primero «Agregar imagen» y luego las imágenes ya guardadas en este navegador
+let tkDisp = 0;
+async function llenarDispositivo() {
+  vistaCat = "dispositivo";
+  const tk = ++tkDisp;
+  const cont = $("catImgs");
+  cont.innerHTML = "";
+  $("catTitulo").textContent = "Desde mi dispositivo";
+  cont.appendChild(carta(marcoEmoji("➕", 5), "Agregar imagen", () => $("archivo").click()));
+  let lista;
+  try { lista = await listarLocales(); } catch (err) { if (tk === tkDisp) vacioEn(cont, err.message || "No se pudo leer el almacenamiento del dispositivo"); return; }
+  if (tk !== tkDisp || vistaCat !== "dispositivo") return;
+  if (!lista.length) vacioEn(cont, "Aún no hay imágenes aquí. Toca «Agregar imagen»: se comprime y se guarda en este dispositivo, sin subirse a ningún servidor.");
+  for (const x of lista) {
+    const ref = "l:" + x.id;
+    const b = carta(marcoRef(ref), "", () => elegirRef(ref, "cat"));
+    const borrar = document.createElement("span");
+    borrar.className = "borrar"; borrar.setAttribute("role", "button"); borrar.setAttribute("aria-label", "Borrar imagen"); borrar.textContent = "✕";
+    borrar.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
+      if (!(await preguntar("¿Borrar esta imagen de tu dispositivo? También se borrarán sus partidas guardadas.", "Borrar"))) return;
+      try { await borrarLocal(x.id); } catch (err) {}
+      escribirPartidas(leerPartidas().filter((s) => s.url !== ref));
+      pintarMenu();
+      llenarDispositivo();
+    });
+    b.querySelector(".marco").appendChild(borrar);
+    cont.appendChild(b);
+  }
+}
+
+function abrirCategoria(c) {
+  const cont = $("catImgs");
+  vistaCat = "otro";
+  if (c.tipo === "niveles") { llenarCarpetas(); pantalla("cat"); return; }
+  if (c.tipo === "dispositivo") { llenarDispositivo(); pantalla("cat"); return; }
+  cont.innerHTML = "";
   $("catTitulo").textContent = c.nombre;
-  const vacio = (t) => { const p = document.createElement("p"); p.className = "vacio"; p.textContent = t; cont.appendChild(p); };
+  const vacio = (t) => vacioEn(cont, t);
   if (c.tipo === "galeria") {
     const lista = leerGaleria();
-    if (!lista.length) vacio("Aún no hay imágenes guardadas. Elige una desde tu dispositivo: al jugar se guarda aquí sola (necesitas haber entrado con Google en el portal).");
+    if (!lista.length) vacio("Aún no hay imágenes en la nube. Elige una desde tu dispositivo y toca «Guardar imagen» (solo administrador).");
     for (const u of lista) cont.appendChild(carta(marcoImg(u), "", () => elegirUrl(u, "cat")));
   } else if (c.tipo === "partidas") {
     const lista = leerPartidas();
     if (!lista.length) vacio("Aún no hay partidas guardadas. Dentro del juego toca el botón 💾 para guardar tu avance.");
     for (const s of lista) {
-      const b = carta(marcoImg(s.url), s.cols * s.rows + " piezas · " + s.col + "/" + s.cols * s.rows + " · " + fmt(s.t), () => abrirPartida(s));
+      const b = carta(marcoRef(s.url), s.cols * s.rows + " piezas · " + s.col + "/" + s.cols * s.rows + " · " + fmt(s.t), () => abrirPartida(s));
       const x = document.createElement("span");
       x.className = "borrar"; x.setAttribute("role", "button"); x.setAttribute("aria-label", "Borrar partida"); x.textContent = "✕";
       x.addEventListener("click", async (e) => {
@@ -241,7 +424,8 @@ function abrirCategoria(c) {
   }
   pantalla("cat");
 }
-$("catCerrar").addEventListener("click", () => pantalla("menu"));
+// ✕: dentro de una carpeta vuelve a la lista de carpetas; en cualquier otro caso, al menú
+$("catCerrar").addEventListener("click", () => { if (vistaCat === "carpeta") llenarCarpetas(); else pantalla("menu"); });
 
 // ---------- AJUSTES (número de piezas y rotación) ----------
 // Elige columnas×filas con celdas casi cuadradas según la proporción de la imagen
@@ -316,6 +500,11 @@ function dibujarPrev() {
   x.stroke();
 }
 
+function botonesCfg() {      // «Guardar imagen» (imgbb) solo para el administrador y solo con imágenes del dispositivo
+  $("guardar").hidden = !(admin && deDispositivo() && !urlNube);
+  $("enlace").hidden = !urlNube;
+}
+
 function aplicarOpcion() {
   const o = opciones[idx];
   cols = o.c; rows = o.r;
@@ -343,9 +532,8 @@ function abrirAjustes(desde) {
   const rango = $("rango");
   rango.min = 0; rango.max = opciones.length - 1; rango.value = idx;
   ponerRotacion(rotacion);
-  $("guardar").hidden = origenImg !== "archivo" || !!urlNube;
+  botonesCfg();
   $("guardar").disabled = false;
-  $("enlace").hidden = !urlNube;
   pantalla("cfg");
   aplicarOpcion();
 }
@@ -661,8 +849,6 @@ function jugar(guardada) {   // guardada: partida a restaurar (si no, se reparte
     $("msg").hidden = true;
     iniciar(guardada);
   }
-  // Una imagen elegida del dispositivo se guarda sola en imgbb (en segundo plano, ya con el juego en pantalla)
-  if (origenImg === "archivo" && !urlNube) setTimeout(() => guardarEnNube(true), 500);
 }
 
 // ---------- TIEMPO, PAUSA Y FINAL ----------
@@ -711,7 +897,7 @@ $("fSalir").addEventListener("click", () => { $("finMenu").hidden = true; pantal
 async function ganar() {
   if (t0) { acum += (Date.now() - t0) / 1000; t0 = 0; }
   terminado = true;
-  if (urlNube) borrarPartida(idPartida());          // ya está completo: la partida guardada deja de hacer falta
+  if (refImg) borrarPartida(idPartida());          // ya está completo: la partida guardada deja de hacer falta
   const pts = Math.max(1, Math.round(piezas.length / PIEZAS_POR_PUNTO));
   $("finInfo").textContent = piezas.length + " piezas · " + fmt(tiempoActual()) + " · +" + pts + " pts (si tienes sesión)";
   $("finMenu").hidden = false;
@@ -986,9 +1172,15 @@ $("archivo").addEventListener("change", async () => {
   if (f.size > IMAGEN_MAX_MB * 1048576) return aviso("La imagen pesa más de " + IMAGEN_MAX_MB + " MB");
   const u = URL.createObjectURL(f);
   try {
-    fuente = reducir(await cargar(u));
-    origenImg = "archivo"; urlNube = null;
-    abrirAjustes("menu");
+    const c = reducir(await cargar(u));
+    fuente = c; origenImg = "local"; urlNube = null; refImg = null;
+    abrirAjustes(vistaCat === "dispositivo" ? "cat" : "menu");
+    // Se comprime y se guarda en ESTE dispositivo (IndexedDB); no se sube a ningún servidor
+    guardarLocal(c).then((id) => {
+      if (fuente === c) refImg = "l:" + id;
+      if (vistaCat === "dispositivo") llenarDispositivo();
+      aviso("Imagen guardada en este dispositivo 📱");
+    }).catch((err) => aviso("No se pudo guardar la imagen en este dispositivo. Puedes jugar, pero no podrás guardar la partida"));
   } catch (e) {
     aviso(e.message);
   } finally {
@@ -1004,17 +1196,22 @@ function urlValida(u) {
   } catch (e) { return false; }
 }
 
-async function elegirUrl(u, desde) {
-  if (!urlValida(u)) return aviso("Enlace de imagen no permitido");
+async function elegirRef(ref, desde) {
+  if (!refValida(ref)) return aviso("Imagen no válida");
   try {
     aviso("Cargando imagen…", true);
-    fuente = reducir(await cargar(u));
-    origenImg = "nube"; urlNube = u;
+    const src = await srcDeRef(ref);
+    try { fuente = reducir(await cargar(src.url)); } finally { src.liberar(); }
+    origenImg = origenDeRef(ref); refImg = ref; urlNube = urlValida(ref) ? ref : null;
     $("msg").hidden = true;
     abrirAjustes(desde);
   } catch (e) {
-    aviso(e.message);
+    aviso(e.message || "No se pudo cargar la imagen");
   }
+}
+async function elegirUrl(u, desde) {
+  if (!urlValida(u)) return aviso("Enlace de imagen no permitido");
+  return elegirRef(u, desde);
 }
 
 function leerGaleria() {
@@ -1055,11 +1252,11 @@ function guardarHuella(h, url) {
   try { localStorage.setItem(CLAVE_HUELLAS, JSON.stringify(m)); } catch (e) {}
 }
 
-// Sube la imagen elegida a imgbb y la añade a «Mis imágenes». auto = true cuando lo dispara «Jugar»
+// Sube la imagen elegida a imgbb y la añade a «Mis imágenes ☁️». SOLO ADMINISTRADOR (el Apps Script debe comprobar también el correo)
 let subiendo = null, avisoSesion = false;
 async function guardarEnNube(auto) {
   const mia = fuente;                             // por si el jugador cambia de imagen mientras sube
-  if (!mia || origenImg !== "archivo" || urlNube || subiendo === mia) return;
+  if (!admin || !mia || !deDispositivo() || urlNube || subiendo === mia) return;
   if (URL_SUBIDA.startsWith("PEGA")) { if (!auto) aviso("Falta pegar la URL de tu Apps Script en compartido/configs.js"); return; }
   if (navigator.onLine === false) { aviso("Sin conexión: la imagen no se guardó en tu galería"); return; }
   let token;
@@ -1089,6 +1286,7 @@ async function guardarEnNube(auto) {
     pintarMenu();                                 // la tarjeta «Mis imágenes» muestra la más reciente
     if (fuente === mia) {
       urlNube = url;
+      if (!refImg) refImg = url;
       $("guardar").hidden = true;
       $("enlace").hidden = false;
     }
@@ -1112,13 +1310,13 @@ $("enlace").addEventListener("click", async () => {
 // La partida (posición y giro de cada pieza, grupos, lengüetas, tiempo) se guarda en este dispositivo (localStorage).
 // La imagen no cabe ahí: se recuerda su enlace de imgbb. Si la imagen vino de un archivo y aún no está en imgbb,
 // al guardar se sube primero; eso necesita sesión de Google, así que desde aquí mismo se puede iniciar sesión.
-const idPartida = () => urlNube + "|" + cols + "x" + rows;
+const idPartida = () => refImg + "|" + cols + "x" + rows;
 const r1 = (v) => Math.round(v * 10) / 10;
 const codBordes = (m) => m.map((f) => f.map((v) => (v > 0 ? "+" : v < 0 ? "-" : "0")).join("")).join("|");
 const decBordes = (t) => t.split("|").map((f) => [...f].map((ch) => (ch === "+" ? 1 : ch === "-" ? -1 : 0)));
 
 function partidaValida(s) {
-  return !!s && typeof s.id === "string" && urlValida(s.url) && Number.isInteger(s.cols) && Number.isInteger(s.rows)
+  return !!s && typeof s.id === "string" && refValida(s.url) && Number.isInteger(s.cols) && Number.isInteger(s.rows)
     && s.cols >= 2 && s.rows >= 2 && s.cols <= 200 && s.rows <= 200 && Array.isArray(s.ps) && Array.isArray(s.g)
     && s.bordes && typeof s.bordes.aba === "string" && typeof s.bordes.der === "string" && Number.isFinite(s.t) && Number.isFinite(s.col);
 }
@@ -1135,7 +1333,7 @@ function borrarPartida(id) { escribirPartidas(leerPartidas().filter((s) => s.id 
 
 function instantanea() {
   return {
-    id: idPartida(), url: urlNube, cols, rows, rot: rotacion, hor: modoHor,
+    id: idPartida(), url: refImg, cols, rows, rot: rotacion, hor: modoHor,
     bordes: { aba: codBordes(bordes.aba), der: codBordes(bordes.der) },
     ps: piezas.map((p) => (p.ok ? 1 : [r1(p.x), r1(p.y), p.rot])),          // 1 = ya está fija en el tablero
     g: sueltas.map((gr) => gr.m.map((p) => p.r * cols + p.c)),                // grupos sueltos, de abajo hacia arriba
@@ -1182,8 +1380,9 @@ async function abrirPartida(s) {
     aviso("Cargando partida…", true);
     const aba = decBordes(s.bordes.aba), der = decBordes(s.bordes.der);
     if (aba.length !== s.rows || der.length !== s.rows || aba.some((f) => f.length !== s.cols) || der.some((f) => f.length !== s.cols)) throw new Error("La partida guardada está dañada");
-    fuente = reducir(await cargar(s.url));
-    origenImg = "nube"; urlNube = s.url; volverA = "menu";
+    const src = await srcDeRef(s.url);
+    try { fuente = reducir(await cargar(src.url)); } finally { src.liberar(); }
+    origenImg = origenDeRef(s.url); refImg = s.url; urlNube = urlValida(s.url) ? s.url : null; volverA = "menu";
     cols = s.cols; rows = s.rows; bordes = { aba, der };
     ponerRotacion(!!s.rot);
     $("msg").hidden = true;
@@ -1244,15 +1443,7 @@ async function guardarPartida() {
   if (guardandoPartida || !fuente || !piezas.length || terminado) return;
   guardandoPartida = true;
   try {
-    if (origenImg === "archivo" && !urlNube) {     // la imagen aún no está en imgbb: hay que subirla primero (requiere sesión)
-      if (subiendo && subiendo === fuente) { aviso("Subiendo la imagen…", true); await esperarSubida(); }
-      if (!urlNube) {
-        if (!(await haySesion())) { $("msg").hidden = true; abrirLogin(); return; }
-        await guardarEnNube(false);
-        if (!urlNube) return;                      // guardarEnNube ya explicó el motivo (sin conexión, error al subir…)
-      }
-    }
-    if (!urlValida(urlNube)) return aviso("Esta imagen no se puede guardar en una partida");
+    if (!refValida(refImg)) return aviso("Esta imagen no se puede guardar en una partida");
     const lista = [instantanea(), ...leerPartidas().filter((x) => x.id !== idPartida())].slice(0, PARTIDAS_MAX);
     if (!escribirPartidas(lista)) return aviso("No hay espacio para guardar la partida en este dispositivo");
     pintarMenu();
@@ -1263,8 +1454,23 @@ async function guardarPartida() {
 }
 
 // ---------- ARRANQUE ----------
+// ¿La sesión es de administrador? Solo entonces aparecen «Mis imágenes ☁️» y «Guardar imagen» (la protección real está en el Apps Script)
+async function vigilarSesion() {
+  try {
+    const m = await import("../compartido/jugador.js");
+    m.alCambiarSesion((u) => {
+      const a = esAdmin(u);
+      if (a === admin) return;
+      admin = a;
+      pintarMenu();
+      if (!$("cfg").hidden) botonesCfg();
+    });
+  } catch (e) {}
+}
+
 texturas();
 pintarMenu();
+vigilarSesion();
 pantalla("menu");
 const q = new URLSearchParams(location.search).get("img");
 if (q && urlValida(q)) elegirUrl(q, "menu");

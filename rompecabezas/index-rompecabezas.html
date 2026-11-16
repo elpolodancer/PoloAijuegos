@@ -46,8 +46,6 @@
     .pila i { display: block; height: calc(var(--u) * .7); background: #aab3bd; border-radius: 9px; }
     .pila i:nth-child(1) { width: 90%; } .pila i:nth-child(2) { width: 96%; }
     .marco { display: block; aspect-ratio: 1; overflow: hidden; background: #1e2025; border: calc(var(--u) * .3) solid #cfd6de; border-radius: calc(var(--u) * .5); }
-    /* inmersivo.css define «.inmersivo .marco» (ancho de pantalla y 4:3, para el tablero de otros juegos): aquí lo anulamos para que cada tarjeta sea un cuadrado de media columna */
-    .inmersivo .cuadricula .marco { width: 100%; aspect-ratio: 1; }
     .marco canvas, .marco img { display: block; width: 100%; height: 100%; object-fit: cover; }
     .nom { display: block; min-height: calc(var(--u) * 10); margin-top: calc(var(--u) * 1.6); font: 400 calc(var(--u) * 4.2)/1.25 system-ui, Roboto, sans-serif; text-transform: uppercase; letter-spacing: .02em; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
     .galeria { padding: 0 calc(var(--u) * 2.7); column-gap: calc(var(--u) * 3.8); row-gap: calc(var(--u) * 9); }
@@ -138,7 +136,7 @@
     </div>
     <button class="b3d txt b-verde" id="jugar" type="button"><span class="b-ico">▶️</span> Jugar</button>
     <div class="extras">
-      <button class="b3d txt b-azul" id="guardar" type="button" hidden title="Sube la imagen a imgbb (requiere sesión con Google)"><span class="b-ico">☁️</span> Guardar imagen</button>
+      <button class="b3d txt b-azul" id="guardar" type="button" hidden title="Sube la imagen a imgbb (solo administrador)"><span class="b-ico">☁️</span> Guardar imagen</button>
       <button class="b3d txt b-gris" id="enlace" type="button" hidden><span class="b-ico">🔗</span> Copiar enlace</button>
     </div>
   </section>
