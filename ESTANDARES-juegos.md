@@ -8,22 +8,23 @@ Referencias: **Estacionamiento** (mapa, niveles, monedas, botones) y **Rubik** (
 
 | Botón | Esquina | Forma y color |
 |---|---|---|
-| **🎮 Juegos** (vuelve al portal, `href="../"`) | arriba-izquierda | **Alargado** (`b3d txt`), **azul oscuro** (`b-azuloscuro`: `#7d9cea → #3b63c4 → #1c3a82`). Siempre visible |
-| **☰** (Pausa / Menú principal) | arriba-izquierda, justo debajo | **Alargado, del mismo ancho** que 🎮 Juegos, gris (`b-gris`). Oculto en el menú principal del juego |
+| **🎮 Portal de Juegos** (vuelve al portal, `href="../"`) | arriba-izquierda | **Alargado** (`b3d txt`), **azul oscuro** (`b-azuloscuro`: `#7d9cea → #3b63c4 → #1c3a82`). Siempre visible |
+| **☰ Pausa** | arriba-izquierda, justo debajo | **Alargado, del mismo ancho** que 🎮 Portal de Juegos, **verde claro** (`b-verde`). Oculto en la pantalla del menú principal |
 | **🌙 / ☀️** (madera clara / oscura) | abajo-izquierda | 40×40, oro. Lo crea `compartido/fondo-madera.js` |
 | **⛶ / ✕** (pantalla completa) | abajo-derecha | 40×40, gris. Lo crea `compartido/pantalla-completa.js` |
+| **👤 Iniciar sesión** | arriba-derecha | Alargado (`b3d txt`, alto 40), azul (`b-azul`). **Siempre** en esa esquina, lo más a la derecha de la fila `.hud-der` (sección 7) |
 
 HTML del bloque de navegación (copiar tal cual):
 
 ```html
 <nav class="nav-juego" aria-label="Navegación">
-  <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
-  <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa"><span class="b-ico">☰</span> Pausa</button>
+  <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Portal de Juegos</a>
+  <button class="b3d txt b-verde" id="btn-menu" type="button" title="Pausa"><span class="b-ico">☰</span> Pausa</button>
 </nav>
 ```
 
-- El azul oscuro es **un poco más claro** que el de Deslizante, sin llegar a ser azul claro. Se define una sola vez en `compartido/inmersivo.css` (`.b-azuloscuro`); los juegos no lo redefinen (Deslizante todavía tiene su copia local, que se puede borrar).
-- Dentro de una partida el ☰ dice «Pausa» y abre `compartido/menu-pausa.js` (Continuar / opciones del juego / Salir). En mapas y listas dice «Menú principal» y vuelve al menú del juego.
+- El azul oscuro es **un poco más claro** que el de Deslizante, sin llegar a ser azul claro. Se define una sola vez en `compartido/inmersivo.css` (`.b-azuloscuro`); los juegos no lo redefinen (Deslizante todavía tiene su copia local, que se puede borrar). Como «Portal de Juegos» es más largo que el antiguo «Juegos», los dos botones toman el ancho del más largo (≈ 175 px) y la zona reservada de arriba-izquierda mide ≈ 190 × 92.
+- El ☰ dice **siempre «Pausa»**, en cualquier pantalla del juego, y siempre abre `compartido/menu-pausa.js` (Continuar / opciones del juego / Salir). Dentro de una partida congela el juego; en mapas, listas de niveles y dificultades (donde no hay nada que pausar) abre el mismo menú, y su «Salir» vuelve al menú principal del juego.
 - Zonas reservadas: el juego no pone nada interactivo en esas esquinas (medidas en `inmersivo.css`).
 
 ## 2. Fondo de madera (clara y oscura)
@@ -64,7 +65,7 @@ El menú de niveles **siempre es un mapa**:
 
 - **Juego libre / infinito:** tableros al azar sin fin, sin mapa ni niveles. Propuesta general: **no da monedas ni puntos** (como el modo libre de Deslizante) para que no se pueda repetir sin límite; guarda mejor marca y cantidad resuelta. En Estacionamiento todavía está por hacer (ver su README, sección 12).
 
-**Variante: juego con menú de inicio propio (Supermercado).** Si el juego ya tiene su menú (Nueva partida / Continuar / Niveles), el mapa NO es la pantalla principal: se abre con el botón «🗺️ Niveles». Dentro del mapa el ☰ dice «Menú principal» y vuelve a ese menú, y junto a «Continuar · nivel N» va un botón «♾️ Modo infinito» que hace lo mismo (es el equivalente de «Juego libre»). Un nivel es una partida aparte con sus propias metas y restricciones; el juego solo guarda cuántos niveles lleva terminados.
+**Variante: juego con menú de inicio propio (Supermercado).** Si el juego ya tiene su menú (Nueva partida / Continuar / Niveles), el mapa NO es la pantalla principal: se abre con el botón «🗺️ Niveles». Dentro del mapa el ☰ dice «Pausa» (su «Salir» vuelve a ese menú), y junto a «Continuar · nivel N» va un botón «♾️ Modo infinito» que hace lo mismo (es el equivalente de «Juego libre»). Un nivel es una partida aparte con sus propias metas y restricciones; el juego solo guarda cuántos niveles lleva terminados.
 
 Código reutilizable (ya está en `compartido/`, anotado en `ARCHIVOS` de `sw.js`):
 
@@ -99,14 +100,16 @@ Cuando se pida «crear el menú como dicta el inmersivo», se crea **siempre** c
 
 | # | Botón | Color | Qué hace |
 |---|---|---|---|
-| 1 | **♾️ Modo libre** | `b-verde` | **Siempre el primero.** Abre la pantalla de **dificultades**: 5 niveles (Muy fácil `b-verde`, Fácil `b-azul`, Normal `b-morado`, Difícil `b-oro`, Experto `b-rojo`) más las opciones propias del juego (por ejemplo, el tamaño del tablero) |
+| 1 | **♾️ Modo libre** | `b-verde` | **Siempre el primero.** Al tocarlo **despliega debajo una lista de botones de dificultad** (Muy fácil `b-verde`, Fácil `b-azul`, Normal `b-morado`, Difícil `b-oro`, Experto `b-rojo`) más las opciones propias del juego (por ejemplo, el tamaño del tablero). Se vuelve a tocar para plegarla. Las dificultades están **siempre disponibles** en el modo libre |
 | 2 | **🪜 Niveles** | `b-azul` | Lista de niveles de la etapa donde va el jugador (el mapa abierto en el nivel actual) |
 | 3 | **🗺️ Mapa** | `b-azul` | Vista principal del mapa estándar de México y del mundo |
 | 4 | **🚪 Salir** | `b-rojo` | **Siempre el último.** Vuelve al portal (`href="../"`) |
 
 - No se agregan botones entre estos cuatro ni se cambia su orden. Los extras (ℹ️ Info, ajustes…) van en ☰ Pausa o dentro de Modo libre.
 - Si el juego aún no tiene niveles, «Niveles» y «Mapa» se muestran igual y al tocar un nivel inexistente se avisa que todavía no están creados.
-- El ☰ no se ve en este menú; en Modo libre, Niveles y Mapa dice «Menú principal» y vuelve aquí.
+- El ☰ Pausa no se ve en este menú; en Niveles, Mapa y dentro de una partida sí, y abre el menú de pausa, cuyo «Salir» vuelve aquí.
+- **👤 Iniciar sesión**: botón alargado azul (`b3d txt b-azul`) **siempre en la esquina superior derecha** del menú principal, con las funciones de `compartido/jugador.js` (`alCambiarSesion`, `entrar`, `salir`) cargado con `import()` dinámico y `try/catch`, para que el menú funcione sin internet. Sin sesión dice «👤 Iniciar sesión»; con sesión muestra el nombre y permite cerrarla. Si el juego tiene sonido u otros chips arriba a la derecha, van a su izquierda: el de sesión es siempre el último de la fila.
+- **Modo libre desplegable**: es un botón igual a los demás del menú. Al tocarlo se abre debajo, empujando hacia abajo a Niveles, Mapa y Salir, la lista de las 5 dificultades como botones `b3d txt` más chicos, y al elegir una empieza la partida. No es otra pantalla.
 - Juegos sin niveles (sección 4B): solo «♾️ Modo libre» y «🚪 Salir».
 - Los juegos ya hechos (Estacionamiento, Supermercado, Batalla naval…) se pasan a este menú cuando se vuelvan a tocar.
 
@@ -126,3 +129,17 @@ En los juegos por niveles (sección 4A), la dificultad de los niveles **sube poc
 - **Qué significa cada nivel de dificultad lo decide el juego** (tamaño del tablero, tiempo, enemigos, movimientos…) y lo explica en su README. Es independiente de las 5 dificultades del Modo libre (Muy fácil … Experto): aquí son 3 tipos de nivel dentro del mapa.
 - **No cambiar después de publicar:** si ya hay jugadores con progreso, cambiar los porcentajes o la semilla cambia la dificultad de niveles que ya jugaron.
 - Totales de referencia con 22 600 niveles: ≈ 37.5 % fáciles (8 475), 40 % normales (9 040) y ≈ 22.5 % difíciles (5 085).
+
+## 9. Al pedir «crear el menú principal» en un juego (revisión obligatoria)
+
+Cuando se pida crear el menú principal en un juego que no lo tiene o que está desactualizado, **no basta con poner los 4 botones**: se revisa y corrige todo lo siguiente, en este orden, contra `compartido/inmersivo.css` (si algo no coincide, manda el CSS):
+
+1. **Fondo de madera clara y oscura.** `<html class="inmersivo">` y `<body class="inmersivo">`; el script del `<head>` contra el parpadeo; `compartido/fondo-madera.js` al final del `<body>`; el botón **🌙 / ☀️** abajo a la izquierda que alterna entre madera clara y oscura; los `<canvas>` transparentes (`clearRect`); ningún fondo propio en `html`/`body`.
+2. **Botón azul oscuro «🎮 Portal de Juegos»** (`b3d txt b-azuloscuro`, `href="../"`), arriba a la izquierda. Se eliminan las versiones viejas: «🎮 Juegos», flechas «←», botones de volver propios.
+3. **Botón verde claro «☰ Pausa»** (`b3d txt b-verde`, con el icono de las tres rayitas), justo debajo del anterior y del mismo ancho. El texto es siempre «Pausa» y abre `compartido/menu-pausa.js`. No se muestra en la pantalla del menú principal.
+4. **Zona de menú**: columna de botones grandes (`b3d txt grande`), de arriba hacia abajo y centrada, con los cuatro de la sección 7: **♾️ Modo libre · 🪜 Niveles · 🗺️ Mapa · 🚪 Salir**. Sin botones extra entre ellos.
+5. **Botón «👤 Iniciar sesión»** siempre en la **esquina superior derecha** (sección 7).
+6. **Modo libre con sus dificultades**: el botón despliega la lista de las 5 dificultades (Muy fácil, Fácil, Normal, Difícil, Experto), siempre disponibles (sección 7).
+7. **Lo demás de los estándares**: botón ⛶ de pantalla completa abajo a la derecha; ningún control del juego dentro de las zonas reservadas de las esquinas (medidas en `inmersivo.css`); y la pausa conectada con `crearMenuPausa`.
+
+Al migrar un juego que ya tenía menú propio, **se conserva su lógica y su progreso** (claves de `localStorage`, `conectar()`, puntos pendientes): solo cambia la pantalla de inicio. Al terminar, se anota en el README del juego qué estaba desactualizado y qué se cambió, y se sube `VERSION` en `sw.js`.
