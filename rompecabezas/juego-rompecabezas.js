@@ -4,6 +4,7 @@
 // mediante un Apps Script (la API key NUNCA va aquí).
 
 import { URL_SUBIDA_IMAGENES } from "../compartido/configs.js";
+import { crearMenuPausa } from "../compartido/menu-pausa.js";   // menú de pausa estándar (☰)
 import { encolarPuntos } from "../compartido/cola-puntos.js"; // no usa Firebase: anota puntos aunque no haya internet o sesión
 
 // ---------- AJUSTES ----------
@@ -140,7 +141,6 @@ function texturas() {
   }
   const st = document.documentElement.style;
   st.setProperty("--jean", "url(" + jean.toDataURL() + ")");
-  st.setProperty("--lino", "url(" + lino.toDataURL() + ")");
 }
 
 // ---------- PANTALLAS ----------
@@ -148,6 +148,10 @@ const PANTALLAS = ["menu", "cat", "cfg", "juego"];
 function pantalla(nombre) {
   for (const p of PANTALLAS) $(p).hidden = p !== nombre;
   document.body.classList.toggle("en-juego", nombre === "juego");
+  const bm = $("btn-menu");                          // ☰: oculto en el menú principal; «Menú principal» en categoría/ajustes; «Pausa» en la partida
+  bm.hidden = nombre === "menu";
+  $("btn-menu-txt").textContent = nombre === "juego" ? "Pausa" : "Menú principal";
+  bm.title = nombre === "juego" ? "Pausa" : "Menú principal";
   if (nombre !== "juego") { $(nombre).scrollTop = 0; ocultarFlota(); }
 }
 
@@ -576,18 +580,19 @@ function zonasLibres() {
     : [{ x0: vx0 + m, x1: vx1 - m, y0: vy0 + m, y1: Math.max(vy0 + m, -m) },
        { x0: vx0 + m, x1: vx1 - m, y0: Math.min(vy1 - m, BH + m), y1: vy1 - m }];
   for (const a of z) { a.x1 = Math.max(a.x0, a.x1); a.y1 = Math.max(a.y0, a.y1); a.w = Math.max(1, (a.x1 - a.x0) * (a.y1 - a.y0)); }
-  return { z, vx1, vy0, m };
+  return { z, vx0, vx1, vy0, m };
 }
 
-function puntoLibre(zl) {                         // punto al azar en alguna zona (más probable en la más grande); esquiva el botón de pausa
+function puntoLibre(zl) {                         // punto al azar en alguna zona (más probable en la más grande); esquiva los botones de las esquinas de arriba
   const R = BOTON_PX / cam.s;
+  const RX = 130 / cam.s, RY = 104 / cam.s;       // zona reservada de 🎮 Juegos + ☰ (arriba a la izquierda)
   let x = 0, y = 0;
   for (let i = 0; i < 8; i++) {
     const tot = zl.z[0].w + zl.z[1].w;
     const a = Math.random() * tot < zl.z[0].w ? zl.z[0] : zl.z[1];
     x = a.x0 + Math.random() * (a.x1 - a.x0);
     y = a.y0 + Math.random() * (a.y1 - a.y0);
-    if (!(x > zl.vx1 - R && y < zl.vy0 + R)) break;
+    if (!(x > zl.vx1 - R && y < zl.vy0 + R) && !(x < zl.vx0 + RX && y < zl.vy0 + RY)) break;
   }
   return { x, y };
 }
@@ -648,7 +653,7 @@ function jugar(guardada) {   // guardada: partida a restaurar (si no, se reparte
   if (!fuente) return;
   pantalla("juego");
   tamano();
-  $("pausaMenu").hidden = true; $("finMenu").hidden = true;
+  $("finMenu").hidden = true;
   if (cols * rows > 300) {
     aviso("Preparando piezas…", true);
     setTimeout(() => { iniciar(guardada); if ($("msg").textContent === "Preparando piezas…") $("msg").hidden = true; }, 40);
@@ -666,39 +671,39 @@ function iniciarReloj() {
   if (!t0 && !terminado && !pausado) t0 = Date.now();
 }
 
-function pausar() {
-  if (terminado || !piezas.length) return;
-  pausado = true;
-  if (t0) { acum += (Date.now() - t0) / 1000; t0 = 0; }
-  $("pausaInfo").textContent = colocadas + " / " + piezas.length + " piezas · " + fmt(tiempoActual());
-  $("pGuia").textContent = guia ? "Ocultar imagen guía" : "Ver imagen guía";
-  $("pausaMenu").hidden = false;
-}
 function continuar() {
   pausado = false;
-  $("pausaMenu").hidden = true;
   if (iniciado && !terminado) t0 = Date.now();
 }
-$("pausa").addEventListener("click", pausar);
-$("pContinuar").addEventListener("click", continuar);
-$("pGuardar").addEventListener("click", () => guardarPartida());
+
+// ☰ Pausa = compartido/menu-pausa.js (Continuar / opciones del juego / Salir)
+const menuPausa = crearMenuPausa({
+  titulo: "Pausa",
+  puedeAbrir: () => !$("juego").hidden && !terminado && piezas.length > 0 && $("finMenu").hidden && $("loginMenu").hidden && $("confirmar").hidden,
+  alAbrir: () => { pausado = true; if (t0) { acum += (Date.now() - t0) / 1000; t0 = 0; } },
+  alContinuar: continuar,
+  extras: () => [
+    { icono: "⏱️", texto: colocadas + " / " + piezas.length + " piezas · " + fmt(tiempoActual()), clase: "b-gris", deshabilitado: true, alElegir: () => {} },
+    { icono: "🖼️", texto: guia ? "Ocultar imagen guía" : "Ver imagen guía", clase: "b-azul", alElegir: () => { guia = !guia; if (arr) arr.fl = null; pedir(); continuar(); } },
+    { icono: "💾", texto: "Guardar partida", clase: "b-oro", alElegir: () => { continuar(); guardarPartida(); } },
+    { icono: "🔀", texto: "Mezclar de nuevo", clase: "b-morado", alElegir: async () => {
+        if (colocadas > 0 && !(await preguntar("Se mezclarán de nuevo las piezas. ¿Continuar?"))) return continuar();
+        jugar();
+      } },
+    { icono: "🧩", texto: "Cambiar piezas", clase: "b-gris", alElegir: async () => {
+        if (colocadas > 0 && !(await preguntar("Se perderá el avance. ¿Continuar?"))) return continuar();
+        abrirAjustes(volverA);
+      } },
+  ],
+  ayudaSalir: () => (colocadas > 0 ? "Se perderá el avance de este rompecabezas" : ""),
+  alSalir: async () => {
+    if (colocadas > 0 && !(await preguntar("Se perderá el avance. ¿Salir?", "Salir"))) return continuar();
+    pantalla("menu");
+  },
+});
+// ☰ fuera de la partida = «Menú principal»; dentro = Pausa
+$("btn-menu").addEventListener("click", () => { if ($("juego").hidden) pantalla("menu"); else menuPausa.abrir(); });
 $("guardarPartida").addEventListener("click", () => guardarPartida());
-$("pGuia").addEventListener("click", () => { guia = !guia; if (arr) arr.fl = null; pedir(); continuar(); });
-$("pMezclar").addEventListener("click", async () => {
-  if (colocadas > 0 && !(await preguntar("Se mezclarán de nuevo las piezas. ¿Continuar?"))) return;
-  $("pausaMenu").hidden = true;
-  jugar();
-});
-$("pPiezas").addEventListener("click", async () => {
-  if (colocadas > 0 && !(await preguntar("Se perderá el avance. ¿Continuar?"))) return;
-  $("pausaMenu").hidden = true;
-  abrirAjustes(volverA);
-});
-$("pSalir").addEventListener("click", async () => {
-  if (colocadas > 0 && !(await preguntar("Se perderá el avance. ¿Salir?", "Salir"))) return;
-  $("pausaMenu").hidden = true;
-  pantalla("menu");
-});
 $("fOtra").addEventListener("click", () => { $("finMenu").hidden = true; jugar(); });
 $("fPiezas").addEventListener("click", () => { $("finMenu").hidden = true; abrirAjustes(volverA); });
 $("fSalir").addEventListener("click", () => { $("finMenu").hidden = true; pantalla("menu"); });
@@ -948,11 +953,7 @@ for (const ev of ["gesturestart", "gesturechange", "gestureend"]) {
 
 addEventListener("keydown", (e) => {
   if ($("juego").hidden) return;
-  if (e.key === "Escape") {
-    if (!$("loginMenu").hidden) cerrarLogin();
-    else if (pausado) continuar();
-    else pausar();
-  }
+  if (e.key === "Escape" && !$("loginMenu").hidden) cerrarLogin();   // la pausa con Esc la maneja compartido/menu-pausa.js
 });
 
 // ---------- IMAGEN: LOCAL Y NUBE ----------

@@ -5,13 +5,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>Rompecabezas</title>
-  <meta name="theme-color" content="#101114" />
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
   <link rel="stylesheet" href="../compartido/estilos.css" />
   <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
     /* --u = 1% del ancho de pantalla, con tope para que en la compu se vea como en el celular */
     :root { --u: min(1vw, 5.4px); }
-    html.inmersivo { --fondo-juego: #1c1d21; }
     [hidden] { display: none !important; }
     html, body { margin: 0; min-height: 100%; }
     body {
@@ -24,9 +24,11 @@
     /* Cada pantalla es una capa a pantalla completa con scroll PROPIO (la página no se desplaza) */
     .pantalla {
       position: fixed; inset: 0; z-index: 2; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
-      background: #1c1d21 var(--jean, none);
-      padding: calc(env(safe-area-inset-top, 0px) + var(--u) * 4 + 46px) max(0px, calc(50vw - var(--u) * 50)) calc(env(safe-area-inset-bottom, 0px) + var(--u) * 10);
+      color: var(--txt-fondo); text-shadow: var(--sombra-txt);
+      padding: calc(env(safe-area-inset-top, 0px) + 58px) max(0px, calc(50vw - var(--u) * 50)) calc(env(safe-area-inset-bottom, 0px) + var(--u) * 10);
     }
+    /* En categoría y ajustes también está el botón ☰ «Menú principal» debajo de 🎮 Juegos: el contenido empieza más abajo */
+    #cat, #cfg { padding-top: calc(env(safe-area-inset-top, 0px) + 104px); }
     .cab {
       position: relative; display: flex; align-items: center; justify-content: center;
       min-height: calc(var(--u) * 14); margin: calc(var(--u) * -2) calc(var(--u) * 4) calc(var(--u) * 7);
@@ -34,7 +36,7 @@
     .carta:focus-visible { outline: 3px solid #ffc400; outline-offset: 3px; }
     .b-negro { --c1: #8a8f9c; --c2: #3c404a; --c3: #15171a; }
 
-    .logo { margin: 0; padding: 0 calc(var(--u) * 2); font-size: calc(var(--u) * 9.2); white-space: nowrap; font-style: italic; font-weight: 900; letter-spacing: -.02em; color: #ffc400; text-shadow: 0 calc(var(--u) * .5) 0 #b57f00, 0 calc(var(--u) * 1) calc(var(--u) * 1.4) rgba(0, 0, 0, .4); }
+    .logo { margin: 0; padding: 0 calc(var(--u) * 2); font-size: calc(var(--u) * 9.2); white-space: nowrap; font-style: italic; font-weight: 900; letter-spacing: -.02em; color: #ffc400; text-shadow: 0 calc(var(--u) * .5) 0 #7a5200, 0 calc(var(--u) * 1) calc(var(--u) * 1.4) rgba(0, 0, 0, .4); }
     .tit { margin: 0; padding: 0 calc(var(--u) * 2); text-align: center; font-size: calc(var(--u) * 7.4); font-weight: 700; line-height: 1.1; }
 
     /* Cuadrículas */
@@ -45,10 +47,10 @@
     .pila i:nth-child(1) { width: 90%; } .pila i:nth-child(2) { width: 96%; }
     .marco { display: block; aspect-ratio: 1; overflow: hidden; background: #1e2025; border: calc(var(--u) * .3) solid #cfd6de; border-radius: calc(var(--u) * .5); }
     .marco canvas, .marco img { display: block; width: 100%; height: 100%; object-fit: cover; }
-    .nom { display: block; min-height: calc(var(--u) * 10); margin-top: calc(var(--u) * 1.6); font: 400 calc(var(--u) * 4.2)/1.25 system-ui, Roboto, sans-serif; text-transform: uppercase; letter-spacing: .02em; color: #eaf0f6; }
+    .nom { display: block; min-height: calc(var(--u) * 10); margin-top: calc(var(--u) * 1.6); font: 400 calc(var(--u) * 4.2)/1.25 system-ui, Roboto, sans-serif; text-transform: uppercase; letter-spacing: .02em; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
     .galeria { padding: 0 calc(var(--u) * 2.7); column-gap: calc(var(--u) * 3.8); row-gap: calc(var(--u) * 9); }
     .galeria .marco { border-width: calc(var(--u) * .25); border-color: #c4ccd5; }
-    .vacio { grid-column: 1 / -1; padding: calc(var(--u) * 6); text-align: center; font-size: calc(var(--u) * 4.2); color: #c9ccd3; }
+    .vacio { grid-column: 1 / -1; padding: calc(var(--u) * 6); text-align: center; font-size: calc(var(--u) * 4.2); color: var(--txt-fondo-suave); }
 
     /* Ajustes */
     #prevCaja { display: grid; place-items: center; margin: 0 calc(var(--u) * 5); }
@@ -74,9 +76,12 @@
     .extras .b3d { --t: 40px; font-size: 14px; }
 
     /* Juego */
-    #juego { position: fixed; inset: 0; background: #cbb68e var(--lino, none); }
+    #juego { position: fixed; inset: 0; } /* sin fondo propio: se ve la madera clara u oscura */
     #lienzo { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
         .marco { position: relative; }
+    /* Botones de arriba a la derecha: tamaño estándar (40 px) aunque otra regla los agrande */
+    .hud-der .b3d { --t: 40px; width: 40px; height: 40px; font-size: 20px; margin: 0 0 5px; }
+    @media (max-height: 420px) { .hud-der .b3d { --t: 36px; width: 36px; height: 36px; font-size: 18px; } }
     .borrar { position: absolute; top: calc(var(--u) * 1); right: calc(var(--u) * 1); display: grid; place-items: center; width: calc(var(--u) * 8); height: calc(var(--u) * 8); border-radius: 50%; background: rgba(0, 0, 0, .6); color: #fff; font-size: calc(var(--u) * 4); line-height: 1; }
 
     /* Menús encima del juego */
@@ -94,10 +99,15 @@
 </head>
 <body class="inmersivo" data-pantalla-auto>
 
+  <!-- Navegación estándar: 🎮 Juegos (portal) y ☰ (Menú principal / Pausa). El ☰ se oculta en el menú principal del juego -->
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Menú principal" hidden><span class="b-ico">☰</span> <span id="btn-menu-txt">Menú principal</span></button>
+  </nav>
+
   <!-- 1. MENÚ: categorías -->
   <section id="menu" class="pantalla">
     <div class="cab">
-      <div class="hud hud-izq"><a class="b3d chico b-gris" href="../" aria-label="Volver al portal de juegos" title="Volver al portal"><span class="b-ico">🏠</span></a></div>
       <h1 class="logo">Rompecabezas</h1>
     </div>
     <div id="cats" class="cuadricula"></div>
@@ -136,22 +146,8 @@
     <canvas id="lienzo"></canvas>
     <div class="hud hud-der">
       <button class="b3d chico b-oro" id="guardarPartida" type="button" aria-label="Guardar partida" title="Guardar partida"><span class="b-ico">💾</span></button>
-      <button class="b3d chico b-gris" id="pausa" type="button" aria-label="Pausa" title="Pausa"><span class="b-ico">⏸️</span></button>
     </div>
   </section>
-
-  <div class="velo" id="pausaMenu" hidden>
-    <div class="panel" role="dialog" aria-label="Pausa">
-      <h2>Pausa</h2>
-      <p id="pausaInfo"></p>
-      <button class="b3d txt b-verde principal" id="pContinuar" type="button">▶️ Continuar</button>
-      <button class="b3d txt b-azul" id="pGuia" type="button">🖼️ Ver imagen guía</button>
-      <button class="b3d txt b-oro" id="pGuardar" type="button">💾 Guardar partida</button>
-      <button class="b3d txt b-morado" id="pMezclar" type="button">🔀 Mezclar de nuevo</button>
-      <button class="b3d txt b-gris" id="pPiezas" type="button">🧩 Cambiar piezas</button>
-      <button class="b3d txt b-rojo" id="pSalir" type="button">🚪 Salir</button>
-    </div>
-  </div>
 
   <div class="velo" id="finMenu" hidden>
     <div class="panel" role="dialog" aria-label="Rompecabezas completo">
@@ -184,6 +180,7 @@
   <div id="msg" hidden></div>
 
   <script type="module" src="juego-rompecabezas.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
 </body>
 </html>
