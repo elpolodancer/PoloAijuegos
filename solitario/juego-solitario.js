@@ -1,6 +1,9 @@
 // Ruta: solitario/juego-solitario.js (lógica del juego «solitario»: Klondike clásico)
 import { encolarPuntos } from "../compartido/cola-puntos.js"; // no usa Firebase: anota puntos aunque no haya internet o sesión
-import { DIFICULTADES, TOTAL_NIVELES, PLAN, SEMILLAS, nivel } from "./niveles-solitario.js";
+import { DIFICULTADES, PLAN, nivel } from "./niveles-solitario.js";
+import { crearEtapas } from "../compartido/etapas-mapa.js";   // 32 estados + 194 países, 100 niveles cada uno = 22 600
+import { montarMapa } from "../compartido/mapa-niveles.js";     // mapa de niveles estándar (sin Firebase ni red)
+import { crearMenuPausa } from "../compartido/menu-pausa.js";   // menú de pausa estándar
 import { animarVictoria } from "./victoria-solitario.js";
 
 const ID = "solitario"; // el mismo id de juegos.js (colección de puntos en Firestore)
@@ -8,11 +11,11 @@ const ID = "solitario"; // el mismo id de juegos.js (colección de puntos en Fir
 // ---- Ajustes ----
 const PTS = { descarteATablero: 5, aBase: 10, voltear: 5, baseATablero: -15, reciclar: -100 };
 const bonoVictoria = (seg) => 100 + Math.max(0, Math.round((600 - seg) / 6)); // más rápido = más bono
-const POR_PAGINA = 50; // niveles que se ven por página en la lista
+const ETAPAS = crearEtapas({ porEtapa: 100 }); // ETAPAS.total = 22 600 niveles (los creados salen de niveles-solitario.js; el resto muestra «🚧 todavía no creado»)
 const CLAVE_PROGRESO = "solitario-niveles"; // localStorage: { [nivel]: mejor puntaje }
 const CLAVE_MONEDAS = "solitario-monedas";  // localStorage: número de monedas
+const CLAVE_LIBRE = "solitario_libre_v1";    // localStorage: { sel: dificultad elegida, rec: { [dificultad]: { t: mejor tiempo, g: ganadas } } } (el «_v1» la incluye en la copia de seguridad de almacen.js)
 const CLAVE_TIEMPOS = "solitario-tiempos";  // localStorage: { [nivel]: mejor tiempo en segundos }
-const PREMIO_RAPIDA = 25; // monedas por ganar una partida rápida
 const PREMIO_NIVEL = 50;  // monedas por ganar un nivel
 const COSTO_BOOST = 10;   // precio del boost «deshacer»
 const AYUDA = "Arrastra una carta, o tócala y luego toca el lugar donde quieres ponerla. Toca una carta seleccionada otra vez para subirla a la base.";
@@ -31,7 +34,9 @@ const rojo = (c) => c.s === 1 || c.s === 2;
 function rotular(id, texto) { const b = $(id); b.title = texto; b.setAttribute("aria-label", texto); }
 
 let mazo, descarte, base, tab, puntos, movs, sel, historial, inicioT, reloj, terminado, guardado, usuario = null;
-let cfg = { robar: 1, reciclajes: Infinity }, reciclados = 0, actual = null, pagina = 0;
+let cfg = { robar: 1, reciclajes: Infinity }, reciclados = 0, actual = null;
+let pausadoDesde = 0;       // instante en que se abrió la pausa (0 = no hay pausa); el reloj no cuenta ese tiempo
+const enLibre = () => !!actual && !actual.nivel; // Modo libre: sin monedas ni puntos
 let boost = false;          // boost «deshacer» activo en el nivel actual
 let deshechoSeguido = false; // true si ya se deshizo y aún no hay un movimiento nuevo
 let llenando = false, llenadoId = 0; // «Rellenar todo» en marcha / número de la tanda (si cambia, la tanda se cancela)
@@ -40,7 +45,7 @@ let bloqueaClicHasta = 0;            // tras un arrastre se ignora el «click» 
 // La sesión y la nube se cargan aparte: si Firebase no está disponible (sin conexión la primera vez), el juego funciona igual
 let entrarFn = null, nube = null;
 import("../compartido/jugador.js").then((m) => { entrarFn = m.entrar; m.alCambiarSesion((u) => { usuario = u; btnEntrar.hidden = !!u; }); }).catch(() => {});
-btnEntrar.addEventListener("click", () => { if (entrarFn) entrarFn().catch((e) => { estado.textContent = e.message; }); });
+btnEntrar.addEventListener("click", () => { if (entrarFn) entrarFn().catch((e) => avisar(e.message)); });
 
 // ---- Progreso de niveles (en este dispositivo) ----
 function leerProgreso() {
@@ -69,8 +74,10 @@ function guardarTiempo(n, seg) {
 }
 function pintarRecord() {
   const n = actual && actual.nivel;
-  $("record-wrap").hidden = !n;
-  if (n) { const t = leerTiempos()[n]; $("record").textContent = t === undefined ? "–" : fmt(t); }
+  if (n) { $("record-wrap").hidden = false; const t = leerTiempos()[n]; $("record").textContent = t === undefined ? "–" : fmt(t); return; }
+  const r = enLibre() ? leerLibre().rec[actual.dificultad] : null; // Modo libre: mejor tiempo de esa dificultad
+  $("record-wrap").hidden = !enLibre();
+  if (enLibre()) $("record").textContent = r ? fmt(r.t) : "–";
 }
 
 // ---- Monedas (en este dispositivo) ----
@@ -82,7 +89,7 @@ function ponerMonedas(n) {
   guardarCopia(true);
   pintarMonedas();
 }
-function pintarMonedas() { $("monedas-barra").textContent = "🪙 " + leerMonedas(); }
+function pintarMonedas() { $("monedas-n").textContent = String(leerMonedas()); }
 
 // ---- Copia para la nube ----
 // { n: mejor puntaje por nivel, t: mejor tiempo por nivel, g / s: monedas ganadas y gastadas EN TOTAL (monedas = g − s) }.
@@ -116,65 +123,163 @@ function aplicarNube(v) { // la nube trajo algo nuevo: se copia a las claves de 
     if ("g" in v) localStorage.setItem(CLAVE_MONEDAS, String(Math.max(0, (Number(v.g) || 0) - (Number(v.s) || 0))));
   } catch (e) {}
   pintarMonedas(); pintarRecord();
-  if (!$("vista-niveles").hidden) pintarNiveles();
+  mapa.refrescar(); pintarContinuar();
+}
+
+// ---- Aviso corto ----
+let avisoT = 0;
+function avisar(texto) {
+  const a = $("aviso");
+  a.textContent = texto; a.hidden = false;
+  clearTimeout(avisoT);
+  avisoT = setTimeout(() => { a.hidden = true; }, 3000);
 }
 
 // ---- Vistas ----
-const VISTAS = ["menu", "dificultad", "niveles", "juego"];
-function mostrar(v) {
+// «menu» = menú principal, «libre» = Modo libre, «juego» = partida. El mapa de niveles lo dibuja compartido/mapa-niveles.js encima de todo.
+const VISTAS = ["menu", "libre", "juego"];
+const btnMenu = $("btn-menu");
+function mostrar(v) { // v = «menu» | «libre» | «juego» | «mapa» (con «mapa» las tres quedan ocultas)
   VISTAS.forEach((n) => { $("vista-" + n).hidden = n !== v; });
   document.body.classList.toggle("jugando", v === "juego"); // los marcadores y botones de la partida solo se ven jugando
-  if (v === "niveles") pintarNiveles();
+  if (v === "menu") pintarContinuar();
+  if (v === "libre") pintarLibre();
+  menuBoton();
 }
-document.querySelectorAll("[data-volver]").forEach((b) => b.addEventListener("click", () => mostrar(b.dataset.volver)));
-$("ir-rapida").addEventListener("click", () => mostrar("dificultad"));
-$("ir-niveles").addEventListener("click", () => mostrar("niveles"));
-document.querySelectorAll("[data-dif]").forEach((b) =>
-  b.addEventListener("click", () => nueva({ dificultad: b.dataset.dif })));
-$("menu").addEventListener("click", async () => {
-  llenadoId++; llenando = false;
+const enPartida = () => !$("vista-juego").hidden && !mapa.abierto() && !terminado;
+// ☰: «Pausa» dentro de una partida, «Atrás» en el resto de pantallas y oculto en el menú principal (ESTANDARES-juegos.md, 7.4)
+function menuBoton() {
+  const enMenu = !$("vista-menu").hidden;
+  const jugando = enPartida();
+  btnMenu.hidden = enMenu;
+  $("txt-menu").textContent = jugando ? "Pausa" : "Atrás";
+  btnMenu.title = jugando ? "Pausa" : "Volver al menú principal";
+}
+async function mostrarMenu() {
+  llenadoId++; llenando = false; pausadoDesde = 0;
   await abandonar();
   clearInterval(reloj);
+  mapa.cerrar();
   mostrar("menu");
-});
-
-// ---- Lista de niveles ----
-function pintarNiveles() {
-  const prog = leerProgreso();
-  const tiempos = leerTiempos();
-  const rejilla = $("rejilla-niveles");
-  rejilla.innerHTML = "";
-  const desde = pagina * POR_PAGINA + 1, hasta = Math.min(desde + POR_PAGINA - 1, TOTAL_NIVELES);
-  for (let n = desde; n <= hasta; n++) {
-    const dif = PLAN[n - 1];
-    const creado = !!nivel(n);
-    const hecho = prog[n] !== undefined;
-    const abierto = creado && (n === 1 || prog[n - 1] !== undefined);
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "nivel " + dif + (hecho ? " hecho" : "") + (creado ? (abierto ? "" : " cerrado") : " pronto");
-    b.textContent = hecho ? n + " ✓" : abierto ? String(n) : creado ? n + " 🔒" : String(n);
-    b.title = "Nivel " + n + " · " + DIFICULTADES[dif].nombre + (creado ? "" : " (próximamente)") +
-      (hecho && tiempos[n] !== undefined ? " · Récord " + fmt(tiempos[n]) : "");
-    if (hecho && tiempos[n] !== undefined) {
-      const s = document.createElement("small");
-      s.textContent = "⏱ " + fmt(tiempos[n]);
-      b.appendChild(s);
-    }
-    b.disabled = !abierto;
-    if (abierto) b.addEventListener("click", () => nueva({ nivel: n }));
-    rejilla.appendChild(b);
-  }
-  $("pag-texto").textContent = "Niveles " + desde + "–" + hasta;
-  $("pag-ant").disabled = pagina === 0;
-  $("pag-sig").disabled = hasta >= TOTAL_NIVELES;
-  const cuenta = (d) => PLAN.filter((x) => x === d).length;
-  $("resumen-niveles").textContent =
-    "Creados: " + Object.keys(SEMILLAS).length + " de " + TOTAL_NIVELES +
-    " · Plan: " + cuenta("facil") + " fáciles, " + cuenta("media") + " normales, " + cuenta("dificil") + " difíciles.";
 }
-$("pag-ant").addEventListener("click", () => { pagina = Math.max(0, pagina - 1); pintarNiveles(); });
-$("pag-sig").addEventListener("click", () => { pagina = Math.min(Math.ceil(TOTAL_NIVELES / POR_PAGINA) - 1, pagina + 1); pintarNiveles(); });
+btnMenu.addEventListener("click", () => { if (!enPartida()) mostrarMenu(); }); // en partida lo atiende el menú de pausa
+
+// ---- Menú principal ----
+const hechoMax = () => { let m = 0; for (const k in leerProgreso()) { const n = Number(k); if (n > m && n <= ETAPAS.total) m = n; } return m; };
+const proximoNivel = () => Math.min(hechoMax() + 1, ETAPAS.total);
+function pintarContinuar() { $("txt-continuar").textContent = "Continuar · nivel " + proximoNivel(); }
+$("ir-libre").addEventListener("click", () => mostrar("libre"));
+$("ir-continuar").addEventListener("click", () => jugarNivel(proximoNivel()));
+$("ir-niveles").addEventListener("click", () => abrirMapa(proximoNivel()));
+
+// ---- Info: «Cómo se juega» ----
+const infoFondo = $("info-fondo");
+function abrirInfo() { infoFondo.hidden = false; try { $("info-ok").focus({ preventScroll: true }); } catch (e) {} }
+function cerrarInfo() { infoFondo.hidden = true; }
+$("ir-info").addEventListener("click", abrirInfo);
+$("info-ok").addEventListener("click", cerrarInfo);
+infoFondo.addEventListener("click", (e) => { if (e.target === infoFondo) cerrarInfo(); });
+addEventListener("keydown", (e) => { if (e.key === "Escape" && !infoFondo.hidden) { e.preventDefault(); e.stopPropagation(); cerrarInfo(); } }, true);
+
+// ---- Modo libre (pantalla propia: dificultad, nota, récord y «Jugar») ----
+function leerLibre() {
+  let o = null;
+  try { o = JSON.parse(localStorage.getItem(CLAVE_LIBRE)); } catch (e) {}
+  o = o && typeof o === "object" ? o : {};
+  return { sel: o.sel in DIFICULTADES ? o.sel : "facil", rec: o.rec && typeof o.rec === "object" ? o.rec : {} };
+}
+function guardarLibre(o) {
+  try { localStorage.setItem(CLAVE_LIBRE, JSON.stringify(o)); } catch (e) {}
+}
+// Anota una victoria del Modo libre; devuelve el récord de antes (undefined si era la primera)
+function registrarLibre(dif, seg) {
+  const L = leerLibre(), r = L.rec[dif];
+  const previo = r && Number.isFinite(r.t) ? r.t : undefined;
+  L.rec[dif] = { t: previo === undefined ? seg : Math.min(previo, seg), g: (r && Number(r.g) || 0) + 1 };
+  guardarLibre(L);
+  return previo;
+}
+function notaDif(d) {
+  const robar = d.robar === 1 ? "Robas 1 carta" : "Robas " + d.robar + " cartas";
+  const rec = d.reciclajes === Infinity ? "reciclas el mazo sin límite" : d.reciclajes === 1 ? "solo 1 reciclaje del mazo" : d.reciclajes + " reciclajes del mazo";
+  return robar + " · " + rec + ".";
+}
+function pintarLibre() {
+  const L = leerLibre(), fila = $("fila-dif");
+  fila.replaceChildren();
+  for (const k of Object.keys(DIFICULTADES)) {
+    const d = DIFICULTADES[k], b = document.createElement("button");
+    b.type = "button";
+    b.className = "b3d txt " + (k === L.sel ? "b-oro on" : "b-cielo");
+    b.setAttribute("aria-pressed", String(k === L.sel));
+    b.textContent = d.emoji + " " + d.nombre;
+    b.addEventListener("click", () => { L.sel = k; guardarLibre(L); pintarLibre(); });
+    fila.appendChild(b);
+  }
+  $("nota-dif").textContent = notaDif(DIFICULTADES[L.sel]);
+  const r = L.rec[L.sel];
+  $("libre-record").textContent = r && Number.isFinite(r.t) ? fmt(r.t) + " · " + (r.g || 0) + ((r.g || 0) === 1 ? " ganada" : " ganadas") : "–";
+}
+$("libre-jugar").addEventListener("click", () => nueva({ dificultad: leerLibre().sel }));
+
+// ---- Niveles: mapa estándar (México y mundo armados; el mundo sale al terminar los 32 estados) ----
+const INFO_DIF = {
+  facil:      { sub: "🟢", clase: "b-verde" },
+  media:      { sub: "🟡", clase: "b-oro" },
+  dificil:    { sub: "🔴", clase: "b-rojo" },
+  muydificil: { sub: "🟣", clase: "b-morado" },
+  experto:    { sub: "⚫", clase: "b-azuloscuro" },
+};
+const mapa = montarMapa({
+  prefijo: "solitario",
+  etapas: ETAPAS,
+  progreso: () => { const h = hechoMax(); return { max: Math.min(h + 1, ETAPAS.total), hecho: h }; },
+  jugarNivel: (n) => jugarNivel(n),
+  infoNivel: (n) => {
+    const d = nivel(n);
+    if (!d) return { sub: "🚧", clase: "b-cielo", aria: "todavía no está creado" };
+    return { ...INFO_DIF[d.dificultad], aria: DIFICULTADES[d.dificultad].nombre };
+  },
+  leyenda: "🟢 Fácil · 🟡 Medio · 🔴 Difícil · 🟣 Muy difícil · ⚫ Experto · 🚧 todavía no creado",
+  alInfo: abrirInfo,
+  alCambiarVista: () => menuBoton(),
+});
+function abrirMapa(n, alcanzado) {
+  mostrar("mapa");
+  mapa.abrir(n, alcanzado);
+  menuBoton();
+}
+function jugarNivel(n) {
+  if (!nivel(n)) { avisar("🚧 Los niveles todavía no están creados"); return; }
+  mapa.cerrar();
+  nueva({ nivel: n });
+}
+
+// ---- Menú de pausa estándar (solo en partida): Continuar · Reiniciar nivel · Niveles · Menú principal ----
+// En Modo libre solo «Continuar» y «Salir a elegir tablero»
+function detenerRelleno() { llenadoId++; llenando = false; }
+async function irANiveles() {
+  detenerRelleno(); pausadoDesde = 0;
+  await abandonar();
+  clearInterval(reloj);
+  abrirMapa(actual && actual.nivel ? actual.nivel : proximoNivel());
+}
+const pausa = crearMenuPausa({
+  boton: btnMenu,
+  puedeAbrir: () => enPartida(),
+  alAbrir: () => { detenerRelleno(); pausadoDesde = Date.now(); dibujar(); }, // congela el reloj (y para «Rellenar todo» si estaba en marcha)
+  alContinuar: () => { if (pausadoDesde) { inicioT += Date.now() - pausadoDesde; pausadoDesde = 0; } },
+  extras: () => enLibre() ? [] : [
+    { icono: "🔄", texto: "Reiniciar nivel", ayuda: "Vuelves a empezar este nivel. Los puntos que llevabas se guardan.", alElegir: () => { pausadoDesde = 0; nueva(actual); } },
+    { icono: "📋", texto: "Niveles", ayuda: "Vas a la zona de niveles. Se pierde lo avanzado en este nivel.", alElegir: irANiveles },
+  ],
+  get textoSalir() { return enLibre() ? "Salir a elegir tablero" : "Menú principal"; },
+  ayudaSalir: () => enLibre() ? "La partida termina; no se pierde ningún récord." : "Se pierde lo avanzado en este nivel.",
+  alSalir: () => {
+    if (enLibre()) { detenerRelleno(); pausadoDesde = 0; clearInterval(reloj); mostrar("libre"); }
+    else mostrarMenu();
+  },
+});
 
 // ---- Partida ----
 // Generador con semilla: la misma semilla reparte siempre las mismas cartas (para los niveles)
@@ -189,7 +294,7 @@ function mulberry32(a) {
 async function abandonar() {
   if (!terminado && !guardado && puntos > 0) await guardar(); // al abandonar, se guardan los puntos ganados
 }
-// opc: { dificultad } para partida rápida, o { nivel: n } para un nivel
+// opc: { dificultad } para el Modo libre, o { nivel: n } para un nivel
 async function nueva(opc) {
   llenadoId++; llenando = false;
   await abandonar();
@@ -203,7 +308,7 @@ async function nueva(opc) {
     rotular("nueva", "Reiniciar nivel");
   } else {
     dif = opc.dificultad;
-    $("titulo-partida").textContent = "Partida rápida · " + DIFICULTADES[dif].emoji + " " + DIFICULTADES[dif].nombre;
+    $("titulo-partida").textContent = "Modo libre · " + DIFICULTADES[dif].emoji + " " + DIFICULTADES[dif].nombre;
     rotular("nueva", "Nueva partida");
   }
   cfg = { robar: DIFICULTADES[dif].robar, reciclajes: DIFICULTADES[dif].reciclajes };
@@ -214,7 +319,7 @@ async function nueva(opc) {
   tab = [];
   for (let i = 0; i < 7; i++) { const p = b.splice(0, i + 1); p[i].up = true; tab.push(p); }
   mazo = b; descarte = []; base = [[], [], [], []];
-  puntos = 0; movs = 0; reciclados = 0; sel = null; historial = []; terminado = false; guardado = false;
+  puntos = 0; movs = 0; reciclados = 0; sel = null; historial = []; terminado = false; guardado = false; pausadoDesde = 0;
   $("siguiente").hidden = true;
   boost = false; deshechoSeguido = false;
   $("boost").hidden = !opc.nivel; // el boost solo existe en los niveles
@@ -228,14 +333,14 @@ async function nueva(opc) {
 }
 async function guardar() {
   guardado = true;
-  if (!(puntos > 0)) return;
+  if (enLibre() || !(puntos > 0)) return; // el Modo libre no da puntos
   encolarPuntos(ID, puntos); // se anota siempre; se envía al haber internet y sesión
   let pendientes = 1;
   try { pendientes = await (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
   estado.textContent += pendientes === 0 ? " Guardados ✓" : " Se enviarán a tu perfil cuando haya internet y sesión.";
 }
 function pintarTiempo() {
-  if (terminado) return;
+  if (terminado || pausadoDesde) return;
   const s = Math.floor((Date.now() - inicioT) / 1000);
   $("tiempo").textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 }
@@ -314,10 +419,11 @@ function ganar() {
   clearInterval(reloj);
   const seg = Math.floor((Date.now() - inicioT) / 1000);
   puntos += bonoVictoria(seg);
-  const premio = actual && actual.nivel ? PREMIO_NIVEL : PREMIO_RAPIDA;
-  ponerMonedas(leerMonedas() + premio);
+  const premio = actual && actual.nivel ? PREMIO_NIVEL : 0; // el Modo libre no da monedas
+  if (premio) ponerMonedas(leerMonedas() + premio);
   dibujar();
-  estado.textContent = "🎉 ¡Ganaste! Terminaste con " + puntos + " puntos en " + $("tiempo").textContent + ". +" + premio + " 🪙";
+  menuBoton(); // la partida terminó: el ☰ vuelve a decir «Atrás»
+  estado.textContent = "🎉 ¡Ganaste! Terminaste con " + puntos + " puntos en " + $("tiempo").textContent + (premio ? ". +" + premio + " 🪙" : ". (Modo libre: sin monedas ni puntos.)");
   if (actual && actual.nivel) {
     guardarProgreso(actual.nivel, puntos);
     const previo = leerTiempos()[actual.nivel];
@@ -327,7 +433,11 @@ function ganar() {
       estado.textContent += " Tu récord sigue en " + fmt(previo) + ".";
     }
     pintarRecord();
-    $("siguiente").hidden = !nivel(actual.nivel + 1);
+    $("siguiente").hidden = !(nivel(actual.nivel + 1) || actual.nivel % 100 === 0); // al cerrar una etapa de 100, el botón lleva al mapa
+  } else {
+    const dif = actual.dificultad, previo = registrarLibre(dif, seg);
+    estado.textContent += previo === undefined ? " ⏱ Primer tiempo guardado: " + fmt(seg) + "." : seg < previo ? " 🏆 ¡Nuevo récord! " + fmt(seg) + " (antes " + fmt(previo) + ")." : " Tu récord sigue en " + fmt(previo) + ".";
+    pintarRecord();
   }
   guardar();
   // Animación de victoria: las cartas salen de las bases, caen y rebotan (se salta tocando la pantalla)
@@ -340,7 +450,10 @@ function pintarBase(i, c) {
   el.innerHTML = "";
   if (c) el.appendChild(carta(c, 0, 0, 0, false));
 }
-$("siguiente").addEventListener("click", () => nueva({ nivel: actual.nivel + 1 }));
+$("siguiente").addEventListener("click", () => {
+  if (actual.nivel % 100 === 0) { abrirMapa(actual.nivel, true); return; } // terminó un estado/país: el mapa muestra subir el agua
+  nueva({ nivel: actual.nivel + 1 });
+});
 
 // ---- Toques ----
 tablero.addEventListener("click", (e) => {

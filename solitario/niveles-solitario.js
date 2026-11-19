@@ -1,13 +1,15 @@
 // Ruta: solitario/niveles-solitario.js
 // Dificultades, plan de los 500 niveles y niveles ya creados del «solitario».
 
-// ---- Qué cambia en cada dificultad (ajusta aquí si quieres más fácil o más difícil) ----
+// ---- Qué cambia en cada dificultad (5 niveles; ajusta aquí si quieres más fácil o más difícil) ----
 //   robar:      cartas que se roban del mazo cada vez (1 = fácil, 3 = clásico)
 //   reciclajes: cuántas veces se puede voltear el descarte para volver a usarlo (Infinity = sin límite)
 export const DIFICULTADES = {
-  facil:   { nombre: "Fácil",   emoji: "🟢", robar: 1, reciclajes: Infinity },
-  media:   { nombre: "Normal",  emoji: "🟡", robar: 1, reciclajes: 3 },
-  dificil: { nombre: "Difícil", emoji: "🔴", robar: 3, reciclajes: Infinity },
+  facil:      { nombre: "Fácil",       emoji: "🟢", robar: 1, reciclajes: Infinity },
+  media:      { nombre: "Medio",       emoji: "🟡", robar: 1, reciclajes: 3 },
+  dificil:    { nombre: "Difícil",     emoji: "🔴", robar: 3, reciclajes: Infinity },
+  muydificil: { nombre: "Muy difícil", emoji: "🟣", robar: 3, reciclajes: 3 },   // propuesta: por confirmar
+  experto:    { nombre: "Experto",     emoji: "⚫", robar: 3, reciclajes: 1 },   // propuesta: por confirmar
 };
 
 // ---- Plan de los 500 niveles: 50 % fácil (250), 40 % normal (200), 10 % difícil (50) ----

@@ -1,6 +1,6 @@
 // Ruta: spider/juego-spider.js
-// Solitario Spider: menú principal (♾️ Modo libre · 🎯 Niveles · 🗺️ Mapa), partida y mapa estándar de México/mundo.
-// Niveles: por ahora 5 (niveles-spider.js, dificultad Fácil); el mapa está montado con 10 por etapa y los que faltan salen bloqueados.
+// Solitario Spider: menú principal estándar (♾️ Modo libre · ▶ Continuar · 📋 Niveles · ℹ️ Info), Modo libre, partida y mapa estándar de México/mundo.
+// Niveles: por ahora 5 (niveles-spider.js, dificultad Fácil); el mapa está montado con 100 por etapa (22 600) y los que faltan salen «🚧 todavía no creado».
 import { DIFICULTADES, PALOS, nuevaPartida, clonar, largoTramo, puedeMover, mover, puedeRepartir, repartir, ganada, jugadas, palo, rango, SERIES } from "./logica-spider.js";
 import { generarVerificada } from "./ia-spider.js";
 import { NIVELES } from "./niveles-spider.js";
@@ -16,7 +16,7 @@ const SIMB = ["♠", "♥", "♣", "♦"], ROJO = [false, true, false, true];
 const NOMBRE_RANGO = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 
 // ---------- Progreso (local primero; se sincroniza con la cuenta si hay internet) ----------
-let prog = { niv: { max: 1, hecho: 0 }, mejor: {}, ganadas: 0, t: 0 };
+let prog = { niv: { max: 1, hecho: 0 }, mejor: {}, ganadas: 0, g: 0, s: 0, t: 0 }; // g / s = monedas ganadas y gastadas EN TOTAL (monedas = g − s)
 try { const g = JSON.parse(localStorage.getItem(CLAVE)); if (g) prog = { ...prog, ...g }; } catch (e) {}
 let nube = null;
 function guardar() {
@@ -31,7 +31,7 @@ function fusionar(a, b) { // gana el mayor avance y el menor tiempo de cada difi
   for (const k in a.mejor || {}) mejor[k] = mejor[k] ? Math.min(mejor[k], a.mejor[k]) : a.mejor[k];
   const na = a.niv || {}, nb = b.niv || {};
   const opc = (a.t || 0) >= (b.t || 0) ? a.opc || b.opc : b.opc || a.opc; // la última combinación elegida
-  return { niv: { max: Math.max(na.max || 1, nb.max || 1), hecho: Math.max(na.hecho || 0, nb.hecho || 0) }, mejor, opc, ganadas: Math.max(a.ganadas || 0, b.ganadas || 0), t: Math.max(a.t || 0, b.t || 0) };
+  return { niv: { max: Math.max(na.max || 1, nb.max || 1), hecho: Math.max(na.hecho || 0, nb.hecho || 0) }, mejor, opc, ganadas: Math.max(a.ganadas || 0, b.ganadas || 0), g: Math.max(a.g || 0, b.g || 0), s: Math.max(a.s || 0, b.s || 0), t: Math.max(a.t || 0, b.t || 0) };
 }
 import("../compartido/progreso.js").then((m) => { nube = m.conectar("spider", { clave: CLAVE, fusionar, alCambiar: (u) => { prog = { ...prog, ...u }; pintarMenu(); } }); }).catch(() => {});
 
@@ -47,28 +47,65 @@ let colecc = [], mostradas = 0, fantasmas = [], animTimers = [], finAnim = 0, tb
 const btnMenu = $("btn-menu");
 if (prog.opc) { pal = PALOS.includes(prog.opc.palos) ? prog.opc.palos : 1; dif = DIFICULTADES[prog.opc.dif - 1] ? prog.opc.dif : 1; }
 
-function mostrar(p) {
+function mostrar(p) { // p = «menu» | «libre» | «juego» | «mapa» (con «mapa» las otras quedan ocultas y lo dibuja compartido/mapa-niveles.js)
   pantalla = p;
   $("menu").hidden = p !== "menu";
+  $("libre").hidden = p !== "libre";
   $("juego").hidden = p !== "juego";
-  btnMenu.hidden = p === "menu";
-  btnMenu.lastChild.textContent = p === "mapa" ? " Menú principal" : " Pausa";
+  document.body.classList.toggle("jugando", p === "juego");
+  btnMenu.hidden = p === "menu"; // el ☰ no se ve en el menú principal
+  rotularMenu();
   if (p !== "mapa") mapa.cerrar();
   if (p === "juego") pintar();
+  if (p === "menu" || p === "libre") pintarMenu();
+}
+// ☰: «Pausa» dentro de una partida en curso, «Atrás» en el resto de pantallas (ESTANDARES-juegos.md, 7.4)
+function rotularMenu() {
+  const jugando = pantalla === "juego" && !fin;
+  $("txt-menu").textContent = jugando ? "Pausa" : "Atrás";
+  btnMenu.title = jugando ? "Pausa" : "Volver al menú principal";
 }
 function aviso(txt) {
   const t = $("toast"); t.textContent = txt; t.hidden = false;
   clearTimeout(aviso.id); aviso.id = setTimeout(() => { t.hidden = true; }, 2200);
 }
 
-// ---------- Menú ----------
+// ---------- Menú principal ----------
+const ETAPAS = crearEtapas({ porEtapa: 100 }); // 32 estados + 194 países, 100 niveles cada uno = 22 600 (los creados salen de niveles-spider.js)
+const monedas = () => Math.max(0, (prog.g || 0) - (prog.s || 0));
+function pintarMonedas() { $("monedas-n").textContent = String(monedas()); }
+const proximoNivel = () => Math.min(Math.max(1, prog.niv.max), ETAPAS.total);
+function pintarContinuar() { $("txt-continuar").textContent = "Continuar · nivel " + proximoNivel(); }
+function pintarMenu() { pintarContinuar(); pintarLibre(); pintarMonedas(); }
+$("b-libre").addEventListener("click", () => mostrar("libre"));
+$("b-continuar").addEventListener("click", () => jugarNivel(proximoNivel()));
+$("b-niveles").addEventListener("click", () => abrirMapa(proximoNivel()));
+function abrirMapa(n, alcanzado) { mostrar("mapa"); mapa.abrir(n, alcanzado); }
+function jugarNivel(n) { if (n <= NIVELES.length) empezar(n); else aviso("🚧 Los niveles todavía no están creados"); }
+
+// ---------- Info: «Cómo se juega» ----------
+const infoFondo = $("info-fondo");
+function abrirInfo() { infoFondo.hidden = false; try { $("info-ok").focus({ preventScroll: true }); } catch (err) {} }
+function cerrarInfo() { infoFondo.hidden = true; }
+$("b-info").addEventListener("click", abrirInfo);
+$("info-ok").addEventListener("click", cerrarInfo);
+infoFondo.addEventListener("click", (ev) => { if (ev.target === infoFondo) cerrarInfo(); });
+addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !infoFondo.hidden) { ev.preventDefault(); ev.stopPropagation(); cerrarInfo(); } }, true);
+
+// ---------- 👤 Iniciar sesión (la sesión se carga aparte: sin internet el juego funciona igual) ----------
+let entrarFn = null;
+import("../compartido/jugador.js").then((m) => { entrarFn = m.entrar; m.alCambiarSesion((u) => { $("entrar").hidden = !!u; }); }).catch(() => {});
+$("entrar").addEventListener("click", () => { if (entrarFn) entrarFn().catch((err) => aviso(err.message)); });
+
+// ---------- Modo libre (pantalla propia: palos, dificultad, nota, récord y «Jugar») ----------
 const SIMBOLOS_PALOS = ["♠", "♠♥", "♠♥♣", "♠♥♣♦"];
-function elegir(que, v) { if (que === "pal") pal = v; else dif = v; prog.opc = { palos: pal, dif }; guardar(); pintarMenu(); }
-function pintarMenu() {
+function elegir(que, v) { if (que === "pal") pal = v; else dif = v; prog.opc = { palos: pal, dif }; guardar(); pintarLibre(); }
+function pintarLibre() {
   const cp = $("palos"); cp.replaceChildren();
   for (const p of PALOS) {
     const b = document.createElement("button");
-    b.type = "button"; b.className = "b3d txt b-gris" + (p === pal ? " on" : "");
+    b.type = "button"; b.className = "b3d txt " + (p === pal ? "b-oro on" : "b-cielo");
+    b.setAttribute("aria-pressed", String(p === pal));
     b.innerHTML = "<span>" + p + (p === 1 ? " palo " : " palos ") + SIMBOLOS_PALOS[p - 1] + "</span>";
     b.addEventListener("click", () => elegir("pal", p));
     cp.appendChild(b);
@@ -76,7 +113,8 @@ function pintarMenu() {
   const caja = $("dificultades"); caja.replaceChildren();
   for (const d of DIFICULTADES) {
     const b = document.createElement("button");
-    b.type = "button"; b.className = "b3d txt b-gris" + (d.id === dif ? " on" : "");
+    b.type = "button"; b.className = "b3d txt " + (d.id === dif ? "b-oro on" : "b-cielo");
+    b.setAttribute("aria-pressed", String(d.id === dif));
     b.innerHTML = '<span class="b-ico">' + d.ico + "</span> " + d.nombre;
     b.addEventListener("click", () => elegir("dif", d.id));
     caja.appendChild(b);
@@ -85,22 +123,27 @@ function pintarMenu() {
   $("desc-dif").textContent = pal + (pal === 1 ? " palo" : " palos") + " · reparto " + d.nombre + (d.deshacer ? " · con deshacer" : " · SIN deshacer") +
     (n ? " · " + n + " repartos con solución comprobada" : " · todavía sin repartos comprobados: se buscará uno al momento");
   const m = prog.mejor[llave(pal, dif)];
-  $("mejores").textContent = m ? "Mejor tiempo: " + formato(m) : "";
+  $("mejores").textContent = m ? formato(m) : "–";
 }
-$("b-libre").addEventListener("click", () => empezar());
-$("b-niveles").addEventListener("click", () => { mostrar("mapa"); mapa.abrir(Math.min(prog.niv.max, NIVELES.length)); });
-$("b-mapa").addEventListener("click", () => { mostrar("mapa"); mapa.abrir(); });
+$("b-jugar").addEventListener("click", () => empezar());
 
-// ---------- Mapa estándar (México y mundo): todavía sin niveles ----------
+// ---------- Niveles: mapa estándar (México y mundo armados; el mundo sale al terminar los 32 estados) ----------
+const CLASE_DIF = ["b-verde", "b-azul", "b-morado", "b-oro", "b-rojo"]; // = color de cada dificultad (🟢 🔵 🟣 🟠 🔴)
 const mapa = montarMapa({
   prefijo: "spider",
-  etapas: crearEtapas({ porEtapa: 10 }),
+  etapas: ETAPAS,
   progreso: () => prog.niv,
-  jugarNivel: (n) => (n <= NIVELES.length ? empezar(n) : aviso("🚧 Ese nivel llegará pronto")),
-  nivelContinuar: () => Math.min(prog.niv.max, NIVELES.length),
-  infoNivel: (n) => (NIVELES[n - 1] ? { sub: "🟢 Fácil", clase: "b-verde" } : { sub: "🚧", clase: "b-gris" }),
+  jugarNivel,
+  nivelContinuar: proximoNivel,
+  infoNivel: (n) => {
+    const N = NIVELES[n - 1];
+    if (!N) return { sub: "🚧", clase: "b-cielo", aria: "todavía no está creado" };
+    const d = DIFICULTADES[N.dif - 1];
+    return { sub: d.ico + " " + N.palos + "♠", clase: CLASE_DIF[N.dif - 1], aria: d.nombre + ", " + N.palos + (N.palos === 1 ? " palo" : " palos") };
+  },
+  leyenda: "🟢 Fácil · 🔵 Normal · 🟣 Difícil · 🟠 Experto · 🔴 Maestro · ♠ = cantidad de palos · 🚧 todavía no creado",
   avisoPrincipal: () => NIVELES.length + " niveles listos · más en camino 🕷️",
-  botonesExtra: [{ icono: "♾️", texto: "Modo libre", clase: "b-morado", fn: () => empezar() }],
+  alInfo: abrirInfo,
 });
 
 // ---------- Partida ----------
@@ -141,11 +184,11 @@ function jugar(fn, op) { // op = qué jugada es ({de,k,a} o {rep:true}); sirve p
   if (ganada(e)) terminar();
 }
 function terminar() {
-  fin = true; acum = segundos(); t0 = 0;
+  fin = true; acum = segundos(); t0 = 0; rotularMenu(); // el ☰ vuelve a decir «Atrás»
   const s = Math.round(acum);
   if (nivel) { // desbloquea el siguiente (hasta donde haya niveles)
     prog.niv.hecho = Math.max(prog.niv.hecho, nivel);
-    prog.niv.max = Math.min(NIVELES.length, Math.max(prog.niv.max, nivel + 1));
+    prog.niv.max = Math.min(ETAPAS.total, Math.max(prog.niv.max, nivel + 1));
   } else {
     prog.ganadas++;
     const k = llave(e.palos, e.dif);
@@ -157,8 +200,8 @@ function terminar() {
   f.innerHTML = '<div class="pausa-panel"><h2>🎉 ¡Ganaste' + (nivel ? " el nivel " + nivel : "") + '!</h2><p>' + formato(s) + " · " + e.movs + ' movimientos</p><div class="pausa-opciones"></div></div>';
   const ops = f.querySelector(".pausa-opciones");
   const sig = nivel && nivel < NIVELES.length ? [["▶", "Siguiente nivel", "b-verde", () => empezar(nivel + 1)]] : [];
-  const otra = nivel ? [["🔄", "Repetir nivel", "b-azul", () => empezar(nivel)], ["🗺️", "Mapa", "b-morado", () => { mostrar("mapa"); mapa.abrir(nivel); }]] : [["🔄", "Otra partida", "b-verde", () => empezar()]];
-  for (const [ico, txt, cl, fn] of [...sig, ...otra, ["🏠", "Menú principal", "b-gris", () => { pintarMenu(); mostrar("menu"); }]]) {
+  const otra = nivel ? [["🔄", "Repetir nivel", "b-azul", () => empezar(nivel)], ["📋", "Niveles", "b-azul", () => abrirMapa(nivel, nivel % 100 === 0)]] : [["🔄", "Otra partida", "b-verde", () => empezar()], ["⚙️", "Cambiar tablero", "b-cielo", () => mostrar("libre")]];
+  for (const [ico, txt, cl, fn] of [...sig, ...otra, ["🏠", "Menú principal", "b-cielo", () => mostrar("menu")]]) {
     const b = document.createElement("button"); b.type = "button"; b.className = "b3d txt " + cl;
     b.innerHTML = '<span class="b-ico">' + ico + "</span><span>" + txt + "</span>";
     b.addEventListener("click", () => { f.remove(); fn(); });
@@ -461,17 +504,23 @@ setInterval(() => {
   if (!pista && Date.now() - ultimaAccion >= PISTA_MS) calcularPista(); // 15 s sin tocar nada
 }, 500);
 
-// ---------- Botón ☰ ----------
+// ---------- Menú de pausa estándar (solo en partida): Continuar · Reiniciar nivel · Niveles · Menú principal ----------
+// En Modo libre solo «Continuar» y «Salir a elegir tablero»
 const pausa = crearMenuPausa({
   boton: btnMenu,
   puedeAbrir: () => pantalla === "juego" && !fin,
   alAbrir: () => { acum = segundos(); t0 = 0; pausado = true; },
   alContinuar: () => { pausado = false; ultimaAccion = Date.now(); if (acum > 0 || e.movs) t0 = Date.now(); },
-  extras: () => [{ icono: "🔄", texto: nivel ? "Reiniciar nivel" : "Nueva partida", clase: "b-azul", alElegir: () => { pausado = false; empezar(nivel); } }],
-  alSalir: () => { pausado = false; pintarMenu(); mostrar("menu"); },
-  ayudaSalir: "Se pierde la partida en curso",
+  extras: () => nivel ? [
+    { icono: "🔄", texto: "Reiniciar nivel", clase: "b-azul", ayuda: "Vuelves a empezar este nivel desde cero.", alElegir: () => { pausado = false; empezar(nivel); } },
+    { icono: "📋", texto: "Niveles", clase: "b-azul", ayuda: "Vas a la zona de niveles. Se pierde lo avanzado en este nivel.", alElegir: () => { pausado = false; abrirMapa(nivel); } },
+  ] : [],
+  get textoSalir() { return nivel ? "Menú principal" : "Salir a elegir tablero"; },
+  ayudaSalir: () => (nivel ? "Se pierde lo avanzado en este nivel." : "La partida termina; no se pierde ningún récord."),
+  alSalir: () => { pausado = false; mostrar(nivel ? "menu" : "libre"); },
 });
-btnMenu.addEventListener("click", () => { if (pantalla === "mapa") { pintarMenu(); mostrar("menu"); } }); // en el mapa, ☰ = «Menú principal»
+// Fuera de una partida en curso (mapa, Modo libre, resultado) el ☰ dice «Atrás» y vuelve al menú principal; en partida lo atiende la pausa
+btnMenu.addEventListener("click", () => { if (!(pantalla === "juego" && !fin)) mostrar("menu"); });
 
 pintarMenu();
 mostrar("menu");

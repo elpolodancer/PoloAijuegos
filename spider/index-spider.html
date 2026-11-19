@@ -11,20 +11,31 @@
 <style>
 .pantalla { position: fixed; inset: 0; }
 .pantalla[hidden] { display: none; }
-/* Menú principal */
-#menu { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 60px 16px; overflow-y: auto; text-align: center; color: var(--txt-fondo); }
-#menu h1 { margin: 0; font-size: clamp(2rem, 8vw, 3rem); text-shadow: var(--sombra-txt); }
-#menu p { margin: 0; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
+/* Menú principal y Modo libre (pantallas de menú sobre la madera estándar; zona reservada arriba-izquierda ≈ 190 × 92) */
+.capa { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 104px 16px 72px; overflow-y: auto; text-align: center; color: var(--txt-fondo); }
+.capa h1, .capa h2 { margin: 0; font-size: clamp(1.8rem, 7vw, 2.6rem); text-shadow: var(--sombra-txt); }
+.capa p { margin: 0; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
+.menu-col { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(100%, 340px); margin-top: 6px; }
+.menu-col .b3d.grande { width: 100%; }
+.menu-col .b3d.info { --t: 44px; }
+.grupo { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.rotulo { font-size: .95rem; font-weight: 700; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
 .fila { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-#menu .b3d.txt { --t: 48px; }
-.principales .b3d.txt { --t: 58px; font-size: 18px; min-width: 210px; }
-#aviso { min-height: 1.3em; font-weight: 700; }
+.capa .fila .b3d.txt { --t: 44px; }
+.nota { min-height: 2.6em; max-width: 440px; font-size: .85rem; }
+.record-libre { font-weight: 800; color: var(--txt-fondo) !important; }
+.info-texto { margin: 0 0 14px; text-align: left; font-size: .9rem; line-height: 1.4; color: #e3e5ea; }
+.info-texto p { margin: 0 0 8px; color: inherit; text-shadow: none; }
+.info-texto ul { margin: 0 0 8px; padding-left: 18px; }
+/* Arriba a la derecha: monedas y 👤 Iniciar sesión (solo fuera de la partida; en partida están los marcadores) */
+#hud-sesion { z-index: 6; }
+body.jugando #hud-sesion { display: none; }
 /* Mesa */
 /* Tablero = fila superior + mesa de columnas. La fila superior NO tiene fondo: son cartas como las de la partida, con los mismos límites
    que las columnas (series terminadas desde el borde izquierdo de la 1.ª columna; el mazo, carta boca abajo, sobre la última columna).
    Su alto y las medidas las ajusta juego-spider.js (medidas). */
 #tablero { position: absolute; left: 6px; right: 6px; top: 100px; bottom: 68px; display: flex; flex-direction: column; }
-@media (min-aspect-ratio: 1/1) { #tablero { left: 128px; top: 52px; } }
+@media (min-aspect-ratio: 1/1) { #tablero { left: 196px; top: 52px; } } /* 196: «🎮 Portal de Juegos» + ☰ miden ≈ 190 de ancho */
 #barra { position: relative; flex: none; height: 56px; margin-bottom: 6px; }
 #series { position: absolute; inset: 0; pointer-events: none; }
 #mesa { position: relative; flex: 1; min-height: 0; }
@@ -69,24 +80,36 @@
 </head>
 <body class="inmersivo">
 <nav class="nav-juego" aria-label="Navegación">
-  <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
-  <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> Pausa</button>
+  <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Portal de Juegos</a>
+  <button class="b3d txt b-cielo" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> <span id="txt-menu">Pausa</span></button>
 </nav>
 
-<main class="pantalla" id="menu">
+<main class="pantalla capa" id="menu">
   <h1>🕷️ Spider</h1>
-  <p>Ordena cada palo de K a A y quita las 8 series. Elige cuántos palos y qué tan difícil es el reparto.</p>
-  <div class="fila" id="palos" role="group" aria-label="Palos de la baraja"></div>
-  <div class="fila" id="dificultades" role="group" aria-label="Dificultad del reparto"></div>
-  <p id="desc-dif"></p>
-  <div class="fila principales">
-    <button class="b3d txt b-verde" id="b-libre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
-    <button class="b3d txt b-azul" id="b-niveles" type="button"><span class="b-ico">🎯</span> Niveles</button>
-    <button class="b3d txt b-morado" id="b-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+  <p>Ordena cada palo de K a A y quita las 8 series.</p>
+  <div class="menu-col">
+    <button class="b3d txt grande b-morado" id="b-libre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
+    <button class="b3d txt grande b-verde" id="b-continuar" type="button"><span class="b-ico">▶</span> <span id="txt-continuar">Continuar · nivel 1</span></button>
+    <button class="b3d txt grande b-azul" id="b-niveles" type="button"><span class="b-ico">📋</span> Niveles</button>
+    <button class="b3d txt info b-cielo" id="b-info" type="button"><span class="b-ico">ℹ️</span> Info</button>
   </div>
-  <p id="aviso" aria-live="polite"></p>
-  <p id="mejores"></p>
 </main>
+
+<!-- Modo libre: pantalla propia (no desplegable) -->
+<main class="pantalla capa" id="libre" hidden>
+  <h2>♾️ Modo libre</h2>
+  <p>Repartos al azar sin fin. No da monedas ni puntos.</p>
+  <div class="grupo"><span class="rotulo">Palos</span><div class="fila" id="palos" role="group" aria-label="Palos de la baraja"></div></div>
+  <div class="grupo"><span class="rotulo">Dificultad</span><div class="fila" id="dificultades" role="group" aria-label="Dificultad del reparto"></div></div>
+  <p id="desc-dif" class="nota"></p>
+  <p class="record-libre">🏆 Récord: <span id="mejores">–</span></p>
+  <button class="b3d txt grande b-verde" id="b-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
+</main>
+
+<div class="hud hud-der" id="hud-sesion">
+  <span id="monedas-barra" class="chip chip-monedas" title="Tus monedas"><span class="moneda"></span><span id="monedas-n">0</span></span>
+  <button id="entrar" class="b3d txt b-azul" type="button" hidden title="Entrar con Google para guardar puntos"><span class="b-ico">👤</span> Iniciar sesión</button>
+</div>
 
 <section class="pantalla" id="juego" hidden aria-label="Partida">
   <div class="hud hud-der">
@@ -107,6 +130,24 @@
   </div>
 </section>
 <div id="toast" hidden role="status"></div>
+
+<!-- Ventana «Cómo se juega» -->
+<div id="info-fondo" class="pausa-fondo" hidden role="dialog" aria-modal="true" aria-label="Cómo se juega">
+  <div class="pausa-panel">
+    <h2>ℹ️ Cómo se juega</h2>
+    <div class="info-texto">
+      <p>Forma escaleras del mismo palo de K a A en las columnas; cada escalera completa se quita. Gana quien quita las 8 series.</p>
+      <ul>
+        <li>Toca un tramo de cartas y luego la columna donde quieres ponerlo. Solo se mueven tramos del mismo palo y en orden.</li>
+        <li>Una carta va sobre otra con un valor más alto (no importa el palo); en una columna vacía cabe cualquiera.</li>
+        <li>El mazo reparte una carta en cada columna (5 veces) y no se puede repartir si hay una columna vacía.</li>
+        <li>Si pasas 15 segundos sin mover, aparece una pista.</li>
+      </ul>
+      <p>Con 1 palo es lo más fácil; con 4, lo más difícil. En «Maestro» no hay deshacer. El Modo libre no da monedas ni puntos.</p>
+    </div>
+    <div class="pausa-opciones"><button id="info-ok" class="b3d txt b-verde" type="button">Entendido</button></div>
+  </div>
+</div>
 
 <script type="module" src="juego-spider.js"></script>
 <script type="module" src="../compartido/fondo-madera.js"></script>
