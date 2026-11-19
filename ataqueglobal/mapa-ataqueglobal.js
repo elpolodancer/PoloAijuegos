@@ -201,6 +201,10 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
   const ctx = lienzo.getContext("2d");
   const quieto = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   let W = 0, H = 0, dpr = 1, Rmin = 100, Rmax = 3000;
+  // CALIDAD ADAPTATIVA: mide el tiempo por cuadro y, si el dispositivo no da la talla, baja detalle solo (y lo sube si vuelve a sobrar).
+  // 0 = todo; 1 = menos puntitos de luz, un solo halo de costa y resolución ≤ 1.5; 2 = sin halo, solo las ciudades grandes y resolución 1.
+  const TOPE_DPR = [2, 1.5, 1];
+  let calidad = 0, msMedio = 16, ultimoCambio = 0;
   const cam = { lon: 10 * RAD, lat: 25 * RAD, R: 100 }; // centro de la vista (radianes) y radio del planeta en píxeles
   let sl0, cl0, sp0, cp0, CX = 0, CY = 0;               // trigonometría de la cámara, recalculada en cada cuadro
   let sel = null, raf = 0, activo = false, fondo = null, tween = null, inercia = null, ultimo = 0, ultimoToque = 0;
@@ -307,7 +311,7 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
   function ajustar() {
     const caja = lienzo.getBoundingClientRect();
     if (!caja.width || !caja.height) return false;
-    const w = Math.round(caja.width), h = Math.round(caja.height), d = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.round(caja.width), h = Math.round(caja.height), d = Math.min(window.devicePixelRatio || 1, TOPE_DPR[calidad]);
     const primera = !W;
     if (w === W && h === H && d === dpr) return true;
     W = w; H = h; dpr = d;
@@ -389,10 +393,11 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
     }
     // 1) halo de aguas poco profundas alrededor de las costas
     const halo = Math.min(18, 3 + R * 0.02);
-    ctx.lineWidth = halo; ctx.strokeStyle = "rgba(70,210,200,.13)";
-    for (const v of vis) ctx.stroke(v[1]);
-    ctx.lineWidth = halo * 0.5; ctx.strokeStyle = "rgba(90,230,210,.2)";
-    for (const v of vis) ctx.stroke(v[1]);
+    if (calidad < 2) {
+      ctx.lineWidth = halo; ctx.strokeStyle = "rgba(70,210,200,.13)";
+      for (const v of vis) ctx.stroke(v[1]);
+      if (calidad < 1) { ctx.lineWidth = halo * 0.5; ctx.strokeStyle = "rgba(90,230,210,.2)"; for (const v of vis) ctx.stroke(v[1]); }
+    }
     // 2) tierra (y encima, el color de dueño o la destrucción)
     for (const [p, path] of vis) {
       const e = estado.get(p.iso);
@@ -497,23 +502,31 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
   }
 
   // ---------- Lucecitas de ciudades: tintinean y reflejan el nivel de población (más habitantes = más grande, más brillante, más puntitos) ----------
+  const SPRITES = []; // 2 imágenes de luz ya dibujadas (cálida y blanca): dibujarlas es mucho más barato que crear un degradado por luz y por cuadro
+  function sprite(cal) {
+    if (SPRITES[cal]) return SPRITES[cal];
+    const c = document.createElement("canvas"); c.width = c.height = 64;
+    const x = c.getContext("2d"), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, cal ? "rgba(255,214,120,1)" : "rgba(255,244,214,1)"); g.addColorStop(0.3, "rgba(255,170,70,.35)"); g.addColorStop(1, "rgba(255,150,40,0)");
+    x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+    return (SPRITES[cal] = c);
+  }
   function pintarLuces(R) {
     const t = performance.now() / 1000, antes = ctx.globalCompositeOperation;
     ctx.globalCompositeOperation = "lighter";
-    const grande = R > Rmin * 2.5; // al acercarse el cielo nocturno se llena de más detalle
+    const esc = Math.min(2.2, 0.7 + R / (Rmin * 4));
+    const sp = [sprite(0), sprite(1)];
     for (const L of LUCES) {
+      if (calidad >= 2 ? L.a < 1 : calidad === 1 && L.a < 1 && L.f > 2) continue; // con poca potencia, menos puntitos
       const q = proy(L.lon, L.lat);
-      if (q[2] < 0.04) continue;
-      if (q[0] < -20 || q[0] > W + 20 || q[1] < -20 || q[1] > H + 20) continue;
+      if (q[2] < 0.04 || q[0] < -20 || q[0] > W + 20 || q[1] < -20 || q[1] > H + 20) continue;
       const tint = 0.55 + 0.45 * Math.sin(t * L.f * 2 + L.ph) * Math.sin(t * L.f * 0.7 + L.ph * 1.7); // parpadeo irregular
       const a = acotar(L.a * (0.45 + 0.55 * Math.max(0, tint)) * Math.min(1, q[2] * 2.2), 0, 1); // se apaga hacia el borde del planeta
-      const rad = (1.1 + 4.2 * L.g) * Math.min(2.2, 0.7 + R / (Rmin * 4)) * (grande ? 1 : 0.9);
-      const col = L.cal ? "255,214,120" : "255,244,214";
-      const g = ctx.createRadialGradient(q[0], q[1], 0, q[0], q[1], rad * 3.2);
-      g.addColorStop(0, "rgba(" + col + "," + a.toFixed(3) + ")"); g.addColorStop(0.3, "rgba(255,170,70," + (a * 0.35).toFixed(3) + ")"); g.addColorStop(1, "rgba(255,150,40,0)");
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(q[0], q[1], rad * 3.2, 0, DOS_PI); ctx.fill();
+      const d = (1.1 + 4.2 * L.g) * esc * 6.4; // diámetro del sprite en pantalla
+      ctx.globalAlpha = a;
+      ctx.drawImage(sp[L.cal], q[0] - d / 2, q[1] - d / 2, d, d);
     }
-    ctx.globalCompositeOperation = antes;
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = antes;
   }
 
   // ---------- Casillas de misiles dentro de TUS países ----------
@@ -628,7 +641,14 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
   // ---------- Bucle ----------
   function cuadro(ahora) {
     raf = requestAnimationFrame(cuadro);
-    const dt = Math.min(50, ahora - (ultimo || ahora)); ultimo = ahora;
+    const crudo = ahora - (ultimo || ahora), dt = Math.min(50, crudo); ultimo = ahora;
+    if (crudo > 0 && crudo < 250) { // ignora pausas (pestaña oculta)
+      msMedio += (crudo - msMedio) * 0.05;
+      if (ahora - ultimoCambio > 3000) {
+        if (msMedio > 24 && calidad < 2) { calidad++; ultimoCambio = ahora; }
+        else if (msMedio < 12 && calidad > 0 && ahora - ultimoCambio > 12000) { calidad--; ultimoCambio = ahora; }
+      }
+    }
     if (tween) {
       const u = acotar((ahora - tween.t0) / tween.ms, 0, 1), e = u * u * (3 - 2 * u);
       cam.lon = tween.lon0 + dif(tween.lon1 - tween.lon0) * e; cam.lat = tween.lat0 + (tween.lat1 - tween.lat0) * e;
