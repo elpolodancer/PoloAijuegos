@@ -1,11 +1,18 @@
 # Slither (`slither/`)
 
-Arena redonda con bots: come bolitas para crecer, no toques el cuerpo de otra serpiente ni la orilla. id de puntos: `slither`. Tipo **A) por niveles** del estándar (mapa de México con agua y, al terminarlo, el mundo) más un **♾️ Juego libre**.
+Arena redonda con bots: come bolitas para crecer, no toques el cuerpo de otra serpiente ni la orilla. id de puntos: `slither`. Tipo **A) por niveles** del estándar (mapa de México con agua y, al terminarlo, el mundo) más un **♾️ Modo libre**. **Terminado** (zona «Juegos» del portal desde `sw.js` VERSION 189).
+
+## Pantallas (estándar de `ESTANDARES-juegos.md`, secciones 1, 6, 7 y 11)
+- **Menú principal** (`#menu`, clases `.pant-menu` de `inmersivo.css`): ♾️ Modo libre · ▶ Continuar · nivel N · 📋 Niveles · ℹ️ Info, y 👤 Iniciar sesión arriba a la derecha (`jugador.js` con `import()`; sin internet dice «Sin conexión»). El ☰ no se ve aquí.
+- **Modo libre** (`#inicio`): bots Fácil/Normal/Difícil y mapa Pequeño/Mediano/Grande (elegido `b-oro on`, resto `b-cielo`), nombre y ▶ Jugar. Sin metas **ni puntos de perfil** (`PUNTOS_LIBRE = false` en `juego-slither.js`; ponerlo en `true` devuelve la regla antigua de 1 punto por cada 10 de masa).
+- **Niveles**: «📋 Niveles» abre `compartido/mapa-niveles.js` en la etapa del jugador (ya no lleva el botón ♾️). ☰ «Atrás» sale siempre al menú principal.
+- **Partida**: ☰ «Pausa» → Continuar · 🔄 Reiniciar nivel · 📋 Niveles · 🚪 Menú principal (en Modo libre: Continuar y «Salir a elegir mapa y bots»).
+- **Fin** (`#fin`, `.sobre-tablero`): «Siguiente nivel ▶» (solo al ganar), Reintentar / Repetir nivel / Jugar otra vez, 🗺️ Mapa de niveles o ⚙️ Cambiar mapa y bots. Sin velo oscuro: la arena se sigue viendo.
 
 ## Archivos
 | Archivo | Qué es |
 |---|---|
-| `index-slither.html` | Página: canvas, botones fijos, HUD (Largo y Récord) y las ventanas (Juego libre, Info, resultado) |
+| `index-slither.html` | Página: canvas, botones fijos (🎮 Portal de Juegos, ☰, 👤), HUD (Largo y Récord) y las pantallas (menú principal, Modo libre, Info, fin) |
 | `juego-slither.js` | Todo el juego: simulación, bots, dibujo, entrada, menús, progreso y mapa. Al final trae la herramienta de calibración (solo con `#calibrar`) |
 | `niveles-slither.js` | Los **22 600 niveles**: reparto de dificultad y mapas, metas y tabla de calibración. Sin `document` (se prueba en Node) |
 | `verificar-slither.mjs`, `package.json` | Solo consola, **no van al service worker**: `node slither/verificar-slither.mjs` comprueba todo el reparto |
@@ -37,7 +44,7 @@ Por décimas del juego (de `verificar-slither.mjs`): 49/40/11 → 46/39/15 → 4
 - Se sortean con altibajos: ~7 % son **retos** (+20 a +40 %), ~19 % **respiros** (−15 a −30 %) y el resto varía ±10 %. Los primeros 5 niveles no se sortean (no bajan). Mínimo 200.
 - Mediana por décima del juego: 290 → 370 → 460 → 580 → 710 → 860 → 1050 → 1200 → 1200 → 1250. Máxima 2300.
 - **El nivel 1 es siempre Fácil, mapa Pequeño y de 250 puntos** (única excepción al sorteo, para que nadie empiece contra bots difíciles).
-- Pasar un nivel **por primera vez** da puntos de perfil: `puntosNivel(meta) = max(2, meta/40)`. Repetirlo no da. (En los niveles no se usa la regla del Juego libre de «1 punto por cada 10 de masa».)
+- Pasar un nivel **por primera vez** da puntos de perfil: `puntosNivel(meta) = max(2, meta/40)`. Repetirlo no da. (En los niveles no se usa la regla antigua del Juego libre de «1 punto por cada 10 de masa».)
 - En el mapa, cada botón dice su nivel con el **color** (verde / azul / rojo = bots fáciles / normales / difíciles), el **número** (meta, `1.2k` = 1200) y la **letra** del mapa (P / M / G).
 
 ### Que todos se puedan pasar (calibración)
@@ -56,8 +63,8 @@ Las metas cambian si cambia la tabla, así que hazlo **antes** de publicar.
 
 **Nota (12 nov 2026):** la tabla `CALIBRACION` actual se midió con una versión anterior de esta misma sonda. Al repetirla con la herramienta de este archivo (50 min × 9 combinaciones, 12 jugadores automáticos) salieron picos ~20 % más altos (mediana de las diferencias; techos de meta `[[1800,1350,1350],[2400,1500,1400],[2350,1650,1600]]` en lugar de los actuales). **Se dejó la tabla actual a propósito**: es más conservadora, así que los niveles son más fáciles de alcanzar. Si en las pruebas con gente los niveles se sienten demasiado fáciles, pega la medición nueva (o baja `P_TECHO`) y vuelve a correr el verificador.
 
-## Juego libre
-Sin metas: eliges la dificultad de los bots (Fácil, Normal, Difícil) y el tamaño del mapa (Pequeño, Mediano, Grande); se guarda en el aparato (`slither_config`). Mantiene el récord de Largo y los puntos de perfil de siempre (1 por cada 10 de masa máxima, menos el primero).
+## Modo libre
+Sin metas: eliges la dificultad de los bots (Fácil, Normal, Difícil) y el tamaño del mapa (Pequeño, Mediano, Grande); se guarda en el aparato (`slither_config`). Mantiene el **récord de Largo** (uno solo, no por combinación) y **ya no da puntos de perfil** (estándar 7.2; antes 1 por cada 10 de masa máxima, menos el primero, sin tope por partida: al pasar a «Juegos» se podía repetir sin límite).
 
 ### Mapas y bots (`MAPAS`, `DIFICULTADES`)
 | Mapa | Radio | Bots | Bolitas | Doradas |
@@ -74,5 +81,5 @@ Las **bolitas doradas** valen 10 veces una normal; reaparecen entre 8 y 22 s des
 ## Pendiente
 - Afinar con jugadores reales (ver la nota de la calibración).
 - Sin sonido, sin imagen de tarjeta (`imagenes/slither.webp`).
-- Los puntos del Juego libre (sin tope por partida) siguen la regla antigua; la propuesta general del estándar para el modo libre es no dar puntos.
-- No probado en celular real (sí en Chrome de escritorio: mapa, niveles, victoria, derrota, reintentar, pausa y recarga).
+- El récord del Modo libre es uno solo; el estándar pide el de la combinación elegida (cambiaría el formato de `slither_progreso_v1`: si se hace, debe seguir leyendo el viejo).
+- No probado en celular real. Sí en Chromium de escritorio (sin pantalla, 19 nov 2026): menú principal, Info (Esc), Niveles ↔ Atrás, Modo libre (opciones y Jugar), pausa de Modo libre y de nivel (Reiniciar / Niveles / Menú principal), Continuar, derrota con «Reintentar» y «Mapa de niveles», sin errores en consola. La victoria y la recarga con progreso se probaron en la versión anterior; conviene repetirlas tocando.

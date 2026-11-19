@@ -204,7 +204,7 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
    Estructura:  <div class="sobre-tablero" hidden>
                   <div class="sobre-texto"><h2>¡Nivel 7 completado!</h2><div>Lo lograste en 12 movimientos.</div></div>
                   <button class="b3d txt grande b-verde">Siguiente nivel ▶</button>          ← siempre el primero y el más grande
-                  <div class="sobre-fila"> <button class="b3d txt b-gris">Repetir nivel</button> … </div>
+                  <div class="sobre-fila"> <button class="b3d txt b-cielo">Repetir nivel</button> … </div>
                 </div> */
 .sobre-tablero { position: fixed; z-index: 7; left: 0; top: 0; width: 100%; height: 100%; box-sizing: border-box; padding: 10px; overflow: hidden;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; color: #f1f2f4; pointer-events: none; }
@@ -234,3 +234,31 @@ html.inmersivo.oscura {
 /* Botón 🌙/☀️ que alterna entre madera clara y oscura (lo crea compartido/fondo-madera.js): abajo a la izquierda,
    frente a ⛶ que va abajo a la derecha */
 .btn-fondo { position: fixed; z-index: 6; bottom: max(14px, env(safe-area-inset-bottom)); left: max(10px, env(safe-area-inset-left)); }
+
+/* ===================================================================================================================
+   PANTALLAS DE MENÚ SOBRE LA MADERA (ESTÁNDAR; ESTANDARES-juegos.md, secciones 7 y 11). Las usan el menú principal y la pantalla de Modo libre.
+   Sin velo oscuro: el texto va directo sobre la madera (var(--txt-fondo)) y los botones son los .b3d de siempre. Referencia: «Slither».
+   Estructura:  <div class="pant-menu" id="menu">
+                  <h1>🐍 Slither</h1>  <p>Una frase corta.</p>
+                  <div class="menu-columna">  <button class="b3d txt grande b-morado">♾️ Modo libre</button> … <button class="b3d txt b-cielo">ℹ️ Info</button>  </div>
+                </div>
+   • .pant-menu cubre la ventana, deja libre la zona de 🎮 Portal de Juegos + ☰ (≈ 190 × 92 arriba a la izquierda) y se desplaza si no cabe.
+   • .menu-columna = columna centrada de botones; los .grande miden lo mismo (hasta 300 px), «ℹ️ Info» es más chico.
+   • .modo-grupo = rótulo de un grupo de la pantalla de Modo libre; .modo-fila = su fila de botones de 44 px (elegido «b-oro on», resto «b-cielo»).
+   • .pant-menu[hidden] se oculta con el atributo hidden. El juego pone z-index mayor si lo necesita (por defecto 4: encima del canvas, debajo del mapa y los chips). */
+.pant-menu { position: fixed; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: max(104px, calc(env(safe-area-inset-top) + 96px)) max(20px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  color: var(--txt-fondo, #4a2a10); text-shadow: var(--sombra-txt, 0 2px 0 rgba(255, 240, 210, .6)); touch-action: pan-y; }
+.pant-menu[hidden] { display: none; }
+.pant-menu > :first-child { margin-top: auto; }
+.pant-menu > :last-child { margin-bottom: auto; }
+.pant-menu h1, .pant-menu h2 { margin: 0; font-size: 34px; line-height: 1.1; }
+.pant-menu p { margin: 0; max-width: 380px; line-height: 1.4; color: var(--txt-fondo-suave, #6b4423); }
+.menu-columna { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 6px; }
+.menu-columna .b3d.grande { width: min(300px, 86vw); }
+.modo-grupo { margin: 4px 0 0; font-weight: 800; font-size: 15px; color: var(--txt-fondo, #4a2a10); }
+.modo-fila { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.modo-fila .b3d.txt { --t: 44px; }
+.pant-menu .nota { font-size: 13px; }
+.pant-menu input { font: inherit; font-size: 18px; width: 240px; padding: 10px 14px; text-align: center; color: #fff; background: #23252b; border: 2px solid #4a4e58; border-radius: 12px; text-shadow: none; -webkit-user-select: text; user-select: text; }
+@media (max-height: 520px) { .pant-menu { gap: 8px; padding-top: 56px; } .pant-menu h1, .pant-menu h2 { font-size: 24px; } .pant-menu p { max-width: 560px; font-size: 14px; } }

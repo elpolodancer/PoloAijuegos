@@ -2,7 +2,7 @@
 
 Pegar en el README principal (o dejar como `ESTANDARES-juegos.md` en la raíz). La especificación de medidas y colores vive en `compartido/inmersivo.css`; aquí está lo que hay que respetar y por qué. Cada juego tiene su propio README con sus detalles.
 
-Referencias: **Conecta gominolas** (menú principal, Modo libre, mapa, botón ☰ «Pausa/Atrás» y menú de pausa: secciones 1 y 7), **Estacionamiento** (mapa, niveles, monedas) y **Rubik** (juego sin niveles). De **Puzle deslizante** solo se tomó la idea del botón azul oscuro del portal.
+Referencias: **Conecta gominolas** (menú principal, Modo libre, mapa, botón ☰ «Pausa/Atrás» y menú de pausa: secciones 1 y 7), **Slither** (lo mismo con un juego a pantalla completa: menú y Modo libre con las clases `.pant-menu`, fin «sobre el tablero» sin velo; secciones 6, 7 y 11), **Estacionamiento** (mapa, niveles, monedas) y **Rubik** (juego sin niveles). De **Puzle deslizante** solo se tomó la idea del botón azul oscuro del portal.
 
 ## 1. Botones fijos (en TODOS los juegos)
 
@@ -84,7 +84,7 @@ El juego solo indica cuántos niveles tiene cada etapa (`porEtapa`), el progreso
 **No llevan mapa ni niveles.** Su menú principal sigue la sección 7 pero solo con «♾️ Modo libre» (y «ℹ️ Info» si la necesitan): no tienen Continuar ni Niveles. Antes tenía lo mínimo: el selector de lo que se juega (en Rubik, el modelo de cubo) y, dentro de la partida, el botón de revolver. Todo sobre el fondo de madera clara u oscura y con los botones fijos de la sección 1. Detalle en `rubik/README-rubik.md`.
 
 ## 5. Para registrar un juego nuevo o cambiado
-Anotarlo en `juegos.js`, en `JUEGOS` de `sw.js`, subir `VERSION`, y agregar su fila y nota «Estado» al README principal.
+Anotarlo en `juegos.js`, en `JUEGOS` de `sw.js`, subir `VERSION`, y agregar su fila y nota «Estado» al README principal. Para **pasarlo a la zona «Juegos» (terminado)** ver la sección 11.
 
 ## 6. Fin de nivel: «Siguiente nivel ▶» sobre el tablero
 
@@ -94,6 +94,7 @@ En todos los juegos con niveles, al terminar un nivel el botón **Siguiente nive
 - Estilos en `compartido/inmersivo.css` (clase `.sobre-tablero`, con la estructura de ejemplo en el comentario). La ventana **no bloquea** el tablero (`pointer-events: none`; solo el texto y los botones reciben toques).
 - El juego pone la ventana encima del tablero asignando `left`, `top`, `width` y `height` (px) = rectángulo del tablero en pantalla, recortado a la ventana; si el tablero casi no se ve (muy acercado o muy movido), toda la ventana. Si el jugador mueve o acerca la vista con la ventana abierta, el juego la recoloca. Ejemplo: `colocarVictoria()` en `estacionamiento/juego-estacionamiento.js`.
 - En el último nivel del juego el botón «Siguiente» se oculta.
+- **Juegos donde el tablero es toda la ventana** (Slither, Agario…): no se asignan `left/top/width/height`; la ventana cubre la pantalla y centra su contenido (sigue sin bloquear los toques). En el botón principal de la ventana, si no hay «Siguiente» (derrota, Modo libre), el primero y más grande es «Reintentar» / «Jugar otra vez»; las demás opciones (Mapa de niveles, Cambiar mapa y bots) van debajo en `.sobre-fila` y en `b-cielo`.
 
 ## 7. Menú principal, Modo libre, mapa, ☰ y pausa (estándar de TODOS los juegos)
 
@@ -110,6 +111,7 @@ Pantalla de inicio: un título (`h1`, emoji + nombre del juego), una frase corta
 | 3 | **📋 Niveles** | `b-azul`, `grande` | Abre el mapa en la lista de niveles del estado o país donde va el jugador (`mapa.abrir(nivelActual)`). Solo juegos con niveles |
 | 4 | **ℹ️ Info** | `b-cielo`, tamaño normal | Ventana «Cómo se juega» (estilos `.pausa-*`) con un botón verde «Entendido». Más chico que los otros tres |
 
+- **Estilos ya hechos:** `compartido/inmersivo.css` trae `.pant-menu` (pantalla sobre la madera, texto con `--txt-fondo`, se desplaza si no cabe y deja libre la zona de 🎮 / ☰), `.menu-columna` (la columna de botones; los `.grande` miden igual, hasta 300 px) y, para el Modo libre, `.modo-grupo` y `.modo-fila`. El juego solo pone el HTML (ver el comentario de esas clases); no copia CSS propio.
 - **No hay botón 🗺️ Mapa ni 🚪 Salir.** Al mapa se llega desde «Niveles» (con «◀ México» / «◀ Mundo») y al portal se sale con «🎮 Portal de Juegos».
 - Juegos sin niveles (sección 4B): solo «♾️ Modo libre» (y «ℹ️ Info» si el juego la necesita).
 - Si el juego aún no tiene niveles, «Continuar» y «Niveles» se muestran igual y al tocar un nivel inexistente se avisa con «🚧 Los niveles todavía no están creados».
@@ -121,14 +123,14 @@ Pantalla de inicio: un título (`h1`, emoji + nombre del juego), una frase corta
 - Título «♾️ Modo libre», una frase y grupos con su rótulo («Tablero», «Dificultad»…). Cada grupo es una **fila de botones** `b3d txt` de 44 px: **el elegido es `b-oro on`** y los demás **`b-cielo`**.
 - Debajo: una nota que explica qué cambia la dificultad, el «🏆 Récord» de la combinación elegida y, al final, **«▶ Jugar»** (`b3d txt grande b-verde`).
 - Se recuerda la última selección. Cada juego decide qué grupos tiene y **cuántas dificultades** (Gominolas: 🙂 Fácil · 😐 Medio · 😈 Difícil, según cuántas negras nuevas salen por jugada fallida; ya no se exigen siempre las 5 de antes).
-- Sin monedas ni puntos (como en la sección 4A) y sin barra de boosts. Al terminar una ronda, el botón del resultado dice «⚙️ Cambiar tablero» y vuelve a esta pantalla.
+- Sin monedas ni **puntos de perfil** (como en la sección 4A) y sin barra de boosts: el Modo libre solo guarda el récord. Esto cuenta desde que el juego pasa a la zona «Juegos» (sección 11), porque desde ahí sus puntos suman al total de todos. Si el juego quiere apartarse, lo deja en una constante (`PUNTOS_LIBRE`, en Slither) y lo explica en su README. Al terminar una ronda, el botón del resultado dice «⚙️ Cambiar tablero» y vuelve a esta pantalla.
 - El ☰ dice «Atrás» y vuelve al menú principal.
 
 ### 7.3 Niveles y mapa
 
 - «Niveles» abre `compartido/mapa-niveles.js` directo en la lista de niveles de la etapa actual. Tras pasar el último nivel de una etapa, el juego vuelve al mapa con el agua subiendo (`mapa.abrir(n, true)`).
 - La vista principal del mapa (México) lleva «▶ Continuar · nivel N», «ℹ️ Info» (`alInfo`) y, solo cuando se desbloquea, «🌍 Mundo». **No lleva «Modo libre»**: al modo libre solo se entra desde el menú principal.
-- **Botón de atrás dentro del mapa:** «◀ México» (desde un estado o el mundo) y «◀ Mundo» (desde un país), `b-cielo`; suben un paso dentro del mapa y Esc hace lo mismo. El ☰ «Atrás» sale del mapa al menú principal del juego.
+- **Botón de atrás dentro del mapa:** «◀ México» (desde un estado o el mundo) y «◀ Mundo» (desde un país), `b-cielo`; suben un paso dentro del mapa y Esc hace lo mismo. El ☰ «Atrás» sale del mapa **siempre** al menú principal del juego (aunque se esté dentro de un estado o país), y Esc sube un paso dentro del mapa.
 - Cada juego dice cómo se ve cada nivel con `infoNivel` (por ejemplo ★★☆ y 🎁) y llama a `menuBoton()` en `alCambiarVista` (7.4).
 - El mundo (194 países) viene siempre armado pero oculto hasta terminar los 32 estados (secciones 4A y 9).
 
@@ -213,3 +215,18 @@ Al migrar un juego que ya tenía menú propio, **se conserva su lógica y su pro
 4. **Solo entonces** se generan los 22 600 niveles (100 por estado y por país) con la dificultad de la sección 8.
 
 Mientras un juego está en `EN_DESARROLLO` y sin publicar, sus niveles se pueden borrar y regenerar. Después de publicar **no se cambian** (cambiaría niveles que ya se pasaron).
+
+## 11. Pasar un juego a la zona «Juegos» (terminado)
+
+Mientras un juego está en `EN_DESARROLLO` (`juegos.js`) sus puntos **nunca suman al total** (`jugador.js`: solo guardan la mejor marca y, si juega el administrador, van a `totalPrueba`). Al pasarlo a «Juegos» **empiezan a contar para todos**, así que antes de pasarlo se revisa esta lista, en este orden:
+
+1. **Estándares completos** (secciones 1, 2, 7 y 9): 🎮 Portal de Juegos, ☰ Pausa/Atrás en `b-cielo`, madera, ⛶, menú principal con **♾️ Modo libre · ▶ Continuar · 📋 Niveles · ℹ️ Info**, 👤 Iniciar sesión, pantalla de Modo libre, mapa armado con el mundo oculto, pausa estándar y fin de nivel sobre el tablero (6). Ningún `b-gris` en menús ni `velo` oscuro propio: las pantallas de menú usan `.pant-menu` y la ayuda («Cómo se juega») la ventana `.pausa-*` con «Entendido».
+2. **Puntos revisados.** El Modo libre no da puntos de perfil (7.2). Los niveles dan puntos **solo la primera vez** que se pasan y con tope por envío (`MAX_PUNTOS_POR_ENVIO` = 1000 en `jugador.js` y `cola-puntos.js`, igual que las reglas de Firestore). Se comprueba que no hay forma de repetir algo sin límite y que sume.
+3. **Niveles completos y comprobados:** los 22 600 (o los que el juego declare) generados **después** de los estándares (sección 10), con su verificador en consola (`verificar-<juego>.mjs`, «Todo cumple»). Si el reparto de dificultad se aparta de la sección 8, el README del juego lo explica (Slither: 50/40/10 → 25/35/40).
+4. **Progreso local primero** con `conectar()` y puntos pendientes con `encolarPuntos()`; `jugador.js` y `progreso.js` se cargan con `import()` y `try/catch` para que el juego abra sin internet.
+5. **Probado:** flujo completo (menú → Modo libre → partida → pausa → salir; Niveles → mapa → nivel → ganar/perder → Mapa/Siguiente; recargar con progreso), en escritorio **y en celular real** (las pruebas con navegador sin pantalla no sustituyen tocar con el dedo).
+6. **Registro:** quitar el id de `EN_DESARROLLO` en `juegos.js`; comprobar que su carpeta y archivos están en `JUEGOS` de `sw.js` (y que los de solo consola **no**); subir `VERSION` con una línea de «Última versión»; fila de «Mapa de archivos» y nota «Estado» en el README principal (con la fecha y qué falta, p. ej. sonido o imagen de tarjeta).
+7. **Imagen de tarjeta** (`imagenes/<juego>.webp`, anotada en `ARCHIVOS` de `sw.js` y en el campo `imagen` de `juegos.js`): recomendada pero **no obligatoria**; sin ella el portal muestra el icono y el nombre. Si falta, se deja como pendiente en el README.
+
+Pasar un juego a terminado **no cambia sus niveles** (sección 10): después de publicar ya no se tocan.
+
