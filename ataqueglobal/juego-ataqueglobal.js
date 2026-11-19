@@ -1,7 +1,7 @@
 // Ruta: ataqueglobal/juego-ataqueglobal.js
 // Ataque Global (id de puntos «ataqueglobal»): guerra de misiles sobre el mapa del mundo. Plan completo en README-ataqueglobal.md.
 // ESTADO ACTUAL (fase 1): menú principal, el mundo como GLOBO 3D con giro, zoom y países seleccionables, y el mapa de niveles estándar.
-// Todavía NO hay bots que jueguen: Fácil/Normal/Difícil abren el mundo (la dificultad queda guardada en «dificultad»), y los niveles muestran un aviso.
+// Bots: ya EXPANDEN (BOT_EXPANSION, según la dificultad); todavía no fabrican misiles ni atacan. Fácil/Normal/Difícil abren el mundo; los niveles muestran un aviso.
 // BOTONES DE ATAQUE (armas-ataqueglobal.js): 💀 apunta todos los misiles (niveles 1, 2 y 3) y ✈ solo los de nivel 1; se elige el objetivo, se confirma y salen únicamente los que alcanzan.
 // MENÚ CIRCULAR: al tocar un país TUYO salen Expandir (si hay vecinos libres), Misil nivel 1 e Investigar (menu-pais-ataqueglobal.js); las 8 mejoras están en investigacion-ataqueglobal.js.
 // NIEBLA DE GUERRA: TODA partida empieza con el planeta tapado por una niebla negra y solo se ve el 10 % alrededor del país propio (ver VISION).
@@ -36,7 +36,19 @@ const PAISES_INICIALES = { facil: ["MX"], normal: ["MX"], dificil: ["MX"] };
 
 // Tiempos (README 5.1 y 5.2). Con «?rapido» en la dirección duran la décima parte, para probar sin esperar un minuto por mejora.
 const TIEMPO = new URLSearchParams(location.search).has("rapido") ? 0.1 : 1;
-const MS_EXPANDIR = 25000, MS_MISIL1 = 5000, MISILES_INICIALES = 2;
+const MS_EXPANDIR = 25000, MS_MISIL1 = 5000;
+// Los misiles NO cuestan nada (no hay dinero en el juego): solo ocupan una casilla del arsenal. Cada país empieza —y también al ser conquistado— con sus 2 casillas VACÍAS
+// y va llenándolas fabricando (5 s cada misil). Antes empezaba con 2 misiles ya guardados, el arsenal estaba lleno y por eso «Misil nivel 1» salía bloqueado.
+const MISILES_INICIALES = 0;
+
+// BOTS (README 5.7): cada enemigo expande a países vecinos sin dueño con la misma regla del jugador (25 s por país × «factor»).
+//   inicio    ms que espera el primer bot para empezar (casi «luego luego»);  escalon  ms extra por cada bot siguiente (no arrancan todos al mismo tiempo)
+//   factor    multiplica los 25 s de expandir (> 1 = más lento);  paralelo  cuántos países de un mismo bot pueden expandirse a la vez (1 = de uno en uno)
+const BOT_EXPANSION = {
+  facil:   { inicio: 3000, escalon: 1200, factor: 1.2, paralelo: 1 },
+  normal:  { inicio: 2000, escalon: 900,  factor: 1,   paralelo: 2 },
+  dificil: { inicio: 1000, escalon: 600,  factor: 0.8, paralelo: 99 },
+};
 const CAPACIDAD_BASE = 2, CAPACIDAD_RESILIENCIA = 4; // casillas de misiles por país: 2 al inicio; con «Resiliencia suprema» (8) sube a 4 (README 5.3; el 5 y el tope definitivo siguen en duda, 9.2)
 // Alcance de cada nivel de misil, como fracción de la superficie del planeta (igual que la niebla: 50 % = un hemisferio, 90° desde el país que lo lanza).
 // ❓ Nivel 1 «corto» no tiene número en el README: se usa el 10 % provisional. Nivel 3: README dice 66 % y también «todo el mundo» (duda 1).
@@ -50,13 +62,13 @@ const menu = $("menu"), lienzo = $("mundo"), btnMenu = $("btn-menu"), txtMenu = 
 const hud = $("hud"), chipModo = $("chip-modo"), zoom = $("zoom"), ficha = $("ficha"), velo = $("velo");
 
 let pantalla = "menu";      // menu | mundo | niveles
-let dificultad = "normal";  // se usará cuando existan los bots (ver README, sección de dificultades)
+let dificultad = "normal";  // facil | normal | dificil: hoy define el ritmo de expansión de los bots (BOT_EXPANSION)
 let nivelVision = 0;        // índice en VISION: sube con las mejoras de Inteligencia
 let propios = [];           // países del jugador (de aquí sale lo que se ve bajo la niebla)
 let pausado = false;        // el reloj de las acciones se detiene mientras está abierto el menú de pausa
 let menuPais = null;        // menú circular (se crea más abajo, después del mundo)
 const ocupado = new Map();  // iso → { texto, total, resta, alTerminar }: un país hace UNA cosa a la vez (expandir, fabricar o investigar)
-const misiles = new Map();  // iso → [misiles nivel 1, nivel 2, nivel 3] guardados (si no está, tiene MISILES_INICIALES de nivel 1)
+const misiles = new Map();  // iso → [misiles nivel 1, nivel 2, nivel 3] guardados (si no está, tiene MISILES_INICIALES de nivel 1: hoy 0, o sea 2 casillas vacías)
 const golpes = new Map();   // iso → puntos de impacto recibidos
 const destruidos = new Set();
 let apuntando = null;       // { tipo: "todos" | "n1", objetivo: { iso, lon, lat } | null } mientras se elige a dónde disparar
@@ -64,6 +76,7 @@ let armas = null;           // botones de ataque (se crean más abajo)
 const reservados = new Set(); // países hacia los que ya se está expandiendo
 const hechas = new Set();   // números de las mejoras ya investigadas
 const enCurso = new Map();  // número de la mejora → país que la está investigando
+let bots = [];              // enemigos de la partida: { n, color, paises: [iso], trabajos: Map(origen → { destino, resta }), espera }
 const duenos = new Map();   // iso → { tipo: "jugador" | "bot", n, color }: de quién es cada país (para la ficha)
 function leerBots() { try { const n = Math.floor(Number(localStorage.getItem(CLAVE_BOTS))); return n >= BOTS_MIN && n <= BOTS_MAX ? n : BOTS_INICIAL; } catch (e) { return BOTS_INICIAL; } }
 let nBots = leerBots();     // enemigos de la partida (1 a 15), se recuerda en el aparato
@@ -193,7 +206,46 @@ function repartirPaises(n) {
   mundo.limpiarEstados(); duenos.clear();
   propios.forEach((iso) => { mundo.setDueno(iso, COLOR_JUGADOR, true); duenos.set(iso, { tipo: "jugador", color: COLOR_JUGADOR }); });
   const libres = PAISES_BOTS.filter((iso) => !propios.includes(iso));
-  for (let i = 0; i < n && i < libres.length; i++) { mundo.setDueno(libres[i], COLORES_BOTS[i]); duenos.set(libres[i], { tipo: "bot", n: i + 1, color: COLORES_BOTS[i] }); }
+  bots = [];
+  const cfg = BOT_EXPANSION[dificultad] || BOT_EXPANSION.normal;
+  for (let i = 0; i < n && i < libres.length; i++) {
+    mundo.setDueno(libres[i], COLORES_BOTS[i]); duenos.set(libres[i], { tipo: "bot", n: i + 1, color: COLORES_BOTS[i] });
+    bots.push({ n: i + 1, color: COLORES_BOTS[i], paises: [libres[i]], trabajos: new Map(), espera: (cfg.inicio + i * cfg.escalon) * TIEMPO });
+  }
+}
+// ---------- Bots: expansión ----------
+function botConquista(bot, iso) {
+  if (destruidos.delete(iso)) { golpes.delete(iso); mundo.setDestruido(iso, false); } // un país destruido se recupera expandiéndose hacia él (igual que el jugador)
+  bot.paises.push(iso);
+  duenos.set(iso, { tipo: "bot", n: bot.n, color: bot.color });
+  mundo.setDueno(iso, bot.color);
+  if (mundo.seleccionado() === iso) pintarFicha(iso);
+}
+function botPierde(iso, n) { // un país de un bot fue destruido: lo que hacía se pierde
+  const bot = bots.find((b) => b.n === n); if (!bot) return;
+  bot.paises = bot.paises.filter((x) => x !== iso);
+  const t = bot.trabajos.get(iso); if (t) { reservados.delete(t.destino); bot.trabajos.delete(iso); }
+}
+function botsTic(dt) {
+  const cfg = BOT_EXPANSION[dificultad] || BOT_EXPANSION.normal;
+  for (const bot of bots) {
+    if (bot.espera > 0) { bot.espera -= dt; continue; }
+    for (const [origen, t] of [...bot.trabajos]) { // lo que ya está expandiendo
+      t.resta -= dt;
+      if (t.resta > 0) continue;
+      bot.trabajos.delete(origen); reservados.delete(t.destino);
+      if (!duenos.has(t.destino) && bot.paises.includes(origen)) botConquista(bot, t.destino);
+    }
+    for (const origen of bot.paises) { // lo que puede empezar: un país libre expande a un vecino sin dueño que nadie más esté tomando
+      if (bot.trabajos.size >= cfg.paralelo) break;
+      if (bot.trabajos.has(origen)) continue;
+      const destinos = destinosDe(origen);
+      if (!destinos.length) continue;
+      const destino = destinos[Math.floor(Math.random() * destinos.length)];
+      reservados.add(destino);
+      bot.trabajos.set(origen, { destino, resta: MS_EXPANDIR * cfg.factor * TIEMPO });
+    }
+  }
 }
 // Botón «Centrar»: lleva la cámara exactamente a tu país
 function centrar() { if (propios[0]) mundo.centrarEn(propios[0]); }
@@ -217,7 +269,7 @@ function empezarPartida(paisesPropios, bots) {
 }
 // ---------- Acciones de un país propio (menú circular) ----------
 function limpiarPartida() {
-  ocupado.clear(); misiles.clear(); reservados.clear(); hechas.clear(); enCurso.clear(); golpes.clear(); destruidos.clear(); pausado = false;
+  ocupado.clear(); misiles.clear(); reservados.clear(); bots = []; hechas.clear(); enCurso.clear(); golpes.clear(); destruidos.clear(); pausado = false;
   terminarApuntado(); mundo.cancelarVuelos();
   if (menuPais) { menuPais.cerrarPanel(); menuPais.cerrar(); }
 }
@@ -236,6 +288,7 @@ function ocupar(iso, o) {
 }
 function ganarPais(iso) {
   if (destruidos.delete(iso)) { golpes.delete(iso); mundo.setDestruido(iso, false); } // un país destruido se recupera expandiéndote hacia él
+  misiles.delete(iso); // país recién conquistado: sus 2 casillas de arsenal empiezan vacías
   propios.push(iso);
   duenos.set(iso, { tipo: "jugador", color: COLOR_JUGADOR });
   mundo.setDueno(iso, COLOR_JUGADOR, true);
@@ -398,7 +451,7 @@ function destruirPais(iso) {
     const o = ocupado.get(iso); if (o) { ocupado.delete(iso); if (o.alCancelar) o.alCancelar(); }
     misiles.delete(iso); aplicarVision();
     menuPais.aviso(nombreTerritorio(iso) + " fue destruido");
-  } else menuPais.aviso(nombreTerritorio(iso) + " fue destruido");
+  } else { if (d && d.tipo === "bot") botPierde(iso, d.n); menuPais.aviso(nombreTerritorio(iso) + " fue destruido"); }
   if (mundo.seleccionado() === iso) { pintarFicha(iso); menuPais.cerrar(); }
   menuPais.refrescar(); refrescarArmas();
 }
@@ -428,7 +481,9 @@ let ultimoTic = 0;
 setInterval(() => {
   const ahora = performance.now(), dt = Math.min(500, ahora - (ultimoTic || ahora));
   ultimoTic = ahora;
-  if (pantalla !== "mundo" || pausado || document.hidden || !ocupado.size) { menuPais.tic(); refrescarArmas(); return; }
+  if (pantalla !== "mundo" || pausado || document.hidden) { menuPais.tic(); refrescarArmas(); return; }
+  botsTic(dt);
+  if (!ocupado.size) { menuPais.tic(); refrescarArmas(); return; }
   let termino = false;
   for (const [iso, o] of [...ocupado]) { o.resta -= dt; if (o.resta <= 0) { ocupado.delete(iso); o.alTerminar(); termino = true; } }
   if (termino) menuPais.refrescar(); else menuPais.tic();

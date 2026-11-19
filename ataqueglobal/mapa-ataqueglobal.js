@@ -21,6 +21,8 @@
 //   vecinosDe("MX") → ids de los territorios que tocan a MX (PROVISIONAL: se calcula con los contornos; ver el comentario de VECINOS).
 import { PAISES, NOMBRES_ESPECIALES, DIVISIONES } from "./paises-ataqueglobal.js";
 import { nombrePais } from "../compartido/etapas-mapa.js";
+import { crearCompactador } from "./compactar-ataqueglobal.js";
+import { CIUDADES } from "./ciudades-ataqueglobal.js";
 
 // Estados Unidos, Canadá y Rusia NO existen como un solo territorio: están partidos en divisiones independientes (ids US1…US5, CA1…CA9, RU1…RU7;
 // ver DIVISIONES en paises-ataqueglobal.js). Cada división se comporta como un país más (dueño, selección, niebla, destrucción).
@@ -39,16 +41,27 @@ export const banderaTerritorio = (iso) => {
 };
 
 const RAD = Math.PI / 180, DOS_PI = Math.PI * 2;
+// COMPACTAR EL OCÉANO: 0 = mapa real; 1 = quita mucha agua (los continentes se acercan y los países quedan ~20 % más grandes en grados); entre 0 y 1 = a medias.
+// Se aplica una sola vez al cargar los contornos (ver compactar-ataqueglobal.js y su tabla compactacion-ataqueglobal.js). Cambiarlo mueve los países: dónde queda cada uno
+// y qué tan lejos está de otro (alcances de misiles, niebla, vecinos). No lo cambies con partidas ya guardadas.
+const COMPACTACION = 1;
+// true: el planeta se ve MÁS CHICO (÷ ESCALA_COMPACTACION) y cada país conserva en pantalla el tamaño que tenía antes. false: el planeta se ve igual de grande y los países se ven ~20 % más grandes.
+const PLANETA_ENCOGIDO = true;
 const PASO_MAX = 2;            // al preparar los contornos, ningún lado mide más de esto (grados): así las líneas largas se curvan con el globo
 const ZOOM_MAX = 30;           // veces que se puede acercar desde el planeta completo
-const TIERRAS = ["#2f5f2b", "#356a30", "#2a5527"]; // verde oscuro de tierra con césped: tres tonos casi iguales (cada país usa uno, estable por código)
+const TIERRAS = ["#3a2616", "#33200f", "#412b1a"]; // tierra café oscuro: tres tonos casi iguales (cada país usa uno, estable por código)
 const ALFA_BOT = 0.72;         // un país de un bot se tiñe MUCHO de su color para identificarlo de un vistazo
 const ALFA_JUGADOR = 0.12;     // tu país conserva su verde casi intacto: lo que lo distingue es su trazo brillante
 // NIEBLA DE GUERRA. La visión se mide como fracción de la SUPERFICIE del planeta: un casquete esférico alrededor de cada país propio.
 // Un casquete que cubre la fracción f tiene radio angular θ con cos θ = 1 − 2f: 10 % ≈ 37°, 50 % = un hemisferio, 100 % = todo (sin niebla).
 const FUNDIDO_NIEBLA = 0.07;   // borde difuso (en coseno): dentro del radio se ve limpio y, un poco afuera, se oscurece hasta negro total
 const MARGEN_TOQUE = 0.02;     // dentro de este margen del borde el terreno aún cuenta como visto; más afuera no se puede tocar ni se escribe su nombre
-const COLOR_SEL = "#86d65e", COLOR_DESTRUIDO = "#0b0b0b"; // el seleccionado se aclara a verde césped (y lleva trazo blanco)
+const COLOR_SEL = "#7a4f2c", COLOR_DESTRUIDO = "#0b0b0b"; // el seleccionado se aclara a café medio (y lleva trazo blanco)
+const COLOR_FRONTERA = "rgba(255,226,170,.9)";   // fronteras claras que resaltan sobre la tierra oscura
+const COLOR_FRONTERA_NIEBLA = "rgba(214,170,120,.30)"; // fronteras tenues que siguen viéndose bajo la niebla negra
+// LUCECITAS DE CIUDADES (ver ciudades-ataqueglobal.js): se dibujan encima de la niebla, así que se ven en todo el planeta y parpadean.
+const LUCES_SATELITE = 5;      // máximo de puntitos extra alrededor de una gran ciudad (más habitantes = más puntitos)
+const LUCES_RADIO_SAT = 1.3;   // dispersión de esos puntitos (grados, antes de compactar)
 
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 const azar = (semilla) => () => ((semilla = (Math.imul(semilla, 1664525) + 1013904223) >>> 0) / 4294967296);
@@ -95,10 +108,12 @@ function dentro(a, x, y) { // punto en anillo (par-impar)
 }
 const vec = (lon, lat) => [Math.cos(lat * RAD) * Math.cos(lon * RAD), Math.cos(lat * RAD) * Math.sin(lon * RAD), Math.sin(lat * RAD)];
 
+const COMPACTADOR = crearCompactador({ fuerza: COMPACTACION });
+export const ESCALA_COMPACTACION = COMPACTADOR.escala; // ≈ cuántas veces más grande (en ángulo) queda un país respecto al mapa real
 const LISTA = [];
 for (const iso of Object.keys(PAISES)) {
   const d = PAISES[iso];
-  const orig = d.r.map((f) => Float32Array.from(f));
+  const orig = d.r.map((f) => Float32Array.from(COMPACTADOR.anillo(f))); // contornos ya compactados (y con lados de ≤ 2°)
   let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, mayor = null, areaMayor = -1;
   const partes = []; // cada anillo con su ancho y alto (para poder elegir el principal por un punto «centro»)
   for (const a of orig) {
@@ -110,7 +125,7 @@ for (const iso of Object.keys(PAISES)) {
     if (ar > areaMayor) { areaMayor = ar; mayor = partes[partes.length - 1]; }
   }
   const fijo = DIVISIONES[iso] && DIVISIONES[iso].centro; // división con partes separadas (Alaska): la parte principal es la que contiene este punto
-  if (fijo) { const p = partes.find((q) => dentro(q.a, fijo[0], fijo[1])); if (p) mayor = p; }
+  if (fijo) { const f = COMPACTADOR.punto(fijo[0], fijo[1]); const p = partes.find((q) => [0, -360, 360].some((o) => dentro(q.a, f[0] + o, f[1]))); if (p) mayor = p; }
   const [cx, cy, area] = centroide(mayor.a);
   const cv = vec(cx, cy);
   let ang = 0; // radio angular del país (para saber si está del lado oculto sin proyectarlo)
@@ -128,12 +143,28 @@ for (const iso of Object.keys(PAISES)) {
 LISTA.sort((p, q) => Number(p.micro) - Number(q.micro) || q.area - p.area); // grandes primero, marcadores al final
 const POR_ISO = new Map(LISTA.map((p) => [p.iso, p]));
 
+// ----- Luces de ciudades (una sola vez): cada ciudad se coloca con el mismo compactador que los países, así cae justo donde quedó -----
+const LUCES = (() => {
+  const out = [], r = azar(777);
+  CIUDADES.forEach(([lon, lat, pop], i) => {
+    const gran = Math.min(1, Math.sqrt(pop) / 5.5); // 0..1: tamaño de la luz
+    const mk = (x, y, g, a) => { const q = COMPACTADOR.punto(x, y); return { lon: q[0], lat: q[1], g, a, f: 0.8 + r() * 2.4, ph: r() * DOS_PI, cal: r() < 0.7 ? 0 : 1 }; };
+    out.push(mk(lon, lat, 0.35 + 0.65 * gran, 1));
+    const n = Math.min(LUCES_SATELITE, Math.round(pop / 3.5));
+    for (let k = 0; k < n; k++) {
+      const ang = r() * DOS_PI, d = (0.25 + r() * LUCES_RADIO_SAT) * (0.5 + gran);
+      out.push(mk(lon + Math.cos(ang) * d / Math.max(0.3, Math.cos(lat * RAD)), lat + Math.sin(ang) * d, 0.12 + 0.2 * r(), 0.55));
+    }
+  });
+  return out;
+})();
+
 // ----- Vecindad (PROVISIONAL, README fase 2: grafo real con Natural Earth) -----
-// Dos territorios son vecinos si algún vértice de uno queda a menos de ~1° de un vértice del otro (los contornos generados comparten sus fronteras).
+// Dos territorios son vecinos si algún vértice de uno queda a menos de ~1° (×ESCALA_COMPACTACION) de un vértice del otro (los contornos generados comparten sus fronteras).
 // Los que quedan sin vecino (islas) se enlazan con los 2 más cercanos a menos de 25°, en los dos sentidos.
 let VECINOS = null;
 function calcularVecinos() {
-  const CELDA = 0.6, celdas = new Map(), clave = (x, y) => x + "," + y, V = new Map();
+  const CELDA = 0.6 * ESCALA_COMPACTACION, celdas = new Map(), clave = (x, y) => x + "," + y, V = new Map();
   for (const p of LISTA) for (const a of p.orig) for (let i = 0; i < a.length; i += 2) {
     const k = clave(Math.floor(a[i] / CELDA), Math.floor(a[i + 1] / CELDA));
     let s = celdas.get(k); if (!s) { s = new Set(); celdas.set(k, s); } s.add(p.iso);
@@ -149,7 +180,7 @@ function calcularVecinos() {
   for (const p of LISTA) {
     if (V.get(p.iso).size) continue;
     const cerca = LISTA.filter((q) => q !== p).map((q) => [q, Math.acos(acotar(p.cv[0] * q.cv[0] + p.cv[1] * q.cv[1] + p.cv[2] * q.cv[2], -1, 1))])
-      .filter((x) => x[1] <= 25 * RAD).sort((a, b) => a[1] - b[1]).slice(0, 2);
+      .filter((x) => x[1] <= 25 * ESCALA_COMPACTACION * RAD).sort((a, b) => a[1] - b[1]).slice(0, 2);
     for (const [q] of cerca) { V.get(p.iso).add(q.iso); V.get(q.iso).add(p.iso); }
   }
   return V;
@@ -282,7 +313,7 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
     W = w; H = h; dpr = d;
     lienzo.width = Math.round(W * dpr); lienzo.height = Math.round(H * dpr);
     const antes = Rmin;
-    Rmin = Math.min(W, H) * (W < H ? 0.42 : 0.27); // planeta completo con espacio alrededor, como en la imagen de referencia
+    Rmin = (Math.min(W, H) * (W < H ? 0.42 : 0.27)) / (PLANETA_ENCOGIDO ? ESCALA_COMPACTACION : 1); // planeta completo con espacio alrededor, como en la imagen de referencia
     Rmax = Rmin * ZOOM_MAX;
     if (primera) cam.R = Rmin; else cam.R = cam.R * (Rmin / antes);
     limitar(); hacerFondo();
@@ -382,10 +413,10 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
     }
     // 3) luz y sombra del planeta (lado de noche abajo a la derecha, oscurecido hacia el borde)
     const s = ctx.createRadialGradient(CX - R * 0.32, CY - R * 0.28, R * 0.1, CX, CY, R * 1.35);
-    s.addColorStop(0, "rgba(0,0,15,0)"); s.addColorStop(0.5, "rgba(0,0,15,.05)"); s.addColorStop(1, "rgba(0,0,15,.68)");
+    s.addColorStop(0, "rgba(0,0,15,.12)"); s.addColorStop(0.5, "rgba(0,0,15,.2)"); s.addColorStop(1, "rgba(0,0,15,.75)");
     ctx.fillStyle = s; ctx.fillRect(CX - R, CY - R, R * 2, R * 2);
     // 4) fronteras claras
-    ctx.lineWidth = acotar(R * 0.0035, 0.8, 2.2); ctx.strokeStyle = "rgba(255,238,205,.6)";
+    ctx.lineWidth = acotar(R * 0.004, 0.9, 2.4); ctx.strokeStyle = COLOR_FRONTERA;
     for (const v of vis) ctx.stroke(v[1]);
     for (const m of marcadores) { ctx.beginPath(); ctx.arc(m[1][0], m[1][1], m[2], 0, DOS_PI); ctx.stroke(); }
     // 4b) Trazo de los dueños: cada bot con su color; TU país con un trazo más grueso, con resplandor y un filo blanco (el más brillante de todos)
@@ -425,7 +456,15 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
       else { const v = vis.find((x) => x[0].iso === sel); if (v) ctx.stroke(v[1]); }
     }
     // NIEBLA NEGRA: tapa todo lo que quede fuera de la visión (países, fronteras, marcas de destrucción y selección)
-    if (prepararNiebla()) { ctx.imageSmoothingEnabled = true; ctx.drawImage(niebla.lienzo, 0, 0, niebla.mw * niebla.div, niebla.mh * niebla.div); }
+    const hayNiebla = prepararNiebla();
+    if (hayNiebla) {
+      ctx.imageSmoothingEnabled = true; ctx.drawImage(niebla.lienzo, 0, 0, niebla.mw * niebla.div, niebla.mh * niebla.div);
+      // Bajo la niebla todavía se adivinan los trazos de los países (tenues; en la zona despejada se suman a las fronteras claras sin notarse)
+      ctx.lineWidth = acotar(R * 0.003, 0.8, 1.8); ctx.strokeStyle = COLOR_FRONTERA_NIEBLA;
+      for (const v of vis) ctx.stroke(v[1]);
+      for (const m of marcadores) { ctx.beginPath(); ctx.arc(m[1][0], m[1][1], m[2], 0, DOS_PI); ctx.stroke(); }
+    }
+    pintarLuces(R);
     ctx.restore();
     // Borde luminoso del planeta
     ctx.lineWidth = 2; ctx.strokeStyle = "rgba(150,170,255,.75)";
@@ -455,6 +494,26 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
       rotulos.set(p.iso, { ty, tam });
     }
     if (celdasDe) pintarCeldas(rotulos);
+  }
+
+  // ---------- Lucecitas de ciudades: tintinean y reflejan el nivel de población (más habitantes = más grande, más brillante, más puntitos) ----------
+  function pintarLuces(R) {
+    const t = performance.now() / 1000, antes = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = "lighter";
+    const grande = R > Rmin * 2.5; // al acercarse el cielo nocturno se llena de más detalle
+    for (const L of LUCES) {
+      const q = proy(L.lon, L.lat);
+      if (q[2] < 0.04) continue;
+      if (q[0] < -20 || q[0] > W + 20 || q[1] < -20 || q[1] > H + 20) continue;
+      const tint = 0.55 + 0.45 * Math.sin(t * L.f * 2 + L.ph) * Math.sin(t * L.f * 0.7 + L.ph * 1.7); // parpadeo irregular
+      const a = acotar(L.a * (0.45 + 0.55 * Math.max(0, tint)) * Math.min(1, q[2] * 2.2), 0, 1); // se apaga hacia el borde del planeta
+      const rad = (1.1 + 4.2 * L.g) * Math.min(2.2, 0.7 + R / (Rmin * 4)) * (grande ? 1 : 0.9);
+      const col = L.cal ? "255,214,120" : "255,244,214";
+      const g = ctx.createRadialGradient(q[0], q[1], 0, q[0], q[1], rad * 3.2);
+      g.addColorStop(0, "rgba(" + col + "," + a.toFixed(3) + ")"); g.addColorStop(0.3, "rgba(255,170,70," + (a * 0.35).toFixed(3) + ")"); g.addColorStop(1, "rgba(255,150,40,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(q[0], q[1], rad * 3.2, 0, DOS_PI); ctx.fill();
+    }
+    ctx.globalCompositeOperation = antes;
   }
 
   // ---------- Casillas de misiles dentro de TUS países ----------
@@ -613,10 +672,14 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
     if (!visibleVec(vec(lon, lat))) return null; // bajo la niebla no se puede tocar nada
     for (let i = LISTA.length - 1; i >= 0; i--) { // países: del más chico al más grande
       const p = LISTA[i];
-      if (p.micro || lon < p.bbox[0] || lon > p.bbox[2] || lat < p.bbox[1] || lat > p.bbox[3]) continue;
-      let r = false;
-      for (const a of p.orig) if (dentro(a, lon, lat)) r = !r;
-      if (r) return p.iso;
+      if (p.micro || lat < p.bbox[1] || lat > p.bbox[3]) continue;
+      for (const o of [0, -360, 360]) { // los contornos compactados pueden pasar de ±180°
+        const x = lon + o;
+        if (x < p.bbox[0] || x > p.bbox[2]) continue;
+        let r = false;
+        for (const a of p.orig) if (dentro(a, x, lat)) r = !r;
+        if (r) return p.iso;
+      }
     }
     return marcador(18); // islas pequeñas en el mar: un poco más de margen al tocar
   }
