@@ -10,6 +10,7 @@ import { montarMapa } from "../compartido/mapa-niveles.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
 import { crearMundo, nombreTerritorio, banderaTerritorio, vecinosDe, centroTerritorio, radioTerritorio, distanciaAngular } from "./mapa-ataqueglobal.js";
 import { crearArmas } from "./armas-ataqueglobal.js";
+import { crearAjustes } from "./ajustes-ataqueglobal.js";
 import { crearMenuPais, mmss } from "./menu-pais-ataqueglobal.js";
 import { MEJORAS, SUPERARMAS, estadoMejora, faltan, basicasCompletas, porNumero } from "./investigacion-ataqueglobal.js";
 // EE. UU. (US1–US5), Canadá (CA1–CA9) y Rusia (RU1–RU7) son varios territorios cada uno: ver DIVISIONES en paises-ataqueglobal.js.
@@ -71,6 +72,7 @@ const ocupado = new Map();  // iso → { texto, total, resta, alTerminar }: un p
 const misiles = new Map();  // iso → [misiles nivel 1, nivel 2, nivel 3] guardados (si no está, tiene MISILES_INICIALES de nivel 1: hoy 0, o sea 2 casillas vacías)
 const golpes = new Map();   // iso → puntos de impacto recibidos
 const destruidos = new Set();
+let expandiendo = null;     // { origen } mientras eliges, tocando un país resaltado del mapa, hacia dónde expandirte
 let apuntando = null;       // { tipo: "todos" | "n1", objetivo: { iso, lon, lat } | null } mientras se elige a dónde disparar
 let armas = null;           // botones de ataque (se crean más abajo)
 const reservados = new Set(); // países hacia los que ya se está expandiendo
@@ -118,12 +120,14 @@ $("z-menos").addEventListener("click", () => mundo.zoom(1 / 1.6));
 $("z-todo").addEventListener("click", () => mundo.reiniciarVista());
 
 // ---------- Pausa (dentro del mundo) ----------
+// Ajustes (música, efectos, pantalla completa): se abren desde la pausa; al cerrarlos la partida sigue
+const ajustes = crearAjustes({ alCerrar: () => { if (pantalla === "mundo") pausado = false; } });
 const pausa = crearMenuPausa({
   boton: btnMenu,
   puedeAbrir: () => { if (pantalla !== "mundo") return false; if (menuPais) menuPais.cerrarPanel(); return true; },
   alAbrir: () => { pausado = true; },
   alContinuar: () => { pausado = false; },
-  extras: () => [{ icono: "🌍", texto: "Ver todo el mundo", clase: "b-azul", alElegir: () => { pausado = false; mundo.reiniciarVista(); } }],
+  extras: () => [{ icono: "⚙️", texto: "Ajustes", clase: "b-gris", alElegir: () => { pausado = true; ajustes.abrir(); setTimeout(() => { if (ajustes.abierto()) pausado = true; }, 0); } }, { icono: "🌍", texto: "Ver todo el mundo", clase: "b-azul", alElegir: () => { pausado = false; mundo.reiniciarVista(); } }],
   alSalir: () => mostrarMenu(),
 });
 
@@ -172,12 +176,10 @@ function mostrarMenu() {
   propios = []; nivelVision = 0; mundo.limpiarEstados(); duenos.clear(); aplicarVision(); // fuera de una partida el mundo vuelve a quedar tapado y limpio
   ver("menu");
 }
-// El mundo se juega con el celular en horizontal: se intenta pantalla completa + bloqueo (Android lo permite; iPhone no, ahí solo sale el aviso «gira tu celular»)
+// El mundo se juega con el celular en horizontal. YA NO se pide pantalla completa sola: se activa a mano en Pausa → Ajustes.
+// Si el jugador ya está en pantalla completa, se bloquea la orientación horizontal (Android lo permite; iPhone no, ahí solo sale el aviso «gira tu celular»).
 async function pedirHorizontal() {
-  try {
-    if (!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
-    if (screen.orientation && screen.orientation.lock) await screen.orientation.lock("landscape");
-  } catch (e) {}
+  try { if (document.fullscreenElement && screen.orientation && screen.orientation.lock) await screen.orientation.lock("landscape"); } catch (e) {}
 }
 function soltarHorizontal() { try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) {} }
 // ---------- Selector de enemigos (menú) ----------
@@ -270,7 +272,7 @@ function empezarPartida(paisesPropios, bots) {
 // ---------- Acciones de un país propio (menú circular) ----------
 function limpiarPartida() {
   ocupado.clear(); misiles.clear(); reservados.clear(); bots = []; hechas.clear(); enCurso.clear(); golpes.clear(); destruidos.clear(); pausado = false;
-  terminarApuntado(); mundo.cancelarVuelos();
+  terminarApuntado(); terminarExpansion(); mundo.cancelarVuelos();
   if (menuPais) { menuPais.cerrarPanel(); menuPais.cerrar(); }
 }
 const arsenal = (iso) => { if (!misiles.has(iso)) misiles.set(iso, [MISILES_INICIALES, 0, 0]); return misiles.get(iso); };
@@ -306,14 +308,32 @@ function expandir(origen, destino) {
     alTerminar: () => { reservados.delete(destino); if (!duenos.has(destino)) { ganarPais(destino); menuPais.aviso(banderaTerritorio(destino) + " " + nombreTerritorio(destino) + " ahora es tuyo"); } },
   });
 }
+// Con un solo destino se expande directo; con varios, los países a los que puedes expandirte se RESALTAN en el mapa y tocas el que quieras.
 function elegirDestino(origen) {
   const d = destinosDe(origen);
   if (!d.length) return;
   if (d.length === 1) { expandir(origen, d[0]); return; }
-  menuPais.abrirPanel({
-    titulo: "Expandir", sub: "¿Hacia dónde? Tarda 25 s y mientras tanto este país no puede fabricar ni investigar.",
-    filas: () => destinosDe(origen).map((v) => ({ texto: banderaTerritorio(v) + " " + nombreTerritorio(v), alElegir: () => { menuPais.cerrarPanel(); expandir(origen, v); } })),
-  });
+  empezarExpansion(origen, d);
+}
+function empezarExpansion(origen, destinos) {
+  if (apuntando) terminarApuntado();
+  menuPais.cerrarPanel(); mundo.seleccionar(null);
+  expandiendo = { origen };
+  mundo.resaltar(destinos);
+  mundo.modoApuntar(alTocarExpansion);
+  armas.banner("Elige hacia dónde expandirte: toca un país resaltado (tarda 25 s)");
+}
+function alTocarExpansion(t) {
+  if (!expandiendo) return;
+  const origen = expandiendo.origen;
+  if (t.iso && destinosDe(origen).includes(t.iso)) { terminarExpansion(); expandir(origen, t.iso); return; }
+  menuPais.aviso(!t.iso ? (t.lon == null ? "Toca sobre el planeta" : t.visible ? "Toca un país resaltado" : "Esa zona está bajo la niebla") : "Ese país no está disponible: toca uno resaltado");
+}
+function terminarExpansion() {
+  if (!expandiendo) return;
+  expandiendo = null;
+  mundo.resaltar(null); mundo.modoApuntar(null);
+  if (armas) armas.banner(null);
 }
 
 // Misil de nivel 1 (5 s)
@@ -386,6 +406,7 @@ function planDeTiro(tipo, lon, lat) {
   return { grupos, total, llegan };
 }
 function empezarApuntado(tipo) {
+  terminarExpansion();
   if (apuntando) { cancelarApuntado(); return; } // pulsar otra vez el mismo botón cancela
   if (!totalMisiles(tipo)) return;
   menuPais.cerrarPanel(); mundo.seleccionar(null);
@@ -416,7 +437,7 @@ function terminarApuntado() {
   if (mundo) { mundo.modoApuntar(null); mundo.setMira(null); }
   if (armas) { armas.banner(null); armas.confirmar(null); refrescarArmas(); }
 }
-function cancelarApuntado() { if (apuntando) terminarApuntado(); }
+function cancelarApuntado() { if (expandiendo) terminarExpansion(); else if (apuntando) terminarApuntado(); } // «Cancelar» del aviso y Esc sirven para apuntar y para expandir
 function confirmarDisparo() {
   if (!apuntando || !apuntando.objetivo) return;
   const { tipo, objetivo } = apuntando, plan = planDeTiro(tipo, objetivo.lon, objetivo.lat); // se recalcula: el arsenal pudo cambiar mientras se apuntaba
@@ -483,6 +504,7 @@ setInterval(() => {
   ultimoTic = ahora;
   if (pantalla !== "mundo" || pausado || document.hidden) { menuPais.tic(); refrescarArmas(); return; }
   botsTic(dt);
+  if (expandiendo) { const d = destinosDe(expandiendo.origen); if (!d.length || ocupado.has(expandiendo.origen) || !propios.includes(expandiendo.origen)) terminarExpansion(); else mundo.resaltar(d); } // los resaltados se actualizan si un bot toma uno
   if (!ocupado.size) { menuPais.tic(); refrescarArmas(); return; }
   let termino = false;
   for (const [iso, o] of [...ocupado]) { o.resta -= dt; if (o.resta <= 0) { ocupado.delete(iso); o.alTerminar(); termino = true; } }

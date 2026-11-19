@@ -16,6 +16,7 @@
 //   mundo.setDueno("MX", "#ffb020"); mundo.setDestruido("BR", true); mundo.limpiarEstados(); mundo.paises();
 //   mundo.posicion("MX") → { x, y, visible }: dónde cae el centro del país en pantalla (lo usa el menú circular). crearMundo({ alCuadro }) llama a alCuadro tras pintar cada cuadro.
 //   mundo.modoApuntar(fn) → mientras haya fn, tocar el mapa NO selecciona: llama fn({ x, y, lon, lat, iso, visible }) (iso = territorio tocado, null si es mar o está bajo la niebla); modoApuntar(null) lo apaga.
+//   mundo.resaltar([iso, …]) marca países con un relleno y trazo dorados que pulsan (resaltar(null) los suelta).
 //   mundo.setMira(lon, lat) dibuja una mira en ese punto (setMira(null) la quita). mundo.lanzar({ de:[lon,lat], a:[lon,lat], ms, espera, color, alImpactar }) manda un misil: vuela, explota y llama alImpactar. mundo.cancelarVuelos().
 //   centroTerritorio(iso) → [lon, lat]; radioTerritorio(iso) → grados; distanciaAngular([lon,lat],[lon,lat]) → grados.
 //   vecinosDe("MX") → ids de los territorios que tocan a MX (PROVISIONAL: se calcula con los contornos; ver el comentario de VECINOS).
@@ -212,6 +213,7 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
   const anchoTexto = new Map();
   const punteros = new Map();
   let arrastre = null, pellizco = null;
+  let resaltados = new Set(); // países marcados (p. ej. a los que puedes expandirte): relleno y trazo dorados que pulsan
   let apuntador = null, mira = null; // modo apuntar (tocar el mapa llama a apuntador) y su mira
   const vuelos = [], explosiones = [];
 
@@ -393,7 +395,8 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
     }
     // 1) halo de aguas poco profundas alrededor de las costas
     const halo = Math.min(18, 3 + R * 0.02);
-    if (calidad < 2) {
+    const moviendo = !!(arrastre && arrastre.movido) || !!inercia || !!tween || performance.now() - ultimoToque < 140; // mientras giras o acercas se omite el halo (lo más pesado) para ir fluido
+    if (calidad < 2 && !moviendo) {
       ctx.lineWidth = halo; ctx.strokeStyle = "rgba(70,210,200,.13)";
       for (const v of vis) ctx.stroke(v[1]);
       if (calidad < 1) { ctx.lineWidth = halo * 0.5; ctx.strokeStyle = "rgba(90,230,210,.2)"; for (const v of vis) ctx.stroke(v[1]); }
@@ -437,6 +440,18 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
       const w = acotar(R * 0.008, 2.4, 4.4);
       for (const [e, trazar] of mios) { ctx.globalAlpha = 0.35; ctx.lineWidth = w * 3; ctx.strokeStyle = e.dueno; trazar(); ctx.globalAlpha = 1; ctx.lineWidth = w; trazar(); }
       for (const [, trazar] of mios) { ctx.lineWidth = Math.max(1, w * 0.4); ctx.strokeStyle = "rgba(255,255,255,.9)"; trazar(); }
+    }
+    // Países resaltados (a los que puedes expandirte): relleno dorado que pulsa y trazo con resplandor. Va ANTES de la niebla: bajo ella no se ve.
+    if (resaltados.size) {
+      const u = 0.5 + 0.5 * Math.sin(performance.now() / 260);
+      ctx.fillStyle = "rgba(255,200,70," + (0.22 + 0.26 * u).toFixed(3) + ")";
+      for (const v of vis) if (resaltados.has(v[0].iso)) ctx.fill(v[1], "evenodd");
+      for (const m of marcadores) if (resaltados.has(m[0].iso)) { ctx.beginPath(); ctx.arc(m[1][0], m[1][1], m[2], 0, DOS_PI); ctx.fill(); }
+      ctx.lineWidth = acotar(R * 0.007, 2.4, 4.6); ctx.strokeStyle = "rgba(255,214,96," + (0.75 + 0.25 * u).toFixed(3) + ")";
+      ctx.shadowColor = "rgba(255,190,50,.95)"; ctx.shadowBlur = 8 + 8 * u;
+      for (const v of vis) if (resaltados.has(v[0].iso)) ctx.stroke(v[1]);
+      for (const m of marcadores) if (resaltados.has(m[0].iso)) { ctx.beginPath(); ctx.arc(m[1][0], m[1][1], m[2], 0, DOS_PI); ctx.stroke(); }
+      ctx.shadowBlur = 0; ctx.shadowColor = "transparent";
     }
     // Destrucción: mancha carbonizada y grietas rojas
     for (const [iso, e] of estado) {
@@ -819,6 +834,7 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
     zoom(factor) { irA(cam.lon, cam.lat, cam.R * factor, 200); },
     seleccionar,
     seleccionado: () => sel,
+    resaltar(isos) { resaltados = new Set(isos || []); }, // resaltar(["BR","AR"]) marca esos países; resaltar(null) los suelta
     modoApuntar(fn) { apuntador = fn || null; lienzo.style.cursor = apuntador ? "crosshair" : "grab"; },
     setMira(lon, lat) { mira = lon == null ? null : { lon, lat }; },
     lanzar({ de, a, ms = 5000, espera = 0, color = "#fff", alImpactar }) { // espera: milisegundos antes de despegar (para escalonar varios misiles)
