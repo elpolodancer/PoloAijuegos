@@ -1,17 +1,17 @@
 {
-  "name": "Juegos",
-  "short_name": "Juegos",
+  "name": "Portal de Juegos El Polo",
+  "short_name": "El Polo",
   "description": "Portal de juegos: piano, buscaminas, burbujas y más.",
   "lang": "es",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#121316",
-  "theme_color": "#121316",
+  "background_color": "#0b0d3d",
+  "theme_color": "#0b0d3d",
   "icons": [
     { "src": "iconos/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "iconos/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "iconos/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "iconos/icono-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
