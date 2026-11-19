@@ -10,7 +10,7 @@ import { montarMapa } from "../compartido/mapa-niveles.js";   // menú principal
 import { crearEtapas } from "../compartido/etapas-mapa.js";   // 32 estados + 194 países
 import { TABLEROS, DIFICULTADES, parametrosLibre, parametrosNivel } from "./logica-gominolas.js"; // balance: tableros, dificultades, negras y movimientos (el bot de pruebas usa los mismos números)
 import { nivelDe } from "./catalogo-gominolas.js"; // qué tablero, dificultad, tipo y patrón tiene cada uno de los 22 600 niveles
-import { estrellasDe, estrellasDeNivel, ponerEstrellas, unirEstrellas, recompensa, carteraVacia, saldo, ganarMonedas, gastarMonedas, unirCarteras, unirProgresoGominolas } from "./cartera-gominolas.js"; // monedas, cartera y estrellas
+import { PRECIOS, estrellasDe, estrellasDeNivel, ponerEstrellas, unirEstrellas, recompensa, carteraVacia, saldo, ganarMonedas, gastarMonedas, unirCarteras, unirProgresoGominolas } from "./cartera-gominolas.js"; // monedas, cartera y estrellas
 let nube = null; // se llena al cargar compartido/progreso.js (abajo del todo)
 let entrar = async () => { throw new Error("Sesión no disponible sin conexión"); };
 
@@ -48,6 +48,12 @@ const PODERES = {
   horizontal: { icono: "↔️" },
   vertical: { icono: "↕️" },
   color: { icono: "🎨" },
+};
+// Boosts de la tienda (cuestan PRECIOS.* de cartera-gominolas.js): clase = color del botón; ayuda = letrero mientras se apunta (ver «Boosts» más abajo)
+const BOOSTS = {
+  quitar: { clase: "b-rojo", ayuda: "🗑️ Toca la gominola que quieres quitar" },
+  revolver: { clase: "b-azul", ayuda: "" },
+  color: { clase: "b-morado", ayuda: "🎨 Toca una gominola de color: dentro de una cadena rompe todas las de ese color" },
 };
 
 const NEGRA = -1;           // valor de «k» de una gominola negra
@@ -87,6 +93,10 @@ const pantMenu = document.getElementById("pantMenu");     // menú principal: Co
 const pantLibre = document.getElementById("pantLibre");   // modo libre: elegir tablero y dificultad
 const ovlMapa = document.getElementById("ovlMapa");
 const rotNivel = document.getElementById("rotNivel");
+const elBoosts = document.getElementById("boosts");           // barra de boosts (tienda dentro de la partida)
+const elBoostAyuda = document.getElementById("boostAyuda");   // letrero sobre el tablero mientras se apunta un boost
+const botonesBoost = {};                                      // { quitar: { el, precio }, revolver: …, color: … }
+for (const id of ["quitar", "revolver", "color"]) botonesBoost[id] = { el: document.getElementById("b" + id[0].toUpperCase() + id.slice(1)), precio: document.getElementById("p" + id[0].toUpperCase() + id.slice(1)) };
 
 // ---------- Estado ----------
 let grid = [];          // grid[fila][col] = { k: color (o NEGRA), y: fila visual, v: velocidad, p: poder ("horizontal" | "vertical" | "color", solo en ositos con poder) }
@@ -113,6 +123,7 @@ let ultimo = 0;
 let partida = 0;        // número de intento: evita que un aviso tardío del perfil se pegue al texto de otra pantalla
 let usuario = null;     // sesión de Google (null si no ha entrado)
 let modo = "campana";   // "campana" (mapa de niveles) | "libre" (rondas sin fin)
+let boostActivo = null; // boost que se está apuntando: "quitar" | "color" (null = ninguno)
 let libre = { t: TABLEROS[0], d: DIFICULTADES.facil, ronda: 1 }; // lo elegido en el modo libre y la ronda en juego
 let recordsLibre = {};  // { "l_6x8_facil": rondas superadas (récord) }; viaja con el progreso a la cuenta (se une con el máximo)
 const CLAVE_SEL = "gominolas_libre_sel";
@@ -136,7 +147,7 @@ function guardarProg() {
 }
 // Chip dorado de monedas (arriba a la derecha). gastar(n) cobra si alcanza (los boosts de la tienda cuestan PRECIOS.* de cartera-gominolas.js)
 const elMonedas = document.getElementById("monedas");
-function pintarMonedas() { if (elMonedas) elMonedas.textContent = saldo(cartera).toLocaleString("es-MX"); }
+function pintarMonedas() { if (elMonedas) elMonedas.textContent = saldo(cartera).toLocaleString("es-MX"); pintarBoosts(); }
 function gastar(n) {
   if (!gastarMonedas(cartera, idDisp, n)) return false;
   pintarMonedas(); guardarProg();
@@ -154,12 +165,14 @@ const TOTAL_NIVELES = ETAPAS.total;
 const btnMenu = document.getElementById("btn-menu");
 
 // «☰» (estándar): en el menú principal del juego NO se muestra; en el resto de pantallas (niveles, modo libre, resultados) dice
-// «Menú principal» y vuelve a él; dentro de una partida dice «Pausa» y abre el menú de pausa.
+// «Atrás» y vuelve a él; dentro de una partida dice «Pausa» y abre el menú de pausa.
 function menuBoton() {
   const enMenu = !pantMenu.hidden;
   const enPartida = !enMenu && pantLibre.hidden && !mapa.abierto() && estado === "jugando";
   btnMenu.hidden = enMenu;
-  document.getElementById("txt-menu").textContent = enPartida ? "Pausa" : "Menú principal";
+  if (estado !== "jugando") cancelarBoost(); // al ganar, perder o salir ya no hay boost apuntado
+  pintarBoosts();
+  document.getElementById("txt-menu").textContent = enPartida ? "Pausa" : "Atrás";
   btnMenu.title = enPartida ? "Pausa" : "Volver al menú principal";
 }
 // Ventana «Info» del mapa (usa los estilos .pausa-* de compartido/inmersivo.css)
@@ -190,7 +203,7 @@ const mapa = montarMapa({
   },
   alInfo: abrirInfo,
   alCambiarVista: () => menuBoton(),
-  botonesExtra: [{ icono: "♾️", texto: "Modo libre", clase: "b-morado", fn: () => { mapa.cerrar(); mostrarLibre(); } }], // estándar: junto a «Continuar»
+  // Sin botón de «Modo libre» aquí: solo se entra desde el menú principal
 });
 function abrirMapa(aguaSube) {
   estado = "inicio"; cadena = null;
@@ -203,10 +216,13 @@ function abrirMapa(aguaSube) {
 const opcionesPausa = {
   boton: btnMenu,
   puedeAbrir: () => estado === "jugando" && !mapa.abierto() && pantMenu.hidden && pantLibre.hidden,
-  alAbrir: () => { cadena = null; },
-  extras: () => (modo === "libre" ? [] : [{ icono: "🔄", texto: "Reiniciar nivel", clase: "b-azul", ayuda: "Vuelves a empezar este nivel con tus puntos de antes.", alElegir: () => empezar() }]),
-  textoSalir: "Salir al mapa",
-  alSalir: () => (modo === "libre" ? mostrarLibre() : abrirMapa(false)),
+  alAbrir: () => { cadena = null; cancelarBoost(); },
+  extras: () => (modo === "libre" ? [] : [
+    { icono: "🔄", texto: "Reiniciar nivel", clase: "b-azul", ayuda: "Vuelves a empezar este nivel con tus puntos de antes.", alElegir: () => empezar() },
+    { icono: "📋", texto: "Niveles", clase: "b-azul", ayuda: "Vas a la zona de niveles. Se pierde lo avanzado en este nivel.", alElegir: () => abrirMapa(false) },
+  ]),
+  textoSalir: "Menú principal",
+  alSalir: () => (modo === "libre" ? mostrarLibre() : mostrarMenu()),
   ayudaSalir: () => (modo === "libre" ? "La partida termina; se guarda cuántas rondas superaste." : "Se pierde lo avanzado en este nivel."),
 };
 crearMenuPausa(opcionesPausa);
@@ -550,6 +566,79 @@ function colocarPoder(f, c, poder = "color") {
   return true;
 }
 
+// ---------- Boosts (tienda dentro de la partida) ----------
+// Se compran con monedas (PRECIOS de cartera-gominolas.js) y solo existen en la campaña (el modo libre no da monedas). Ninguno gasta movimiento
+// ni castiga con negras nuevas, y solo se cobran cuando se aplican de verdad:
+//   🗑️ Quitar   toca UNA gominola y la quita (si es una negra con candados, pierde un candado; si queda pegada a una negra, esa negra también sale, como siempre)
+//   🔀 Revolver baraja los colores del tablero (los ositos con poder y las negras no se mueven)
+//   🎨 Color    toca una gominola de color y se vuelve 🎨: dentro de una cadena de su color rompe TODAS las gominolas de ese color
+// (la lista BOOSTS está arriba, junto a PODERES, porque pintarMonedas() la usa al cargar)
+function avisoTablero(txt) { textos.push({ x: tam * COLUMNAS / 2, y: tam * FILAS * 0.5, vida: 1.5, txt }); }
+// Pone al día los tres botones: precio, si alcanzan las monedas y cuál se está apuntando
+function pintarBoosts() {
+  if (!elBoosts) return;
+  elBoosts.hidden = modo === "libre";
+  if (modo === "libre") return;
+  const monedas = saldo(cartera), jugando = estado === "jugando";
+  for (const id in BOOSTS) {
+    const b = botonesBoost[id], activo = boostActivo === id, alcanza = monedas >= PRECIOS[id];
+    b.precio.textContent = PRECIOS[id];
+    b.el.className = "b3d txt boost " + (activo ? "b-oro on" : jugando && alcanza ? BOOSTS[id].clase : "b-gris");
+    b.el.setAttribute("aria-pressed", String(activo));
+    b.el.setAttribute("aria-disabled", String(!jugando || (!alcanza && !activo)));
+  }
+}
+function cancelarBoost() {
+  boostActivo = null;
+  if (elBoostAyuda) elBoostAyuda.hidden = true;
+  pintarBoosts();
+}
+// Toque en un botón de boost: «revolver» actúa al momento; «quitar» y «color» piden después tocar una gominola (otro toque en el botón lo cancela)
+function usarBoost(id) {
+  if (estado !== "jugando" || modo === "libre" || cayendo()) return;
+  cadena = null; puntoPrevio = null;
+  if (boostActivo === id) { cancelarBoost(); return; }
+  const falta = PRECIOS[id] - saldo(cartera);
+  if (falta > 0) { cancelarBoost(); avisoTablero("Te faltan " + falta + " monedas"); return; }
+  if (id === "revolver") {
+    cancelarBoost();
+    if (!gastar(PRECIOS.revolver)) return;
+    barajar();
+    textos.push({ x: tam * COLUMNAS / 2, y: tam * FILAS / 2, vida: 1.2, txt: "🔀 ¡Revuelto!" });
+    [330, 392, 494].forEach((f, i) => setTimeout(() => tono(f, 0.12), i * 70));
+    return;
+  }
+  boostActivo = id;
+  elBoostAyuda.textContent = BOOSTS[id].ayuda;
+  elBoostAyuda.hidden = false;
+  pintarBoosts();
+}
+// Se terminó de aplicar un boost sobre el tablero: caen las de arriba y se revisa si ya no quedan negras (sin gastar movimiento ni castigar)
+function cerrarBoost() {
+  caer();
+  if (fase === "senuelo") { if (contarNegras() === 0) revelar(); }
+  else if (contarNegras() === 0) { actualizarHud(); ganar(); return; }
+  actualizarHud();
+}
+// Toque sobre el tablero con un boost apuntado: p = { f, c }. Solo se cobra si la jugada es válida.
+function aplicarBoost(p) {
+  const id = boostActivo, g = grid[p.f][p.c];
+  if (!id || !g) return;
+  if (id === "color" && (g.k < 0 || g.p)) { avisoTablero("Elige una gominola de color sin poder"); return; }
+  if (!gastar(PRECIOS[id])) { cancelarBoost(); avisoTablero("No te alcanzan las monedas"); return; }
+  cancelarBoost();
+  if (id === "quitar") {
+    romper([[p.f, p.c]]);
+    [494, 392, 330].forEach((f, i) => setTimeout(() => tono(f, 0.1), i * 60));
+    cerrarBoost();
+  } else {
+    colocarPoder(p.f, p.c, "color");
+    textos.push({ x: (p.c + 0.5) * tam, y: (g.y + 0.5) * tam, vida: 1.2, txt: "🎨" });
+    [523, 659, 784].forEach((f, i) => setTimeout(() => tono(f, 0.12), i * 70));
+  }
+}
+for (const id in BOOSTS) botonesBoost[id].el.addEventListener("click", () => usarBoost(id));
+
 function juntar(cad) {
   const n = cad.length;
   const ganancia = Math.round(n * PUNTOS_BASE + (n - MIN_CADENA) * (n - MIN_CADENA) * (PUNTOS_BASE / 2));
@@ -594,6 +683,7 @@ lienzo.addEventListener("pointerdown", (ev) => {
   if (estado !== "jugando" || cayendo()) return;
   const p = celdaEn(ev);
   if (!p) return;
+  if (boostActivo) { aplicarBoost(p); return; } // con «quitar» o «color» apuntado, el toque va al boost y no empieza una cadena
   if (grid[p.f][p.c].k === NEGRA) return; // las negras no se pueden arrastrar
   try { lienzo.setPointerCapture(ev.pointerId); } catch (e) {}
   cadena = [{ f: p.f, c: p.c }];
@@ -665,13 +755,14 @@ function actualizarHud() {
   rotNivel.textContent = modo === "libre" ? "Ronda" : "Nivel";
   elBarra.style.width = Math.max(0, (movs / movsIni) * 100) + "%";
   elBarra.classList.toggle("poco", movs <= 3);
+  pintarBoosts();
 }
 
 // Empieza el nivel n (el que se elige en el mapa o el siguiente tras ganar)
 function jugar(n) {
   actual = Math.max(1, Math.min(TOTAL_NIVELES, Math.floor(Number(n)) || 1));
   modo = "campana";
-  opcionesPausa.textoSalir = "Salir al mapa";
+  opcionesPausa.textoSalir = "Menú principal";
   pantMenu.hidden = true; pantLibre.hidden = true; escena.hidden = false;
   empezar();
 }
@@ -685,6 +776,7 @@ function empezar() {
   movsIni = par.movs;
   movs = movsIni;
   cadena = null;
+  boostActivo = null; if (elBoostAyuda) elBoostAyuda.hidden = true; // un boost apuntado no pasa al nivel siguiente
   particulas = [];
   textos = [];
   revisar = false;
@@ -1102,6 +1194,10 @@ function dibujar() {
     ctx.beginPath(); ctx.arc(p.x, p.y, tam * 0.07, 0, Math.PI * 2); ctx.fill();
   }
   ctx.globalAlpha = 1;
+  if (boostActivo) { // marco dorado mientras se apunta un boost
+    ctx.strokeStyle = "rgba(255,196,0," + (0.65 + 0.3 * Math.sin(performance.now() / 180)).toFixed(2) + ")";
+    ctx.lineWidth = 6; ctx.strokeRect(3, 3, tam * COLUMNAS - 6, tam * FILAS - 6);
+  }
   if (destello > 0) { // destello blanco al salir todas las negras (nivel sorpresa)
     ctx.fillStyle = "rgba(255,255,255," + (destello * 0.65).toFixed(2) + ")";
     ctx.fillRect(0, 0, tam * COLUMNAS, tam * FILAS);

@@ -20,9 +20,22 @@
     #barra.poco { background: #ff4d5e; }
     .tablero { position: relative; flex: none; overflow: hidden; border-radius: 22px; background: linear-gradient(160deg, #e3d3fb, #bfa3ee); border: 3px solid #a98ae0; box-shadow: 0 8px 0 #8d6fcb, 0 14px 22px rgba(60,30,110,.35); touch-action: none; user-select: none; -webkit-user-select: none;
       /* --asp (columnas ÷ filas) y --maxw los pone juego-gominolas.js según el tablero (6×8 … 14×16) */
-      width: min(calc(100vw - 24px), calc((100vh - 216px) * var(--asp, 0.75)), var(--maxw, 480px));
-      width: min(calc(100vw - 24px), calc((100dvh - 216px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * var(--asp, 0.75)), var(--maxw, 480px)); }
+      /* 268 px = lo que ocupan arriba (marcadores) y abajo (barra de boosts) */
+      width: min(calc(100vw - 24px), calc((100vh - 268px) * var(--asp, 0.75)), var(--maxw, 480px));
+      width: min(calc(100vw - 24px), calc((100dvh - 268px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * var(--asp, 0.75)), var(--maxw, 480px)); }
     canvas { display: block; width: 100%; touch-action: none; }
+    /* Boosts (🗑️ Quitar · 🔀 Revolver · 🎨 Color): barra bajo el tablero; se ocultan en el modo libre (no da monedas) */
+    .boosts { display: flex; flex: none; gap: 6px; width: min(calc(100vw - 24px), 480px); }
+    .boosts[hidden] { display: none; }
+    .boosts .boost { flex: 1 1 0; min-width: 0; height: auto; min-height: 48px; padding: 4px 6px; font-size: 13px; line-height: 1.1;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .boost .precio { font-size: 12px; font-weight: 800; }
+    .boost .precio::before { content: ""; display: inline-block; width: .85em; height: .85em; margin-right: 3px; vertical-align: -1px; box-sizing: border-box;
+      border-radius: 50%; border: 2px solid #a86a00; background: radial-gradient(circle at 35% 30%, #fff3a8, #ffc928 60%, #d99100); } /* moneda dibujada en CSS (el emoji 🪙 no se ve en sistemas viejos) */
+    /* Letrero sobre el tablero mientras se apunta «quitar» o «color» */
+    .boost-ayuda { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 3; width: max-content; max-width: calc(100% - 16px); padding: 6px 12px;
+      text-align: center; font-size: 13px; font-weight: 800; line-height: 1.25; color: #fff; background: rgba(59,42,115,.92); border: 2px solid #fff; border-radius: 14px; pointer-events: none; }
+    .boost-ayuda[hidden] { display: none; }
     .hud-der { z-index: 7; } /* el botón de entrar queda por encima del mapa */
     .ovl { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; justify-content: safe center; gap: 12px; padding: 24px; text-align: center; background: rgba(10,10,12,.84); color: #fff; overflow-y: auto; }
     .ovl.oculto { display: none; }
@@ -52,6 +65,7 @@
       .fila-chips { flex-direction: column; flex-wrap: nowrap; align-items: stretch; width: 100%; padding: 0; }
       .fila-chips .chip { justify-content: space-between; }
       .tiempo { width: 100%; }
+      .boosts { position: fixed; z-index: 5; flex-direction: column; width: 112px; left: max(10px, env(safe-area-inset-left)); top: calc(104px + env(safe-area-inset-top, 0px)); } /* columna a la izquierda, bajo «🎮 Juegos» y «Atrás» */
       .tablero { width: calc((100vh - 24px) * var(--asp, 0.75)); width: calc((100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * var(--asp, 0.75)); }
     }
   </style>
@@ -71,7 +85,7 @@
     <div class="pant-botones">
       <button class="b3d txt grande b-morado" id="menuLibre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
       <button class="b3d txt grande b-verde" id="menuContinuar" type="button"><span class="b-ico">▶</span> Continuar · nivel&nbsp;<span id="menuNivel">1</span></button>
-      <button class="b3d txt grande b-azul" id="menuNiveles" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+      <button class="b3d txt grande b-azul" id="menuNiveles" type="button"><span class="b-ico">📋</span> Niveles</button>
       <button class="b3d txt b-gris" id="menuInfo" type="button"><span class="b-ico">ℹ️</span> Info</button>
     </div>
   </section>
@@ -96,12 +110,18 @@
     </div>
     <div class="tablero">
       <canvas id="lienzo"></canvas>
+      <div class="boost-ayuda" id="boostAyuda" role="status" hidden></div>
       <div class="ovl oculto" id="ovl">
         <h2 id="ovlTitulo"></h2>
         <p id="ovlTexto"></p>
         <button class="b3d txt grande b-verde" id="ovlBtn" type="button">Jugar</button>
         <button class="b3d txt b-azul" id="ovlMapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
       </div>
+    </div>
+    <div class="boosts" id="boosts" role="group" aria-label="Boosts (se pagan con monedas y no gastan movimientos)">
+      <button class="b3d txt boost b-rojo" id="bQuitar" type="button" title="Quita una gominola (o una negra) sin gastar movimiento"><span>🗑️ Quitar</span><span class="precio" id="pQuitar">50</span></button>
+      <button class="b3d txt boost b-azul" id="bRevolver" type="button" title="Revuelve los colores del tablero sin gastar movimiento"><span>🔀 Revolver</span><span class="precio" id="pRevolver">50</span></button>
+      <button class="b3d txt boost b-morado" id="bColor" type="button" title="Convierte una gominola en 🎨: en una cadena rompe todas las de su color"><span>🎨 Color</span><span class="precio" id="pColor">50</span></button>
     </div>
   </div>
   <script type="module" src="juego-gominolas.js"></script>
