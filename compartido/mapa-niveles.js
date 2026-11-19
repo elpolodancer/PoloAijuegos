@@ -24,7 +24,7 @@
 //     botonesExtra: [{ icono, texto, clase, fn }], // van a la derecha de «Continuar» (por ejemplo ♾️ Juego libre)
 //     alInfo: () => { ... },                   // botón «Info» de la vista principal
 //     avisoPrincipal: () => "texto",           // línea de información bajo el título de la vista principal
-//     alCambiarVista: (esPrincipal) => { ... } // para rotular el botón ☰ («Menú principal» no se muestra en la vista principal)
+//     alCambiarVista: (esPrincipal) => { ... } // avisa de cada cambio de vista (el juego vuelve a rotular el ☰: «Atrás» mientras el mapa está abierto)
 //   });
 //   mapa.abrir();                // vista principal
 //   mapa.abrir(n);               // abre la lista de niveles de la etapa del nivel n
@@ -399,7 +399,7 @@ export function montarMapa(o) {
     const hechos = acotar(p.hecho - base, 0, NIVELES_POR_ETAPA);
     titulo.textContent = "📍 " + e.nombre;
     info.textContent = "Etapa " + (indice + 1) + " de " + NUM_ESTADOS + " · " + hechos + " de " + NIVELES_POR_ETAPA + " niveles completados";
-    boton("México", "◀", "b-gris", () => ir("mexico"));
+    boton("México", "◀", "b-cielo", () => ir("mexico"));
     if (p.max > base && p.max <= base + NIVELES_POR_ETAPA) botonContinuar();
     rejillaNiveles(base);
   }
@@ -409,7 +409,7 @@ export function montarMapa(o) {
     const p = prog();
     titulo.textContent = "🌍 Mundo";
     info.textContent = "💧 " + p.paisesHechos + " de " + NUM_PAISES + " países completados · toca un país para ver sus niveles";
-    boton("México", "◀", "b-gris", () => ir("mexico"));
+    boton("México", "◀", "b-cielo", () => ir("mexico"));
     if (p.max > NIVELES_MEXICO) botonContinuar();
     cuerpo.classList.add("m-mundo");
 
@@ -446,7 +446,7 @@ export function montarMapa(o) {
     const hechos = acotar(p.hecho - base, 0, NIVELES_POR_ETAPA);
     titulo.textContent = banderaPais(codigo) + " " + nombrePais(codigo);
     info.textContent = "País " + (indice + 1) + " de " + NUM_PAISES + " · " + hechos + " de " + NIVELES_POR_ETAPA + " niveles completados";
-    boton("Mundo", "◀", "b-gris", () => ir("mundo"));
+    boton("Mundo", "◀", "b-cielo", () => ir("mundo"));
     if (p.max > base && p.max <= base + NIVELES_POR_ETAPA) botonContinuar();
     rejillaNiveles(base);
   }

@@ -43,7 +43,7 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
    | Botón                | Esquina        | Distancia      | Tamaño                    | Color (clase)      | Lo crea / clase        |
    |----------------------|----------------|----------------|---------------------------|--------------------|------------------------|
    | 🎮 Portal de Juegos  | arriba-izq.    | 8 arr., 8 izq. | alto 40, ancho auto (≈175)| azul oscuro .b-azuloscuro | <a class="b3d txt b-azuloscuro"> en .nav-juego |
-   | ☰ Pausa              | arriba-izq.    | justo debajo   | alto 40, MISMO ancho      | verde .b-verde     | <button class="b3d txt b-verde"> en .nav-juego |
+   | ☰ Pausa / ◀ Atrás   | arriba-izq.    | justo debajo   | alto 40, MISMO ancho      | azul cielo .b-cielo| <button class="b3d txt b-cielo"> en .nav-juego |
    | 🌙 / ☀️ (madera)     | abajo-izq.     | 10 izq,14 abj. | 40 × 40 (cuadrado)        | oro   .b-oro       | compartido/fondo-madera.js (.btn-fondo) |
    | ⛶ / ✕ pantalla compl.| abajo-der.     | 10 der,14 abj. | 40 × 40 (cuadrado)        | gris (fijo en JS)  | compartido/pantalla-completa.js |
    | 👤 Iniciar sesión    | arriba-der.    | 8 arr., 8 der. | alto 40, ancho auto       | azul  .b-azul      | .hud.hud-der: SIEMPRE el último (más a la derecha) |
@@ -53,11 +53,13 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
    Va en una zona libre: arriba-der. con el resto de chips, o (como en Estacionamiento) en una fila de información debajo de ☰.
 
    • 🎮 Portal de Juegos = vuelve al PORTAL (href="../"), siempre visible.
-     ☰ Pausa = abre SIEMPRE compartido/menu-pausa.js (Continuar / opciones del juego / Salir), dentro de una partida y también en
-     mapas y listas de niveles; su «Salir» vuelve al menú principal del juego. Oculto en el menú principal.
+     ☰ = UN solo botón con dos rótulos (ESTANDARES-juegos.md, sección 7.4): «Pausa» dentro de una partida (abre compartido/menu-pausa.js:
+     Continuar / opciones del juego / Menú principal) y «Atrás» en cualquier otra pantalla (mapa, niveles, Modo libre, resultados), donde
+     vuelve al menú principal del juego. Oculto en el menú principal.
    • 🌙/☀️: 🌙 en madera clara (pasa a oscura), ☀️ en madera oscura. Guarda la elección en localStorage «fondo_madera».
    • Colores (degradado de arriba a abajo, ver .b-gris y .b-oro más abajo):
        gris  #d5d9e0 → #8b93a0 → #4f5662        oro  #fff08c → #ffb020 → #a85d00
+       azul cielo (☰ y demás botones neutros)  #c4ecff → #4db8f0 → #1f72ab
        azul oscuro (🎮 Portal de Juegos)  #7d9cea → #3b63c4 → #1c3a82   (más claro que el de Deslizante, sin llegar a azul claro)
    • Zonas RESERVADAS (el juego no pone nada interactivo ahí, ni dentro de su propio marco):
        arriba-izquierda   ≈ 190 × 92   (🎮 Portal de Juegos + ☰ Pausa)
@@ -73,31 +75,29 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
    =================================================================================================================== */
 
 /* ===================================================================================================================
-   MENÚ PRINCIPAL ESTÁNDAR (obligatorio en TODOS los juegos; se crea siempre igual cuando se pide «el menú como dicta el inmersivo»)
-   Es la pantalla de inicio del juego: columna de botones grandes (b3d txt grande) centrada, sobre la madera, en ESTE orden y con
-   estos nombres. Siempre los mismos botones, siempre en el mismo orden, para que el jugador los encuentre igual en cualquier juego:
+   MENÚ PRINCIPAL ESTÁNDAR (obligatorio en TODOS los juegos; referencia: «Conecta gominolas», gominolas/index-gominolas.html)
+   Pantalla de inicio: título (h1 con emoji + nombre) y una frase, y debajo una columna de botones centrada sobre la madera, en ESTE orden:
 
-   | # | Botón            | Color (clase) | Qué hace                                                                                     |
-   |---|------------------|---------------|----------------------------------------------------------------------------------------------|
-   | 1 | ♾️ Modo libre    | b-verde       | SIEMPRE el primero. Al tocarlo DESPLIEGA debajo 5 botones de dificultad (Muy fácil b-verde, Fácil b-azul,           |
-   |   |                  |               | Normal b-morado, Difícil b-oro, Experto b-rojo) y las opciones propias del juego (tamaño del tablero…)      |
-   | 2 | 🪜 Niveles        | b-azul        | Lista de niveles de la etapa donde vas (el mapa abierto en el nivel actual: mapa.abrir(n))                  |
-   | 3 | 🗺️ Mapa          | b-azul        | Vista principal del mapa estándar de México y del mundo (compartido/mapa-niveles.js: mapa.abrir())          |
-   | 4 | 🚪 Salir         | b-rojo        | SIEMPRE el último. Vuelve al portal de juegos (href="../")                                                  |
+   | # | Botón                  | Color (clase)        | Qué hace                                                                                         |
+   |---|------------------------|----------------------|--------------------------------------------------------------------------------------------------|
+   | 1 | ♾️ Modo libre          | b-morado (grande)    | SIEMPRE el primero. Abre la pantalla de Modo libre (tablero/dificultad/Jugar), que NO es un desplegable |
+   | 2 | ▶ Continuar · nivel N  | b-verde (grande)     | Juega directo el nivel donde vas. Solo juegos con niveles                                        |
+   | 3 | 📋 Niveles             | b-azul (grande)      | Abre el mapa de niveles (compartido/mapa-niveles.js) en la lista del estado o país donde vas. Solo juegos con niveles |
+   | 4 | ℹ️ Info                | b-cielo (normal)     | Ventana «Cómo se juega» con un botón verde «Entendido». Más chico que los otros tres               |
 
-   • Modo libre: sin límite de tiradas ni de tiempo si el juego lo permite; por defecto no da monedas ni puntos (ver ESTANDARES-juegos.md).
-   • Si el juego todavía no tiene niveles, «Niveles» y «Mapa» se muestran igual (el mapa existe, aunque sus niveles estén por crear);
-     al tocar un nivel inexistente se avisa con «🚧 Los niveles todavía no están creados».
-   • No se agregan botones entre estos cuatro ni se cambia su orden; cualquier extra (ℹ️ Info, ajustes…) va en ☰ Pausa o dentro
-     de la pantalla de Modo libre, nunca en medio. «Salir» siempre queda al final.
-   • El ☰ no se muestra en este menú (es el menú principal); en Niveles, Mapa y dentro de una partida dice «Pausa»
-     y abre compartido/menu-pausa.js, cuyo «Salir» vuelve aquí. Su color es verde claro (.b-verde).
-   • MAPA con México Y mundo armados desde el primer día (crearEtapas + montarMapa: 32 estados y 194 países). El mundo y el botón 🌍
-     están OCULTOS hasta terminar los 32 estados; después los países se abren de UNO EN UNO, en el orden de PAISES_BASE (los no
-     desbloqueados no se listan). Se deja funcionando aunque el juego aún no tenga niveles. Ver secciones 4A y 9 de ESTANDARES-juegos.md.
+   • NO hay botón 🗺️ Mapa ni 🚪 Salir: al mapa se llega desde «Niveles» (◀ México / ◀ Mundo), y se sale al portal con «🎮 Portal de Juegos».
+   • Juegos sin niveles: solo ♾️ Modo libre (más ℹ️ Info si hace falta). Juegos con niveles aún sin crear: «Niveles» se muestra igual y al
+     tocar un nivel inexistente se avisa con «🚧 Los niveles todavía no están creados».
+   • MODO LIBRE = pantalla propia (no desplegable): título «♾️ Modo libre», frase, grupos con rótulo («Tablero», «Dificultad») que son filas de
+     botones b3d txt de 44 px (el elegido b-oro on, los demás b-cielo), nota de lo que cambia la dificultad, «🏆 Récord» de la combinación y,
+     al final, «▶ Jugar» (grande b-verde). Recuerda la última selección. Cada juego decide qué opciones y cuántas dificultades tiene.
+   • NIVELES Y MAPA: el mapa abre en la etapa del jugador; su vista principal lleva «Continuar · nivel N», «ℹ️ Info» y, cuando se desbloquea,
+     «🌍 Mundo». Los botones «◀ México» y «◀ Mundo» (b-cielo) suben un paso dentro del mapa (Esc hace lo mismo); el ☰ «Atrás» sale al menú.
+     El modo libre solo se entra desde el menú principal. El mundo y sus 194 países están ocultos hasta terminar los 32 estados (4A y 9).
+   • ☰ = «Pausa» en partida y «Atrás» fuera de ella (oculto en el menú principal): ver ESTANDARES-juegos.md, sección 7.4.
+   • PAUSA (en partida): ▶ Continuar · 🔄 Reiniciar nivel · 📋 Niveles · 🚪 Menú principal. En Modo libre solo Continuar y «Salir a elegir tablero».
+   • «👤 Iniciar sesión» (b3d txt b-azul): SIEMPRE en la esquina superior derecha del menú principal.
    • NO se generan niveles hasta que los estándares del juego estén completos (sección 10 de ESTANDARES-juegos.md).
-   • «👤 Iniciar sesión» (b3d txt b-azul): SIEMPRE en la esquina superior derecha del menú principal. Modo libre es un botón que, al
-     tocarlo, despliega debajo la lista de dificultades (siempre disponibles); no abre otra pantalla. Ver sección 9 de ESTANDARES-juegos.md.
    =================================================================================================================== */
 
 /* ===================================================================================================================
@@ -166,7 +166,8 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
 .b-morado { --c1: #e3bcff; --c2: #a14df0; --c3: #62209f; }
 .b-oro    { --c1: #fff08c; --c2: #ffb020; --c3: #a85d00; }
 .b-rojo   { --c1: #ffb3a8; --c2: #f0483a; --c3: #8f1c12; }
-.b-gris   { --c1: #d5d9e0; --c2: #8b93a0; --c3: #4f5662; }
+.b-gris   { --c1: #d5d9e0; --c2: #8b93a0; --c3: #4f5662; } /* solo para ⛶ y botones desactivados; los botones neutros (pausa, atrás, info, opciones) usan .b-cielo */
+.b-cielo  { --c1: #c4ecff; --c2: #4db8f0; --c3: #1f72ab; } /* ESTÁNDAR: botón neutro de todos los juegos (☰ Pausa/Atrás, ℹ️ Info, ◀ atrás del mapa, opciones sin elegir del Modo libre) */
 .b-azuloscuro { --c1: #7d9cea; --c2: #3b63c4; --c3: #1c3a82; } /* ESTÁNDAR: botón «🎮 Portal de Juegos» de todos los juegos */
 
 /* Chip de monedas ESTÁNDAR (dorado) y moneda dibujada con CSS */

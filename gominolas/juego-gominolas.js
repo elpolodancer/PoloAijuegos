@@ -226,7 +226,7 @@ const opcionesPausa = {
   ayudaSalir: () => (modo === "libre" ? "La partida termina; se guarda cuántas rondas superaste." : "Se pierde lo avanzado en este nivel."),
 };
 crearMenuPausa(opcionesPausa);
-// Fuera de una partida (mapa, modo libre, resultados) el ☰ dice «Menú principal» y vuelve al menú del juego
+// Fuera de una partida (mapa, modo libre, resultados) el ☰ dice «Atrás» y vuelve al menú del juego (ver menuBoton)
 btnMenu.addEventListener("click", () => { if (mapa.abierto() || !pantLibre.hidden || estado !== "jugando") mostrarMenu(); });
 
 // ---------- Menú principal y modo libre ----------
@@ -242,7 +242,7 @@ function mostrarMenu() {
 function botonOpcion(texto, on, fn) {
   const b = document.createElement("button");
   b.type = "button";
-  b.className = "b3d txt " + (on ? "b-oro on" : "b-gris");
+  b.className = "b3d txt " + (on ? "b-oro on" : "b-cielo");
   b.textContent = texto;
   b.setAttribute("aria-pressed", String(on));
   b.addEventListener("click", fn);

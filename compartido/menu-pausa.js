@@ -1,8 +1,8 @@
 // Ruta: compartido/menu-pausa.js
-// MENÚ DE PAUSA ESTÁNDAR de todos los juegos. El botón ☰ (arriba a la izquierda, bajo «🎮 Portal de Juegos») abre una ventana con:
+// MENÚ DE PAUSA ESTÁNDAR de todos los juegos. Dentro de una partida, el botón ☰ «Pausa» (arriba a la izquierda, bajo «🎮 Portal de Juegos») abre una ventana con:
 //     ▶ Continuar          (siempre primero)
-//     … opciones propias del juego (por ejemplo «💾 Guardar progreso de este nivel y salir»)
-//     🚪 Salir             (siempre al final)
+//     … opciones propias del juego (por ejemplo «🔄 Reiniciar nivel» y «📋 Niveles»)
+//     🚪 Menú principal    (siempre al final; en Modo libre suele decir «Salir a elegir tablero»)
 // No importa Firebase ni nada más: funciona sin internet. Necesita compartido/inmersivo.css (botones .b3d y estilos .pausa-*).
 //
 // Uso en un juego:
@@ -16,7 +16,7 @@
 //       { icono: "💾", texto: "Guardar progreso y salir", clase: "b-oro", ayuda: "texto pequeño debajo", deshabilitado: false, alElegir: guardarYSalir },
 //     ],
 //     alSalir: () => { /* vuelve al menú principal del juego */ },
-//     // más opciones: titulo ("Pausa"), textoContinuar ("Continuar"), textoSalir ("Salir"),
+//     // más opciones: titulo ("Pausa"), textoContinuar ("Continuar"), textoSalir ("Menú principal"),
 //     //               ayudaSalir (texto o función que lo devuelve: aviso de lo que se pierde), tecla (false = sin Esc)
 //   });
 //   pausa.abrir();  pausa.cerrar();  pausa.abierto();
@@ -24,9 +24,9 @@
 // Reglas:
 // - «alContinuar» solo se llama si la persona elige Continuar, toca fuera de la ventana o pulsa Esc. Si elige «Salir» o una opción
 //   extra, el juego decide qué hacer en «alSalir» / «alElegir» (y ahí mismo debe soltar la pausa que puso en «alAbrir»).
-// - El botón ☰ se rotula SIEMPRE «☰ Pausa» y siempre abre este menú. En las pantallas sin partida (modo libre, listas de niveles,
-//   mapa) no hay nada que congelar: no pases alAbrir/alContinuar y deja que «Salir» (alSalir) vuelva al menú principal del juego.
-//   En el menú principal del juego el ☰ no se muestra.
+// - El ☰ es UN solo botón con dos rótulos (ESTANDARES-juegos.md, sección 7.4): «Pausa» dentro de una partida (abre este menú) y «Atrás» en el
+//   resto de pantallas (mapa, niveles, Modo libre, resultados), donde vuelve al menú principal del juego y NO abre la pausa. Para eso
+//   «puedeAbrir» debe devolver false fuera de una partida (así tampoco choca la tecla Esc con la del mapa). En el menú principal el ☰ no se muestra.
 // - Teclado: Esc abre y cierra; Tab se queda dentro de la ventana. No usa confirm(): todo ocurre dentro de la página.
 
 export function crearMenuPausa(o = {}) {
@@ -77,7 +77,7 @@ export function crearMenuPausa(o = {}) {
       opcion(x.icono || "•", x.texto, x.clase || "b-azul", () => { cerrar(false); if (x.alElegir) x.alElegir(); }, x);
     }
     const ay = typeof o.ayudaSalir === "function" ? o.ayudaSalir() : o.ayudaSalir || "";
-    opcion("🚪", o.textoSalir || "Salir", "b-rojo", () => { cerrar(false); if (o.alSalir) o.alSalir(); }, { ayuda: ay });
+    opcion("🚪", o.textoSalir || "Menú principal", "b-rojo", () => { cerrar(false); if (o.alSalir) o.alSalir(); }, { ayuda: ay });
     return primero;
   }
 

@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="../compartido/estilos.css" />
   <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    /* Columna: marcadores + barra de movimientos + tablero 6×8. Arriba a la izquierda va «🎮 Juegos» + «☰» (≈120×92): se deja ese espacio. */
+    /* Columna: marcadores + barra de movimientos + tablero 6×8. Arriba a la izquierda va «🎮 Portal de Juegos» + «☰» (≈175×92): se deja ese espacio. */
     .inmersivo .escena { flex-direction: column; gap: 8px; padding: calc(100px + env(safe-area-inset-top, 0px)) 0 calc(8px + env(safe-area-inset-bottom, 0px)); }
     .panel-info { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: none; }
     .fila-chips { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; width: min(100vw, 520px); padding: 0 8px; }
@@ -41,7 +41,7 @@
     .ovl.oculto { display: none; }
     .ovl h2 { margin: 0; font-size: 1.7rem; }
     /* Menú principal y modo libre: pantallas sobre la madera (textos con --txt-fondo, que cambia solo con la madera clara/oscura).
-       Dejan libres las esquinas reservadas: arriba-izq. (🎮 Juegos + ☰), abajo-izq. (🌙) y abajo-der. (⛶). */
+       Dejan libres las esquinas reservadas: arriba-izq. (🎮 Portal de Juegos + ☰), abajo-izq. (🌙) y abajo-der. (⛶). */
     .pantalla { position: fixed; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; justify-content: safe center; gap: 14px; overflow-y: auto; text-align: center;
       padding: calc(104px + env(safe-area-inset-top, 0px)) 16px calc(70px + env(safe-area-inset-bottom, 0px)); color: var(--txt-fondo, #4a2a10); }
     .pantalla[hidden] { display: none; }
@@ -65,15 +65,15 @@
       .fila-chips { flex-direction: column; flex-wrap: nowrap; align-items: stretch; width: 100%; padding: 0; }
       .fila-chips .chip { justify-content: space-between; }
       .tiempo { width: 100%; }
-      .boosts { position: fixed; z-index: 5; flex-direction: column; width: 112px; left: max(10px, env(safe-area-inset-left)); top: calc(104px + env(safe-area-inset-top, 0px)); } /* columna a la izquierda, bajo «🎮 Juegos» y «Atrás» */
+      .boosts { position: fixed; z-index: 5; flex-direction: column; width: 112px; left: max(10px, env(safe-area-inset-left)); top: calc(104px + env(safe-area-inset-top, 0px)); } /* columna a la izquierda, bajo «🎮 Portal de Juegos» y «Atrás» */
       .tablero { width: calc((100vh - 24px) * var(--asp, 0.75)); width: calc((100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * var(--asp, 0.75)); }
     }
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>
   <nav class="nav-juego" aria-label="Navegación">
-    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
-    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> <span id="txt-menu">Pausa</span></button>
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Portal de Juegos</a>
+    <button class="b3d txt b-cielo" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> <span id="txt-menu">Pausa</span></button>
   </nav>
   <div class="hud hud-der">
     <span class="chip chip-monedas" id="chipMonedas" title="Tus monedas"><span class="moneda"></span><span id="monedas">0</span></span>
@@ -86,7 +86,7 @@
       <button class="b3d txt grande b-morado" id="menuLibre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
       <button class="b3d txt grande b-verde" id="menuContinuar" type="button"><span class="b-ico">▶</span> Continuar · nivel&nbsp;<span id="menuNivel">1</span></button>
       <button class="b3d txt grande b-azul" id="menuNiveles" type="button"><span class="b-ico">📋</span> Niveles</button>
-      <button class="b3d txt b-gris" id="menuInfo" type="button"><span class="b-ico">ℹ️</span> Info</button>
+      <button class="b3d txt b-cielo" id="menuInfo" type="button"><span class="b-ico">ℹ️</span> Info</button>
     </div>
   </section>
   <section class="pantalla" id="pantLibre" aria-label="Modo libre" hidden>
