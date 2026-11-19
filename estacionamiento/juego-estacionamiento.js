@@ -1,7 +1,7 @@
 // Ruta: estacionamiento/juego-estacionamiento.js
 // Saca todos los autos de un estacionamiento cuadrado (vista 2D desde arriba). El tamaño cambia con cada nivel (de 10×10 a 50×50).
 // - Cada auto avanza solo hacia donde apunta su flecha; si algo le estorba, no se mueve.
-// - Al tocarlo, el auto sale en línea recta por su flecha, cruza la orilla del tablero y se desvanece (sin vía ni giros: nunca estorba a otros).
+// - Alrededor del estacionamiento hay una vía de un solo sentido (horario) con la salida en las 4 esquinas.
 // - Hay 22 600 niveles (3200 de México y 100 por cada país). Todos salen de niveles-estacionamiento.js: tamaño, autos y premio dependen solo del número
 //   de nivel, y siempre tienen solución (cada auto se coloca con su camino libre respecto a los ya colocados).
 
@@ -16,7 +16,14 @@ const CELL = 32;                    // lado de una casilla en píxeles con zoom 
 // ≥6 px = cuerpo, techo y flecha; menos (tableros enormes de lejos) = solo un rectángulo de color, que no se nota y cuesta mucho menos.
 const PX_DETALLE = 14, PX_MEDIO = 6;
 const VEL = 16;                     // casillas por segundo al salir
-const ALTO_PARED = 0.26, SUBE_TECHO = 0.05; // pared inferior visible de cada auto y cuánto sube el techo respecto a su casilla (en casillas)
+const OSCURECER = 0.72;             // tonos de los autos: los mismos colores pero más oscuros (1 = como antes; menos = más oscuro)
+// Aspecto visual (NO cambia la lógica ni la hitbox: cada auto sigue ocupando sus casillas completas)
+const DPR_MAX = 1.5;                // resolución máxima del lienzo (2 se ve un poco más nítido pero pinta 78 % más píxeles)
+const TILT = 0.64;                  // altura de la cámara: 1 = vista cenital; menos = más inclinada (0.64 ≈ 50° de elevación, como la referencia)
+const ANCHO_AUTO = 0.6;             // ancho del auto dentro de su casilla (antes 0.8): queda aire transparente alrededor
+const MARGEN_LARGO = 0.3;           // al largo del auto se le resta esto (en casillas): queda separación entre autos en fila
+const ALTO_CARROCERIA = 0.20, ALTO_CABINA = 0.15; // alturas del auto (en casillas): carrocería y cabina con ventanas
+const ALTO_TOQUE = 0.3;             // al tocar la pantalla se busca el auto a esta altura (a media carrocería), no en el suelo
 const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0]; // 0 arriba, 1 derecha, 2 abajo, 3 izquierda
 const ID_JUEGO = "estacionamiento";
 const CLAVE = "estacionamiento-progreso";
@@ -210,7 +217,7 @@ function celdasDe(c) {
   return r;
 }
 
-// ----- Salida: camino libre y animación -----
+// ----- Salida: camino libre, vía ocupada, animación -----
 function caminoLibre(c) {
   const [hx, hy] = cabeza(c);
   let x = hx + DX[c.dir], y = hy + DY[c.dir];
@@ -221,15 +228,52 @@ function caminoLibre(c) {
   return true;
 }
 
-// Ruta de un auto: línea recta desde su casilla, por donde apunta su flecha, hasta salir del tablero. No hay vía ni giros,
-// así que un auto que sale nunca bloquea a los demás (todos pueden tocarse sin esperar).
+// Datos de la ruta de un auto: de su casilla a la vía y por la vía (horario) hasta la esquina de salida
 function planear(c) {
   const [hx, hy] = cabeza(c);
   const d = c.dir;
-  const n = d === 0 ? hy + 1 : d === 1 ? N - hx : d === 2 ? N - hy : hx + 1; // casillas hasta la orilla del tablero
-  const largo = n + c.len + 6;
-  const pts = [[hx + 0.5, hy + 0.5], [hx + 0.5 + DX[d] * largo, hy + 0.5 + DY[d] * largo]];
-  return { n, pts, acum: [0, largo], nLib: n + c.len, enBorde: n, tFin: n + c.len + 4 };
+  const n = d === 0 ? hy + 1 : d === 1 ? N - hx : d === 2 ? N - hy : hx + 1; // casillas hasta la vía
+  const entrada = [hx + DX[d] * n, hy + DY[d] * n];
+  let s0, esquinaS, sd, esquina;
+  const V = N + 1; // largo de cada lado de la vía
+  if (d === 0) { s0 = hx + 1; esquinaS = V; sd = [1, 0]; esquina = [N + 0.5, -0.5]; }
+  else if (d === 1) { s0 = V + (hy + 1); esquinaS = 2 * V; sd = [0, 1]; esquina = [N + 0.5, N + 0.5]; }
+  else if (d === 2) { s0 = 2 * V + (N - hx); esquinaS = 3 * V; sd = [-1, 0]; esquina = [-0.5, N + 0.5]; }
+  else { s0 = 3 * V + (N - hy); esquinaS = 4 * V; sd = [0, -1]; esquina = [-0.5, -0.5]; }
+  const P0 = [hx + 0.5, hy + 0.5];
+  const P1 = [entrada[0] + 0.5, entrada[1] + 0.5];
+  const ext = c.len + 6;
+  const P3 = [esquina[0] + sd[0] * ext, esquina[1] + sd[1] * ext];
+  const pts = [P0, P1, esquina, P3];
+  const acum = [0];
+  for (let i = 1; i < pts.length; i++) acum.push(acum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  const enEsquina = n + (esquinaS - s0);
+  return { n, s0, corner: esquinaS, pts, acum, nLib: n + c.len, enEsquina, tFin: enEsquina + c.len + 4 };
+}
+
+// Tramo de la vía que ocupa un auto en el instante tAbs (null si no está en la vía)
+function cobertura(c, tAbs) {
+  const t = (tAbs - c.t0) * VEL;
+  if (t < c.n) return null;
+  const head = c.s0 + (t - c.n);
+  if (head - c.len + 0.5 >= c.corner + 0.5) return null;
+  const lo = Math.max(c.s0 - 0.5, head - c.len + 0.5);
+  const hi = Math.min(head, c.corner) + 0.5;
+  return [lo, hi];
+}
+function viaOcupada(nuevo) {
+  const ini = nuevo.t0 + nuevo.n / VEL;
+  const fin = nuevo.t0 + (nuevo.n + (nuevo.corner - nuevo.s0) + nuevo.len) / VEL;
+  for (let t = ini; t <= fin; t += 0.04) {
+    const a = cobertura(nuevo, t);
+    if (!a) continue;
+    for (const o of autos) {
+      if (o.estado !== 1) continue;
+      const b = cobertura(o, t);
+      if (b && a[0] < b[1] - 0.05 && b[0] < a[1] - 0.05) return true;
+    }
+  }
+  return false;
 }
 
 // Boost «Quitar un auto»: gasta un uso (o 30 monedas) y el auto desaparece; sus casillas quedan libres
@@ -283,14 +327,20 @@ function tocarAuto(c) {
     return;
   }
   const plan = planear(c);
+  const cand = Object.assign({ len: c.len, t0: T }, plan);
+  if (viaOcupada(cand)) {
+    c.bump = 0.35; c.flash = 0.4;
+    aviso("La vía de salida está ocupada, espera un momento");
+    return;
+  }
   // Su hitbox desaparece AL INSTANTE: las casillas quedan libres en cuanto se toca, aunque el auto siga animándose hacia la salida.
-  // Así se puede tocar de inmediato a los autos que estorbaba.
+  // Así se puede tocar de inmediato a los autos que estorbaba (la vía de salida sigue protegida por viaOcupada).
   Object.assign(c, plan, { estado: 1, t0: T, liberado: true });
   celdasDe(c).forEach(([x, y]) => { if (occ[y * N + x] === c.id) occ[y * N + x] = -1; });
   movs++;
 }
 
-// ----- Posición de un auto: cabeza y cola siguen la ruta (recta) -----
+// ----- Posición de un auto: cabeza y cola siguen la ruta, así gira en las curvas -----
 function puntoEn(c, d) {
   const pts = c.pts, ac = c.acum;
   if (d <= 0) {
@@ -306,18 +356,20 @@ function puntoEn(c, d) {
   return pts[pts.length - 1];
 }
 function poseDe(c) {
-  let cab, col, alfa = 1;
+  let cab, col, alfa = 1, z = 0; // z = salto del auto en casillas (solo visual)
   if (c.estado === 1) {
     const t = (T - c.t0) * VEL;
+    z = 0.035 * Math.abs(Math.sin(t * 2.6)); // rebote suave de la suspensión al avanzar
     cab = puntoEn(c, t);
     col = puntoEn(c, t - (c.len - 1));
-    alfa = 1 - clamp((t - c.enBorde - 1) / (c.len + 2), 0, 1);
+    alfa = 1 - clamp((t - c.enEsquina - 1) / (c.len + 2), 0, 1);
   } else {
     const [hx, hy] = cabeza(c);
     cab = [hx + 0.5, hy + 0.5];
     col = [cab[0] - DX[c.dir] * (c.len - 1), cab[1] - DY[c.dir] * (c.len - 1)];
     if (c.bump > 0) {
       const off = Math.sin((1 - c.bump / 0.35) * Math.PI) * 0.22;
+      z = 0.1 * Math.sin((1 - c.bump / 0.35) * Math.PI); // brinquito al chocar
       cab = [cab[0] + DX[c.dir] * off, cab[1] + DY[c.dir] * off];
       col = [col[0] + DX[c.dir] * off, col[1] + DY[c.dir] * off];
     }
@@ -325,7 +377,7 @@ function poseDe(c) {
   let dx = cab[0] - col[0], dy = cab[1] - col[1];
   const L = Math.hypot(dx, dy);
   if (L < 1e-3) { dx = DX[c.dir]; dy = DY[c.dir]; } else { dx /= L; dy /= L; }
-  return { cx: (cab[0] + col[0]) / 2, cy: (cab[1] + col[1]) / 2, dx, dy, alfa };
+  return { cx: (cab[0] + col[0]) / 2, cy: (cab[1] + col[1]) / 2, dx, dy, alfa, z };
 }
 
 // ----- Cámara -----
@@ -333,17 +385,18 @@ const cv = $("lienzo"), ctx = cv.getContext("2d");
 let cw = 300, ch = 300, dpr = 1;
 function redim() {
   const r = cv.getBoundingClientRect();
-  dpr = Math.min(2, window.devicePixelRatio || 1);
+  dpr = Math.min(DPR_MAX, window.devicePixelRatio || 1);
+  cacheAutos.clear(); pixCache = 0; // los dibujos guardados dependen de dpr
   cw = r.width; ch = r.height;
   cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
 }
-const escalaAjustada = () => Math.max(0.05, Math.min((cw - 16) / ((N + 1) * CELL), (ch - 130) / ((N + 1) * CELL))); // cabe el tablero completo; deja aire para los botones
+const escalaAjustada = () => Math.max(0.05, Math.min((cw - 16) / ((N + 2) * CELL), (ch - 130) / ((N + 2) * CELL * TILT))); // cabe la vía completa; deja aire para los botones
 function ajustarCamara() {
   const s = escalaAjustada();
   camMin = s * 0.8; camMax = s * 7;
   cam.s = s;
   cam.ox = cw / 2 - (N * CELL * s) / 2;
-  cam.oy = ch / 2 - (N * CELL * s) / 2 + 12; // un poco más abajo: arriba están los botones
+  cam.oy = ch / 2 - (N * CELL * s * TILT) / 2 + 12; // un poco más abajo: arriba están los botones
   camTocada = false;
 }
 function zoom(f, mx, my) {
@@ -353,38 +406,47 @@ function zoom(f, mx, my) {
   cam.oy = my - (my - cam.oy) * k;
   cam.s = s2;
 }
-// Casilla (gx, gy) → píxeles de pantalla, y al revés (vista desde arriba: sin proyección)
-const P = (gx, gy) => [cam.ox + gx * CELL * cam.s, cam.oy + gy * CELL * cam.s];
-function suelo(sx, sy) {
+// Casilla (gx, gy) → píxeles de pantalla, y al revés (vista inclinada: el eje vertical se aplasta por TILT)
+const P = (gx, gy) => [cam.ox + gx * CELL * cam.s, cam.oy + gy * CELL * cam.s * TILT];
+function suelo(sx, sy, alto = 0) { // alto = altura (en casillas) del punto tocado: 0 = el suelo
   const u = CELL * cam.s;
-  return [(sx - cam.ox) / u, (sy - cam.oy) / u];
+  return [(sx - cam.ox) / u, (sy + alto * u - cam.oy) / (u * TILT)];
 }
 
 // ----- Dibujo (vista 2D desde arriba) -----
 // Rectángulo redondeado (arcTo funciona en todos los navegadores; ctx.roundRect no)
-function rr(x, y, w, h, r) {
+function rr(x, y, w, h, r, g = ctx) {
   r = Math.max(0, Math.min(r, w / 2, h / 2));
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
 }
 
 function dibujarSuelo() {
   const u = CELL * cam.s;
+  // Vía: asfalto que rodea el tablero, con sombra suave sobre la madera
+  const [vx0, vy0] = P(-1, -1), [vx1, vy1] = P(N + 1, N + 1);
+  ctx.save();
+  if (u >= PX_MEDIO) { rr(vx0 + 0.15 * u, vy0 + 0.55 * u, vx1 - vx0, vy1 - vy0, 0.8 * u); ctx.fillStyle = "rgba(0,0,0,.22)"; ctx.fill(); } // sombra sobre la madera (sin blur: el blur es lentísimo)
+  rr(vx0, vy0 + 0.28 * u, vx1 - vx0, vy1 - vy0, 0.72 * u); // grosor del asfalto (se ve por debajo por la inclinación)
+  ctx.fillStyle = "#3b3e50";
+  ctx.fill();
+  rr(vx0, vy0, vx1 - vx0, vy1 - vy0, 0.72 * u);
+  ctx.fillStyle = "#5d6171";
+  ctx.fill();
+  ctx.restore();
+
   // Tablero: panel lavanda claro (como el piso de la referencia)
   const [tx0, ty0] = P(0, 0), [tx1, ty1] = P(N, N);
-  ctx.save();
-  if (u >= PX_MEDIO) { ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 5; }
-  rr(tx0, ty0, tx1 - tx0, ty1 - ty0, 0.25 * u);
+  rr(tx0, ty0, tx1 - tx0, ty1 - ty0, 0.2 * u);
   const gr = ctx.createLinearGradient(0, ty0, 0, ty1);
   gr.addColorStop(0, "#d6daec"); gr.addColorStop(1, "#bcc1da");
   ctx.fillStyle = gr;
   ctx.fill();
-  ctx.restore();
   ctx.lineWidth = Math.max(1, 0.07 * u);
   ctx.strokeStyle = "#eef0fa";
   ctx.stroke();
@@ -392,7 +454,7 @@ function dibujarSuelo() {
   // Cuadrícula muy tenue (solo las líneas que se ven en pantalla, y solo si las casillas son grandes)
   if (u >= 9) {
     const g0 = clamp(Math.floor(-cam.ox / u), 1, N - 1), g1 = clamp(Math.ceil((cw - cam.ox) / u), 1, N - 1);
-    const h0 = clamp(Math.floor(-cam.oy / u), 1, N - 1), h1 = clamp(Math.ceil((ch - cam.oy) / u), 1, N - 1);
+    const h0 = clamp(Math.floor(-cam.oy / (u * TILT)), 1, N - 1), h1 = clamp(Math.ceil((ch - cam.oy) / (u * TILT)), 1, N - 1);
     ctx.lineWidth = 1;
     ctx.strokeStyle = "rgba(100,108,160,.16)";
     ctx.beginPath();
@@ -400,146 +462,169 @@ function dibujarSuelo() {
     for (let i = h0; i <= h1; i++) { const a = P(0, i), b = P(N, i); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
     ctx.stroke();
   }
-}
 
-// Pared inferior de un auto. La vista es desde arriba, un poco inclinada hacia el jugador: del auto se ve el techo y SOLO la pared que mira hacia
-// abajo en la pantalla. Si el auto apunta a la derecha o a la izquierda esa pared es su costado (ventanas y llantas, con el frente hacia donde apunta);
-// si apunta hacia abajo es su frente (parabrisas, faros, parrilla) y si apunta hacia arriba es su parte de atrás (luneta, luces, placa).
-// c = el auto (largo 2 = coche, 3 = autobús); (sx, sy) = centro del techo en pantalla; (dx, dy) = hacia dónde mira el auto; L × W = largo y ancho del techo en píxeles.
-function dibujarPared(c, sx, sy, dx, dy, L, W, u, det, col) {
-  const H = ALTO_PARED * u, ang = Math.atan2(dy, dx);
-  // 1) Silueta: el contorno del techo repetido hacia abajo, sin huecos y con cualquier ángulo
-  ctx.fillStyle = col(0.74, 72);
-  for (let k = 1; k <= 4; k++) {
-    ctx.save();
-    ctx.translate(sx, sy + (H * k) / 4); ctx.rotate(ang);
-    rr(-L / 2, -W / 2, L, W, 0.22 * u);
-    ctx.fill();
-    ctx.restore();
-  }
-  if (det < 2) return; // con casillas chicas no hay espacio para detalles
-  // 2) Detalles: cada cara del auto que mira hacia abajo en la pantalla (a lo más dos, en las curvas)
-  const hl = L / 2, hw = W / 2, nx = -dy, ny = dx; // (nx, ny) = lado derecho del auto
-  const caras = [
-    { v: dy, cx: sx + dx * hl, cy: sy + dy * hl, tx: -dy, ty: dx, w: W, tipo: "frente" },
-    { v: -dy, cx: sx - dx * hl, cy: sy - dy * hl, tx: -dy, ty: dx, w: W, tipo: "atras" },
-    { v: ny, cx: sx + nx * hw, cy: sy + ny * hw, tx: dx, ty: dy, w: L, tipo: "lado" },
-    { v: -ny, cx: sx - nx * hw, cy: sy - ny * hw, tx: dx, ty: dy, w: L, tipo: "lado" },
-  ].filter((f) => f.v > 0.3).sort((a, b) => a.v - b.v);
-  const cuadro = (a, b, w, h, r, color) => { rr(a, b, w, h, r); ctx.fillStyle = color; ctx.fill(); };
-  for (const f of caras) {
-    let { tx, ty } = f;
-    if (tx < 0) { tx = -tx; ty = -ty; } // la cara se dibuja de izquierda a derecha en pantalla
-    ctx.save();
-    // Sistema de la cara: a = a lo largo de su borde, b = hacia abajo desde el borde del techo (0 = techo, H = suelo)
-    ctx.transform(tx, ty, 0, 1, f.cx - (tx * f.w) / 2, f.cy - (ty * f.w) / 2);
-    const w = f.w;
-    const llanta = (a, b, r) => { ctx.beginPath(); ctx.arc(a, b, r, 0, Math.PI * 2); ctx.fillStyle = "#1d1f26"; ctx.fill();
-      ctx.beginPath(); ctx.arc(a, b, r * 0.45, 0, Math.PI * 2); ctx.fillStyle = "#9aa0ad"; ctx.fill(); };
-    if (f.tipo === "lado") {
-      if (dx * tx + dy * ty < 0) { ctx.translate(w, 0); ctx.scale(-1, 1); } // el frente queda a la derecha; si no, se voltea
-      const nv = c.len >= 3 ? 4 : 2, x0 = 0.28 * u, x1 = w - 0.3 * u, g = 0.05 * u, vw = (x1 - x0 - g * (nv - 1)) / nv;
-      for (let i = 0; i < nv; i++) cuadro(x0 + i * (vw + g), 0.06 * H, vw, 0.36 * H, 0.04 * u, "rgba(222,242,255,.96)");
-            llanta(0.42 * u, 0.66 * H, 0.08 * u);
-      llanta(w - 0.42 * u, 0.66 * H, 0.08 * u);
-      if (c.len >= 3) llanta(w / 2, 0.66 * H, 0.08 * u);
-      cuadro(w - 0.07 * u, 0.5 * H, 0.07 * u, 0.25 * H, 0.02 * u, "#fff3a0"); // faro
-      cuadro(0, 0.5 * H, 0.06 * u, 0.25 * H, 0.02 * u, "#ff4d4d");             // luz trasera
-    } else {
-      const frente = f.tipo === "frente";
-      cuadro(0.1 * u, 0.06 * H, w - 0.2 * u, 0.38 * H, 0.05 * u, frente ? "rgba(222,242,255,.97)" : "rgba(40,60,95,.8)"); // parabrisas / luneta
-      const luz = frente ? "#fff3a0" : "#ff4d4d";
-      cuadro(0.12 * u, 0.52 * H, 0.16 * u, 0.28 * H, 0.04 * u, luz);
-      cuadro(w - 0.12 * u - 0.16 * u, 0.52 * H, 0.16 * u, 0.28 * H, 0.04 * u, luz);
-      if (frente) cuadro(0.34 * u, 0.56 * H, w - 0.68 * u, 0.24 * H, 0.03 * u, "#262a33"); // parrilla
-      else cuadro(w / 2 - 0.1 * u, 0.56 * H, 0.2 * u, 0.24 * H, 0.02 * u, "#f4f4f4");      // placa
-      cuadro(0.01 * u, 0.5 * H, 0.08 * u, 0.48 * H, 0.02 * u, "#1d1f26");                  // llantas
-      cuadro(w - 0.09 * u, 0.5 * H, 0.08 * u, 0.48 * H, 0.02 * u, "#1d1f26");
+  // Flechas de la vía (sentido horario): chevrones amarillos
+  if (u >= PX_MEDIO) {
+    ctx.strokeStyle = "rgba(255,214,70,.8)";
+    ctx.lineWidth = Math.max(1.5, 0.09 * u);
+    ctx.lineCap = "round";
+    const mf = 2 * u;
+    ctx.beginPath(); // todos los chevrones en UN solo trazo (antes: un save/restore/stroke por cada uno)
+    const chevron = (gx, gy, dx, dy) => {
+      const o = P(gx, gy);
+      if (o[0] < -mf || o[0] > cw + mf || o[1] < -mf || o[1] > ch + mf) return;
+      const pt = (px, py, f) => { const X = o[0] + (px * dx - py * dy) * u, Y = o[1] + (px * dy + py * dx) * u * TILT; f.call(ctx, X, Y); };
+      pt(-0.16, -0.22, ctx.moveTo); pt(0.16, 0, ctx.lineTo); pt(-0.16, 0.22, ctx.lineTo);
+    };
+    for (let i = 2; i < N; i += 3) {
+      chevron(i + 0.5, -0.5, 1, 0);
+      chevron(N + 0.5, i + 0.5, 0, 1);
+      chevron(i + 0.5, N + 0.5, -1, 0);
+      chevron(-0.5, i + 0.5, 0, -1);
     }
-    ctx.restore();
+    ctx.stroke();
+    ctx.lineCap = "butt";
+  }
+
+  // Salidas en las 4 esquinas
+  const fs = Math.max(4, Math.round(0.2 * u));
+  ctx.font = "bold " + fs + "px system-ui,sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for (const [x, y] of [[-1, -1], [N, -1], [N, N], [-1, N]]) {
+    const [a, b] = P(x, y);
+    rr(a + 0.08 * u, b + 0.08 * u * TILT, 0.84 * u, 0.84 * u * TILT, 0.16 * u);
+    ctx.fillStyle = "#2ecc71"; ctx.fill();
+    ctx.lineWidth = Math.max(1, 0.05 * u); ctx.strokeStyle = "#1e8449"; ctx.stroke();
+    if (u >= PX_DETALLE) { ctx.fillStyle = "#fff"; ctx.fillText("SALIDA", a + 0.5 * u, b + 0.5 * u * TILT); }
   }
 }
 
-// Vehículo visto desde arriba: pared inferior (ver arriba), cuerpo de color, techo claro, parabrisas al frente y flecha blanca en el techo.
-// (cx, cy) = centro en casillas; (dx, dy) = hacia dónde mira (unitario); los autos largos (3) se ven como autobuses.
-function dibujarAuto(c, pose) {
-  const { cx, cy, dx, dy, alfa } = pose || poseDe(c);
-  const u = CELL * cam.s;
-  const sx = cam.ox + cx * u, sy = cam.oy + cy * u;
-  const L = (c.len - 0.14) * u, W = 0.8 * u;
-  const det = u >= PX_DETALLE ? 2 : u >= PX_MEDIO ? 1 : 0;
-  const ang = Math.atan2(dy, dx);
-  const col = (f, sat) => "hsl(" + c.tono + "," + (sat || 76) + "%," + Math.min(93, c.luz * f).toFixed(1) + "%)";
-  ctx.globalAlpha = alfa;
+// Auto en vista inclinada (como la referencia): sombra, llantas, carrocería con volumen y contorno oscuro, cabina con ventanas, techo con la flecha.
+// Cada pieza es un rectángulo redondeado APILADO hacia arriba (así funciona con cualquier ángulo: los autos giran en las curvas de la vía).
+// El auto es más chico que su casilla (ANCHO_AUTO, MARGEN_LARGO): el aire que queda alrededor es solo decoración, la hitbox sigue siendo la casilla.
+// c = el auto (largo 2 = coche, 3 = camión); pose = { cx, cy, dx, dy, alfa, z } (z = salto en casillas, para el rebote).
+function pintarAuto(g, ds, c, ang, u, sx, sy, hz, alfa, det) {
+  // g = contexto donde se pinta; ds = escala del contexto (ds, o 1 si es un dibujo guardado); u = píxeles por casilla EN ESE contexto
+  const K = TILT;
+  const bus = c.len >= 3, esc = bus ? 1.15 : 1;
+  const L = (c.len - MARGEN_LARGO) * u, W = ANCHO_AUTO * u;
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  const col = (f, sat) => "hsl(" + c.tono + "," + (sat || 76) + "%," + Math.min(93, c.luz * f * OSCURECER).toFixed(1) + "%)";
+  const hb = ALTO_CARROCERIA * u * esc, hc = ALTO_CABINA * u * esc;
+  // Pone el sistema de coordenadas del auto (a = a lo largo hacia el frente, b = a lo ancho) a la altura h en pantalla; salta = sigue el rebote
+  const base = (h, salta = true) => g.setTransform(ds * ca, ds * K * sa, -ds * sa, ds * K * ca, ds * sx, ds * (sy - h - (salta ? hz : 0)));
+  const pieza = (ox, oy, l, w, r, color) => { rr(ox - l / 2, oy - w / 2, l, w, r, g); g.fillStyle = color; g.fill(); };
+  // Bloque: capas desde h0 hasta h1 (las paredes) y la tapa arriba. lado(t) da el color de cada capa (t: 0 abajo → 1 arriba)
+  const bloque = (h0, h1, ox, oy, l, w, r, lado, tapa, maxN = 8) => {
+    const n = Math.max(1, Math.min(det === 2 ? maxN : 3, Math.ceil((h1 - h0) / 3)));
+    for (let i = 0; i < n; i++) { base(h0 + ((h1 - h0) * i) / n); pieza(ox, oy, l, w, r, lado(n > 1 ? i / (n - 1) : 1)); }
+    base(h1); pieza(ox, oy, l, w, r, tapa);
+  };
+  g.globalAlpha = alfa;
 
-  const ty = sy - SUBE_TECHO * u; // el techo sube un poco; debajo de él queda la pared
-
-  if (det === 0) { // de lejos: un rectángulo de color con su pared (más oscura) debajo
-    ctx.save();
-    ctx.translate(sx, ty + ALTO_PARED * u * 0.7); ctx.rotate(ang);
-    ctx.fillStyle = col(0.6, 70);
-    ctx.fillRect(-L / 2, -W / 2, L, W);
-    ctx.restore();
-    ctx.save();
-    ctx.translate(sx, ty); ctx.rotate(ang);
-    ctx.fillStyle = col(1);
-    ctx.fillRect(-L / 2, -W / 2, L, W);
-    ctx.restore();
-    ctx.globalAlpha = 1;
+  if (det === 0) { // de lejos: un bloque de color con su pared más oscura (casi no se distingue y cuesta muy poco)
+    bloque(0, hb + hc * 0.6, 0, 0, L, W, 0.18 * u, () => col(0.6, 70), col(1));
+    g.setTransform(ds, 0, 0, ds, 0, 0);
+    g.globalAlpha = 1;
     return;
   }
 
-  // Pared inferior (la que mira hacia la pantalla): según hacia dónde mire el auto es su costado, su frente o su parte de atrás
-  dibujarPared(c, sx, ty, dx, dy, L, W, u, det, col);
-
-  ctx.save();
-  ctx.translate(sx, ty); ctx.rotate(ang);
-  // Cuerpo
-  rr(-L / 2, -W / 2, L, W, 0.22 * u);
-  ctx.fillStyle = col(1);
-  ctx.fill();
-  // Techo (más claro)
-  rr(-L / 2 + 0.1 * u, -W / 2 + 0.1 * u, L - 0.2 * u, W - 0.2 * u, 0.15 * u);
-  ctx.fillStyle = col(1.2, 72);
-  ctx.fill();
+  // Sombra en el suelo (no salta con el auto)
+  base(0, false); pieza(0.04 * u, 0.05 * u, L + 0.1 * u, W + 0.1 * u, 0.22 * u, "rgba(20,15,30,.28)");
 
   if (det === 2) {
-    // Parabrisas (al frente) y luneta (atrás)
-    rr(L / 2 - 0.44 * u, -W / 2 + 0.14 * u, 0.3 * u, W - 0.28 * u, 0.08 * u);
-    ctx.fillStyle = "rgba(232,246,255,.95)";
-    ctx.fill();
-    rr(-L / 2 + 0.14 * u, -W / 2 + 0.16 * u, 0.13 * u, W - 0.32 * u, 0.05 * u);
-    ctx.fillStyle = "rgba(40,60,95,.55)";
-    ctx.fill();
-    // Faros delanteros y luces traseras
-    ctx.fillStyle = "#fff3a0";
-    ctx.fillRect(L / 2 - 0.05 * u, -W / 2 + 0.05 * u, 0.05 * u, 0.15 * u);
-    ctx.fillRect(L / 2 - 0.05 * u, W / 2 - 0.2 * u, 0.05 * u, 0.15 * u);
-    ctx.fillStyle = "#ff4d4d";
-    ctx.fillRect(-L / 2, -W / 2 + 0.05 * u, 0.05 * u, 0.15 * u);
-    ctx.fillRect(-L / 2, W / 2 - 0.2 * u, 0.05 * u, 0.15 * u);
+    // Llantas: asoman por debajo de la carrocería
+    const aw = L * (bus ? 0.34 : 0.3), lw = 0.28 * u;
+    for (const a of [-aw, aw]) for (const s of [-1, 1]) bloque(0, 0.17 * u, a, s * (W / 2 - 0.005 * u), lw, 0.12 * u, 0.05 * u, () => "#14161c", "#2b2e38", 2);
+    // Contorno oscuro (carrocería y cabina un poco más grandes, debajo del color)
+    const o = 0.07 * u;
+    bloque(0.06 * u, hb, 0, 0, L + o, W + o, 0.22 * u, () => "#1b1d29", "#1b1d29");
   }
 
+  // Carrocería: paredes que se aclaran hacia arriba y tapa con brillo
+  bloque(0.06 * u, hb, 0, 0, L, W, 0.2 * u, (t) => col(0.5 + 0.3 * t, 74), col(1.02));
+  base(hb);
+  pieza(0, 0, L - 0.14 * u, W - 0.14 * u, 0.14 * u, col(1.13, 70));
+  if (det === 2) { // faros (frente) y luces traseras, sobre la tapa
+    for (const s of [-1, 1]) {
+      pieza(L / 2 - 0.1 * u, s * W * 0.3, 0.1 * u, 0.11 * u, 0.03 * u, "#fff3a0");
+      pieza(-L / 2 + 0.07 * u, s * W * 0.3, 0.08 * u, 0.11 * u, 0.03 * u, "#ff4d4d");
+    }
+  }
+
+  // Cabina: ventanas en las paredes y techo del color del auto (con la flecha). Los camiones llevan una caja más larga
+  const cl = L * (bus ? 0.78 : 0.52), cw = W * (bus ? 0.88 : 0.84), co = -L * (bus ? 0.04 : 0.08);
+  if (det === 2) { const o = 0.06 * u; bloque(hb, hb + hc, co, 0, cl + o, cw + o, 0.16 * u, () => "#1b1d29", "#1b1d29"); }
+  bloque(hb, hb + hc, co, 0, cl, cw, 0.14 * u, (t) => "hsl(203,55%," + (46 + 24 * t).toFixed(0) + "%)", "#cfeaf8");
+  const rl = cl - 0.13 * u, rw = cw - 0.13 * u;
+  base(hb + hc + 0.02 * u);
+  pieza(co, 0, rl, rw, 0.1 * u, col(1.2, 72));
+
   // Flecha blanca en el techo (apunta hacia donde sale el auto)
-  const A = (c.len >= 3 ? 0.95 : 0.7) * u, x0 = -0.04 * u, sw = 0.075 * u, hw = 0.22 * u, hb = x0 + A / 2 - 0.34 * u;
-  ctx.beginPath();
-  ctx.moveTo(x0 - A / 2, -sw); ctx.lineTo(hb, -sw); ctx.lineTo(hb, -hw); ctx.lineTo(x0 + A / 2, 0);
-  ctx.lineTo(hb, hw); ctx.lineTo(hb, sw); ctx.lineTo(x0 - A / 2, sw);
-  ctx.closePath();
-  ctx.fillStyle = "#fff";
-  ctx.fill();
-  ctx.lineWidth = Math.max(1, 0.03 * u);
-  ctx.strokeStyle = "rgba(0,0,0,.28)";
-  ctx.lineJoin = "round";
-  ctx.stroke();
+  const A = rl * 0.88, hw = rw * 0.47, sw = hw * 0.36, x1 = co + A / 2, x0 = co - A / 2, hbx = x1 - Math.min(A * 0.5, hw * 1.3);
+  g.beginPath();
+  g.moveTo(x0, -sw); g.lineTo(hbx, -sw); g.lineTo(hbx, -hw); g.lineTo(x1, 0);
+  g.lineTo(hbx, hw); g.lineTo(hbx, sw); g.lineTo(x0, sw);
+  g.closePath();
+  g.fillStyle = "#fff";
+  g.fill();
+  g.lineWidth = Math.max(0.02 * u, 0.5);
+  g.strokeStyle = "rgba(0,0,0,.35)";
+  g.lineJoin = "round";
+  g.stroke();
 
   // Destello rojo cuando algo le estorba
   if (c.flash > 0) {
-    rr(-L / 2, -W / 2, L, W, 0.22 * u);
-    ctx.fillStyle = "rgba(255,50,50," + (0.6 * c.flash / 0.4).toFixed(2) + ")";
-    ctx.fill();
+    const a = (0.6 * c.flash / 0.4).toFixed(2);
+    base(hb); pieza(0, 0, L, W, 0.2 * u, "rgba(255,50,50," + a + ")");
+    base(hb + hc + 0.02 * u); pieza(co, 0, rl, rw, 0.1 * u, "rgba(255,50,50," + a + ")");
   }
-  ctx.restore();
+  g.setTransform(ds, 0, 0, ds, 0, 0);
+  g.globalAlpha = 1;
+}
+
+// ----- Dibujos guardados de los autos (caché) -----
+// Armar un auto pieza por pieza cuesta ~15 dibujos; con cientos de autos en pantalla eso era lo que hacía lento el juego.
+// Ahora cada combinación (color, largo, dirección, nivel de zoom) se dibuja UNA vez en un lienzo pequeño y después se pega con drawImage.
+// Los autos que giran en las curvas de la vía, los que están en destello rojo y los muy lejanos (det 0) se dibujan directo, como antes.
+const PASO_ZOOM = 1.15;               // el zoom se redondea a potencias de esto (el dibujo guardado se estira como máximo ±7 %)
+const MAX_PIXELES_CACHE = 14e6;       // tope de memoria de los dibujos guardados (~56 MB); si se pasa, se vacía y se vuelven a crear los que se usen
+const cacheAutos = new Map();
+let pixCache = 0;
+function dibujoGuardado(c, dir, k) {
+  const llave = c.tono + "|" + (46 + (((c.luz - 46) / 4) | 0) * 4) + "|" + c.len + "|" + dir + "|" + k;
+  let sp = cacheAutos.get(llave);
+  if (sp) return sp;
+  const ds = dpr, U = Math.pow(PASO_ZOOM, k) * ds, ang = dir * Math.PI / 2;
+  const ca = Math.abs(Math.cos(ang)), sa = Math.abs(Math.sin(ang)), esc = c.len >= 3 ? 1.15 : 1;
+  const L = (c.len - MARGEN_LARGO) * U, W = ANCHO_AUTO * U;
+  const hx = (ca * L + sa * W) / 2 + 0.3 * U, gy = (TILT * (sa * L + ca * W)) / 2;
+  const arriba = gy + (ALTO_CARROCERIA + ALTO_CABINA) * U * esc + 0.3 * U, abajo = gy + 0.35 * U;
+  const w = Math.ceil(2 * hx), h = Math.ceil(arriba + abajo);
+  if (pixCache + w * h > MAX_PIXELES_CACHE) { cacheAutos.clear(); pixCache = 0; }
+  const lienzo = document.createElement("canvas");
+  lienzo.width = w; lienzo.height = h;
+  const g = lienzo.getContext("2d");
+  g.lineJoin = "round";
+  const luzq = 46 + (((c.luz - 46) / 4) | 0) * 4;
+  pintarAuto(g, 1, { tono: c.tono, luz: luzq, len: c.len, flash: 0 }, ang, U, w / 2, arriba, 0, 1, U >= PX_DETALLE * ds ? 2 : 1);
+  sp = { cv: lienzo, w, h, ay: arriba, ds };
+  cacheAutos.set(llave, sp);
+  pixCache += w * h;
+  return sp;
+}
+
+function dibujarAuto(c, pose) {
+  const { cx, cy, dx, dy, alfa, z } = pose || poseDe(c);
+  const u = CELL * cam.s;
+  const sx = cam.ox + cx * u, sy = cam.oy + cy * u * TILT, hz = (z || 0) * u;
+  const det = u >= PX_DETALLE ? 2 : u >= PX_MEDIO ? 1 : 0;
+  const dir = dx > 0.9995 ? 0 : dy > 0.9995 ? 1 : dx < -0.9995 ? 2 : dy < -0.9995 ? 3 : -1; // -1 = en diagonal (curva de la vía)
+  if (det === 0 || dir < 0 || c.flash > 0) { pintarAuto(ctx, dpr, c, Math.atan2(dy, dx), u, sx, sy, hz, alfa, det); return; }
+  const k = Math.round(Math.log(u) / Math.log(PASO_ZOOM)), f = u / Math.pow(PASO_ZOOM, k);
+  const sp = dibujoGuardado(c, dir, k);
+  ctx.globalAlpha = alfa;
+  ctx.drawImage(sp.cv, sx - (sp.w / 2 / sp.ds) * f, sy - hz - (sp.ay / sp.ds) * f, (sp.w / sp.ds) * f, (sp.h / sp.ds) * f);
   ctx.globalAlpha = 1;
 }
 
@@ -554,7 +639,7 @@ function dibujar() {
   for (const c of autos) {
     if (c.estado === 2) continue;
     const p = poseDe(c);
-    const sx = cam.ox + p.cx * u, sy = cam.oy + p.cy * u, mg = (c.len + 1.5) * u;
+    const sx = cam.ox + p.cx * u, sy = cam.oy + p.cy * u * TILT, mg = (c.len + 1.5) * u;
     if (sx < -mg || sx > cw + mg || sy < -mg || sy > ch + mg) continue;
     vis.push({ c, p, k: p.cy + (Math.abs(p.dy) * (c.len - 0.14) + Math.abs(p.dx) * 0.8) / 2 }); // k = borde de abajo del auto
   }
@@ -704,7 +789,7 @@ function soltar(e) {
   if (eraUno && g && !g.moved && e.type === "pointerup") {
     const p = pos(e);
     if (modoBomba) { tocarBomba(p); return; }
-    const [gx, gy] = suelo(p.x, p.y);
+    const [gx, gy] = suelo(p.x, p.y, ALTO_TOQUE); // se toca el auto, que se ve levantado del suelo
     const x = Math.floor(gx), y = Math.floor(gy);
     if (x >= 0 && y >= 0 && x < N && y < N) {
       const id = occ[y * N + x];
@@ -751,8 +836,8 @@ function botonMenu() {
 // ----- Ventana «Info»: cómo se juega (usa los estilos .pausa-* de compartido/inmersivo.css) -----
 const TEXTO_INFO = [
   ["🚗 Objetivo", "Saca todos los autos del estacionamiento. Ganas cuando no queda ninguno."],
-  ["👆 Cómo sacar un auto", "Toca un auto y avanzará en línea recta hacia donde apunta su flecha hasta salir del tablero."],
-  ["🚧 Si algo le estorba", "Un auto no puede salir si otro está en su camino: saca primero al que estorba. En cuanto tocas un auto, ya no estorba: puedes tocar los demás de inmediato."],
+  ["👆 Cómo sacar un auto", "Toca un auto y avanzará hacia donde apunta su flecha hasta salir por las esquinas, dando la vuelta por la vía que rodea el tablero."],
+  ["🚧 Si algo le estorba", "Un auto no puede salir si otro está en su camino: saca primero al que estorba. Si la vía de salida está ocupada, espera un instante y vuelve a tocarlo. En cuanto tocas un auto, ya no estorba: puedes tocar los demás de inmediato."],
   ["🔍 Mover la vista", "Arrastra para mover el tablero y pellizca (o usa la rueda del ratón) para acercar o alejar."],
   ["💰 Monedas", "Ganas monedas la primera vez que terminas un nivel; mientras más grande el tablero, más monedas."],
   ["💥 Boosts", "Quitar un auto (30 monedas): toca el botón y luego el auto que quieres quitar. Paquete ×3 (50 monedas): te da 3 usos de quitar un auto. Bomba (100 monedas): elige una zona de 5×5 casillas y borra todos los autos que haya ahí."],

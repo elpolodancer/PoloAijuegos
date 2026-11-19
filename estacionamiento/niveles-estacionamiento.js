@@ -1,6 +1,6 @@
 // Ruta: estacionamiento/niveles-estacionamiento.js
 // Generador de los 22 600 niveles del Estacionamiento (tableros siempre llenos: ver generarNivel). No toca la página (no usa document), así que se puede probar en Node.
-//   - configNivel(n)   → { n, zona, etapa, k, tam, seed, obj, p3, K, premio, dif }  (todo sale del número de nivel: iguales para todos)
+//   - configNivel(n)   → { n, zona, etapa, k, tam, seed, obj, p3, enredo, premio, dif }  (todo sale del número de nivel: iguales para todos)
 //   - generarNivel(cfg) → lista de autos del nivel; SIEMPRE tiene solución (se resuelve quitando los autos del último al primero)
 //
 // Niveles: 1–3200 = México (32 estados × 100) · 3201–22600 = mundo (194 países × 100). Ver README, secciones 1 a 4.

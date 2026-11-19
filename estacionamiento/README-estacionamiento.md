@@ -140,16 +140,16 @@ Recordatorio: `niveles-estacionamiento.js` debe ir en la lista `ARCHIVOS` de `sw
 
 ## 10. El generador (`niveles-estacionamiento.js`)
 
-`configNivel(n)` devuelve `{ n, zona, etapa, k, tam, seed, obj, p3, K, premio, dif }` y `generarNivel(cfg)` los autos. Todo depende solo de `n`, así que todos los jugadores ven el mismo tablero.
+`configNivel(n)` devuelve `{ n, zona, etapa, k, tam, seed, obj, p3, enredo, premio, dif }` y `generarNivel(cfg)` los autos. Todo depende solo de `n`, así que todos los jugadores ven el mismo tablero.
 
 - **Zona y etapa:** niveles 1–3200 = México (`etapa` 0–31 = estado, `k` 1–100); 3201–22600 = mundo (`etapa` 0–193 = país). El orden de estados y países queda para el mapa.
 - **Tamaño en México:** dentro de cada tramo sube poco a poco con un poco de azar (`tamanoMexico`), siempre dentro del rango pedido. Los últimos 200 son 50×50.
 - **Tamaño en países:** en cada país salen exactamente 40 niveles de 40–50, 30 de 30–39, 20 de 20–29 y 10 de 10–19, en orden aleatorio fijo por país (comprobado en los 194 países).
-- **Dificultad (`dif`, 0–1):** en México crece con el número de nivel (0.1 → 0.85, y 0.9 en los últimos 200); en países depende del tamaño. De ella salen la proporción de autos largos (`p3`), el «desorden» (`K`) y la densidad.
-- **Tope de autos por tamaño:** mientras más grande el tablero, más largo el camino de cada auto hasta la orilla y menos caben (medido: ocupación máxima ≈74 % en 10×10, ≈52 % en 25×25, ≈36 % en 50×50). Por eso la densidad pedida tiene un tope `0.245 + 4.25 / tam`. Un 50×50 trae ~320 autos; un 25×25 difícil, ~160.
-- **Solución garantizada:** se comprueba con `esResoluble` quitando los autos del último al primero. Probado en los 22 600 niveles.
+- **Dificultad (`dif`, 0–1):** en México crece con el número de nivel (0.1 → 0.85, y 0.9 en los últimos 200); en países depende del tamaño. De ella salen la proporción de autos largos (`p3`, 0.3 → 0.6) y el «enredo» (`enredo`, 0.1 → 0.95: cuánto se prefieren las cadenas de autos que se estorban unos a otros).
+- **Tablero siempre lleno.** `generarNivel` ya no coloca autos uno por uno: primero **tesela** todo el tablero con autos de 2 y 3 casillas (`teselar`) y luego lo **desarma** en un orden al azar (`desarmar`), poniendo a cada auto la flecha hacia el lado por donde le toca salir. Resultado medido en los 22 600 niveles: **100 % de las casillas ocupadas**, ~45 % de autos horizontales. Un 10×10 trae ~45 autos, un 25×25 ~240 y un 50×50 ~1 000 (antes ~320: ojo con el rendimiento en celulares).
+- **Solución garantizada:** el orden en que se desarma el tablero es una solución (el primero en salir recibe el id más alto); se comprueba con `esResoluble` quitando los autos del último al primero. Probado en los 22 600 niveles. Si algún día el desarmado se atorara, se descarta un auto al azar (queda un hueco); en las pruebas no ha pasado.
 - **Monedas por nivel** (`premioMonedas`): 15 / 25 / 35 / 45 / 60 según el tamaño. El juego ya las muestra en el selector, pero **todavía no las suma** (paso 3).
-- **Velocidad:** el peor nivel se genera en ~20 ms.
+- **Velocidad:** el peor nivel (50×50) se genera en ~15 ms.
 
 Para ajustar la dificultad, los números a tocar están en `configNivel` (`dif`, `p3`, `K`, `dens`).
 
@@ -180,4 +180,6 @@ Hoy el juego abre directo en el mapa de México y ahí solo hay **▶ Continuar 
 - **Autos con volumen.** Cada auto se dibuja con su techo y, debajo, **solo la pared que mira hacia abajo en la pantalla** (`dibujarPared` en `juego-estacionamiento.js`): si el auto apunta a la derecha o a la izquierda se ve su **costado** (ventanas y llantas, con el frente hacia donde apunta); si apunta hacia abajo, su **frente** (parabrisas, faros, parrilla); si apunta hacia arriba, su **parte de atrás** (luneta, luces, placa). Los autobuses (largo 3) llevan 4 ventanas y 3 llantas. En las curvas de la vía la pared sigue al auto con cualquier ángulo. Las proporciones están en `ALTO_PARED` y `SUBE_TECHO`. Con casillas chicas (menos de 14 px) la pared va lisa y de lejos es una franja oscura; el detalle completo solo se dibuja al acercar.
 - **Orden de dibujo.** Los autos visibles se ordenan por su borde de abajo (`dibujar()`): el de más abajo tapa la pared del de arriba. Los toques siguen usando la casilla del suelo.
 - **Fin de nivel.** La ventana de victoria usa el estándar `.sobre-tablero` (ver `ESTANDARES-juegos.md`, sección 6): «Siguiente nivel ▶» aparece **encima del cuadro del tablero** (`colocarVictoria()`), sin velo oscuro, y sigue al tablero si se mueve o acerca la vista.
+- **Colores.** Los autos conservan sus 10 tonos pero más oscuros: `OSCURECER = 0.72` en `juego-estacionamiento.js` multiplica la luminosidad (1 = como antes).
+- **Todos los tableros cambiaron.** Se mantienen los tamaños de cada nivel, las monedas y el progreso guardado (`max`, `hecho`), pero el tablero de cada nivel es nuevo: el nivel N ya no se parece al de antes.
 
