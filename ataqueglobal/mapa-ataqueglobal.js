@@ -213,6 +213,7 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
   const anchoTexto = new Map();
   const punteros = new Map();
   let arrastre = null, pellizco = null;
+  let velocidad = 1; // multiplica el avance del vuelo de los misiles (x1 a x5; lo fija juego-ataqueglobal.js)
   let resaltados = new Set(); // países marcados (p. ej. a los que puedes expandirte): relleno y trazo dorados que pulsan
   let apuntador = null, mira = null; // modo apuntar (tocar el mapa llama a apuntador) y su mira
   const vuelos = [], explosiones = [];
@@ -586,7 +587,7 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
   function avanzarVuelos(dt, ahora) {
     if (!(congelado && congelado())) {
       for (let i = vuelos.length - 1; i >= 0; i--) {
-        const f = vuelos[i]; f.p += dt / f.ms;
+        const f = vuelos[i]; f.p += (dt * velocidad) / f.ms;
         if (f.p >= 1) { vuelos.splice(i, 1); explosiones.push({ lon: f.b[0], lat: f.b[1], t0: ahora, color: f.color }); if (f.alImpactar) f.alImpactar(); }
       }
     }
@@ -834,6 +835,7 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
     zoom(factor) { irA(cam.lon, cam.lat, cam.R * factor, 200); },
     seleccionar,
     seleccionado: () => sel,
+    setVelocidad(k) { velocidad = Math.max(0.1, Number(k) || 1); }, // velocidad del juego: los misiles en vuelo avanzan k veces más rápido
     resaltar(isos) { resaltados = new Set(isos || []); }, // resaltar(["BR","AR"]) marca esos países; resaltar(null) los suelta
     modoApuntar(fn) { apuntador = fn || null; lienzo.style.cursor = apuntador ? "crosshair" : "grab"; },
     setMira(lon, lat) { mira = lon == null ? null : { lon, lat }; },

@@ -11,6 +11,7 @@ import { crearMenuPausa } from "../compartido/menu-pausa.js";
 import { crearMundo, nombreTerritorio, banderaTerritorio, vecinosDe, centroTerritorio, radioTerritorio, distanciaAngular } from "./mapa-ataqueglobal.js";
 import { crearArmas } from "./armas-ataqueglobal.js";
 import { crearAjustes } from "./ajustes-ataqueglobal.js";
+import { crearBarras } from "./barras-ataqueglobal.js";
 import { crearMenuPais, mmss } from "./menu-pais-ataqueglobal.js";
 import { MEJORAS, SUPERARMAS, estadoMejora, faltan, basicasCompletas, porNumero } from "./investigacion-ataqueglobal.js";
 // EE. UU. (US1–US5), Canadá (CA1–CA9) y Rusia (RU1–RU7) son varios territorios cada uno: ver DIVISIONES en paises-ataqueglobal.js.
@@ -74,6 +75,10 @@ const golpes = new Map();   // iso → puntos de impacto recibidos
 const destruidos = new Set();
 let expandiendo = null;     // { origen } mientras eliges, tocando un país resaltado del mapa, hacia dónde expandirte
 let apuntando = null;       // { tipo: "todos" | "n1", objetivo: { iso, lon, lat } | null } mientras se elige a dónde disparar
+// Velocidad del juego: un solo botón en la columna de zoom que va de x1 a x5. Acelera expansión, fabricación, investigación, bots y vuelo de misiles.
+const VELOCIDADES = [1, 2, 3, 4, 5];
+let velocidad = 1;
+let barras = null;          // barritas de progreso sobre los países ocupados (se crean más abajo)
 let armas = null;           // botones de ataque (se crean más abajo)
 const reservados = new Set(); // países hacia los que ya se está expandiendo
 const hechas = new Set();   // números de las mejoras ya investigadas
@@ -97,7 +102,7 @@ const mundo = crearMundo({
   lienzo,
   congelado: () => pausado, // los misiles en vuelo se detienen con la pausa
   celdasDe: (iso) => { const a = arsenal(iso), niveles = []; a.forEach((n, i) => { for (let k = 0; k < n; k++) niveles.push(i + 1); }); return { cap: Math.max(capacidad(), niveles.length), niveles }; }, // casillas grises dentro de tus países
-  alCuadro: () => { if (menuPais) menuPais.seguir(); if (armas) armas.seguir(); }, // el menú circular y la confirmación siguen al país mientras se gira el planeta
+  alCuadro: () => { if (menuPais) menuPais.seguir(); if (armas) armas.seguir(); if (barras) barras.seguir(); }, // el menú circular y la confirmación siguen al país mientras se gira el planeta
   alSeleccionar(iso) {
     pintarFicha(iso);
     if (!menuPais) return;
@@ -115,6 +120,20 @@ function pintarFicha(iso) {
   $("ficha-sub").textContent = d ? (d.tipo === "jugador" ? "Tu país" : "Enemigo " + d.n) : "Toca otra vez para soltarlo";
   ficha.style.borderColor = d ? d.color : ""; // el borde de la ficha lleva el color del dueño
 }
+const btnVel = document.createElement("button");
+btnVel.type = "button"; btnVel.id = "z-vel"; btnVel.className = "b3d txt b-gris";
+btnVel.innerHTML = '<span class="b-ico">⏩</span>&nbsp;<span id="z-vel-n">x1</span>';
+zoom.appendChild(btnVel);
+function fijarVelocidad(k) {
+  velocidad = k; mundo.setVelocidad(k);
+  btnVel.querySelector("#z-vel-n").textContent = "x" + k;
+  btnVel.classList.toggle("b-gris", k === 1); btnVel.classList.toggle("b-rojo", k > 1);
+  btnVel.title = "Velocidad del juego: x" + k + " (V). Toca para cambiarla";
+}
+function siguienteVelocidad() { fijarVelocidad(VELOCIDADES[(VELOCIDADES.indexOf(velocidad) + 1) % VELOCIDADES.length]); }
+btnVel.addEventListener("click", siguienteVelocidad);
+addEventListener("keydown", (ev) => { if ((ev.key === "v" || ev.key === "V") && pantalla === "mundo" && !pausado && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !velo.classList.contains("activo")) { ev.preventDefault(); siguienteVelocidad(); } });
+fijarVelocidad(1);
 $("z-mas").addEventListener("click", () => mundo.zoom(1.6));
 $("z-menos").addEventListener("click", () => mundo.zoom(1 / 1.6));
 $("z-todo").addEventListener("click", () => mundo.reiniciarVista());
@@ -163,6 +182,7 @@ function ver(p) {
   zoom.hidden = p !== "mundo";
   if (p !== "mundo") { ficha.hidden = true; mundo.detener(); }
   if (armas) armas.mostrar(p === "mundo");
+  if (barras) barras.mostrar(p === "mundo");
   btnMenu.hidden = p === "menu";
   txtMenu.textContent = p === "mundo" ? "Pausa" : "Menú principal";
   btnMenu.title = p === "mundo" ? "Pausa" : "Volver al menú principal";
@@ -272,7 +292,7 @@ function empezarPartida(paisesPropios, bots) {
 // ---------- Acciones de un país propio (menú circular) ----------
 function limpiarPartida() {
   ocupado.clear(); misiles.clear(); reservados.clear(); bots = []; hechas.clear(); enCurso.clear(); golpes.clear(); destruidos.clear(); pausado = false;
-  terminarApuntado(); terminarExpansion(); mundo.cancelarVuelos();
+  terminarApuntado(); terminarExpansion(); mundo.cancelarVuelos(); fijarVelocidad(1);
   if (menuPais) { menuPais.cerrarPanel(); menuPais.cerrar(); }
 }
 const arsenal = (iso) => { if (!misiles.has(iso)) misiles.set(iso, [MISILES_INICIALES, 0, 0]); return misiles.get(iso); };
@@ -386,6 +406,8 @@ function accionesDe(iso) {
 }
 const centroDe = (iso) => { const o = ocupado.get(iso); return o ? { texto: o.texto + " · " + mmss(o.resta), fraccion: 1 - o.resta / o.total } : null; };
 menuPais = crearMenuPais({ mundo, acciones: accionesDe, centro: centroDe });
+barras = crearBarras({ mundo, trabajos: () => ocupado }); // una barrita pequeña por cada país tuyo que esté expandiendo, fabricando o investigando
+barras.mostrar(pantalla === "mundo");
 
 // ---------- Ataque: apuntar, confirmar, disparar, impactar ----------
 const NIVELES_DE = { todos: [1, 2, 3], n1: [1] };
@@ -500,7 +522,7 @@ refrescarArmas();
 // Reloj de las acciones: avanza solo con la partida en marcha (no en pausa ni con la pestaña oculta)
 let ultimoTic = 0;
 setInterval(() => {
-  const ahora = performance.now(), dt = Math.min(500, ahora - (ultimoTic || ahora));
+  const ahora = performance.now(), dt = Math.min(500, ahora - (ultimoTic || ahora)) * velocidad;
   ultimoTic = ahora;
   if (pantalla !== "mundo" || pausado || document.hidden) { menuPais.tic(); refrescarArmas(); return; }
   botsTic(dt);

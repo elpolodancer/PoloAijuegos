@@ -15,6 +15,7 @@
 //   menu.aviso("texto");
 
 const D = 86;          // distancia (px) del centro del país a cada botón
+const MARGEN = 140;    // el menú se desplaza hacia adentro para no salirse de la pantalla: botones + etiquetas ocupan ≈ 136 px alrededor del centro
 const ICONOS = { // trazos de 24×24
   expandir: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><circle cx="12" cy="12" r="2.2"/>',
   misil: '<path d="M12 2.5c3 2.8 4 7 3 12H9c-1-5 0-9.2 3-12z"/><circle cx="12" cy="9" r="1.4"/><path d="M9 14.5l-3.5 4.5 3.5-1.200M15 14.5l3.5 4.5-3.5-1.200M12 17.5v4"/>',
@@ -24,8 +25,8 @@ const ICONOS = { // trazos de 24×24
 const CSS = `
 .rm{position:fixed;left:0;top:0;z-index:5;width:0;height:0;pointer-events:none;will-change:transform}
 .rm[hidden]{display:none}
-.rm-anillo{position:absolute;left:0;top:0;border-radius:50%;transform:translate(-50%,-50%) scale(.2);opacity:0;transition:transform .28s ease-out,opacity .22s}
-.rm.abierto .rm-anillo{transform:translate(-50%,-50%) scale(1);opacity:1}
+.rm-anillo{position:absolute;left:0;top:0;border-radius:50%;transform:translate(calc(-50% + var(--ox,0px)),calc(-50% + var(--oy,0px))) scale(.2);opacity:0;transition:transform .28s ease-out,opacity .22s}
+.rm.abierto .rm-anillo{transform:translate(calc(-50% + var(--ox,0px)),calc(-50% + var(--oy,0px))) scale(1);opacity:1}
 .rm-a1{width:46px;height:46px;border:2px dashed rgba(60,240,255,.95);box-shadow:0 0 12px rgba(60,240,255,.5),inset 0 0 12px rgba(60,240,255,.35)}
 .rm-a2{width:78px;height:78px;border:1.5px solid rgba(60,240,255,.5)}
 .rm-a3{width:116px;height:116px;border:1px solid rgba(60,240,255,.28)}
@@ -45,7 +46,7 @@ const CSS = `
 .rm-info{position:absolute;top:-7px;right:-7px;min-width:21px;height:21px;padding:0 5px;box-sizing:border-box;border-radius:11px;font:800 11px/17px system-ui,sans-serif;text-align:center;color:#fff;background:#02121a;border:2px solid #2de8f5}
 .rm-centro{position:absolute;left:0;top:0;transform:translate(-50%,36px);min-width:130px;padding:5px 12px 7px;text-align:center;color:#c8fbff;font:700 12px system-ui,sans-serif;white-space:nowrap;
   background:rgba(2,18,26,.88);border:2px solid #2de8f5;border-radius:12px;box-shadow:0 0 12px rgba(45,232,245,.4)}
-.rm-centro i{display:block;height:4px;margin-top:5px;border-radius:2px;background:rgba(45,232,245,.25);overflow:hidden}
+.rm-centro i{display:none} /* la barra de progreso ahora es la barrita pequeña de barras-ataqueglobal.js, que se ve siempre */
 .rm-centro i b{display:block;height:100%;width:0;background:#2de8f5}
 @media (prefers-reduced-motion:reduce){.rm-anillo,.rm-b{transition:none}.rm-a1::after{animation:none;opacity:0}}
 
@@ -100,7 +101,7 @@ export function crearMenuPais({ mundo, acciones, centro, contenedor = document.b
   const panel = document.createElement("div"); panel.className = "rp"; panel.hidden = true; panel.setAttribute("role", "dialog"); panel.setAttribute("aria-label", "Panel de acciones"); contenedor.appendChild(panel);
   const aviso_ = document.createElement("div"); aviso_.className = "rt"; aviso_.setAttribute("role", "status"); aviso_.setAttribute("aria-live", "polite"); contenedor.appendChild(aviso_);
 
-  let iso = null, espera = 0, vivos = [], panelDef = null, vivosPanel = [], ultimaPos = "";
+  let iso = null, espera = 0, vivos = [], panelDef = null, vivosPanel = [], ultimaPos = "", ultimoDesvio = "";
 
   // ---------- Menú circular ----------
   function construir() {
@@ -148,8 +149,15 @@ export function crearMenuPais({ mundo, acciones, centro, contenedor = document.b
     const p = mundo.posicion(iso);
     if (!p || !p.visible) { raiz.style.visibility = "hidden"; return; }
     raiz.style.visibility = "";
-    const t = "translate(" + p.x.toFixed(1) + "px," + p.y.toFixed(1) + "px)";
-    if (t !== ultimaPos) { ultimaPos = t; raiz.style.transform = t; }
+    // Si el país está muy al borde de la pantalla, el menú se corre hacia adentro para verse completo; los anillos se quedan sobre el país
+    const mx = Math.min(MARGEN, innerWidth / 2), my = Math.min(MARGEN, innerHeight / 2);
+    const cx = Math.max(mx, Math.min(innerWidth - mx, p.x)), cy = Math.max(my, Math.min(innerHeight - my, p.y));
+    const t = "translate(" + cx.toFixed(1) + "px," + cy.toFixed(1) + "px)", o = (p.x - cx).toFixed(1) + "|" + (p.y - cy).toFixed(1);
+    if (t !== ultimaPos) {
+      ultimaPos = t; raiz.style.transform = t;
+      raiz.style.setProperty("--ox", (p.x - cx).toFixed(1) + "px"); raiz.style.setProperty("--oy", (p.y - cy).toFixed(1) + "px");
+    } else if (o !== ultimoDesvio) { raiz.style.setProperty("--ox", (p.x - cx).toFixed(1) + "px"); raiz.style.setProperty("--oy", (p.y - cy).toFixed(1) + "px"); }
+    ultimoDesvio = o;
   }
   function refrescar() {
     if (iso && !raiz.hidden) { construir(); raiz.classList.add("abierto"); }
