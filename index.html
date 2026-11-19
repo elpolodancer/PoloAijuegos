@@ -31,7 +31,7 @@
     html[data-tema="oscuro"] body { background: radial-gradient(ellipse at 50% 0%, #23252b, #101114 70%) fixed; }
 
     /* ----- Botones grandes de zona (arriba de todo) ----- */
-    .zonas { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 900px; margin: 0 auto; padding: max(12px, env(safe-area-inset-top)) 16px 4px; }
+    .zonas { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 900px; margin: 0 auto; padding: 12px 16px 4px; }
     .zona-btn {
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
       min-height: 76px; padding: 10px 12px; font: inherit; font-size: clamp(1.05rem, 3.6vw, 1.5rem); font-weight: 800; line-height: 1.15; text-align: center;
@@ -62,8 +62,6 @@
     /* Distintivo en las tarjetas que aún se programan */
     .rejilla .tarjeta.dev::after { content: "🚧 En desarrollo"; position: absolute; top: 6px; left: 6px; padding: 2px 8px; font-size: .68rem; font-weight: 800; color: #fff; background: #1f6fe0; border: 2px solid #fff; border-radius: 999px; box-shadow: 0 2px 0 rgba(0,0,0,.35); }
     #sinred { font-size: .75rem; color: var(--suave); border: 1px solid var(--borde); border-radius: 999px; padding: 3px 8px; }
-    #ayudaIos { margin: 8px 12px 0; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 10px; font-size: .9rem; color: var(--suave); }
-    #ayudaIos button { margin-left: 8px; }
 
     /* Aviso de la zona en desarrollo */
     .aviso { display: flex; gap: 12px; align-items: flex-start; margin: 0 0 14px; padding: 12px 14px; font-size: .92rem; line-height: 1.45; color: var(--texto); background: #e8f1ff; border: 2px solid #2f86ff; border-radius: 14px; }
@@ -72,30 +70,69 @@
     .aviso p { margin: 0 0 6px; }
     .aviso p:last-child { margin: 0; }
     .vacio { padding: 24px 12px; text-align: center; color: var(--suave); }
-    main { padding-bottom: 90px; } /* espacio para el botón de tema y el de pantalla completa */
+    main { padding-bottom: 90px; } /* espacio para el botón de pantalla completa */
 
-    /* ----- Botón circular de tema (esquina inferior izquierda) ----- */
-    #tema {
-      position: fixed; z-index: 2147482999; width: 52px; height: 52px; padding: 0; display: flex; align-items: center; justify-content: center;
-      bottom: calc(14px + env(safe-area-inset-bottom, 0px)); left: calc(12px + env(safe-area-inset-left, 0px));
-      border-radius: 50%; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
-      transition: transform .07s, box-shadow .07s;
-    }
-    #tema:active { transform: translateY(3px); }
-    #tema:focus-visible { outline: 3px solid var(--acento); outline-offset: 3px; }
-    #tema svg { width: 30px; height: 30px; }
-    /* En claro: círculo azul noche con luna y estrellas (toca para pasar a oscuro) */
-    html[data-tema="claro"] #tema { background: linear-gradient(180deg, #3b4a86, #1b2250); border: 2px solid #0f1433; box-shadow: 0 4px 0 #0f1433, 0 6px 10px rgba(0,0,0,.3), inset 0 2px 0 rgba(255,255,255,.3); }
-    html[data-tema="claro"] #tema .ico-sol { display: none; }
-    /* En oscuro: círculo amarillo con sol (toca para pasar a claro) */
-    html[data-tema="oscuro"] #tema { background: linear-gradient(180deg, #ffe27a, #ffb020); border: 2px solid #a85d00; box-shadow: 0 4px 0 #a85d00, 0 6px 10px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.6); }
-    html[data-tema="oscuro"] #tema .ico-luna { display: none; }
 
     @media (max-width: 380px) { .zona-btn { min-height: 68px; } }
-    @media (prefers-reduced-motion: reduce) { .zona-btn, #tema { transition: none; } }
+    @media (prefers-reduced-motion: reduce) { .zona-btn, .btn-menu, .panel, .panel-fondo { transition: none; } }
+    /* ----- Barra superior: ☰ a la izquierda y redes sociales a la derecha ----- */
+    .topbar { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 12px; background: var(--fondo); border-bottom: 1px solid var(--borde);
+      padding: calc(8px + env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) 8px max(12px, env(safe-area-inset-left, 0px)); }
+    .btn-menu { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; width: 46px; height: 46px; padding: 0; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+      border: 2px solid #4f5662; border-radius: 14px; background: linear-gradient(180deg, #d5d9e0, #8b93a0 60%, #4f5662 140%);
+      box-shadow: 0 4px 0 #4f5662, 0 6px 8px rgba(0,0,0,.3), inset 0 2px 0 rgba(255,255,255,.6); transition: transform .07s, box-shadow .07s; }
+    .btn-menu span { display: block; width: 22px; height: 3px; border-radius: 2px; background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35); }
+    .btn-menu:active { transform: translateY(3px); box-shadow: 0 1px 0 #4f5662, inset 0 2px 0 rgba(255,255,255,.6); }
+    .btn-menu:focus-visible, .op:focus-visible, .panel-x:focus-visible, .red:focus-visible { outline: 3px solid var(--acento); outline-offset: 3px; }
+    .redes { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+    .redes-txt { font-size: .8rem; font-weight: 700; color: var(--suave); }
+    .red { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; font-size: 1.2rem; font-weight: 900; line-height: 1; color: #fff; text-decoration: none; border-radius: 50%; border: 2px solid rgba(0,0,0,.25);
+      box-shadow: 0 3px 0 rgba(0,0,0,.3), inset 0 2px 0 rgba(255,255,255,.35); touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    .red.yt { background: #e62117; } .red.fb { background: #1877f2; } .red.tt { background: #111; }
+    .red.ig { background: linear-gradient(45deg, #f9a03c, #e1306c 55%, #7b3fe4); }
+    .red.sin-enlace { opacity: .45; cursor: default; }
+    .red:not(.sin-enlace):hover { filter: brightness(1.1); }
+
+    /* ----- Panel lateral izquierdo ----- */
+    .panel-fondo { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.5); opacity: 0; pointer-events: none; transition: opacity .2s; }
+    body.menu-abierto .panel-fondo { opacity: 1; pointer-events: auto; }
+    body.menu-abierto { overflow: hidden; }
+    .panel { position: fixed; z-index: 101; top: 0; bottom: 0; left: 0; display: flex; flex-direction: column; width: min(86vw, 320px); padding-left: env(safe-area-inset-left, 0px);
+      color: var(--texto); background: var(--tarjeta); border-right: 1px solid var(--borde); box-shadow: 6px 0 24px rgba(0,0,0,.35);
+      transform: translateX(-105%); visibility: hidden; transition: transform .22s ease, visibility 0s .22s; }
+    body.menu-abierto .panel { transform: none; visibility: visible; transition: transform .22s ease; }
+    .panel-cab { display: flex; align-items: center; justify-content: space-between; padding: calc(12px + env(safe-area-inset-top, 0px)) 14px 10px 16px; font-size: 1.1rem; border-bottom: 1px solid var(--borde); }
+    .panel-x { width: 40px; height: 40px; font: inherit; font-size: 1.1rem; color: var(--texto); background: transparent; border: 1px solid var(--borde); border-radius: 10px; cursor: pointer; }
+    .panel-cuerpo { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; overflow-y: auto; }
+    .panel-pie { padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--borde); }
+    .op { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 10px 14px; font: inherit; font-weight: 700; text-align: left; color: var(--texto); background: var(--fondo);
+      border: 2px solid var(--borde); border-radius: 14px; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    .op:hover:not(:disabled) { border-color: var(--acento); }
+    .op:disabled { opacity: .5; cursor: default; }
+    .op-ico { flex: none; width: 1.6em; text-align: center; font-size: 1.2rem; }
+    .op-google { justify-content: center; color: #1f1f1f; background: #fff; border-color: #c9ccd2; }
+    .op-google .op-ico { font-weight: 900; color: #4285f4; }
+    .op-suave { font-weight: 600; color: var(--suave); }
+    .perfil { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--fondo); border: 2px solid var(--borde); border-radius: 14px; }
+    .perfil img { flex: none; width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
+    .perfil-ico { flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; font-size: 1.5rem; border-radius: 50%; background: var(--tarjeta); border: 1px solid var(--borde); }
+    .perfil > div { min-width: 0; display: flex; flex-direction: column; }
+    .perfil b, .perfil small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .perfil small { color: var(--suave); }
+    .op-nota { margin: 0; font-size: .85rem; line-height: 1.4; color: var(--suave); }
+    .modal-fondo { position: fixed; inset: 0; z-index: 102; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.6); }
+    .modal { width: min(100%, 460px); max-height: 85dvh; overflow-y: auto; padding: 18px; color: var(--texto); background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; }
+    .modal h2 { margin: 0 0 10px; font-size: 1.2rem; }
+    .modal .btn { margin-top: 12px; }
   </style>
 </head>
 <body>
+  <!-- Barra superior: botón ☰ (abre el panel de la izquierda) y enlaces a las redes sociales (se llenan desde «REDES» en el script de abajo) -->
+  <div class="topbar">
+    <button class="btn-menu" id="btnMenu" type="button" aria-label="Abrir menú" aria-expanded="false" aria-controls="panel"><span></span><span></span><span></span></button>
+    <nav class="redes" aria-label="Mis redes sociales"><span class="redes-txt">Sígueme</span><span id="redes" style="display:contents"></span></nav>
+  </div>
+
   <!-- Zonas: Juegos (verde) y Juegos en desarrollo (azul) -->
   <nav class="zonas" role="tablist" aria-label="Zonas del portal">
     <button class="zona-btn verde" id="tabJuegos" role="tab" aria-selected="true" aria-controls="zonaJuegos">
@@ -112,16 +149,10 @@
     <div class="titulo">
       <!-- Juego escondido: «Reflejos» (carpeta ejemplo/), ya no está en juegos.js -->
       <a class="mini" href="ejemplo/index-ejemplo.html">Juego de prueba</a>
-      <button class="btn" id="instalar" hidden>📲 Instalar</button>
       <button class="btn" id="copias" type="button" title="Guardar o cargar una copia de tu progreso">💾 Copias</button>
       <span id="sinred" hidden>Sin conexión</span>
     </div>
-    <div id="sesion"></div>
   </header>
-  <div id="ayudaIos" hidden>
-    Para instalarlo en iPhone/iPad: toca <b>Compartir</b> (el cuadro con la flecha) y luego <b>Agregar a pantalla de inicio</b>.
-    <button class="btn" id="cerrarAyuda">Entendido</button>
-  </div>
   <main>
     <section id="zonaJuegos" role="tabpanel" aria-labelledby="tabJuegos">
       <div id="lista" class="rejilla"></div>
@@ -140,21 +171,33 @@
     </section>
   </main>
 
-  <!-- Botón de modo oscuro / claro -->
-  <button id="tema" type="button" aria-label="Cambiar a modo oscuro" title="Modo oscuro">
-    <svg class="ico-luna" viewBox="0 0 32 32" aria-hidden="true">
-      <path d="M20.5 4.5a11.5 11.5 0 1 0 7 20.6A10 10 0 0 1 20.5 4.5z" fill="#fff4c2" stroke="#fff4c2" stroke-linejoin="round" stroke-width="1"/>
-      <path d="M25 5l.9 2.1L28 8l-2.1.9L25 11l-.9-2.1L22 8l2.1-.9z" fill="#fff"/>
-      <path d="M28.5 14l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z" fill="#fff"/>
-      <path d="M17 2.5l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5z" fill="#fff"/>
-    </svg>
-    <svg class="ico-sol" viewBox="0 0 32 32" aria-hidden="true">
-      <circle cx="16" cy="16" r="6.5" fill="#fff" stroke="#a85d00" stroke-width="1.5"/>
-      <g stroke="#fff" stroke-width="2.6" stroke-linecap="round">
-        <path d="M16 3v4M16 25v4M3 16h4M25 16h4M6.8 6.8l2.8 2.8M22.4 22.4l2.8 2.8M25.2 6.8l-2.8 2.8M9.6 22.4l-2.8 2.8"/>
-      </g>
-    </svg>
-  </button>
+  <!-- Panel lateral: sesión, perfil, instalar, tema y (abajo) aviso de privacidad -->
+  <div class="panel-fondo" id="panelFondo"></div>
+  <aside class="panel" id="panel" role="dialog" aria-modal="true" aria-label="Menú" inert>
+    <div class="panel-cab"><b>Menú</b><button class="panel-x" id="panelX" type="button" aria-label="Cerrar menú">✕</button></div>
+    <div class="panel-cuerpo">
+      <button class="op op-google" id="opEntrar" type="button"><span class="op-ico">G</span> Iniciar sesión con Google</button>
+      <section class="perfil" id="perfil" aria-label="Perfil">
+        <span class="perfil-ico" id="perfilIco" aria-hidden="true">👤</span>
+        <img id="perfilFoto" alt="" referrerpolicy="no-referrer" hidden />
+        <div><b id="perfilNombre">Perfil</b><small id="perfilPuntos">Inicia sesión para ver tus puntos</small></div>
+      </section>
+      <button class="op" id="opSalir" type="button" hidden><span class="op-ico">🚪</span> Cerrar sesión</button>
+      <button class="op" id="opInstalar" type="button"><span class="op-ico">📲</span> Agregar a la pantalla de inicio</button>
+      <p class="op-nota" id="notaInstalar" role="status" hidden></p>
+      <button class="op" id="opTema" type="button"><span class="op-ico" id="opTemaIco">🌙</span> <span id="opTemaTxt">Modo oscuro</span></button>
+    </div>
+    <div class="panel-pie"><button class="op op-suave" id="opPrivacidad" type="button"><span class="op-ico">🔒</span> Aviso de privacidad</button></div>
+  </aside>
+
+  <!-- Aviso de privacidad (vacío por ahora: escribe el texto dentro de #privTexto) -->
+  <div class="modal-fondo" id="priv" role="dialog" aria-modal="true" aria-labelledby="privTitulo" hidden>
+    <div class="modal">
+      <h2 id="privTitulo">🔒 Aviso de privacidad</h2>
+      <div id="privTexto"><p>Próximamente.</p></div>
+      <button class="btn" id="privCerrar" type="button">Cerrar</button>
+    </div>
+  </div>
 
   <script type="module">
     import { JUEGOS, EN_DESARROLLO } from "./juegos.js";
@@ -216,13 +259,13 @@
     function aplicarTema(t, guardar) {
       raiz.dataset.tema = t;
       const oscuro = t === "oscuro";
-      $("tema").setAttribute("aria-label", oscuro ? "Cambiar a modo claro" : "Cambiar a modo oscuro");
-      $("tema").title = oscuro ? "Modo claro" : "Modo oscuro";
+      $("opTemaIco").textContent = oscuro ? "☀️" : "🌙";
+      $("opTemaTxt").textContent = oscuro ? "Modo claro" : "Modo oscuro";
       document.querySelector('meta[name="theme-color"]').content = oscuro ? "#121316" : "#ffffff";
       if (guardar) { try { localStorage.setItem("tema_portal", t); } catch (e) {} }
     }
     aplicarTema(raiz.dataset.tema === "oscuro" ? "oscuro" : "claro", false);
-    $("tema").addEventListener("click", () => aplicarTema(raiz.dataset.tema === "oscuro" ? "claro" : "oscuro", true));
+    $("opTema").addEventListener("click", () => aplicarTema(raiz.dataset.tema === "oscuro" ? "claro" : "oscuro", true));
 
     // ----- Sin conexión + instalar en la pantalla de inicio -----
     const marcarRed = () => ($("sinred").hidden = navigator.onLine);
@@ -231,6 +274,71 @@
     marcarRed();
 
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+
+    // ----- Redes sociales (barra superior): pon aquí tus enlaces. Las que tienen url vacía salen apagadas y sin enlace. -----
+    const REDES = [
+      { nombre: "YouTube", url: "", clase: "yt", texto: "▶" },
+      { nombre: "Facebook", url: "", clase: "fb", texto: "f" },
+      { nombre: "Instagram", url: "", clase: "ig", texto: "◎" },
+      { nombre: "TikTok", url: "", clase: "tt", texto: "♪" },
+    ];
+    for (const r of REDES) {
+      const a = document.createElement("a");
+      a.className = "red " + r.clase;
+      a.textContent = r.texto;
+      a.setAttribute("aria-label", r.nombre);
+      if (r.url) { a.href = r.url; a.target = "_blank"; a.rel = "noopener noreferrer"; a.title = r.nombre; }
+      else { a.classList.add("sin-enlace"); a.title = r.nombre + " (próximamente)"; }
+      $("redes").appendChild(a);
+    }
+
+    // ----- Panel lateral (☰) y aviso de privacidad -----
+    const panel = $("panel"), btnMenu = $("btnMenu"), priv = $("priv");
+    const panelAbierto = () => document.body.classList.contains("menu-abierto");
+    function abrirPanel() {
+      panel.inert = false;
+      document.body.classList.add("menu-abierto");
+      btnMenu.setAttribute("aria-expanded", "true");
+      $("panelX").focus({ preventScroll: true });
+    }
+    function cerrarPanel() {
+      if (!panelAbierto()) return;
+      document.body.classList.remove("menu-abierto");
+      btnMenu.setAttribute("aria-expanded", "false");
+      panel.inert = true;
+      btnMenu.focus({ preventScroll: true });
+    }
+    btnMenu.addEventListener("click", () => (panelAbierto() ? cerrarPanel() : abrirPanel()));
+    $("panelX").addEventListener("click", cerrarPanel);
+    $("panelFondo").addEventListener("click", cerrarPanel);
+    $("opPrivacidad").addEventListener("click", () => { priv.hidden = false; $("privCerrar").focus({ preventScroll: true }); });
+    const cerrarPriv = () => { if (priv.hidden) return; priv.hidden = true; $("opPrivacidad").focus({ preventScroll: true }); };
+    $("privCerrar").addEventListener("click", cerrarPriv);
+    priv.addEventListener("click", (e) => { if (e.target === priv) cerrarPriv(); });
+    addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { if (!priv.hidden) cerrarPriv(); else cerrarPanel(); return; }
+      if (e.key !== "Tab" || !panelAbierto()) return; // Tab no se sale del panel (ni del aviso, si está abierto)
+      const bs = [...(priv.hidden ? panel : priv).querySelectorAll("button:not(:disabled):not([hidden])")];
+      if (!bs.length) return;
+      const i = bs.indexOf(document.activeElement);
+      const sig = e.shiftKey ? (i <= 0 ? bs.length - 1 : i - 1) : (i < 0 || i === bs.length - 1 ? 0 : i + 1);
+      e.preventDefault();
+      bs[sig].focus();
+    });
+
+    // ----- Agregar a la pantalla de inicio (botón del panel). Se escucha ANTES de los await de abajo para no perder el evento -----
+    const instalada = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+    const esIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    let evento = null;
+    const nota = (t) => { $("notaInstalar").textContent = t; $("notaInstalar").hidden = !t; };
+    addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); evento = e; });
+    addEventListener("appinstalled", () => { evento = null; $("opInstalar").hidden = true; nota(""); });
+    if (instalada) $("opInstalar").hidden = true;
+    $("opInstalar").addEventListener("click", async () => {
+      if (evento) { const e = evento; evento = null; e.prompt(); await e.userChoice.catch(() => {}); return; }
+      nota(esIos ? "En iPhone/iPad: toca Compartir (el cuadro con la flecha) y luego «Agregar a pantalla de inicio»."
+                 : "Abre el menú de tu navegador (⋮) y elige «Instalar aplicación» o «Agregar a la pantalla de inicio».");
+    });
 
     // ----- Copias de seguridad y protección del almacenamiento (compartido/almacen.js; no usa Firebase, funciona sin internet) -----
     let alm = null;
@@ -264,63 +372,39 @@
       fijarPruebas(!activo);
     });
 
-    const instalada = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
-    const esIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    let evento = null;
-    if (!instalada) {
-      if (esIos) {
-        // iOS no permite instalar con un botón: se muestran los pasos
-        $("instalar").hidden = false;
-        $("instalar").addEventListener("click", () => ($("ayudaIos").hidden = false));
-        $("cerrarAyuda").addEventListener("click", () => ($("ayudaIos").hidden = true));
-      } else {
-        addEventListener("beforeinstallprompt", (e) => {
-          e.preventDefault();
-          evento = e;
-          $("instalar").hidden = false;
-        });
-        $("instalar").addEventListener("click", async () => {
-          if (!evento) return;
-          evento.prompt();
-          await evento.userChoice.catch(() => {});
-          evento = null;
-          $("instalar").hidden = true;
-        });
-      }
-    }
-    addEventListener("appinstalled", () => ($("instalar").hidden = true));
-
     // ----- Sesión con Google y puntos totales (los mismos para todos los juegos) -----
     // Se carga aparte: si Firebase no está disponible (sin conexión la primera vez), el portal igual se ve.
-    const zona = $("sesion");
+    // p: undefined = cargando · false = no se pudo leer · null = sin perfil todavía (0 pts) · objeto = perfil
+    function pintarPerfil(u, p) {
+      $("opEntrar").hidden = !!u;
+      $("opSalir").hidden = !u;
+      $("perfilNombre").textContent = u ? (u.displayName || "Jugador") : "Perfil";
+      const foto = u && typeof u.photoURL === "string" && u.photoURL.startsWith("https://") ? u.photoURL : "";
+      $("perfilFoto").hidden = !foto;
+      $("perfilIco").hidden = !!foto;
+      if (foto) $("perfilFoto").src = foto; else $("perfilFoto").removeAttribute("src");
+      $("perfilPuntos").textContent = !u ? "Inicia sesión para ver tus puntos" : p === undefined ? "Cargando…" : p === false ? "Puntos no disponibles" : (p ? p.total || 0 : 0) + " pts";
+    }
     try {
       const { alCambiarSesion, entrar, salir, leerPerfil } = await import("./compartido/jugador.js");
       import("./compartido/progreso.js").catch(() => {}); // envía los puntos pendientes al entrar o al volver la conexión
+      const intentar = () => entrar().catch((e) => alert(e.message));
+      $("opEntrar").addEventListener("click", intentar);
+      $("opSalir").addEventListener("click", () => salir());
       alCambiarSesion(async (u) => {
-        zona.replaceChildren();
-        const b = document.createElement("button");
-        b.className = "btn";
         if (!u) {
-          b.textContent = "Entrar con Google";
-          b.addEventListener("click", () => entrar().catch((e) => alert(e.message)));
-          zona.appendChild(b);
+          pintarPerfil(null);
           // Invitación suave (máx. 1 vez por semana y solo si hay puntos guardados solo en este dispositivo)
-          if (alm) alm.invitarASesion({ alAceptar: () => entrar().catch((e) => alert(e.message)) });
+          if (alm) alm.invitarASesion({ alAceptar: intentar });
           return;
         }
         if (alm) alm.cerrarInvitacion();
-        const t = document.createElement("span");
-        t.textContent = (u.displayName || "Jugador") + " · ";
-        b.textContent = "Salir";
-        b.addEventListener("click", salir);
-        zona.append(t, b);
-        try {
-          const p = await leerPerfil();
-          t.textContent = (u.displayName || "Jugador") + " · " + (p ? p.total || 0 : 0) + " pts · ";
-        } catch (e) {}
+        pintarPerfil(u, undefined);
+        try { pintarPerfil(u, await leerPerfil()); } catch (e) { pintarPerfil(u, false); }
       });
     } catch (e) {
-      zona.textContent = "Sesión no disponible sin conexión";
+      $("opEntrar").disabled = true;
+      $("perfilPuntos").textContent = "Sesión no disponible sin conexión";
     }
   </script>
   <script type="module" src="compartido/pantalla-completa.js"></script>
