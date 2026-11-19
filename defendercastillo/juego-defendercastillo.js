@@ -9,8 +9,9 @@ import { MAPAS_DESBLOQUEADOS as MAPAS } from "./mapas-desbloqueados-defendercast
 import { generarNivel, NIVELES_MICHOACAN, DESBLOQUEO_TORRES, OLEADAS } from "./generador-defendercastillo.js";
 import {
   CELDA, ANCHO, ALTO, TORRES, TORRES_CLASICAS, ENEMIGOS, METEORO, REEMBOLSO,
-  nuevaPartida, celdaLibre, torreEn, obstaculoEn, costeTalar, datosTorre, colocar, mejorar, vender, talar, iniciarOleada, comprarMeteoro, meteoro, paso, estrellas,
+  nuevaPartida, celdaLibre, torreEn, obstaculoEn, costeTalar, datosTorre, datosDeNivel, ola, totalOleadas, precioMeteoro, colocar, mejorar, vender, talar, iniciarOleada, comprarMeteoro, meteoro, paso, estrellas,
 } from "./logica-defendercastillo.js";
+import { crearNivelInfinito, REQ_INFINITO, nivelEnemigo } from "./infinito-defendercastillo.js";
 
 // ----- Ajustes -----
 const ID = "defensa";            // nombre del juego en el ranking
@@ -72,6 +73,15 @@ function textoCanvas(txt, x, y, tam, color, trazo, colorTrazo) {
   });
   ctx.textAlign = alinea;
 }
+// Números grandes (el nivel infinito llega a miles de millones): 12 345 → 12.3K · 4 500 000 → 4.50M
+const fmt = (n) => {
+  n = Math.floor(Number(n) || 0);
+  if (n < 10000) return String(n);
+  const U = ["", "K", "M", "B", "T", "Qa", "Qi"]; let v = n, i = 0;
+  while (v >= 1000 && i < U.length - 1) { v /= 1000; i++; }
+  return v >= 1000 ? v.toExponential(2) : (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)) + U[i];
+};
+const fx = (v) => (typeof v !== "number" ? v : v >= 1000 ? fmt(v) : String(+v.toFixed(1)));
 const leer = (k, def) => { try { const v = localStorage.getItem(k); return v == null ? def : JSON.parse(v); } catch (e) { return def; } };
 const guardar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 
@@ -91,11 +101,11 @@ fondo.height = ALTO * DPR;
 
 // ----- Estado -----
 let actual = { t: "clasico", i: 0 }, p = null;
-const nivelDe = (t, i) => (t === "mich" ? generarNivel(i + 1) : MAPAS[i]);
-const totalDe = (t) => (t === "mich" ? NIVELES_MICHOACAN : MAPAS.length);
-const idDe = (t, i) => (t === "mich" ? "M" + (i + 1) : MAPAS[i].id);
+const nivelDe = (t, i) => (t === "inf" ? crearNivelInfinito() : t === "mich" ? generarNivel(i + 1) : MAPAS[i]);
+const totalDe = (t) => (t === "inf" ? 1 : t === "mich" ? NIVELES_MICHOACAN : MAPAS.length);
+const idDe = (t, i) => (t === "inf" ? "INF" : t === "mich" ? "M" + (i + 1) : MAPAS[i].id);
 // Michoacán: se abre el siguiente al pasar uno. Desbloqueados: cada mapa se abre al pasar el nivel «req» de Michoacán.
-const abierto = (t, i) => TODOS || (t === "mich" ? i === 0 || !!progreso[idDe(t, i - 1)] : !!progreso["M" + MAPAS[i].req]);
+const abierto = (t, i) => TODOS || (t === "inf" ? !!progreso["M" + REQ_INFINITO] : t === "mich" ? i === 0 || !!progreso[idDe(t, i - 1)] : !!progreso["M" + MAPAS[i].req]);
 let tipoSel = null, torreSel = null, modoMeteoro = false, modoQuitar = false;
 let pausa = false, vel = 1, acum = 0, ultimo = 0, anim = 0;
 let finalizado = false, fantasma = null, flash = 0, menuAbierto = true;
@@ -136,7 +146,7 @@ const melodia = (notas, tipo = "triangle") => notas.forEach((f, i) => setTimeout
 // ----- Mensajes -----
 function mensaje(t, ms = 2500) { msgTexto = t; msgHasta = performance.now() + ms; }
 function resumenOleada() {
-  const o = p.nivel.oleadas[p.oleada];
+  const o = ola(p, p.oleada);
   if (!o) return "";
   const n = {};
   for (const [tipo, cant] of o.grupos) n[tipo] = (n[tipo] || 0) + cant;
@@ -158,10 +168,11 @@ function empezarNivel(t, i) {
   ajustarLienzo();
   armarFondo();
   const r = progreso[p.nivel.id];
-  $("record").textContent = r ? "Récord: " + r.record + " " + "⭐".repeat(r.estrellas) : "";
-  poner("mapaNombre", "Mapa " + p.nivel.id + ": " + p.nivel.nombre + " · " + (p.nivel.dificultad || ""));
+  $("record").textContent = p.nivel.infinito ? (r ? "Récord: oleada " + (r.oleada || 0) : "") : r ? "Récord: " + r.record + " " + "⭐".repeat(r.estrellas) : "";
+  poner("mapaNombre", p.nivel.infinito ? "♾️ Nivel infinito" : "Mapa " + p.nivel.id + ": " + p.nivel.nombre + " · " + (p.nivel.dificultad || ""));
   const nu = textoNuevos(p.nivel);
-  mensaje(nu ? "Mapa " + p.nivel.id + ": " + p.nivel.nombre + " · " + nu : "Mapa " + p.nivel.id + ": " + p.nivel.nombre, nu ? 7000 : 3000);
+  if (p.nivel.infinito) mensaje("♾️ Nivel infinito: desde la oleada 10 los enemigos suben de nivel. ¡Sube el nivel de tus torres para seguirles el paso!", 7000);
+  else mensaje(nu ? "Mapa " + p.nivel.id + ": " + p.nivel.nombre + " · " + nu : "Mapa " + p.nivel.id + ": " + p.nivel.nombre, nu ? 7000 : 3000);
 }
 // «🆕 Torre: 🔮 Mago · Enemigo: 🦇 Murciélago (vuela…)» para el nivel de Michoacán que trae algo nuevo
 function textoNuevos(n) {
@@ -179,8 +190,22 @@ function abrirMenu() {
   lista.textContent = "";
   $("pestClasicos").classList.toggle("on", pestana === "clasico");
   $("pestMich").classList.toggle("on", pestana === "mich");
+  $("pestInf").classList.toggle("on", pestana === "inf");
   lista.className = pestana === "mich" ? "mich" : "";
-  if (pestana === "clasico") {
+  if (pestana === "inf") {
+    const r = progreso.INF, bloq = !abierto("inf", 0);
+    info.textContent = "♾️ Un mapa enorme de 30×30 con oleadas sin fin. Hasta la oleada 10 es normal; después los enemigos suben de nivel en cada oleada (más vida y más oro) y tus torres también pueden subir sin límite. Cuenta hasta dónde llegas.";
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "b3d txt mapa " + (bloq ? "b-gris" : "b-morado");
+    b.disabled = bloq;
+    const t = document.createElement("b"); t.textContent = (bloq ? "🔒 " : "♾️ ") + "Nivel infinito";
+    const d = document.createElement("small");
+    d.textContent = bloq ? "Pasa el nivel " + REQ_INFINITO + " de Michoacán" : r ? "Tu récord: oleada " + (r.oleada || 0) : "sin jugar";
+    b.append(t, d);
+    b.addEventListener("click", () => empezarNivel("inf", 0));
+    lista.appendChild(b);
+  } else if (pestana === "clasico") {
     const abiertos = MAPAS.filter((_, i) => abierto("clasico", i)).length;
     info.textContent = "🔓 Mapas fijos de 12×18 a 30×30 para jugar cuantas veces quieras: " + abiertos + " de " + MAPAS.length + " abiertos. Cada uno se abre al pasar un nivel de Michoacán.";
     MAPAS.forEach((n, i) => {
@@ -223,6 +248,7 @@ function abrirMenu() {
 }
 $("pestClasicos").addEventListener("click", () => { pestana = "clasico"; guardar(CLAVE_PESTANA, pestana); abrirMenu(); });
 $("pestMich").addEventListener("click", () => { pestana = "mich"; guardar(CLAVE_PESTANA, pestana); abrirMenu(); });
+$("pestInf").addEventListener("click", () => { pestana = "inf"; guardar(CLAVE_PESTANA, pestana); abrirMenu(); });
 function cerrarMenu() { $("menu").hidden = true; menuAbierto = false; }
 
 // Cada mapa puede tener su propio tamaño de cuadrícula (8×12, 12×18…): se redimensiona el lienzo y el fondo
@@ -286,7 +312,7 @@ cv.addEventListener("pointerdown", (ev) => {
   fantasma = { c: q.c, f: q.f };
   if (modoQuitar) {
     const t = torreEn(p, q.c, q.f), o = obstaculoEn(p, q.c, q.f);
-    if (t) { const gana = vender(p, t); torreSel = null; efectos.push({ k: "texto", x: t.x, y: t.y, t: 0, dur: 0.8, txt: "+" + gana + " 💵" }); tono("v", 400, 700, 0.12, "triangle", 0.05); }
+    if (t) { const gana = vender(p, t); torreSel = null; efectos.push({ k: "texto", x: t.x, y: t.y, t: 0, dur: 0.8, txt: "+" + fmt(gana) + " 💵" }); tono("v", 400, 700, 0.12, "triangle", 0.05); }
     else if (o) { if (!talar(p, q.c, q.f)) mensaje("Te faltan monedas: talar cuesta " + costeTalar(o) + " 💵", 1800); }
     return;
   }
@@ -338,10 +364,11 @@ function volverAMapas() {
   if (enCurso && !salirListo) {
     // Sin confirm(): el cuadro del navegador saca de la pantalla completa. Se pide tocar dos veces.
     salirListo = true; clearTimeout(salirTimer); salirTimer = setTimeout(() => (salirListo = false), 3000);
-    mensaje("🗺️ Toca otra vez para salir del mapa: se pierde la partida en curso", 3000);
+    mensaje(p.nivel.infinito && p.oleada > 0 ? "🗺️ Toca otra vez para terminar: se guardan tus oleadas y tus puntos" : "🗺️ Toca otra vez para salir del mapa: se pierde la partida en curso", 3000);
     return;
   }
   salirListo = false; clearTimeout(salirTimer);
+  if (p.nivel.infinito && p.oleada > 0 && p.estado !== "perdido") { p.estado = "perdido"; p.activa = false; terminar(false); return; } // en el infinito salir = terminar la partida
   $("fin").hidden = true;
   abrirMenu();
 }
@@ -352,7 +379,7 @@ $("finMapas").addEventListener("click", abrirMenu);
 $("btnMeteoro").addEventListener("click", () => {
   if (p.estado === "ganado" || p.estado === "perdido") return;
   if (modoMeteoro) { modoMeteoro = false; return; }              // segundo toque: cancelar (el meteoro queda guardado)
-  if (p.meteoros <= 0 && !comprarMeteoro(p)) { mensaje("Te faltan monedas: el meteoro cuesta " + METEORO.precio + " 💵", 2000); return; }
+  if (p.meteoros <= 0 && !comprarMeteoro(p)) { mensaje("Te faltan monedas: el meteoro cuesta " + fmt(precioMeteoro(p)) + " 💵", 2000); return; }
   modoMeteoro = true; tipoSel = null; torreSel = null; modoQuitar = false;
   mensaje("☄️ Toca el mapa donde quieres que caiga", 3000);
 });
@@ -377,7 +404,7 @@ function eventos() {
       else if (e.tipo === "veneno") tono("ve", 300, 220, 0.1, "triangle", 0.03, 100);
       else tono("m", 600, 1200, 0.12, "sine", 0.04, 80);
     } else if (e.t === "muerte") {
-      efectos.push({ k: "texto", x: e.x, y: e.y, t: 0, dur: 0.8, txt: "+" + e.oro + " 💵" });
+      efectos.push({ k: "texto", x: e.x, y: e.y, t: 0, dur: 0.8, txt: "+" + fmt(e.oro) + " 💵" });
       tono("x", 520, 220, 0.1, "triangle", 0.035, 50);
     } else if (e.t === "explosion") {
       efectos.push({ k: "explosion", x: e.x, y: e.y, t: 0, dur: 0.3, r: e.r, hielo: e.hielo });
@@ -423,11 +450,16 @@ function eventos() {
       efectos.push({ k: "texto", x: e.x, y: e.y - 14, t: 0, dur: 0.8, txt: "⬆️" });
       melodia([500, 750]);
     } else if (e.t === "oleada") {
-      const ola = p.nivel.oleadas[e.n - 1], fuerte = ola && ola.jefe !== undefined ? ola.jefe : e.n === p.nivel.oleadas.length;
-      mensaje("👹 Oleada " + e.n + " de " + p.nivel.oleadas.length + (fuerte ? (e.n === p.nivel.oleadas.length ? " — ¡el jefe! 🧌" : " — ¡oleada fuerte! 💪") : ""), 3000);
+      if (p.nivel.infinito) {
+        const o = ola(p, e.n - 1), nv = nivelEnemigo(e.n);
+        mensaje("👹 Oleada " + e.n + (nv ? " · enemigos nivel " + (nv + 1) : "") + (o.jefe && e.n % 10 === 0 ? " — ¡jefe! 🧌" : o.jefe ? " — ¡oleada fuerte! 💪" : ""), 3000);
+      } else {
+        const ola_ = p.nivel.oleadas[e.n - 1], fuerte = ola_ && ola_.jefe !== undefined ? ola_.jefe : e.n === p.nivel.oleadas.length;
+        mensaje("👹 Oleada " + e.n + " de " + p.nivel.oleadas.length + (fuerte ? (e.n === p.nivel.oleadas.length ? " — ¡el jefe! 🧌" : " — ¡oleada fuerte! 💪") : ""), 3000);
+      }
       tono("o", 220, 440, 0.4, "sawtooth", 0.05);
     } else if (e.t === "oleadaLista") {
-      mensaje("✅ Oleada superada: +" + e.bono + " 💵" + (e.minas ? " (+" + e.minas + " de tus minas)" : ""), 3000);
+      mensaje("✅ Oleada superada: +" + fmt(e.bono) + " 💵" + (e.minas ? " (+" + fmt(e.minas) + " de tus minas)" : ""), 3000);
       melodia([440, 550]);
     } else if (e.t === "fin") {
       terminar(e.ganado);
@@ -440,17 +472,18 @@ async function terminar(ganado) {
   if (finalizado) return;
   finalizado = true;
   tipoSel = null; torreSel = null; modoMeteoro = false; modoQuitar = false;
-  const est = estrellas(p), pts = p.puntos;
+  const inf = !!p.nivel.infinito, est = inf ? 0 : estrellas(p), pts = inf ? p.oleada * 100 : p.puntos; // en el infinito solo cuentan las oleadas superadas (100 puntos cada una)
   melodia(ganado ? [523, 659, 784, 1047] : [330, 262, 196, 130], ganado ? "triangle" : "sawtooth");
   const r = progreso[p.nivel.id] || { estrellas: 0, record: 0 };
-  progreso[p.nivel.id] = { estrellas: Math.max(r.estrellas, est), record: Math.max(r.record, pts) };
+  progreso[p.nivel.id] = { estrellas: Math.max(r.estrellas, est), record: Math.max(r.record, pts), ...(inf ? { oleada: Math.max(r.oleada || 0, p.oleada) } : {}) };
   guardar(CLAVE_PROGRESO, progreso);
   if (nube) nube.guardado();
-  $("record").textContent = "Récord: " + progreso[p.nivel.id].record + " " + "⭐".repeat(progreso[p.nivel.id].estrellas);
-  $("finTitulo").textContent = ganado ? "¡Castillo defendido! 🏰" : "El castillo cayó 💥";
+  $("record").textContent = inf ? "Récord: oleada " + progreso.INF.oleada : "Récord: " + progreso[p.nivel.id].record + " " + "⭐".repeat(progreso[p.nivel.id].estrellas);
+  $("finTitulo").textContent = inf ? "Resististe " + p.oleada + " oleadas ♾️" : ganado ? "¡Castillo defendido! 🏰" : "El castillo cayó 💥";
   $("estrellas").textContent = ganado ? "⭐".repeat(est) + "☆".repeat(3 - est) : "";
   const ganados = Math.floor(pts / PUNTOS_POR_PERFIL);
-  let txt = (ganado ? "Oleadas superadas: " + p.oleada + "/" + p.nivel.oleadas.length : "Llegaste a la oleada " + (p.oleada + 1) + " de " + p.nivel.oleadas.length) +
+  let txt = inf ? "Oleadas superadas: " + p.oleada + " (récord " + progreso.INF.oleada + ") · Monstruos derrotados: " + p.matados + " · Puntos: " + pts
+    : (ganado ? "Oleadas superadas: " + p.oleada + "/" + p.nivel.oleadas.length : "Llegaste a la oleada " + (p.oleada + 1) + " de " + p.nivel.oleadas.length) +
     " · Monstruos derrotados: " + p.matados + " · Puntos: " + pts;
   $("finTexto").textContent = txt;
   $("finSiguiente").hidden = !(ganado && actual.i + 1 < totalDe(actual.t) && abierto(actual.t, actual.i + 1));
@@ -514,8 +547,9 @@ function dibujar() {
     circulo(t.x, t.y, 18, COLOR_TORRE[t.tipo], torreSel === t ? "#ffd34d" : "rgba(0,0,0,.45)");
     emoji(TORRES[t.tipo].icono, t.x, t.y + 1, 24);
     ctx.fillStyle = "#ffd34d";
-    for (let i = 0; i <= t.nivel; i++) { ctx.beginPath(); ctx.arc(t.x - t.nivel * 4 + i * 8, t.y + 20, 2.5, 0, Math.PI * 2); ctx.fill(); }
-    if (modoQuitar) etiqueta("+" + Math.floor(t.invertido * REEMBOLSO), t.x, t.y - 22, "#9dff9d");
+    if (t.nivel <= 2) for (let i = 0; i <= t.nivel; i++) { ctx.beginPath(); ctx.arc(t.x - t.nivel * 4 + i * 8, t.y + 20, 2.5, 0, Math.PI * 2); ctx.fill(); }
+    else etiqueta("Nv " + (t.nivel + 1), t.x, t.y + 22, "#ffd34d"); // nivel infinito: más de 3 niveles
+    if (modoQuitar) etiqueta("+" + fmt(Math.floor(t.invertido * REEMBOLSO)), t.x, t.y - 22, "#9dff9d");
     if (t.enganchados) { // cuartel: líneas hacia los enemigos que sus soldados frenan; caído = gris
       if (t.caidoT > 0) { circulo(t.x, t.y, 18, "rgba(30,30,30,.65)"); emoji("💤", t.x, t.y - 14, 14); }
       else for (const e of t.enganchados) {
@@ -623,11 +657,11 @@ function poner(id, valor, prop = "textContent") {
   if (prop === "textContent" && typeof valor === "string" && valor.includes("💵")) conBillete($(id), valor); else $(id)[prop] = valor;
 }
 function ui() {
-  const total = p.nivel.oleadas.length;
-  poner("oro", String(Math.floor(p.oro)));
+  const total = totalOleadas(p);
+  poner("oro", fmt(p.oro));
   $("btnQuitar").classList.toggle("on", modoQuitar);
   poner("vida", String(Math.ceil(p.vida)));
-  poner("oleada", Math.min(total, p.oleada + 1) + "/" + total);
+  poner("oleada", total === Infinity ? String(p.oleada + 1) : Math.min(total, p.oleada + 1) + "/" + total);
   for (const b of tienda.children) {
     const t = b.dataset.tipo;
     b.classList.toggle("on", tipoSel === t);
@@ -641,8 +675,8 @@ function ui() {
   const bm = $("btnMeteoro");
   bm.disabled = p.estado === "ganado" || p.estado === "perdido";
   bm.classList.toggle("on", modoMeteoro);
-  bm.classList.toggle("sin", p.meteoros <= 0 && p.oro < METEORO.precio);   // sin meteoros y sin monedas para comprar uno
-  poner("btnMeteoroNum", p.meteoros > 0 ? "×" + p.meteoros : METEORO.precio + "💵");   // cuántos tienes, o lo que cuesta comprar uno
+  bm.classList.toggle("sin", p.meteoros <= 0 && p.oro < precioMeteoro(p));   // sin meteoros y sin monedas para comprar uno
+  poner("btnMeteoroNum", p.meteoros > 0 ? "×" + p.meteoros : fmt(precioMeteoro(p)) + "💵");   // cuántos tienes, o lo que cuesta comprar uno
 
   // panel de la torre elegida
   const panel = $("panel");
@@ -657,15 +691,15 @@ function ui() {
       panel.classList.toggle("abajo", torreSel.f < p.filas / 2); // si la torre está arriba, el panel va abajo y viceversa
       panel.textContent = "";
       const el = (tag, cls, txt) => { const x = document.createElement(tag); if (cls) x.className = cls; if (txt !== undefined) { if (typeof txt === "string" && txt.includes("💵")) conBillete(x, txt); else x.textContent = txt; } return x; };
-      const sig = def.niveles[torreSel.nivel + 1];           // datos del siguiente nivel (si lo hay) para mostrar la mejora
+      const sig = datosDeNivel(torreSel.tipo, torreSel.nivel + 1, torreSel.inf); // datos del siguiente nivel (si lo hay) para mostrar la mejora
       const info = el("div");
       const cab = el("div", "cab");
       const ic = el("span", "ico", def.icono); ic.style.setProperty("--c", COLOR_TORRE[torreSel.tipo]);
-      cab.append(ic, el("span", "nom", def.nombre), el("span", "pips", "●".repeat(torreSel.nivel + 1) + "○".repeat(2 - torreSel.nivel)));
+      cab.append(ic, el("span", "nom", def.nombre), el("span", "pips", torreSel.inf && torreSel.nivel >= 2 ? "Nv " + (torreSel.nivel + 1) : "●".repeat(torreSel.nivel + 1) + "○".repeat(2 - torreSel.nivel)));
       const chips = el("div", "chips");
       const chip = (ico, v, s, suf = "") => {
-        const c = el("span", "dato", ico + " " + v + suf);
-        if (s !== undefined && s !== v) c.append(" → ", el("em", "", s + suf));
+        const c = el("span", "dato", ico + " " + fx(v) + suf);
+        if (s !== undefined && s !== v) c.append(" → ", el("em", "", fx(s) + suf));
         chips.appendChild(c);
       };
       if (d.dano !== undefined) chip("💥 daño", d.dano, sig && sig.dano);
@@ -683,12 +717,12 @@ function ui() {
       info.append(cab, chips);
       const fila = document.createElement("div"); fila.className = "fila";
       const bu = document.createElement("button"); bu.className = "b3d txt chico " + (torreSel.nivel ? "b-oro" : "b-azul");
-      conBillete(bu, sube ? "⬆️ Mejorar · " + sube + " 💵" : "Nivel máximo");
+      conBillete(bu, sube ? "⬆️ Mejorar · " + fmt(sube) + " 💵" : "Nivel máximo");
       bu.disabled = !sube || p.oro < sube;
       const t = torreSel;
       bu.addEventListener("click", () => { mejorar(p, t); });
       const bv = document.createElement("button"); bv.className = "b3d txt chico b-gris";
-      conBillete(bv, "🏷️ Vender · +" + Math.floor(t.invertido * REEMBOLSO) + " 💵");
+      conBillete(bv, "🏷️ Vender · +" + fmt(Math.floor(t.invertido * REEMBOLSO)) + " 💵");
       bv.addEventListener("click", () => { vender(p, t); torreSel = null; });
       fila.append(bu, bv);
       panel.append(info, fila);
@@ -752,6 +786,7 @@ import("../compartido/progreso.js").then((m) => {
       for (const fuente of [b, a]) for (const k in fuente || {}) {
         const x = fuente[k] || {}, y = r[k] || { estrellas: 0, record: 0 };
         r[k] = { estrellas: Math.max(x.estrellas || 0, y.estrellas || 0), record: Math.max(x.record || 0, y.record || 0) };
+        if (x.oleada || y.oleada) r[k].oleada = Math.max(x.oleada || 0, y.oleada || 0); // récord de oleadas del nivel infinito
       }
       return r;
     },

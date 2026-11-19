@@ -2,13 +2,15 @@
 // Herramienta de Node (no la carga el juego). Un bot juega los niveles de Michoacán con las reglas reales de logica-defendercastillo.js:
 //   node bot-defendercastillo.mjs nivel N [vida]      juega el nivel N y cuenta cómo le fue (vida = calibración a probar; si falta, usa la guardada)
 //   node bot-defendercastillo.mjs calibrar [desde] [hasta]   busca la «vida calibrada» de cada nivel y la guarda en calibracion-defendercastillo.js
+//   node bot-defendercastillo.mjs infinito [oleadas] [arqueros]   hasta qué oleada llega el bot en el nivel infinito (se detiene en [oleadas]; por defecto 60)
 //   node bot-defendercastillo.mjs validar [desde] [hasta]    revisa los niveles: mapa válido, árboles de 20 monedas, el bot bueno gana y el bot de solo arqueros no
 // «Bot bueno»: elige la torre y el lugar con más valor por moneda según lo que trae la próxima oleada (voladores, blindados, grupos grandes…),
 // mejora, tala árboles si el lugar vale la pena y construye minas al inicio. NO usa el meteoro (ahora es un boost de pago del jugador:
 // la calibración no cuenta con él, así que los niveles se ganan sin comprarlo).
 // «Bot de arqueros»: solo arqueros y sus mejoras (para comprobar que ninguna torre sola resuelve el nivel).
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { CELDA, TORRES, ENEMIGOS, nuevaPartida, celdaLibre, datosTorre, colocar, mejorar, talar, iniciarOleada, paso, costeTalar } from "./logica-defendercastillo.js";
+import { CELDA, TORRES, ENEMIGOS, nuevaPartida, celdaLibre, datosTorre, datosDeNivel, ola, totalOleadas, colocar, mejorar, talar, iniciarOleada, paso, costeTalar } from "./logica-defendercastillo.js";
+import { crearNivelInfinito } from "./infinito-defendercastillo.js";
 import { generarNivel, NIVELES_MICHOACAN, MARGEN_HUMANO, OLEADAS } from "./generador-defendercastillo.js";
 import { CALIB } from "./calibracion-defendercastillo.js";
 
@@ -67,13 +69,13 @@ function crearCobertura(p) {
 
 // ---------- Qué trae la oleada (para elegir torres) ----------
 function mezcla(p) {
-  const o = p.nivel.oleadas[Math.min(p.oleada, p.nivel.oleadas.length - 1)];
+  const o = ola(p, p.nivel.infinito ? p.oleada : Math.min(p.oleada, p.nivel.oleadas.length - 1));
   let hp = 0, air = 0, arm = 0, ara = 0, golem = 0, cant = 0;
   for (const [t, n] of o.grupos) {
     const d = ENEMIGOS[t], h = n * d.vida;
     hp += h; cant += n;
     if (d.vuela) air += h;
-    arm += h * (d.arm || 0);
+    arm += h * Math.min(0.8, (d.arm || 0) + (o.armX || 0));
     if (d.resVen) ara += h;
     if (d.inmCong) golem += h;
   }
@@ -100,7 +102,7 @@ function gastar(p, cob, modo) {
   const tipos = modo === "arqueros" ? ["arquero"] : (p.nivel.torres || Object.keys(TORRES));
   for (let vuelta = 0; vuelta < 40; vuelta++) {
     cob.refrescar();
-    const mix = mezcla(p), faltan = p.nivel.oleadas.length - p.oleada;
+    const mix = mezcla(p), faltan = Math.min(999, totalOleadas(p) - p.oleada);
     PESO_AIRE = mix.air * 2.5;
     const tope = p.torres.filter((t) => t.tipo !== "mina").length >= TOPE_BASE + Math.floor(p.nivel.n / 12); // un humano no llena todo el mapa
     let mejor = null, ms = 0;
@@ -136,7 +138,7 @@ function gastar(p, cob, modo) {
       const d = datosTorre(t);
       if (!d.sube) continue;
       if (t.tipo === "mina") { if (faltan > 8) consider(5e5, () => mejorar(p, t), d.sube); continue; }
-      const sig = TORRES[t.tipo].niveles[t.nivel + 1];
+      const sig = datosDeNivel(t.tipo, t.nivel + 1, t.inf);
       const gan = efectivo(t.tipo, sig, mix) - efectivo(t.tipo, d, mix);
       consider((gan * cob(t.c, t.f, sig.alcance, sig.minimo || 0, !TORRES[t.tipo].noAire, true)) / d.sube * 1.15, () => mejorar(p, t), d.sube);
     }
@@ -145,10 +147,10 @@ function gastar(p, cob, modo) {
   }
 }
 
-export function jugarBot(nivel, modo = "bueno") {
+export function jugarBot(nivel, modo = "bueno", tope = Infinity) { // «tope» = oleada en la que se detiene (solo para el nivel infinito)
   const p = nuevaPartida(nivel), cob = crearCobertura(p);
   let tal4 = 0, pasos = 0;
-  while ((p.estado === "preparando" || p.estado === "oleada") && pasos < 60 * 60 * 90) {
+  while ((p.estado === "preparando" || p.estado === "oleada") && pasos < 60 * 60 * (nivel.infinito ? 60 * 24 : 90) && !(nivel.infinito && p.oleada >= tope)) {
     if (p.estado === "preparando") {
       gastar(p, cob, modo);
       if (process.env.DBG) console.log("ola", p.oleada, "vida", Math.ceil(p.vida), "oro", Math.floor(p.oro), p.torres.map((t) => TORRES[t.tipo].icono + (t.nivel + 1) + "@" + t.c + "," + t.f).join(" "));
@@ -159,6 +161,7 @@ export function jugarBot(nivel, modo = "bueno") {
     p.ev.length = 0;
     if (pasos % 60 === 0 && p.estado === "oleada") gastar(p, cob, modo);
   }
+  if (nivel.infinito) return { oleada: p.oleada, vida: Math.ceil(p.vida), torres: p.torres.length, oro: Math.floor(p.oro), nivelesMax: Math.max(0, ...p.torres.map((t) => t.nivel + 1)), perdio: p.estado === "perdido", seg: Math.round(pasos / 60) };
   const nW = nivel.oleadas.length, ganado = p.estado === "ganado";
   return { ganado, vida: Math.ceil(p.vida), vidaFrac: p.vida / nivel.vidaCastillo, oleada: p.oleada, nW, tal4, torres: p.torres.length, talados: p.talados, seg: Math.round(pasos / 60),
     score: ganado ? p.vida / nivel.vidaCastillo : -(1 - p.oleada / nW) };
@@ -218,7 +221,10 @@ function revisarMapa(n) {
 
 const esPrincipal = process.argv[1] && import.meta.url === new URL("file://" + process.argv[1]).href;
 const [, , cmd, a1, a2] = esPrincipal ? process.argv : [0, 0];
-if (cmd === "nivel") {
+if (cmd === "infinito") { // node bot-defendercastillo.mjs infinito [tope] : hasta qué oleada llega el bot bueno (el bot de arqueros, con «arqueros»)
+  const t0 = Date.now(), r = jugarBot(crearNivelInfinito(), a2 === "arqueros" ? "arqueros" : "bueno", +a1 || 60);
+  console.log("infinito:", JSON.stringify(r), "(" + Math.round((Date.now() - t0) / 1000) + " s)");
+} else if (cmd === "nivel") {
   const n = +a1, r = jugarBot(generarNivel(n, a2 ? +a2 : undefined));
   console.log("nivel", n, "bueno:", JSON.stringify(r));
   console.log("   arqueros:", JSON.stringify(jugarBot(generarNivel(n, a2 ? +a2 : undefined), "arqueros")));
