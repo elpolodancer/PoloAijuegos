@@ -758,6 +758,20 @@ function actualizarHud() {
   pintarBoosts();
 }
 
+// Capa «Comenzar»: al abrir el juego se ve el nivel donde vas, tapado por una capa con un botón verde.
+// Al pulsarlo se vuelve a empezar el nivel (así suenan los avisos y no se pierde ningún movimiento).
+const capaComenzar = document.getElementById("capaComenzar");
+function mostrarComenzar() {
+  capaComenzar.hidden = false;
+  try { document.getElementById("btnComenzar").focus({ preventScroll: true }); } catch (e) {}
+}
+function quitarComenzar() { capaComenzar.hidden = true; }
+document.getElementById("btnComenzar").addEventListener("click", () => {
+  if (capaComenzar.hidden) return;
+  puntosInicioNivel = 0;
+  jugar(actual);
+});
+
 // Empieza el nivel n (el que se elige en el mapa o el siguiente tras ganar)
 function jugar(n) {
   actual = Math.max(1, Math.min(TOTAL_NIVELES, Math.floor(Number(n)) || 1));
@@ -768,6 +782,7 @@ function jugar(n) {
 }
 
 function empezar() {
+  quitarComenzar();
   partida++;
   puntos = puntosInicioNivel;
   const par = modo === "libre" ? parametrosLibre(libre.t, libre.d, libre.ronda) : parametrosNivel(nivelDe(actual)); // la campaña usa el catálogo: tablero, dificultad y patrón de cada nivel
@@ -1250,7 +1265,10 @@ function bucle(ahora) {
 configurarTablero(6, 8);
 llenar();
 colocarNegras(10);
-mostrarMenu();  // el juego empieza en el menú principal: Continuar · Modo libre · Niveles
+// El juego empieza directo en el nivel donde va el jugador (o el 1), con la capa «Comenzar». El menú principal se alcanza desde ☰ Pausa → Menú principal.
+puntosInicioNivel = 0;
+jugar(Math.min(nivel, TOTAL_NIVELES));
+mostrarComenzar();
 actualizarHud();
 requestAnimationFrame((t) => { ultimo = t; bucle(t); });
 

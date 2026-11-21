@@ -40,6 +40,10 @@
     .ovl { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; justify-content: safe center; gap: 12px; padding: 24px; text-align: center; background: rgba(10,10,12,.84); color: #fff; overflow-y: auto; }
     .ovl.oculto { display: none; }
     .ovl h2 { margin: 0; font-size: 1.7rem; }
+    /* Capa de inicio: cubre la partida (transparentosa) con el botón verde «Comenzar». Va dentro de .escena, así que se oculta con ella. */
+    .capa-comenzar { position: fixed; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; background: rgba(16,17,20,.38); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+    .capa-comenzar[hidden] { display: none; }
+    .capa-comenzar .b3d.grande { min-width: 200px; }
     /* Menú principal y modo libre: pantallas sobre la madera (textos con --txt-fondo, que cambia solo con la madera clara/oscura).
        Dejan libres las esquinas reservadas: arriba-izq. (🎮 Portal de Juegos + ☰), abajo-izq. (🌙) y abajo-der. (⛶). */
     .pantalla { position: fixed; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; justify-content: safe center; gap: 14px; overflow-y: auto; text-align: center;
@@ -122,6 +126,9 @@
       <button class="b3d txt boost b-rojo" id="bQuitar" type="button" title="Quita una gominola (o una negra) sin gastar movimiento"><span>🗑️ Quitar</span><span class="precio" id="pQuitar">50</span></button>
       <button class="b3d txt boost b-azul" id="bRevolver" type="button" title="Revuelve los colores del tablero sin gastar movimiento"><span>🔀 Revolver</span><span class="precio" id="pRevolver">50</span></button>
       <button class="b3d txt boost b-morado" id="bColor" type="button" title="Convierte una gominola en 🎨: en una cadena rompe todas las de su color"><span>🎨 Color</span><span class="precio" id="pColor">50</span></button>
+    </div>
+    <div class="capa-comenzar" id="capaComenzar" hidden>
+      <button class="b3d txt grande b-verde" id="btnComenzar" type="button"><span class="b-ico">▶</span> Comenzar</button>
     </div>
   </div>
   <script type="module" src="juego-gominolas.js"></script>
