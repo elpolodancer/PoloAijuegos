@@ -11,14 +11,14 @@ Ruta: `deslizante/README-deslizante.md` · Aquí se anotan las especificaciones 
 | `verificar-niveles-deslizante.mjs` | Herramienta de desarrollo (no va en `sw.js`): `node deslizante/verificar-niveles-deslizante.mjs` revisa que todos los niveles sean válidos y tengan solución |
 
 ## Pantallas
-- **Inicio (juego ya cargado)**: al abrir el juego **no hay pantalla de menú aparte**: se ve directamente el nivel donde va el jugador (el primero si es nuevo; con sesión, el que lleve su cuenta de Google, y si tiene partida guardada de ese nivel, esa partida), listo para jugar tocando una ficha. Arriba va la **barra de inicio estándar** (`.barra-inicio` de `compartido/inmersivo.css`; ver `ESTANDARES-juegos.md`, 7.0 y 7.1): tres botones **muy juntos** (4 px), **Modo libre** a la izquierda, **Jugar / Continuar en el centro y del doble de tamaño** (112 px; los otros son cuadrados de 56 px) y **Niveles** a la derecha. En celular vertical la barra va justo debajo de la fila de 🎮 / sesión; en pantallas anchas, en la fila superior.
-  - *Jugar* / *Continuar* juega el primer nivel sin pasar (dice «Continuar» si ya se pasó alguno) y retoma su partida guardada. Si ya se pasaron todos, abre el último.
+- **Inicio (juego ya cargado, con velo)**: al abrir el juego se ve directamente el nivel donde va el jugador (el primero si es nuevo; con sesión, el de su cuenta de Google; y su partida guardada si la tiene) **detrás de un velo negro transparente con un poco de difuminado** (`.velo-inicio` de `compartido/inmersivo.css`; `ESTANDARES-juegos.md`, 7.0 y 7.1). El juego se ve pero no responde (ni toques ni flechas) hasta tocar **Continuar**. En el centro de la pantalla, todo el grupo centrado: **Modo libre** y **Niveles** (cuadrados, juntos) un poco arriba y, debajo, **Jugar / Continuar** (verde, del doble de tamaño). No hay título ni texto de resumen.
+  - *Jugar* / *Continuar* quita el velo y deja jugar el primer nivel sin pasar (dice «Continuar» si ya se pasó alguno), retomando su partida guardada. Si ya se pasaron todos, abre el último.
   - *Niveles* muestra los niveles agrupados por tamaño.
-  - La barra **se esconde con el primer movimiento** (o al tocar Continuar) y el ☰ pasa a ser «Pausa». Al volver al «menú principal» (☰ «Atrás» o «Salir» de la pausa) se vuelve a ver el juego cargado con la barra. Mientras se ve la barra, ◀ ▶ y el ☰ no aparecen.
-  - Si la nube trae un progreso más avanzado y el jugador aún no ha tocado nada, el tablero mostrado se cambia al nivel de su cuenta.
+  - Mientras está el velo no se ven el ☰ ni ◀ ▶. Al volver al «menú principal» (☰ «Atrás» o «Salir» de la pausa) se vuelve a ver el juego cargado con el velo.
+  - Si la nube trae un progreso más avanzado y el velo sigue puesto, el tablero de atrás se cambia al nivel de su cuenta.
 - **Modo libre**: lista los tamaños del 3×3 al 30×30; se elige uno y salen tableros al azar sin fin.
 - **Niveles**: pasado = verde, disponible = azul, bloqueado = gris con 🔒.
-- **Juego**: tablero, movimientos, tiempo, mejor marca del nivel y botón 🔄 para reiniciarlo.
+- **Juego** (ya sin velo): arriba, solo **Modo libre** y **Niveles** (sin Continuar); **justo debajo**, los tres cuadros de **Movimientos · Tiempo · Mejor tiempo**. El **tablero va centrado en la ventana** y en celular vertical ocupa todo el ancho (tapa la madera de los lados). Debajo del tablero: título del nivel, estrellas y avisos; abajo al centro, 🔄 para reiniciar. Ya no hay mensaje de «toca una ficha…». En celular horizontal bajo, la barra, los cuadros y los textos pasan a una columna a la izquierda.
   - Dentro de un nivel (no en modo libre), arriba a la derecha bajo el nombre de sesión: **◀** lleva al nivel anterior (si existe) y **▶** al siguiente (solo si ya está desbloqueado, por ejemplo después de pasar el nivel actual o si ya se había pasado). Cada uno se oculta cuando no aplica. Cambiar de nivel así reinicia el cronómetro.
 
 ## Navegación (estándar de `compartido/inmersivo.css`)
@@ -95,4 +95,5 @@ No hace falta probar jugadas ni hacer backtracking: la solubilidad depende solo 
 - Nombre definitivo del juego (se busca el del juguete de plástico mexicano).
 
 ## Cambios recientes
-- **Inicio con el juego cargado + barra de inicio** (nuevo estándar 7.0/7.1): se eliminó la pantalla `#inicio` (título, resumen y tres botones centrados). El resumen («x de 280 niveles pasados») pasó a una línea sobre el título del nivel, visible solo mientras se ve la barra. Los estilos de los botones salieron de este HTML y viven en `compartido/inmersivo.css`. NO se ha probado en navegador/celular: revisar sobre todo la altura del tablero con la barra en celular vertical y horizontal.
+- **Velo de inicio** (estándar 7.0/7.1): el juego abre cargado detrás de un velo difuminado con Modo libre · Niveles · Continuar centrados. Sin resumen ni textos. Ya en el juego: barra con Modo libre y Niveles + cuadros de datos debajo + tablero centrado a todo el ancho. Se quitó el mensaje «Toca una ficha…».
+- OJO: los botones Modo libre / Niveles de la barra de juego también funcionan a media partida y salen sin guardar (como «Salir» de la pausa). NO se ha probado en navegador/celular: revisar la altura del tablero y los cuadros de datos en vertical y en horizontal.

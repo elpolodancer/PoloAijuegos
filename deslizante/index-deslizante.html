@@ -42,16 +42,22 @@
     /* Anterior / siguiente: arriba a la derecha, justo debajo de la sesión (cabe en los 104px de margen superior de la pantalla) */
     .nav-nivel { position: fixed; z-index: 6; display: flex; gap: 8px; top: calc(max(8px, env(safe-area-inset-top)) + 42px); right: max(8px, env(safe-area-inset-right)); }
     .nav-nivel[hidden] { display: none; }
-    .lado { display: flex; flex-direction: column; align-items: center; gap: 8px; width: min(100%, 520px); }
-    .resumen-inicio { margin: 0; text-align: center; color: var(--txt-fondo-suave); font-size: .8rem; font-weight: 700; text-shadow: var(--sombra-txt); }
+    /* Pantalla de juego: el TABLERO va centrado en la ventana (arriba 50 %, centrado en x) y ocupa todo el ancho en celular vertical (tapa la madera de los lados).
+       --T = espacio que se deja arriba y abajo (barra de juego + cuadros de datos); --S = lado del tablero. */
+    #juego { display: block; padding: 0; --T: calc(190px + env(safe-area-inset-top, 0px)); --S: max(200px, min(100vw, calc(100vh - 2 * var(--T)), 700px)); --S: max(200px, min(100vw, calc(100dvh - 2 * var(--T)), 700px)); }
     .titulo-nivel { font-weight: 800; font-size: 1rem; text-align: center; }
     .titulo-nivel small { display: block; color: var(--txt-fondo-suave); font-weight: 600; font-size: .75rem; }
-    .datos { display: flex; justify-content: center; gap: 8px; width: 100%; }
+    /* Cuadros de movimientos, tiempo y mejor tiempo: justo debajo de la barra de juego (Modo libre · Niveles) */
+    .datos { position: absolute; left: 50%; transform: translateX(-50%); top: calc(max(8px, env(safe-area-inset-top)) + 127px); display: flex; justify-content: center; gap: 8px; width: min(calc(100% - 24px), 360px); }
     .datos div { flex: 1; max-width: 130px; padding: 4px 8px; text-align: center; color: var(--suave); font-size: .7rem; background: linear-gradient(180deg, #3a3d45, #262830); border: 2px solid #121316; border-radius: 12px; box-shadow: 0 3px 0 #121316, inset 0 2px 0 rgba(255,255,255,.15); }
     .datos b { display: block; color: var(--texto); font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+    /* Título del nivel, estrellas y mensajes: justo debajo del tablero */
+    .abajo { position: absolute; left: 50%; transform: translateX(-50%); top: calc(50% + var(--S) / 2 + 10px); width: min(calc(100% - 24px), 420px); display: flex; flex-direction: column; align-items: center; gap: 6px; }
     #msg { margin: 0; min-height: 1.3em; text-align: center; font-size: .8rem; }
+    #reiniciar { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); margin: 0; }
+    #reiniciar:active { transform: translateX(-50%) translateY(4px); }
 
-    #tablero { --n: 3; position: relative; flex: none; width: min(100%, max(220px, calc(100vh - 376px)), 520px); width: min(100%, max(220px, calc(100dvh - 376px)), 520px);
+    #tablero { --n: 3; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: var(--S);
       aspect-ratio: 1 / 1; container-type: inline-size; background: #1a1b20; border: 2px solid var(--borde); border-radius: 16px; padding: 6px;
       box-shadow: 0 6px 0 #0c0d0f, 0 12px 20px rgba(0,0,0,.5); touch-action: none; user-select: none; }
     #fichas { position: relative; width: 100%; height: 100%; }
@@ -114,22 +120,20 @@
     @media (prefers-reduced-motion: reduce) { .est::before, .est::after, .est.pop, .chispa { animation: none !important; } }
     @media (prefers-reduced-motion: reduce) { .ficha { transition: none; } }
 
-    /* Juego ya cargado con la barra de inicio arriba (compartido/inmersivo.css, .barra-inicio): se deja libre su altura (≈ 117 px).
-       Celular vertical: la barra va 52 px más abajo (bajo 🎮 y la sesión). ≥ 640 px de ancho: va en la fila superior. */
-    #juego.con-barra { padding-top: calc(188px + env(safe-area-inset-top, 0px)); }
-    #juego.con-barra #tablero { width: min(100%, max(220px, calc(100vh - 460px)), 520px); width: min(100%, max(220px, calc(100dvh - 460px)), 520px); }
+    /* ≥ 640 px de ancho: la barra de juego va en la fila superior, así que sobra espacio arriba */
     @media (min-width: 640px) {
-      #juego.con-barra { padding-top: calc(140px + env(safe-area-inset-top, 0px)); }
-      #juego.con-barra #tablero { width: min(100%, max(220px, calc(100vh - 412px)), 520px); width: min(100%, max(220px, calc(100dvh - 412px)), 520px); }
+      #juego { --T: calc(140px + env(safe-area-inset-top, 0px)); }
+      .datos { top: calc(max(8px, env(safe-area-inset-top)) + 75px); }
     }
-
-    /* Celular horizontal: los controles pasan a la izquierda y el tablero ocupa toda la altura */
+    /* Celular horizontal: barra, cuadros y textos pasan a una columna a la izquierda y el tablero sigue centrado en la ventana */
     @media (orientation: landscape) and (max-height: 560px) {
-      #juego { flex-direction: row; gap: 18px; padding: 8px calc(56px + env(safe-area-inset-right, 0px)) 8px calc(12px + env(safe-area-inset-left, 0px)); }
-      #juego .lado { width: 230px; padding-top: 100px; gap: 6px; }
-      #tablero { width: min(calc(100vh - 24px), calc(100vw - 324px), 520px); width: min(calc(100dvh - 24px), calc(100vw - 324px), 520px); } /* deja libre la esquina del ⛶ */
-      #juego.con-barra { padding-top: 112px; }
-      #juego.con-barra #tablero { width: min(calc(100vh - 124px), calc(100vw - 324px), 520px); width: min(calc(100dvh - 124px), calc(100vw - 324px), 520px); }
+      #juego { --S: max(160px, min(calc(100vh - 16px), calc(100vw - 508px), 700px)); --S: max(160px, min(calc(100dvh - 16px), calc(100vw - 508px), 700px)); }
+      .datos { left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; top: calc(max(8px, env(safe-area-inset-top)) + 57px); width: 190px; gap: 4px; }
+      .datos div { padding: 3px 4px; font-size: .6rem; }
+      .datos b { font-size: .95rem; }
+      .abajo { left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; top: calc(max(8px, env(safe-area-inset-top)) + 118px); width: 190px; }
+      #reiniciar { left: calc(64px + env(safe-area-inset-left, 0px)); transform: none; }
+      #reiniciar:active { transform: translateY(4px); }
       #pantalla-niveles, #pantalla-libre { padding-top: calc(96px + env(safe-area-inset-top, 0px)); }
     }
   </style>
@@ -147,12 +151,19 @@
     <button class="b3d chico b-verde" id="btn-siguiente" type="button" title="Siguiente nivel" aria-label="Siguiente nivel" hidden><span class="b-ico">▶</span></button>
   </div>
 
-  <!-- Barra de inicio (menú principal estándar, compartido/inmersivo.css): Modo libre · Continuar (centro, doble de grande) · Niveles.
-       Está sobre el juego ya cargado y se esconde con el primer movimiento. -->
-  <div class="barra-inicio" id="barra-inicio" hidden>
-    <button class="b3d b-morado" id="btn-libre" type="button" title="Modo libre" aria-label="Modo libre"><span class="b-ico">♾️</span><span class="b-rot">Modo libre</span></button>
+  <!-- INICIO (estándar, compartido/inmersivo.css): el juego ya cargado se ve detrás, un poco difuminado y oscurecido, y no se puede jugar hasta tocar «Continuar».
+       Arriba del botón grande van Modo libre y Niveles. Todo el grupo va centrado en la pantalla. -->
+  <div class="velo-inicio" id="velo-inicio" hidden>
+    <div class="fila-menu">
+      <button class="b3d b-morado" id="btn-libre" type="button" title="Modo libre" aria-label="Modo libre"><span class="b-ico">♾️</span><span class="b-rot">Modo libre</span></button>
+      <button class="b3d b-azul" id="btn-niveles" type="button" title="Niveles" aria-label="Niveles"><span class="b-ico">🗂️</span><span class="b-rot">Niveles</span></button>
+    </div>
     <button class="b3d central b-verde" id="btn-jugar" type="button"><span class="b-ico">▶</span><span class="b-rot">Jugar</span></button>
-    <button class="b3d b-azul" id="btn-niveles" type="button" title="Niveles" aria-label="Niveles"><span class="b-ico">🗂️</span><span class="b-rot">Niveles</span></button>
+  </div>
+  <!-- Ya dentro del juego: solo Modo libre y Niveles (sin Continuar), arriba; los cuadros de datos van justo debajo -->
+  <div class="barra-juego fila-menu" id="barra-juego" hidden>
+    <button class="b3d b-morado" id="btn-libre2" type="button" title="Modo libre" aria-label="Modo libre"><span class="b-ico">♾️</span><span class="b-rot">Modo libre</span></button>
+    <button class="b3d b-azul" id="btn-niveles2" type="button" title="Niveles" aria-label="Niveles"><span class="b-ico">🗂️</span><span class="b-rot">Niveles</span></button>
   </div>
 
   <main>
@@ -168,19 +179,18 @@
     </section>
 
     <section class="pantalla" id="juego" hidden>
-      <div class="lado">
-        <p class="resumen-inicio" id="resumen" hidden></p>
-        <div class="titulo-nivel" id="titulo"></div>
-        <div class="meta-estrellas" id="meta-estrellas" hidden></div>
-        <div class="datos">
-          <div>Movimientos<b id="movs">0</b></div>
-          <div>Tiempo<b id="tiempo">0:00</b></div>
-          <div>Mejor tiempo<b id="mejor">–</b></div>
-        </div>
-        <button class="b3d chico b-oro" id="reiniciar" type="button" title="Reiniciar nivel" aria-label="Reiniciar nivel"><span class="b-ico">🔄</span></button>
-        <p id="msg"></p>
+      <div class="datos">
+        <div>Movimientos<b id="movs">0</b></div>
+        <div>Tiempo<b id="tiempo">0:00</b></div>
+        <div>Mejor tiempo<b id="mejor">–</b></div>
       </div>
       <div id="tablero"><div id="fichas"></div></div>
+      <div class="abajo">
+        <div class="titulo-nivel" id="titulo"></div>
+        <div class="meta-estrellas" id="meta-estrellas" hidden></div>
+        <p id="msg"></p>
+      </div>
+      <button class="b3d chico b-oro" id="reiniciar" type="button" title="Reiniciar nivel" aria-label="Reiniciar nivel"><span class="b-ico">🔄</span></button>
     </section>
   </main>
   <script type="module" src="juego-deslizante.js"></script>
