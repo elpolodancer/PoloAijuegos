@@ -12,6 +12,12 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Juegos" />
+  <script>
+    // Android/Chrome avisa que se puede instalar con el evento «beforeinstallprompt», que puede llegar ANTES de que cargue el módulo de abajo.
+    // Aquí se guarda de inmediato para que el botón «Agregar a la pantalla de inicio» pueda usarlo después.
+    window.__pwa = { evento: null };
+    addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); window.__pwa.evento = e; });
+  </script>
   <link rel="stylesheet" href="compartido/estilos.css" />
   <script>
     // Tema guardado (claro por defecto). Va aquí, antes de pintar, para que no parpadee.
@@ -120,6 +126,11 @@
     .perfil b, .perfil small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .perfil small { color: var(--suave); }
     .op-nota { margin: 0; font-size: .85rem; line-height: 1.4; color: var(--suave); }
+    .qr-zona { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 14px; text-align: center; background: var(--fondo); border: 2px solid var(--borde); border-radius: 14px; }
+    .qr-zona h3 { margin: 0; font-size: 1rem; }
+    .qr-zona canvas { width: min(100%, 220px); height: auto; aspect-ratio: 1; border-radius: 10px; background: #fff; }
+    .qr-fila { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+    .qr-fila .op { flex: 1 1 120px; width: auto; min-height: 44px; justify-content: center; padding: 8px 10px; font-size: .9rem; }
     .modal-fondo { position: fixed; inset: 0; z-index: 102; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.6); }
     .modal { width: min(100%, 460px); max-height: 85dvh; overflow-y: auto; padding: 18px; color: var(--texto); background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; }
     .modal h2 { margin: 0 0 10px; font-size: 1.2rem; }
@@ -186,6 +197,16 @@
       <button class="op" id="opInstalar" type="button"><span class="op-ico">📲</span> Agregar a la pantalla de inicio</button>
       <p class="op-nota" id="notaInstalar" role="status" hidden></p>
       <button class="op" id="opTema" type="button"><span class="op-ico" id="opTemaIco">🌙</span> <span id="opTemaTxt">Modo oscuro</span></button>
+      <!-- QR fijo del portal con el logo (se dibuja al abrir el panel por primera vez: compartido/qr-portal.js) -->
+      <section class="qr-zona" id="qrZona" aria-label="Código QR del portal">
+        <h3>📱 Comparte el portal</h3>
+        <canvas id="qrCanvas" width="220" height="220" role="img" aria-label="Código QR para abrir el portal de juegos"></canvas>
+        <p class="op-nota">Escanéalo con la cámara de otro celular para abrir el portal.</p>
+        <div class="qr-fila">
+          <button class="op" id="qrDescargar" type="button"><span class="op-ico">⬇️</span> Descargar</button>
+          <button class="op" id="qrCopiar" type="button"><span class="op-ico">🔗</span> Copiar enlace</button>
+        </div>
+      </section>
     </div>
     <div class="panel-pie"><button class="op op-suave" id="opPrivacidad" type="button"><span class="op-ico">🔒</span> Aviso de privacidad</button></div>
   </aside>
@@ -295,7 +316,22 @@
     // ----- Panel lateral (☰) y aviso de privacidad -----
     const panel = $("panel"), btnMenu = $("btnMenu"), priv = $("priv");
     const panelAbierto = () => document.body.classList.contains("menu-abierto");
+    let qrListo = false, qr = null;
+    async function cargarQR() {
+      if (qrListo) return;
+      qrListo = true;
+      try { qr = await import("./compartido/qr-portal.js"); await qr.dibujarQR($("qrCanvas")); }
+      catch (e) { $("qrZona").hidden = true; } // sin el módulo el portal funciona igual, solo sin la zona del QR
+    }
+    $("qrDescargar").addEventListener("click", () => { if (qr) qr.descargarQR(); });
+    $("qrCopiar").addEventListener("click", async () => {
+      if (!qr) return;
+      const b = $("qrCopiar"), t = b.lastChild, antes = t.textContent;
+      t.textContent = (await qr.copiarEnlace()) ? " ¡Copiado!" : " No se pudo copiar";
+      setTimeout(() => { t.textContent = antes; }, 1800);
+    });
     function abrirPanel() {
+      cargarQR();
       panel.inert = false;
       document.body.classList.add("menu-abierto");
       btnMenu.setAttribute("aria-expanded", "true");
@@ -329,7 +365,8 @@
     // ----- Agregar a la pantalla de inicio (botón del panel). Se escucha ANTES de los await de abajo para no perder el evento -----
     const instalada = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
     const esIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    let evento = null;
+    let evento = (window.__pwa && window.__pwa.evento) || null; // lo pudo capturar el script del <head> antes de que cargara este módulo
+    const enOtraApp = /FBAN|FBAV|Instagram|WhatsApp|MicroMessenger|TikTok|Snapchat|Line\/|; wv\)/i.test(navigator.userAgent); // navegador interno de otra app
     const nota = (t) => { $("notaInstalar").textContent = t; $("notaInstalar").hidden = !t; };
     addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); evento = e; });
     addEventListener("appinstalled", () => { evento = null; $("opInstalar").hidden = true; nota(""); });
@@ -337,7 +374,8 @@
     $("opInstalar").addEventListener("click", async () => {
       if (evento) { const e = evento; evento = null; e.prompt(); await e.userChoice.catch(() => {}); return; }
       nota(esIos ? "En iPhone/iPad: toca Compartir (el cuadro con la flecha) y luego «Agregar a pantalla de inicio»."
-                 : "Abre el menú de tu navegador (⋮) y elige «Instalar aplicación» o «Agregar a la pantalla de inicio».");
+         : enOtraApp ? "Estás en el navegador interno de otra app (WhatsApp, Facebook, Instagram…) y ahí no se puede instalar. Toca ⋮ y elige «Abrir en Chrome» (o copia el enlace y ábrelo en Chrome)."
+         : "Abre el menú de Chrome (⋮) y elige «Instalar aplicación» o «Agregar a la pantalla de inicio». Si no aparece, comprueba que no estés en modo incógnito y que Chrome esté actualizado.");
     });
 
     // ----- Copias de seguridad y protección del almacenamiento (compartido/almacen.js; no usa Firebase, funciona sin internet) -----
