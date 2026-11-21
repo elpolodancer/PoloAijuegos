@@ -1,9 +1,11 @@
 // Ruta: estacionamiento/niveles-estacionamiento.js
-// Generador de los 22 600 niveles del Estacionamiento (tableros siempre llenos: ver generarNivel). No toca la página (no usa document), así que se puede probar en Node.
-//   - configNivel(n)   → { n, zona, etapa, k, tam, seed, obj, p3, enredo, premio, dif }  (todo sale del número de nivel: iguales para todos)
+// Generador de los 22 600 niveles del Estacionamiento (tableros de 10×10 —los 10 primeros suben de 6×6—, siempre completamente llenos, dificultad 1 o 2: ver generarNivel). No toca la página (no usa document), así que se puede probar en Node.
+//   - configNivel(n)   → { n, zona, etapa, k, tam, dificultad, seed, obj, p3, enredo, premio }  (todo sale del número de nivel: iguales para todos)
 //   - generarNivel(cfg) → lista de autos del nivel; SIEMPRE tiene solución (se resuelve quitando los autos del último al primero)
 //
 // Niveles: 1–3200 = México (32 estados × 100) · 3201–22600 = mundo (194 países × 100). Ver README, secciones 1 a 4.
+
+import { dificultadSorteada } from "./dificultades-estacionamiento.js"; // sorteo fijo de la dificultad de cada nivel (1 = medio, 2 = difícil)
 
 export const NIVELES_POR_ETAPA = 100;
 export const ESTADOS = 32;
@@ -11,33 +13,26 @@ export const PAISES = 194;
 export const NIVELES_MEXICO = ESTADOS * NIVELES_POR_ETAPA;              // 3 200
 export const TOTAL_NIVELES = NIVELES_MEXICO + PAISES * NIVELES_POR_ETAPA; // 22 600
 
-// ----- Tamaños -----
-// México: [primer nivel, último nivel, tamaño mínimo, tamaño máximo]. Dentro del tramo el tamaño SUBE poco a poco
-// con un poco de azar (así la dificultad no da saltos bruscos, pero tampoco es una escalera aburrida).
-const TRAMOS_MEXICO = [
-  [1, 100, 10, 15],
-  [101, 300, 12, 20],
-  [301, 600, 15, 22],
-  [601, 1000, 17, 25],
-  [1001, 2000, 25, 35],
-  [2001, 3000, 27, 40],
-  [3001, 3200, 50, 50],
-];
-// Países: en cada país, de sus 100 niveles exactamente 40 / 30 / 20 / 10 son de estos rangos, en orden aleatorio fijo.
-const REPARTO_PAIS = [
-  { cantidad: 40, min: 40, max: 50 },
-  { cantidad: 30, min: 30, max: 39 },
-  { cantidad: 20, min: 20, max: 29 },
-  { cantidad: 10, min: 10, max: 19 },
-];
+// ----- Tamaño y dificultad (versión «divertido y satisfactorio») -----
+// Estándar: todos los tableros son de 10×10 y quedan COMPLETAMENTE llenos. Solo los 10 primeros niveles van subiendo (6×6 → 10×10)
+// para aprender jugando. El juego maneja SOLO las dificultades 1 y 2 (las 3, 4 y 5 se descartaron: ver README, sección 14).
+export const TAM_ESTANDAR = 10;
+const TAMS_INICIALES = [6, 6, 7, 7, 8, 8, 9, 9, 10, 10]; // tamaño de los niveles 1..10
+// Dificultad → forma del tablero. p3 = proporción de autos largos (3 casillas); enredo = cuánto se prefieren los caminos tapados al desarmar
+// (poco enredo = casi todos los autos salen de una; más enredo = algunas cadenas de 2 o 3 autos que se estorban).
+export const DIFICULTADES = {
+  // minLibres = % de autos que pueden salir desde el primer toque · minOla = la «ola» más chica (cuello de botella) · maxProf = cadena más larga de autos que se estorban
+  1: { nombre: "Medio", p3: 0.3, enredo: 0, extra: 0, premio: 15, minLibres: 0.40, minOla: 3, maxProf: 4 },
+  2: { nombre: "Difícil", p3: 0.4, enredo: 0.5, extra: 99, premio: 25, minLibres: 0.28, minOla: 2, maxProf: 6 },
+};
+// Qué nivel es medio y cuál difícil NO se calcula aquí: sale del sorteo de dificultades-estacionamiento.js (lo escribe sorteo-dificultades.mjs).
+// Semillas escogidas a mano (probadas con probar-niveles-estacionamiento.mjs) para que los 10 primeros niveles salgan lindos.
+// null = se usa la semilla normal del nivel. Para cambiar un nivel: probar otras semillas con «node semillas-iniciales.mjs».
+const SEMILLAS_INICIALES = [1053, 2141, 3332, 4040, 5249, 6595, 7419, 8164, 9184, 10561];
 
-// ----- Monedas por terminar un nivel, según su tamaño -----
-export function premioMonedas(tam) {
-  if (tam <= 19) return 15;
-  if (tam <= 29) return 25;
-  if (tam <= 39) return 35;
-  if (tam <= 45) return 45;
-  return 60;
+// ----- Monedas por terminar un nivel: según la dificultad (1 → 15, 2 → 25) -----
+export function premioMonedas(dificultad) {
+  return (DIFICULTADES[dificultad] || DIFICULTADES[1]).premio;
 }
 
 // ----- Azar con semilla -----
@@ -57,60 +52,31 @@ function mezclar(a, b) {
 }
 const acotar = (v, a, b) => Math.max(a, Math.min(b, v));
 
-function tamanoMexico(n) {
-  const [ini, fin, a, b] = TRAMOS_MEXICO.find((t) => n >= t[0] && n <= t[1]);
-  if (a === b) return a;
-  const pos = (n - ini) / (fin - ini);
-  const t = acotar(pos + (mulberry32(mezclar(n, 7))() - 0.5) * 0.5, 0, 1);
-  return Math.round(a + (b - a) * t);
-}
-
-const cachePaises = new Map();
-function tamanosPais(p) { // los 100 tamaños de un país (índice 0..193)
-  if (cachePaises.has(p)) return cachePaises.get(p);
-  const rnd = mulberry32(mezclar(p, 99));
-  const cubos = [];
-  REPARTO_PAIS.forEach((r, i) => { for (let j = 0; j < r.cantidad; j++) cubos.push(i); });
-  for (let i = cubos.length - 1; i > 0; i--) { // Fisher-Yates
-    const j = (rnd() * (i + 1)) | 0;
-    [cubos[i], cubos[j]] = [cubos[j], cubos[i]];
-  }
-  const lista = cubos.map((i) => REPARTO_PAIS[i].min + ((rnd() * (REPARTO_PAIS[i].max - REPARTO_PAIS[i].min + 1)) | 0));
-  cachePaises.set(p, lista);
-  return lista;
-}
-
 // ----- Configuración de un nivel -----
 export function configNivel(n) {
   n = Math.floor(Number(n));
   if (!(n >= 1 && n <= TOTAL_NIVELES)) throw new RangeError("Nivel fuera de rango: " + n);
-  let zona, etapa, k, tam, dif;
+  let zona, etapa, k;
   if (n <= NIVELES_MEXICO) {
     zona = "mexico";
     etapa = Math.floor((n - 1) / NIVELES_POR_ETAPA); // 0..31 = índice del estado
     k = ((n - 1) % NIVELES_POR_ETAPA) + 1;           // 1..100 dentro del estado
-    tam = tamanoMexico(n);
-    dif = n > 3000 ? 0.9 : 0.1 + 0.75 * ((n - 1) / 2999);
   } else {
     zona = "mundo";
     const m = n - NIVELES_MEXICO - 1;
     etapa = Math.floor(m / NIVELES_POR_ETAPA);       // 0..193 = índice del país
     k = (m % NIVELES_POR_ETAPA) + 1;
-    tam = tamanosPais(etapa)[k - 1];
-    dif = 0.5 + 0.5 * ((tam - 10) / 40);
   }
-  // El tablero SIEMPRE se llena casi por completo (ver generarNivel). La dificultad ya no sale de cuántos autos caben, sino de:
-  //   p3      proporción de autos largos (3 casillas): 0.3 → 0.6
-  //   enredo  qué tanto se prefieren los caminos tapados por otros autos al desarmar el tablero: 0.1 → 0.95
-  //           (poco enredo = muchos autos libres desde el principio; mucho = pocos libres y cadenas largas de autos que estorban)
-  const p3 = 0.3 + 0.3 * dif;
+  const inicial = n <= TAMS_INICIALES.length;
+  const tam = inicial ? TAMS_INICIALES[n - 1] : TAM_ESTANDAR;
+  const dificultad = dificultadSorteada(n);
+  const { p3, enredo, extra, premio } = DIFICULTADES[dificultad];
   return {
-    n, zona, etapa, k, tam, dif,
-    seed: mezclar(n, 12345),
-    p3,
-    enredo: 0.1 + 0.85 * dif,
-    obj: Math.round((tam * tam) / (2 + p3)), // autos aproximados (informativo: el tablero se llena casi entero)
-    premio: premioMonedas(tam),
+    n, zona, etapa, k, tam, dificultad,
+    seed: (inicial && SEMILLAS_INICIALES[n - 1]) || mezclar(n, 12345),
+    p3, enredo, extra,
+    obj: Math.round((tam * tam) / (2 + p3)), // autos aproximados (informativo: el tablero se llena por completo)
+    premio,
   };
 }
 
@@ -147,7 +113,7 @@ function teselar(N, p3, rnd) {
 // delante autos que salen antes que él. Con «enredo» alto se prefieren los autos cuyo camino, en el tablero completo, está tapado
 // (cadenas largas); con «enredo» bajo, los que ya estaban libres. Si el tablero se atora (ningún auto libre), se quita un auto al azar
 // y queda un hueco (pasa muy pocas veces).
-function desarmar(N, piezas, enredo, rnd) {
+function desarmar(N, piezas, enredo, extra, rnd) {
   const M = piezas.length;
   const orig = new Int32Array(N * N).fill(-1), occ = new Int32Array(N * N).fill(-1);
   piezas.forEach((p, i) => { for (let k = 0; k < p.len; k++) orig[(p.h ? p.y : p.y + k) * N + (p.h ? p.x + k : p.x)] = i; });
@@ -155,17 +121,18 @@ function desarmar(N, piezas, enredo, rnd) {
   const vivo = new Uint8Array(M).fill(1), dir = new Int8Array(M).fill(-1), orden = [];
   let quedan = M;
   const sacar = (i) => { const p = piezas[i]; vivo[i] = 0; quedan--; for (let k = 0; k < p.len; k++) occ[(p.h ? p.y : p.y + k) * N + (p.h ? p.x + k : p.x)] = -1; };
-  // ¿Su camino hacia la orilla, en el tablero completo, está libre?
-  const libreEnOrig = (i, d) => {
+  // ¿Cuántos autos distintos hay en su camino hacia la orilla, en el tablero completo? (0 = sale de una, desde el primer toque)
+  const bloqueosEnOrig = (i, d) => {
     const p = piezas[i];
     let x = d === 1 ? p.x + p.len - 1 : p.x, y = d === 2 ? p.y + p.len - 1 : p.y;
     x += DX[d]; y += DY[d];
-    while (x >= 0 && y >= 0 && x < N && y < N) { if (orig[y * N + x] !== -1) return false; x += DX[d]; y += DY[d]; }
-    return true;
+    let ultimo = -1, cuenta = 0;
+    while (x >= 0 && y >= 0 && x < N && y < N) { const o = orig[y * N + x]; if (o !== -1 && o !== ultimo) { cuenta++; ultimo = o; } x += DX[d]; y += DY[d]; }
+    return cuenta;
   };
   while (quedan > 0) {
-    const faciles = [], dificiles = [];
-    const nuevo = (i, d) => (libreEnOrig(i, d) ? faciles : dificiles).push(i * 4 + d);
+    const cand = []; // candidatos: [auto * 4 + dirección, autos que le estorban en el tablero completo]
+    const nuevo = (i, d) => cand.push([i * 4 + d, bloqueosEnOrig(i, d)]);
     for (let y = 0; y < N; y++) { // solo el primero y el último auto de cada fila (y de cada columna) pueden tener el camino libre
       let x = 0; while (x < N && occ[y * N + x] < 0) x++;
       if (x === N) continue;
@@ -180,14 +147,18 @@ function desarmar(N, piezas, enredo, rnd) {
       let y2 = N - 1; while (occ[y2 * N + x] < 0) y2--;
       if (!piezas[occ[y2 * N + x]].h) nuevo(occ[y2 * N + x], 2);
     }
-    if (!faciles.length && !dificiles.length) { // atorado: se quita un auto al azar (no entra al nivel)
+    if (!cand.length) { // atorado: se quita un auto al azar (no entra al nivel)
       let k = (rnd() * quedan) | 0, i = 0;
       for (; i < M; i++) if (vivo[i] && k-- === 0) break;
       sacar(i);
       continue;
     }
-    const pool = (rnd() < enredo && dificiles.length) || !faciles.length ? dificiles : faciles;
-    const e = pool[(rnd() * pool.length) | 0], i = e >> 2;
+    // Con poco «enredo» se sacan primero los autos con menos estorbos (tablero amable: casi todo sale de una o con un solo auto de por medio);
+    // con más «enredo» a veces se elige uno con hasta 2 estorbos de más (cadenas un poco más largas).
+    let minB = 99; for (const c of cand) if (c[1] < minB) minB = c[1];
+    const tope = minB + (rnd() < enredo ? extra : 0);
+    const pool = cand.filter((c) => c[1] <= tope);
+    const e = pool[(rnd() * pool.length) | 0][0], i = e >> 2;
     dir[i] = e & 3;
     orden.push(i);
     sacar(i);
@@ -196,17 +167,28 @@ function desarmar(N, piezas, enredo, rnd) {
 }
 
 // Cada auto sale con su camino libre respecto a los que salen después que él; quitando los autos del último al primero, el nivel siempre se puede resolver.
+// Además de llenarse por completo, el tablero tiene que ser AMABLE para su dificultad (ver DIFICULTADES): si no cumple, se descarta y se genera otro
+// con lo que sigue del mismo azar (sigue siendo igual para todos los jugadores).
 export function generarNivel(cfg) {
   const N = cfg.tam;
   const rnd = mulberry32(cfg.seed);
-  const piezas = teselar(N, cfg.p3, rnd);
-  const { orden, dir } = desarmar(N, piezas, cfg.enredo, rnd);
-  const K = orden.length;
-  const autos = new Array(K);
-  orden.forEach((i, k) => { // el primero en salir recibe el id más alto (esResoluble los quita del último al primero)
-    const p = piezas[i], id = K - 1 - k;
-    autos[id] = { x: p.x, y: p.y, len: p.len, dir: dir[i], h: p.h, id, tono: TONOS[(rnd() * TONOS.length) | 0], luz: 46 + ((rnd() * 12) | 0) };
-  });
+  const meta = DIFICULTADES[cfg.dificultad] || DIFICULTADES[1];
+  let autos = null;
+  for (let intento = 0; intento < 3000; intento++) {
+    const piezas = teselar(N, cfg.p3, rnd);
+    if (piezas.reduce((t, p) => t + p.len, 0) !== N * N) continue;   // quedó una casilla suelta: no está lleno
+    const { orden, dir } = desarmar(N, piezas, cfg.enredo, cfg.extra, rnd);
+    if (orden.length !== piezas.length) continue;                    // se atoró y se descartó un auto: habría un hueco
+    const K = orden.length;
+    const intentoAutos = new Array(K);
+    orden.forEach((i, k) => { // el primero en salir recibe el id más alto (esResoluble los quita del último al primero)
+      const p = piezas[i], id = K - 1 - k;
+      intentoAutos[id] = { x: p.x, y: p.y, len: p.len, dir: dir[i], h: p.h, id, tono: TONOS[(rnd() * TONOS.length) | 0], luz: 46 + ((rnd() * 12) | 0) };
+    });
+    autos = intentoAutos;
+    const a = analizar(N, autos);
+    if (a.pctLibres >= meta.minLibres && a.minOla >= meta.minOla && a.profundidad <= meta.maxProf) break;
+  }
   return autos;
 }
 
@@ -221,4 +203,26 @@ export function esResoluble(tam, autos) {
     for (let i = 0; i < c.len; i++) occ[(c.h ? c.y : c.y + i) * N + (c.h ? c.x + i : c.x)] = -1;
   }
   return true;
+}
+
+// Medidas de «qué tan divertido» sale un tablero (para pruebas): cuántos autos pueden salir desde el primer toque (libres),
+// y la cadena más larga de autos que se estorban (profundidad: 0 = nadie estorba; 2 = hay que sacar un auto que depende de otro que depende de otro).
+export function analizar(tam, autos) {
+  const N = tam, occ = new Int32Array(N * N).fill(-1);
+  for (const c of autos) for (let i = 0; i < c.len; i++) occ[(c.h ? c.y : c.y + i) * N + (c.h ? c.x + i : c.x)] = c.id;
+  const prof = new Array(autos.length).fill(-1);
+  const calc = (id) => {
+    if (prof[id] >= 0) return prof[id];
+    const c = autos[id], [hx, hy] = cabeza(c);
+    let x = hx + DX[c.dir], y = hy + DY[c.dir], m = 0;
+    while (x >= 0 && y >= 0 && x < N && y < N) { const o = occ[y * N + x]; if (o !== -1 && o !== id) m = Math.max(m, 1 + calc(o)); x += DX[c.dir]; y += DY[c.dir]; }
+    return (prof[id] = m);
+  };
+  let libres = 0, maxProf = 0;
+  for (let i = 0; i < autos.length; i++) { const d = calc(i); if (d === 0) libres++; maxProf = Math.max(maxProf, d); }
+  // olas: cuántos autos hay en cada profundidad (ola 0 = los que salen desde el primer toque). La ola más chica es el «cuello de botella»:
+  // si es muy chica, el jugador se queda con muy pocos autos que se puedan tocar y se frustra buscándolos.
+  const olas = new Array(maxProf + 1).fill(0);
+  for (const d of prof) olas[d]++;
+  return { autos: autos.length, libres, pctLibres: libres / autos.length, profundidad: maxProf, olas, minOla: Math.min(...olas) };
 }
