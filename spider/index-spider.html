@@ -11,13 +11,10 @@
 <style>
 .pantalla { position: fixed; inset: 0; }
 .pantalla[hidden] { display: none; }
-/* Menú principal y Modo libre (pantallas de menú sobre la madera estándar; zona reservada arriba-izquierda ≈ 190 × 92) */
+/* Modo libre (pantalla de menú sobre la madera estándar; zona reservada arriba-izquierda ≈ 190 × 92). El menú principal es el velo de inicio (.velo-inicio, de inmersivo.css) */
 .capa { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 104px 16px 72px; overflow-y: auto; text-align: center; color: var(--txt-fondo); }
 .capa h1, .capa h2 { margin: 0; font-size: clamp(1.8rem, 7vw, 2.6rem); text-shadow: var(--sombra-txt); }
 .capa p { margin: 0; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
-.menu-col { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(100%, 340px); margin-top: 6px; }
-.menu-col .b3d.grande { width: 100%; }
-.menu-col .b3d.info { --t: 44px; }
 .grupo { display: flex; flex-direction: column; gap: 8px; align-items: center; }
 .rotulo { font-size: .95rem; font-weight: 700; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
 .fila { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
@@ -30,11 +27,13 @@
 /* Arriba a la derecha: monedas y 👤 Iniciar sesión (solo fuera de la partida; en partida están los marcadores) */
 #hud-sesion { z-index: 6; }
 body.jugando #hud-sesion { display: none; }
+/* Con el velo de inicio puesto (no se está jugando) el juego de atrás se ve pero no se usa: sin marcadores ni botones de ayuda encima del velo */
+body:not(.jugando) #juego .hud, body:not(.jugando) #juego .barra-inf { visibility: hidden; }
 /* Mesa */
 /* Tablero = fila superior + mesa de columnas. La fila superior NO tiene fondo: son cartas como las de la partida, con los mismos límites
    que las columnas (series terminadas desde el borde izquierdo de la 1.ª columna; el mazo, carta boca abajo, sobre la última columna).
    Su alto y las medidas las ajusta juego-spider.js (medidas). */
-#tablero { position: absolute; left: 6px; right: 6px; top: 100px; bottom: 68px; display: flex; flex-direction: column; }
+#tablero { position: absolute; left: 0; right: 0; top: 100px; bottom: 68px; display: flex; flex-direction: column; } /* a todo el ancho: sin bordes de madera a los lados */
 @media (min-aspect-ratio: 1/1) { #tablero { left: 196px; top: 52px; } } /* 196: «🎮 Portal de Juegos» + ☰ miden ≈ 190 de ancho */
 #barra { position: relative; flex: none; height: 56px; margin-bottom: 6px; }
 #series { position: absolute; inset: 0; pointer-events: none; }
@@ -74,6 +73,11 @@ body.jugando #hud-sesion { display: none; }
 .barra-inf { position: fixed; z-index: 5; bottom: max(14px, env(safe-area-inset-bottom)); left: 64px; right: 64px; display: flex; justify-content: center; align-items: center; gap: 12px; pointer-events: none; }
 .barra-inf > * { pointer-events: auto; }
 .chip small { margin-right: 4px; }
+/* Estrellas y metas al ganar un nivel (ventana sobre el tablero) */
+.estrellas { margin: 6px 0 2px; font-size: 2rem; letter-spacing: .12em; color: #ffd34d; text-shadow: 0 2px 0 rgba(0,0,0,.5); }
+.estrellas .no { color: #8d92a0; text-shadow: none; }
+.sobre-texto .meta { font-size: .85rem; color: #c9ccd3; }
+.sobre-texto .meta.ok { color: #fff4c2; }
 #toast { position: fixed; z-index: 8; left: 50%; bottom: 80px; transform: translateX(-50%); padding: 8px 16px; font-weight: 800; color: #fff; background: rgba(20,22,26,.9); border-radius: 999px; }
 #toast[hidden] { display: none; }
 </style>
@@ -83,17 +87,6 @@ body.jugando #hud-sesion { display: none; }
   <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Portal de Juegos</a>
   <button class="b3d txt b-cielo" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> <span id="txt-menu">Pausa</span></button>
 </nav>
-
-<main class="pantalla capa" id="menu">
-  <h1>🕷️ Spider</h1>
-  <p>Ordena cada palo de K a A y quita las 8 series.</p>
-  <div class="menu-col">
-    <button class="b3d txt grande b-morado" id="b-libre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
-    <button class="b3d txt grande b-verde" id="b-continuar" type="button"><span class="b-ico">▶</span> <span id="txt-continuar">Continuar · nivel 1</span></button>
-    <button class="b3d txt grande b-azul" id="b-niveles" type="button"><span class="b-ico">📋</span> Niveles</button>
-    <button class="b3d txt info b-cielo" id="b-info" type="button"><span class="b-ico">ℹ️</span> Info</button>
-  </div>
-</main>
 
 <!-- Modo libre: pantalla propia (no desplegable) -->
 <main class="pantalla capa" id="libre" hidden>
@@ -108,7 +101,7 @@ body.jugando #hud-sesion { display: none; }
 
 <div class="hud hud-der" id="hud-sesion">
   <span id="monedas-barra" class="chip chip-monedas" title="Tus monedas"><span class="moneda"></span><span id="monedas-n">0</span></span>
-  <button id="entrar" class="b3d txt b-azul" type="button" hidden title="Entrar con Google para guardar puntos"><span class="b-ico">👤</span> Iniciar sesión</button>
+  <button id="entrar" class="b3d chico txt b-azul" type="button" hidden title="Entrar con Google para guardar puntos"><span class="b-ico">👤</span> Iniciar sesión</button>
 </div>
 
 <section class="pantalla" id="juego" hidden aria-label="Partida">
@@ -125,10 +118,21 @@ body.jugando #hud-sesion { display: none; }
     <div id="mesa"></div>
   </div>
   <div class="barra-inf">
-    <button class="b3d txt b-azul" id="b-deshacer" type="button"><span class="b-ico">↶</span> Deshacer</button>
+    <button class="b3d txt b-azul" id="b-deshacer" type="button"><span class="b-ico">↶</span> <span id="t-deshacer">Deshacer</span><span class="b-info" id="p-deshacer" hidden></span></button>
+    <button class="b3d txt b-oro" id="b-pista" type="button"><span class="b-ico">💡</span> <span id="t-pista">Pista</span><span class="b-info" id="p-pista" hidden></span></button>
+    <span class="chip chip-monedas" id="chip-monedas-juego" title="Tus monedas" hidden><span class="moneda"></span><span id="monedas-juego">0</span></span>
     <span class="chip" id="c-estado"></span>
   </div>
 </section>
+<!-- Menú principal = VELO DE INICIO sobre el juego ya cargado (ESTANDARES-juegos.md, 7.0 y 7.1; estilos en compartido/inmersivo.css) -->
+<div class="velo-inicio" id="velo-inicio" role="dialog" aria-label="Menú principal" hidden>
+  <div class="fila-menu">
+    <button class="b3d b-morado" id="b-libre" type="button" title="Modo libre"><span class="b-ico">♾️</span><span class="b-rot">Modo libre</span></button>
+    <button class="b3d b-azul" id="b-niveles" type="button" title="Niveles"><span class="b-ico">🗂️</span><span class="b-rot">Niveles</span></button>
+  </div>
+  <button class="b3d central b-verde" id="b-continuar" type="button"><span class="b-ico">▶</span><span class="b-rot" id="txt-continuar">Continuar</span></button>
+  <button class="b3d chico b-cielo" id="b-info" type="button" title="Cómo se juega"><span class="b-ico">ℹ️</span><span class="b-rot">Info</span></button>
+</div>
 <div id="toast" hidden role="status"></div>
 
 <!-- Ventana «Cómo se juega» -->
@@ -141,9 +145,12 @@ body.jugando #hud-sesion { display: none; }
         <li>Toca un tramo de cartas y luego la columna donde quieres ponerlo. Solo se mueven tramos del mismo palo y en orden.</li>
         <li>Una carta va sobre otra con un valor más alto (no importa el palo); en una columna vacía cabe cualquiera.</li>
         <li>El mazo reparte una carta en cada columna (5 veces) y no se puede repartir si hay una columna vacía.</li>
-        <li>Si pasas 15 segundos sin mover, aparece una pista.</li>
+        <li>↶ Deshacer y 💡 Pista: en Fácil y Normal son gratis e ilimitados, y si pasas 15 segundos sin mover aparece una pista sola.</li>
+        <li>En Difícil y Experto son boosts de pago (monedas) con un tope por intento de nivel; en Maestro no hay deshacer y la pista es de pago.</li>
+        <li>La primera vez que pasas un nivel ganas monedas (más cuanto más difícil). Repetirlo no da monedas.</li>
+        <li>Cada nivel guarda tu mejor tiempo y tiene 3 estrellas: pasarlo, pasarlo en el tiempo del nivel y un reto que cambia de nivel en nivel. Las estrellas no dan monedas.</li>
       </ul>
-      <p>Con 1 palo es lo más fácil; con 4, lo más difícil. En «Maestro» no hay deshacer. El Modo libre no da monedas ni puntos.</p>
+      <p>Con 1 palo es lo más fácil; con 4, lo más difícil. En el Modo libre no hay monedas ni puntos, el deshacer es gratis (menos en «Maestro») y la pista también.</p>
     </div>
     <div class="pausa-opciones"><button id="info-ok" class="b3d txt b-verde" type="button">Entendido</button></div>
   </div>

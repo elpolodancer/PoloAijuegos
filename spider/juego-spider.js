@@ -1,43 +1,52 @@
 // Ruta: spider/juego-spider.js
-// Solitario Spider: menú principal estándar (♾️ Modo libre · ▶ Continuar · 📋 Niveles · ℹ️ Info), Modo libre, partida y mapa estándar de México/mundo.
-// Niveles: por ahora 5 (niveles-spider.js, dificultad Fácil); el mapa está montado con 100 por etapa (22 600) y los que faltan salen «🚧 todavía no creado».
+// Solitario Spider: menú principal = velo de inicio sobre el nivel donde va el jugador (♾️ Modo libre · 🗂️ Niveles · ▶ Continuar · ℹ️ Info), Modo libre, partida y mapa estándar de México/mundo.
+// Niveles: campaña de 22 600 (niveles-spider.js, generado por generar-niveles-spider.mjs; los que todavía no tienen reparto salen «🚧 todavía no creado»).
+// Cada nivel guarda su mejor tiempo y hasta 3 estrellas (estrellas-spider.js); las monedas siguen saliendo solo la primera vez (economia-spider.js).
 import { DIFICULTADES, PALOS, nuevaPartida, clonar, largoTramo, puedeMover, mover, puedeRepartir, repartir, ganada, jugadas, palo, rango, SERIES } from "./logica-spider.js";
 import { generarVerificada } from "./ia-spider.js";
-import { NIVELES } from "./niveles-spider.js";
+import { TOTAL, nivelDe, creados } from "./niveles-spider.js";
+import { metasDe, evaluar, registrar, desempaquetar, textoEstrellas, contar } from "./estrellas-spider.js"; // récord de tiempo y estrellas por nivel
 import { elegirDelBanco, cuantos } from "./banco-spider.js";
+import { ayudasDe, recompensa, carteraVacia, saldo, ganarMonedas, gastarMonedas, unirCarteras, unirProgresoSpider } from "./economia-spider.js"; // monedas, ayudas por dificultad y cartera
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
 import { crearEtapas } from "../compartido/etapas-mapa.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
 
 const $ = (id) => document.getElementById(id);
-const CLAVE = "spider_progreso_v1"; // { niv:{max,hecho}, mejor:{"palos-dif":segundos…}, opc:{palos,dif}, ganadas, t }
+const CLAVE = "spider_progreso_v1"; // { cartera:{d:{…}}, ganadas, mejor:{"palos-dif":segundos…}, niv:{max,hecho}, opc:{palos,dif}, t }  (ver unirProgresoSpider en economia-spider.js)
 const llave = (p, d) => p + "-" + d; // clave del mejor tiempo: un récord por cada combinación de palos y dificultad
 const SIMB = ["♠", "♥", "♣", "♦"], ROJO = [false, true, false, true];
 const NOMBRE_RANGO = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 
 // ---------- Progreso (local primero; se sincroniza con la cuenta si hay internet) ----------
-let prog = { niv: { max: 1, hecho: 0 }, mejor: {}, ganadas: 0, g: 0, s: 0, t: 0 }; // g / s = monedas ganadas y gastadas EN TOTAL (monedas = g − s)
+let prog = { niv: { max: 1, hecho: 0 }, mejor: {}, rec: {}, ganadas: 0, cartera: carteraVacia(), t: 0 }; // cartera = contadores de monedas POR DISPOSITIVO (saldo = ganadas − gastadas de todos)
 try { const g = JSON.parse(localStorage.getItem(CLAVE)); if (g) prog = { ...prog, ...g }; } catch (e) {}
+if (!prog.rec || typeof prog.rec !== "object") prog.rec = {};
+const recDe = (n) => desempaquetar(prog.rec && prog.rec[n]); // { t: mejor tiempo (0 = ninguno), mask: estrellas ganadas (bits 1, 2, 4) }
+prog.cartera = unirCarteras(prog.cartera, null); delete prog.g; delete prog.s; // (antes las monedas eran dos contadores globales g/s; nunca se ganó ninguna)
+const CLAVE_DISP = "spider_dispositivo"; // id de ESTE dispositivo (no se sincroniza): la cartera lleva un contador de monedas por dispositivo
+let idDisp = "";
+try { idDisp = localStorage.getItem(CLAVE_DISP) || ""; if (!idDisp) { idDisp = Math.random().toString(36).slice(2, 10); localStorage.setItem(CLAVE_DISP, idDisp); } } catch (e) {}
+if (!idDisp) idDisp = "t" + Math.random().toString(36).slice(2, 8); // sin localStorage: vale solo en esta sesión
 let nube = null;
-function guardar() {
+function guardar() { // pasa por unirProgresoSpider para dejar las claves en el orden de la sincronización
   prog.t = Date.now();
-  try { localStorage.setItem(CLAVE, JSON.stringify(prog)); } catch (e) {}
+  try { localStorage.setItem(CLAVE, JSON.stringify(unirProgresoSpider(prog, null))); } catch (e) {}
   if (nube) nube.guardado();
 }
-function fusionar(a, b) { // gana el mayor avance y el menor tiempo de cada dificultad
-  if (!a && !b) return null;
-  a = a || {}; b = b || {};
-  const mejor = { ...(b.mejor || {}) };
-  for (const k in a.mejor || {}) mejor[k] = mejor[k] ? Math.min(mejor[k], a.mejor[k]) : a.mejor[k];
-  const na = a.niv || {}, nb = b.niv || {};
-  const opc = (a.t || 0) >= (b.t || 0) ? a.opc || b.opc : b.opc || a.opc; // la última combinación elegida
-  return { niv: { max: Math.max(na.max || 1, nb.max || 1), hecho: Math.max(na.hecho || 0, nb.hecho || 0) }, mejor, opc, ganadas: Math.max(a.ganadas || 0, b.ganadas || 0), g: Math.max(a.g || 0, b.g || 0), s: Math.max(a.s || 0, b.s || 0), t: Math.max(a.t || 0, b.t || 0) };
-}
-import("../compartido/progreso.js").then((m) => { nube = m.conectar("spider", { clave: CLAVE, fusionar, alCambiar: (u) => { prog = { ...prog, ...u }; pintarMenu(); } }); }).catch(() => {});
+import("../compartido/progreso.js").then((m) => { nube = m.conectar("spider", { clave: CLAVE, fusionar: unirProgresoSpider, alCambiar: (u) => { prog = { ...prog, ...u }; if (pantalla === "menu") mostrar("menu"); else pintarMenu(); } }); }).catch(() => {}); // con el velo puesto, el nivel de fondo pasa a ser el de la cuenta (7.0)
 
 // ---------- Pantallas ----------
 let pantalla = "menu", pal = 1, dif = 1, recientes = [], e = null, historial = [], sel = null, fin = false, pausado = false;
 let t0 = 0, acum = 0, verificada = false, nivel = 0; // nivel 0 = modo libre
+let usos = { pista: 0, retro: 0, r: 0, p: 0 }; // pista / retro = ayudas de PAGO usadas en este intento (los topes se reinician al reiniciar) · r / p = veces que el jugador pidió ↶ / 💡 (para el reto de la 3.ª estrella)
+let resultado = null; // ventana «¡Ganaste!» (sobre el tablero)
+// Ayudas (README-spider.md, sección 3). Modo libre: sin monedas, ↶ gratis salvo en Maestro y 💡 gratis. Niveles: según la dificultad del nivel.
+const retroLibre = () => (nivel ? !!ayudasDe(e.dif).libre : DIFICULTADES[e.dif - 1].deshacer);
+const retroPaga = () => (nivel && !ayudasDe(e.dif).libre ? ayudasDe(e.dif).retro : null); // { precio, tope } o null
+const pistaPaga = () => (nivel && !ayudasDe(e.dif).libre ? ayudasDe(e.dif).pista : null);
+const hayRetro = () => retroLibre() || !!retroPaga();
+const pistaAuto = () => !nivel || !!ayudasDe(e.dif).libre; // la pista sola a los 15 s: solo donde las ayudas son gratis
 // Avisos visuales: alertaMal = recuadro rojo (tramo bloqueado); pista = movimiento sugerido {tipo:"mover",de,desde,a} o {tipo:"repartir"}
 const PISTA_MS = 15000; // segundos sin tocar nada antes de dar una pista
 let ultimaAccion = Date.now(), alertaMal = null, pista = null;
@@ -47,17 +56,34 @@ let colecc = [], mostradas = 0, fantasmas = [], animTimers = [], finAnim = 0, tb
 const btnMenu = $("btn-menu");
 if (prog.opc) { pal = PALOS.includes(prog.opc.palos) ? prog.opc.palos : 1; dif = DIFICULTADES[prog.opc.dif - 1] ? prog.opc.dif : 1; }
 
+// «menu» = el juego ya cargado (el nivel donde va el jugador) detrás del velo de inicio; no abre otra pantalla (ESTANDARES-juegos.md, 7.0)
 function mostrar(p) { // p = «menu» | «libre» | «juego» | «mapa» (con «mapa» las otras quedan ocultas y lo dibuja compartido/mapa-niveles.js)
   pantalla = p;
-  $("menu").hidden = p !== "menu";
+  quitarResultado();
+  if (p === "menu") cargarVista();
+  $("velo-inicio").hidden = p !== "menu";
   $("libre").hidden = p !== "libre";
-  $("juego").hidden = p !== "juego";
+  $("juego").hidden = !(p === "juego" || p === "menu"); // con el velo, el tablero se ve detrás
+  $("juego").inert = p === "menu";                      // …pero no responde (ni toques ni teclado)
   document.body.classList.toggle("jugando", p === "juego");
-  btnMenu.hidden = p === "menu"; // el ☰ no se ve en el menú principal
+  btnMenu.hidden = p === "menu"; // el ☰ no se ve mientras está el velo
   rotularMenu();
   if (p !== "mapa") mapa.cerrar();
-  if (p === "juego") pintar();
+  if (p === "juego" || p === "menu") pintar();
   if (p === "menu" || p === "libre") pintarMenu();
+  if (p === "menu") { try { $("b-continuar").focus({ preventScroll: true }); } catch (err) {} }
+}
+// Deja cargado el juego que se ve detrás del velo: el nivel donde va el jugador (lo del dispositivo y, con sesión, lo de su cuenta).
+// Si ese nivel todavía no está creado se ve, solo de fondo, el último creado antes; «Continuar» avisa «🚧 todavía no creado» (igual que el mapa).
+function cargarVista() {
+  let n = proximoNivel();
+  while (n > 1 && !nivelDe(n)) n--;
+  const N = nivelDe(n);
+  nivel = N ? n : 0; verificada = true;
+  e = N ? nuevaPartida(N.palos, N.semilla, N.dif) : nuevaPartida(1, 1, 1);
+  historial = []; usos = { pista: 0, retro: 0, r: 0, p: 0 }; sel = null; fin = false; pausado = false; t0 = 0; acum = 0;
+  alertaMal = null; pista = null; ultimaAccion = Date.now();
+  colecc = []; cancelarAnim(); vistos = new Set([clave(e)]);
 }
 // ☰: «Pausa» dentro de una partida en curso, «Atrás» en el resto de pantallas (ESTANDARES-juegos.md, 7.4)
 function rotularMenu() {
@@ -65,23 +91,28 @@ function rotularMenu() {
   $("txt-menu").textContent = jugando ? "Pausa" : "Atrás";
   btnMenu.title = jugando ? "Pausa" : "Volver al menú principal";
 }
-function aviso(txt) {
+function aviso(txt, ms = 2200) {
   const t = $("toast"); t.textContent = txt; t.hidden = false;
-  clearTimeout(aviso.id); aviso.id = setTimeout(() => { t.hidden = true; }, 2200);
+  clearTimeout(aviso.id); aviso.id = setTimeout(() => { t.hidden = true; }, ms);
 }
 
-// ---------- Menú principal ----------
+// ---------- Menú principal (velo de inicio) ----------
 const ETAPAS = crearEtapas({ porEtapa: 100 }); // 32 estados + 194 países, 100 niveles cada uno = 22 600 (los creados salen de niveles-spider.js)
-const monedas = () => Math.max(0, (prog.g || 0) - (prog.s || 0));
-function pintarMonedas() { $("monedas-n").textContent = String(monedas()); }
+const monedas = () => saldo(prog.cartera);
+function pintarMonedas() { $("monedas-n").textContent = monedas().toLocaleString("es-MX"); $("monedas-juego").textContent = monedas().toLocaleString("es-MX"); }
+function gastar(n) { if (!gastarMonedas(prog.cartera, idDisp, n)) return false; guardar(); pintarMonedas(); return true; }
 const proximoNivel = () => Math.min(Math.max(1, prog.niv.max), ETAPAS.total);
-function pintarContinuar() { $("txt-continuar").textContent = "Continuar · nivel " + proximoNivel(); }
+function pintarContinuar() { // «Jugar» si aún no pasó ningún nivel, «Continuar» si ya (7.1)
+  const txt = prog.niv.hecho > 0 ? "Continuar" : "Jugar", b = $("b-continuar");
+  $("txt-continuar").textContent = txt;
+  b.title = txt + " · nivel " + proximoNivel(); b.setAttribute("aria-label", b.title);
+}
 function pintarMenu() { pintarContinuar(); pintarLibre(); pintarMonedas(); }
 $("b-libre").addEventListener("click", () => mostrar("libre"));
 $("b-continuar").addEventListener("click", () => jugarNivel(proximoNivel()));
 $("b-niveles").addEventListener("click", () => abrirMapa(proximoNivel()));
 function abrirMapa(n, alcanzado) { mostrar("mapa"); mapa.abrir(n, alcanzado); }
-function jugarNivel(n) { if (n <= NIVELES.length) empezar(n); else aviso("🚧 Los niveles todavía no están creados"); }
+function jugarNivel(n) { if (nivelDe(n)) empezar(n); else aviso("🚧 Los niveles todavía no están creados"); }
 
 // ---------- Info: «Cómo se juega» ----------
 const infoFondo = $("info-fondo");
@@ -136,13 +167,15 @@ const mapa = montarMapa({
   jugarNivel,
   nivelContinuar: proximoNivel,
   infoNivel: (n) => {
-    const N = NIVELES[n - 1];
+    const N = nivelDe(n);
     if (!N) return { sub: "🚧", clase: "b-cielo", aria: "todavía no está creado" };
-    const d = DIFICULTADES[N.dif - 1];
-    return { sub: d.ico + " " + N.palos + "♠", clase: CLASE_DIF[N.dif - 1], aria: d.nombre + ", " + N.palos + (N.palos === 1 ? " palo" : " palos") };
+    const d = DIFICULTADES[N.dif - 1], r = recDe(n); // nivel pasado: sus estrellas en lugar de la dificultad (el color ya la dice)
+    const base = d.nombre + ", " + N.palos + (N.palos === 1 ? " palo" : " palos");
+    if (r.t) return { sub: textoEstrellas(r.mask), clase: CLASE_DIF[N.dif - 1], sinMarca: true, aria: base + ", " + contar(r.mask) + " de 3 estrellas, récord " + formato(r.t) };
+    return { sub: d.ico + " " + N.palos + "♠", clase: CLASE_DIF[N.dif - 1], aria: base };
   },
   leyenda: "🟢 Fácil · 🔵 Normal · 🟣 Difícil · 🟠 Experto · 🔴 Maestro · ♠ = cantidad de palos · 🚧 todavía no creado",
-  avisoPrincipal: () => NIVELES.length + " niveles listos · más en camino 🕷️",
+  avisoPrincipal: () => creados().toLocaleString("es-MX") + " de " + TOTAL.toLocaleString("es-MX") + " niveles listos 🕷️",
   alInfo: abrirInfo,
 });
 
@@ -153,7 +186,7 @@ const segundos = () => acum + (t0 && !pausado && !fin ? (Date.now() - t0) / 1000
 function empezar(n = 0) {
   nivel = n;
   if (n) { // nivel fijo: mismo reparto para todos, ya comprobado con el bot
-    const N = NIVELES[n - 1];
+    const N = nivelDe(n);
     verificada = true; e = nuevaPartida(N.palos, N.semilla, N.dif);
   } else {
     // 1) Del banco: repartos que el bot YA resolvió, de la dificultad elegida (más nodos del bot = más difícil)
@@ -170,13 +203,14 @@ function empezar(n = 0) {
       e = nuevaPartida(pal, v ? v.semilla : base, dif);
     }
   }
-  historial = []; sel = null; fin = false; pausado = false; t0 = 0; acum = 0;
+  historial = []; usos = { pista: 0, retro: 0, r: 0, p: 0 }; sel = null; fin = false; pausado = false; t0 = 0; acum = 0;
   alertaMal = null; pista = null; ultimaAccion = Date.now();
   colecc = []; cancelarAnim(); vistos = new Set([clave(e)]);
   mostrar("juego");
+  if (n) { const m = metasDe(n, e.palos, e.dif); aviso("★★ " + m.textos[1] + "   ·   ★★★ " + m.textos[2], 4500); } // las metas de estrellas de este nivel
 }
 function jugar(fn, op) { // op = qué jugada es ({de,k,a} o {rep:true}); sirve para animar las series que se completen
-  if (DIFICULTADES[e.dif - 1].deshacer) { historial.push(clonar(e)); if (historial.length > 300) historial.shift(); }
+  if (hayRetro()) { historial.push(clonar(e)); if (historial.length > 300) historial.shift(); }
   if (!t0) t0 = Date.now();
   const antes = clonar(e);
   fn(); sel = null; vistos.add(clave(e)); pintar();
@@ -186,7 +220,12 @@ function jugar(fn, op) { // op = qué jugada es ({de,k,a} o {rep:true}); sirve p
 function terminar() {
   fin = true; acum = segundos(); t0 = 0; rotularMenu(); // el ☰ vuelve a decir «Atrás»
   const s = Math.round(acum);
-  if (nivel) { // desbloquea el siguiente (hasta donde haya niveles)
+  let premio = 0, est = null, reg = null;
+  if (nivel) { // monedas (solo la primera vez que se pasa el nivel) y desbloquea el siguiente (hasta donde haya niveles)
+    premio = recompensa(e.dif, nivel > prog.niv.hecho);
+    if (premio) ganarMonedas(prog.cartera, idDisp, premio);
+    est = evaluar({ nivel, palos: e.palos, dif: e.dif, segundos: acum, retros: usos.r, pistas: usos.p }); // estrellas y récord de tiempo del nivel
+    reg = registrar(prog.rec, nivel, acum, est.mask);
     prog.niv.hecho = Math.max(prog.niv.hecho, nivel);
     prog.niv.max = Math.min(ETAPAS.total, Math.max(prog.niv.max, nivel + 1));
   } else {
@@ -194,21 +233,44 @@ function terminar() {
     const k = llave(e.palos, e.dif);
     if (!prog.mejor[k] || s < prog.mejor[k]) prog.mejor[k] = s;
   }
-  guardar();
+  guardar(); pintarMonedas();
+  quitarResultado();
   const f = document.createElement("div");
-  f.className = "pausa-fondo";
-  f.innerHTML = '<div class="pausa-panel"><h2>🎉 ¡Ganaste' + (nivel ? " el nivel " + nivel : "") + '!</h2><p>' + formato(s) + " · " + e.movs + ' movimientos</p><div class="pausa-opciones"></div></div>';
-  const ops = f.querySelector(".pausa-opciones");
-  const sig = nivel && nivel < NIVELES.length ? [["▶", "Siguiente nivel", "b-verde", () => empezar(nivel + 1)]] : [];
-  const otra = nivel ? [["🔄", "Repetir nivel", "b-azul", () => empezar(nivel)], ["📋", "Niveles", "b-azul", () => abrirMapa(nivel, nivel % 100 === 0)]] : [["🔄", "Otra partida", "b-verde", () => empezar()], ["⚙️", "Cambiar tablero", "b-cielo", () => mostrar("libre")]];
-  for (const [ico, txt, cl, fn] of [...sig, ...otra, ["🏠", "Menú principal", "b-cielo", () => mostrar("menu")]]) {
-    const b = document.createElement("button"); b.type = "button"; b.className = "b3d txt " + cl;
+  f.className = "sobre-tablero"; // fin de nivel SOBRE el tablero (ESTANDARES-juegos.md, sección 6)
+  const tx = document.createElement("div"); tx.className = "sobre-texto";
+  tx.innerHTML = "<h2>🎉 ¡Ganaste" + (nivel ? " el nivel " + nivel : "") + "!</h2><div>" + formato(s) + " · " + e.movs + " movimientos" + (premio ? " · +" + premio + " monedas" : "") + "</div>" + (reg ? bloqueEstrellas(est, reg) : "");
+  f.appendChild(tx);
+  const fila = document.createElement("div"); fila.className = "sobre-fila";
+  const sig = nivel && nivel < TOTAL && nivelDe(nivel + 1) ? [["▶", "Siguiente nivel", "b-verde", () => empezar(nivel + 1)]] : nivel ? [] : [["▶", "Otra partida", "b-verde", () => empezar()]];
+  const otras = nivel ? [["🔄", "Repetir nivel", "b-azul", () => empezar(nivel)], ["📋", "Niveles", "b-azul", () => abrirMapa(nivel, nivel % 100 === 0)]] : [["⚙️", "Cambiar tablero", "b-cielo", () => mostrar("libre")]];
+  const boton = (ico, txt, cl, fn, grande) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "b3d txt " + (grande ? "grande " : "") + cl;
     b.innerHTML = '<span class="b-ico">' + ico + "</span><span>" + txt + "</span>";
-    b.addEventListener("click", () => { f.remove(); fn(); });
-    ops.appendChild(b);
-  }
-  const espera = finAnim > Date.now() ? finAnim - Date.now() + 250 : 0; // deja terminar el viaje de la última serie
-  setTimeout(() => document.body.appendChild(f), espera);
+    b.addEventListener("click", () => { quitarResultado(); fn(); });
+    return b;
+  };
+  for (const [ico, txt, cl, fn] of sig) f.appendChild(boton(ico, txt, cl, fn, true)); // «Siguiente nivel» siempre primero y el más grande
+  for (const [ico, txt, cl, fn] of [...otras, ["🏠", "Menú principal", "b-cielo", () => mostrar("menu")]]) fila.appendChild(boton(ico, txt, cl, fn));
+  f.appendChild(fila);
+  const esta = e, espera = finAnim > Date.now() ? finAnim - Date.now() + 250 : 0; // deja terminar el viaje de la última serie
+  setTimeout(() => { if (e !== esta || !fin || pantalla !== "juego") return; quitarResultado(); document.body.appendChild(f); resultado = f; colocarResultado(); }, espera);
+}
+// Estrellas y récord que se muestran al ganar un nivel: las 3 metas (✔ ganada, ✖ no) y el tiempo
+function bloqueEstrellas(est, reg) {
+  const m = metasDe(nivel, e.palos, e.dif), bits = [1, 2, 4];
+  const fila = bits.map((b) => '<span class="' + (reg.mask & b ? "" : "no") + '">' + (reg.mask & b ? "★" : "☆") + "</span>").join("");
+  const metas = bits.map((b, i) => '<div class="meta' + (reg.mask & b ? " ok" : "") + '">' + (reg.mask & b ? "✔ " : "✖ ") + m.textos[i] + (reg.nuevas & b && b !== 1 ? " · ¡nueva!" : "") + "</div>").join("");
+  const t = recDe(nivel).t;
+  const tiempo = !reg.previo ? "⏱️ Primer tiempo: " + formato(t) : reg.nuevoRecord ? "🏆 ¡Nuevo récord! " + formato(t) + " (antes " + formato(reg.previo) + ")" : "🏆 Tu récord: " + formato(t);
+  return '<div class="estrellas" aria-label="' + contar(reg.mask) + ' de 3 estrellas">' + fila + "</div>" + metas + "<div>" + tiempo + "</div>";
+}
+function quitarResultado() { if (resultado) { resultado.remove(); resultado = null; } }
+// La ventana ocupa el rectángulo del tablero en pantalla (recortado a la ventana); si casi no se ve, toda la pantalla
+function colocarResultado() {
+  if (!resultado) return;
+  const r = $("tablero").getBoundingClientRect(), W = innerWidth, H = innerHeight;
+  const l = Math.max(0, r.left), t = Math.max(0, r.top), w = Math.min(W, r.right) - l, h = Math.min(H, r.bottom) - t;
+  Object.assign(resultado.style, w > 120 && h > 120 ? { left: l + "px", top: t + "px", width: w + "px", height: h + "px" } : { left: "0px", top: "0px", width: W + "px", height: H + "px" });
 }
 
 // ---------- Dibujo ----------
@@ -228,8 +290,8 @@ function tamBarra(w, h, x0) {
 }
 // Medidas de la mesa. También ajusta el alto de la barra (según el tamaño de las cartas); la mesa se queda con el alto que sobra
 function medidas() {
-  const m = $("mesa"), W = m.clientWidth, gap = Math.max(2, W * 0.008);
-  const w = Math.max(24, Math.min(84, (W - gap * 9) / 10)), h = w * 1.4, x0 = Math.max(0, (W - (w * 10 + gap * 9)) / 2);
+  const m = $("mesa"), W = m.clientWidth, gap = Math.max(2, W * 0.008), borde = 3; // borde: lo justo para que el recuadro rojo/verde de las columnas de los extremos no se corte
+  const w = Math.max(24, Math.min(84, (W - borde * 2 - gap * 9) / 10)), h = w * 1.4, x0 = Math.max(borde, (W - (w * 10 + gap * 9)) / 2);
   const barra = $("barra");
   barra.style.height = Math.round(h) + "px"; // la fila superior mide lo que una carta
   tb = tamBarra(w, h, x0);
@@ -413,9 +475,24 @@ function pintar() {
   $("c-movs").textContent = e.movs; $("c-series").textContent = e.hechos + "/" + SERIES;
   $("n-rep").textContent = 5 - e.rep; $("b-repartir").disabled = e.rep >= 5;
   $("b-repartir").classList.toggle("alerta-rep", !!(pista && pista.tipo === "repartir")); // sin movimientos: parpadea el reparto
-  $("b-deshacer").hidden = !DIFICULTADES[e.dif - 1].deshacer; $("b-deshacer").disabled = !historial.length;
-  $("c-estado").textContent = nivel ? "Nivel " + nivel : verificada ? "✔ Con solución" : "🎲 Al azar";
+  pintarAyudas();
+  $("c-estado").textContent = nivel ? "Nivel " + nivel + (recDe(nivel).t ? " · 🏆 " + formato(recDe(nivel).t) : "") : verificada ? "✔ Con solución" : "🎲 Al azar";
   $("c-tiempo").textContent = formato(segundos());
+}
+// Botones ↶ y 💡: gratis (sin precio) o de pago (precio en la esquina, cuántos quedan junto al nombre; se apagan al llegar al tope o si no alcanzan las monedas)
+function pintarAyudas() {
+  const rp = retroPaga(), pp = pistaPaga(), bd = $("b-deshacer"), bp = $("b-pista");
+  bd.hidden = !hayRetro();
+  bd.disabled = !historial.length || (!!rp && (usos.retro >= rp.tope || monedas() < rp.precio));
+  $("t-deshacer").textContent = rp ? "Retroceder " + (rp.tope - usos.retro) : "Deshacer";
+  $("p-deshacer").hidden = !rp; if (rp) $("p-deshacer").textContent = rp.precio;
+  bd.title = rp ? "Deshace tu última jugada: " + rp.precio + " monedas. Quedan " + (rp.tope - usos.retro) + " en este nivel" : "Deshacer la última jugada";
+  bp.disabled = !!pp && (usos.pista >= pp.tope || monedas() < pp.precio);
+  $("t-pista").textContent = pp ? "Pista " + (pp.tope - usos.pista) : "Pista";
+  $("p-pista").hidden = !pp; if (pp) $("p-pista").textContent = pp.precio;
+  bp.title = pp ? "Muestra un movimiento: " + pp.precio + " monedas. Quedan " + (pp.tope - usos.pista) + " en este nivel" : "Muestra un movimiento";
+  $("chip-monedas-juego").hidden = !(rp || pp); // el saldo solo se ve donde hay algo que comprar
+  $("c-estado").hidden = !!(rp || pp);
 }
 // Recuadro (div .zona) que rodea las cartas desde la posición «desde» hasta «hasta» de una columna. y2 = donde termina; alFinal = incluye la última carta
 function marco(z, ys, y2, w, alFinal) {
@@ -471,12 +548,13 @@ function calcularPista() {
   const j = mejor || (puedeRepartir(e) ? null : otra);
   if (j) { pista = { tipo: "mover", de: j.de, desde: e.cols[j.de].length - j.k, a: j.a }; aviso("💡 Pista: mira el recuadro verde"); }
   else if (puedeRepartir(e)) { pista = { tipo: "repartir" }; aviso("🃏 Solo quedan movimientos que dan vueltas: toca Repartir"); }
-  else { aviso(e.rep < 5 ? "Llena las columnas vacías para poder repartir" : "Ya no hay movimientos posibles"); return; }
+  else { aviso(e.rep < 5 ? "Llena las columnas vacías para poder repartir" : "Ya no hay movimientos posibles"); return false; }
   pintar();
+  return true; // dio una pista (el botón 💡 de pago solo cobra si fue así)
 }
 
 function tocar(c, i) {
-  if (fin || pausado) return;
+  if (pantalla !== "juego" || fin || pausado) return;
   actividad();
   if (sel) {
     if (sel.c !== c) {
@@ -490,18 +568,29 @@ function tocar(c, i) {
   pintar();
 }
 $("b-repartir").addEventListener("click", () => {
-  if (fin || pausado) return;
+  if (pantalla !== "juego" || fin || pausado) return;
   actividad();
   if (e.rep >= 5) return;
   if (!puedeRepartir(e)) { aviso("Llena las columnas vacías antes de repartir"); pintar(); return; }
   jugar(() => repartir(e), { rep: true });
 });
-$("b-deshacer").addEventListener("click", () => { if (fin || pausado || !historial.length) return; actividad(); cancelarAnim(); e = historial.pop(); colecc.length = Math.min(colecc.length, e.hechos); mostradas = colecc.length; sel = null; pintar(); });
-addEventListener("resize", () => { if (pantalla === "juego") pintar(); });
+$("b-pista").addEventListener("click", () => {
+  if (pantalla !== "juego" || fin || pausado) return;
+  const pp = pistaPaga();
+  if (pp && (usos.pista >= pp.tope || monedas() < pp.precio)) return;
+  if (calcularPista()) { usos.p++; if (pp) { gastar(pp.precio); usos.pista++; pintar(); } } // solo cobra (y cuenta) si de verdad hubo una pista
+});
+$("b-deshacer").addEventListener("click", () => {
+  if (pantalla !== "juego" || fin || pausado || !historial.length) return;
+  const rp = retroPaga();
+  if (rp) { if (usos.retro >= rp.tope || !gastar(rp.precio)) return; usos.retro++; }
+  usos.r++;
+  actividad(); cancelarAnim(); e = historial.pop(); colecc.length = Math.min(colecc.length, e.hechos); mostradas = colecc.length; sel = null; pintar(); });
+addEventListener("resize", () => { if (pantalla === "juego" || pantalla === "menu") { pintar(); colocarResultado(); } });
 setInterval(() => {
   if (pantalla !== "juego" || !e || fin || pausado) return;
   $("c-tiempo").textContent = formato(segundos());
-  if (!pista && Date.now() - ultimaAccion >= PISTA_MS) calcularPista(); // 15 s sin tocar nada
+  if (!pista && pistaAuto() && Date.now() - ultimaAccion >= PISTA_MS) calcularPista(); // 15 s sin tocar nada
 }, 500);
 
 // ---------- Menú de pausa estándar (solo en partida): Continuar · Reiniciar nivel · Niveles · Menú principal ----------
@@ -512,7 +601,7 @@ const pausa = crearMenuPausa({
   alAbrir: () => { acum = segundos(); t0 = 0; pausado = true; },
   alContinuar: () => { pausado = false; ultimaAccion = Date.now(); if (acum > 0 || e.movs) t0 = Date.now(); },
   extras: () => nivel ? [
-    { icono: "🔄", texto: "Reiniciar nivel", clase: "b-azul", ayuda: "Vuelves a empezar este nivel desde cero.", alElegir: () => { pausado = false; empezar(nivel); } },
+    { icono: "🔄", texto: "Reiniciar nivel", clase: "b-azul", ayuda: "Vuelves a empezar este nivel desde cero. Las monedas que gastaste no vuelven.", alElegir: () => { pausado = false; empezar(nivel); } },
     { icono: "📋", texto: "Niveles", clase: "b-azul", ayuda: "Vas a la zona de niveles. Se pierde lo avanzado en este nivel.", alElegir: () => { pausado = false; abrirMapa(nivel); } },
   ] : [],
   get textoSalir() { return nivel ? "Menú principal" : "Salir a elegir tablero"; },
