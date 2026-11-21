@@ -16,12 +16,11 @@ const NIVELES = [
   { nombre: "Principiante", icono: "🐣", desc: "Se despista mucho: ideal para aprender.",        prof: 1, tiempo: 300,  azar: 0.45, ruido: 100, puntos: 10 },
   { nombre: "Novato",       icono: "🐥", desc: "Ya ve algunas capturas, pero falla bastante.",    prof: 1, tiempo: 300,  azar: 0.25, ruido: 60,  puntos: 15 },
   { nombre: "Aficionado",   icono: "🙂", desc: "Ve capturas simples, pero comete errores.",       prof: 2, tiempo: 600,  azar: 0.12, ruido: 40,  puntos: 20 },
-  { nombre: "Jugador de club", icono: "🎯", desc: "Casi no regala piezas.",                       prof: 2, tiempo: 800,  azar: 0.04, ruido: 20,  puntos: 30 },
-  { nombre: "Intermedio",   icono: "🎓", desc: "Piensa unas jugadas adelante: cuida tus piezas.", prof: 3, tiempo: 1000, azar: 0.03, ruido: 15,  puntos: 40 },
   { nombre: "Avanzado",     icono: "🦉", desc: "Juega con táctica y casi no regala nada.",        prof: 4, tiempo: 1800, azar: 0,    ruido: 5,   puntos: 60 },
-  { nombre: "Experto",      icono: "🦅", desc: "Calcula profundo y castiga cualquier error.",     prof: 6, tiempo: 2500, azar: 0,    ruido: 2,   puntos: 80 },
   { nombre: "Maestro",      icono: "👑", desc: "El más fuerte: puede tardar unos segundos.",      prof: 8, tiempo: 3000, azar: 0,    ruido: 0,   puntos: 100 },
 ];
+// Al abrir el juego (solo en el Ajedrez, por decisión de Polo) se ve una partida de Modo libre contra este nivel, no el nivel del mapa
+const NIVEL_INICIO = 2;
 const TAM_MAX = 84;        // tamaño máximo de casilla (px)
 // El estándar (7.2) dice que el Modo libre NO da puntos de perfil. El Ajedrez siempre los dio (⭐ y puntos la primera vez que se vence
 // cada dificultad) y la gente ya tiene ese progreso, así que se conserva. Poner false para cumplir el estándar al pie de la letra.
@@ -35,14 +34,15 @@ const FIN = {
   material: "Tablas: no hay material para dar mate.", repeticion: "Tablas por repetición de posición.",
 };
 const AYUDA = "Toca una pieza tuya y luego la casilla a donde quieres moverla (los puntos marcan las jugadas posibles). ↩ deshace tu última jugada y 🔄 empieza otra. " +
-  "Los niveles del mapa son ejercicios y partidas; ♾️ Modo libre es ajedrez completo contra la computadora en 8 dificultades.";
+  "Los niveles del mapa son ejercicios y partidas; ♾️ Modo libre es ajedrez completo contra la computadora en 5 dificultades.";
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => n.toLocaleString("es-MX");
 const DEV = new URLSearchParams(location.search).has("dev"); // ?dev=1 → botón para superar niveles sin contenido y ver subir el agua
 const tab = $("tablero"), zonaJuego = document.querySelector(".aj"), btnMenu = $("btn-menu");
 
-let nivel = Math.min(NIVELES.length, Math.max(1, +localStorage.getItem(ID + ":nivel") || 1)); // dificultad del Modo libre
+const nivelGuardado = () => Math.min(NIVELES.length, Math.max(1, +localStorage.getItem(ID + ":nivel") || 1));
+let nivel = nivelGuardado(); // dificultad con la que se juega ahora (la del Modo libre; el inicio usa NIVEL_INICIO sin guardarla)
 let jugador = localStorage.getItem(ID + ":color") === "-1" ? -1 : 1;
 let est, pila, claves, legs, sel, ult, fin, msgFin, resultado, pensando, partida = 0, nube = null, nubeMapa = null, nivelN = 0, nivelD = null, fotos = [];
 let pantalla = "juego";   // "juego" | "libre" (Modo libre) | "niveles" (mapa)
@@ -311,12 +311,13 @@ function mostrar(p, n, alcanzado) {
 // Suelta lo que la partida en curso tenía pendiente (la jugada de la computadora, la pausa)
 function abandonar() { partida++; pensando = false; retraso = false; pausada = false; $("promo").hidden = true; }
 
-// Deja el juego cargado en el nivel donde va el jugador (lo del dispositivo y, con sesión, lo de su cuenta) y pone la capa «Comenzar»
+// Deja el juego cargado y pone la capa «Comenzar». En el Ajedrez (excepción al estándar 7.0, pedida por Polo) NO es el nivel del mapa:
+// es una partida de Modo libre contra el bot NIVEL_INICIO. No se guarda esa dificultad: el Modo libre recuerda la que el jugador eligió.
 function cargarInicio() {
   abandonar();
-  esperando = true; enLibre = false;
-  const n = leerMapa().max, d = datosNivel(n);
-  if (d) prepararNivel(n, d); else prepararLibre(); // sin contenido en ese nivel: se ve el ajedrez de siempre detrás de la capa
+  esperando = true; enLibre = false; // enLibre = false: la pausa trae el menú completo (Modo libre, Niveles…)
+  nivel = NIVEL_INICIO;
+  prepararLibre();
   mostrar("juego");
 }
 const volverAlInicio = () => cargarInicio();
@@ -339,7 +340,7 @@ function empezarNivel(n, d) { // desde Niveles, «Siguiente nivel» o Reintentar
   mostrar("juego");
 }
 function irANiveles(n, alcanzado) { abandonar(); mostrar("niveles", n, alcanzado); }
-function irALibre() { abandonar(); mostrar("libre"); pintarLibre(); }
+function irALibre() { abandonar(); nivel = nivelGuardado(); mostrar("libre"); pintarLibre(); }
 function empezarLibre() {
   abandonar();
   esperando = false; enLibre = true;
@@ -367,7 +368,7 @@ function pintarLibre() {
 }
 $("libre-jugar").addEventListener("click", empezarLibre);
 
-// ----- ☰ Pausa (7.5): Continuar · ♾️ Modo libre · 📋 Niveles · 🔄 Reiniciar nivel · ℹ️ Info · 🚪 Menú principal -----
+// ----- ☰ Pausa: Continuar · 🔄 Reiniciar nivel (debajo de Continuar, por decisión de Polo) · ♾️ Modo libre · 📋 Niveles · ℹ️ Info · 🚪 Menú principal -----
 const reanudar = () => { pausada = false; if (!esperando) arrancar(); };
 const hayAvance = () => !fin && (pila.length > 0 || fotos.length > 0);
 const pausa = crearMenuPausa({
@@ -375,9 +376,9 @@ const pausa = crearMenuPausa({
   alAbrir: () => { pausada = true; },
   alContinuar: reanudar,
   extras: () => enLibre ? [] : [ // en una partida de Modo libre solo hay Continuar y «Salir a elegir tablero»
+    { icono: "🔄", texto: nivelD ? "Reiniciar nivel" : "Nueva partida", clase: "b-azul", ayuda: nivelD ? "Vuelves a empezar este nivel." : "Empiezas otra partida contra el mismo bot.", alElegir: () => { reanudar(); nueva(); } },
     { icono: "♾️", texto: "Modo libre", clase: "b-morado", ayuda: "Eliges la dificultad y tu color. " + (hayAvance() ? "Se pierde la partida en curso." : "Tu progreso queda guardado."), alElegir: irALibre },
     { icono: "📋", texto: "Niveles", clase: "b-azul", ayuda: hayAvance() ? "Se pierde lo avanzado en este nivel." : "Lista de niveles. Tu progreso queda guardado.", alElegir: () => irANiveles() },
-    nivelD ? { icono: "🔄", texto: "Reiniciar nivel", clase: "b-azul", ayuda: "Vuelves a empezar este nivel.", alElegir: () => { reanudar(); nueva(); } } : null,
     { icono: "ℹ️", texto: "Info", clase: "b-cielo", alElegir: () => { reanudar(); infoJuego(); } },
   ],
   get textoSalir() { return enLibre ? "Salir a elegir tablero" : "Menú principal"; },
@@ -466,7 +467,6 @@ import("../compartido/progreso.js").then((m) => {
     alCambiar: () => { if (pantalla === "libre") pintarLibre(); },
   });
   nubeMapa = m.conectar(ID + "-mapa", { clave: CLAVE_MAPA, fusionar: fusionarMapa, alCambiar: () => {
-    mapa.refrescar();
-    if (esperando && pantalla === "juego") cargarInicio(); // la capa sigue puesta: se muestra el nivel de la cuenta (una vez tocado «Comenzar» no se toca el tablero)
+    mapa.refrescar(); // el inicio ya no depende del nivel del mapa, solo se repinta la lista
   } });
 }).catch(() => {});
