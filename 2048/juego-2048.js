@@ -105,7 +105,7 @@ function nuevaFicha() {
 
 // ----- Movimiento: 0 arriba, 1 derecha, 2 abajo, 3 izquierda -----
 function mover(dir) {
-  if (pantalla !== "juego" || pausa.abierto() || terminado || !$("velo").hidden) return false;
+  if (pantalla !== "juego" || esperando || pausa.abierto() || terminado || !$("velo").hidden) return false;
   const rejilla = Array.from({ length: N }, () => Array(N).fill(null));
   for (const t of fichas) rejilla[t.r][t.c] = t;
   const antes = instantanea();
@@ -252,21 +252,32 @@ function cargarTamano() {
 }
 // ----- Pantallas: menú principal → elegir tablero → partida (ESTANDARES-juegos.md, secciones 1 y 7) -----
 let pantalla = "menu";
+let esperando = false;   // true mientras la capa «Comenzar» cubre la partida
 function mostrar(p) {
   pantalla = p;
+  if (p !== "juego") esperando = false;
+  $("comenzar").hidden = !esperando;
   $("pantalla-menu").hidden = p !== "menu";
   $("pantalla-tamanos").hidden = p !== "tamanos";
+  $("pantalla-niveles").hidden = p !== "niveles";
+  if (p === "niveles") pintarNiveles();
   $("juego").hidden = p !== "juego";
   $("btn-menu").hidden = p === "menu";                                  // en el menú principal el ☰ no se muestra
   $("txt-menu").textContent = $("btn-menu").title = p === "juego" ? "Pausa" : "Menú principal";
-  try { document.querySelector("#" + (p === "juego" ? "deshacer" : "pantalla-" + p + " .b3d")).focus({ preventScroll: true }); } catch (e) {}
+  try { document.querySelector(esperando ? "#btn-comenzar" : "#" + (p === "juego" ? "deshacer" : "pantalla-" + p + " .b3d")).focus({ preventScroll: true }); } catch (e) {}
 }
 const pausa = crearMenuPausa({
   puedeAbrir: () => pantalla === "juego" && $("velo").hidden,
+  // Ajustes: desde aquí se entra al Modo libre (elegir medidas del tablero) y a los Niveles
+  extras: () => [
+    { icono: "♾️", texto: "Modo libre", clase: "b-morado", ayuda: "Eliges las medidas del tablero. Tu partida queda guardada.", alElegir: () => { enviar(); mostrar("tamanos"); } },
+    { icono: "📋", texto: "Niveles", clase: "b-azul", ayuda: "Lista de niveles. Tu partida queda guardada.", alElegir: () => { enviar(); mostrar("niveles"); } },
+  ],
   ayudaSalir: "Tu partida queda guardada en este dispositivo.",
   alSalir: () => { enviar(); mostrar("menu"); },
 });
-$("btn-menu").addEventListener("click", () => { if (pantalla === "juego") pausa.abrir(); else if (pantalla === "tamanos") mostrar("menu"); });
+$("btn-menu").addEventListener("click", () => { if (pantalla === "juego") pausa.abrir(); else if (pantalla === "tamanos" || pantalla === "niveles") mostrar("menu"); });
+$("btn-comenzar").addEventListener("click", () => { esperando = false; $("comenzar").hidden = true; try { $("deshacer").focus({ preventScroll: true }); } catch (e) {} });
 $("btn-jugar").addEventListener("click", () => mostrar("tamanos"));
 for (const n of TAMANOS) {
   const b = document.createElement("button");
@@ -276,6 +287,33 @@ for (const n of TAMANOS) {
 }
 $("nueva").addEventListener("click", () => (puntos > 0 && !terminado ? velo("¿Nueva partida?", "Se pierde la partida actual.", [["Sí, empezar", nueva, true], ["Seguir", cerrarVelo]]) : nueva()));
 $("deshacer").addEventListener("click", deshacer);
+
+// ----- Niveles (en construcción): rejilla de 5 columnas, filas de 5 en 5, por páginas de 100 (20 filas) -----
+// Para añadir los niveles: sube NIVELES_CREADOS y haz que jugarNivel(n) arme el tablero del nivel n.
+const TOTAL_NIVELES = 22600, NIVELES_POR_PAGINA = 100, NIVELES_CREADOS = 0;
+const PAGINAS_NIVELES = Math.ceil(TOTAL_NIVELES / NIVELES_POR_PAGINA);
+let paginaNiveles = 0, avisoT = 0;
+function avisar(texto) {
+  const a = $("aviso"); a.textContent = texto; a.hidden = false;
+  clearTimeout(avisoT); avisoT = setTimeout(() => { a.hidden = true; }, 3000);
+}
+function pintarNiveles() {
+  const g = $("niveles-grid"); g.replaceChildren();
+  const ini = paginaNiveles * NIVELES_POR_PAGINA + 1, fin = Math.min(TOTAL_NIVELES, ini + NIVELES_POR_PAGINA - 1);
+  for (let n = ini; n <= fin; n++) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "b3d txt " + (n <= NIVELES_CREADOS ? "b-verde" : "b-cielo pronto"); b.textContent = n;
+    b.addEventListener("click", () => jugarNivel(n));
+    g.appendChild(b);
+  }
+  $("niveles-pag").textContent = ini.toLocaleString("es-MX") + " – " + fin.toLocaleString("es-MX");
+  $("niv-ant").disabled = paginaNiveles === 0; $("niv-sig").disabled = paginaNiveles >= PAGINAS_NIVELES - 1;
+}
+function jugarNivel(n) {
+  if (n > NIVELES_CREADOS) { avisar("🚧 Los niveles todavía no están creados"); return; }
+}
+$("niv-ant").addEventListener("click", () => { if (paginaNiveles > 0) { paginaNiveles--; pintarNiveles(); } });
+$("niv-sig").addEventListener("click", () => { if (paginaNiveles < PAGINAS_NIVELES - 1) { paginaNiveles++; pintarNiveles(); } });
 
 // ----- Controles: flechas/WASD y deslizar -----
 const TECLAS = { arrowup: 0, w: 0, arrowright: 1, d: 1, arrowdown: 2, s: 2, arrowleft: 3, a: 3 };
@@ -296,7 +334,9 @@ addEventListener("pointercancel", () => (p0 = null));
 addEventListener("resize", ajustar);
 document.addEventListener("visibilitychange", () => { if (document.hidden) enviar(); });
 
-mostrar("menu");
+// Arranque: directo a la partida (tablero de la última vez), con la capa «Comenzar». Las opciones están en ☰ Pausa (Modo libre · Niveles · Menú principal).
+esperando = true;
+mostrar("juego"); cargarTamano();
 
 // Sincroniza los mejores puntajes con la cuenta (se queda el mayor de cada tamaño). La partida en curso queda en este dispositivo.
 import("../compartido/progreso.js").then((m) => {

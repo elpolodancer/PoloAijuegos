@@ -390,21 +390,16 @@ function redim() {
   cw = r.width; ch = r.height;
   cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
 }
-const escalaAjustada = () => Math.max(0.05, Math.min((cw - 16) / ((N + 2) * CELL), (ch - 130) / ((N + 2) * CELL * TILT))); // cabe la vía completa; deja aire para los botones
+// Vista FIJA: sin zoom ni arrastre. La vía completa (N + 2 casillas) ocupa TODO el ancho de la pantalla, sin bordes a los lados,
+// y queda centrada. Solo si la pantalla es más ancha que alta (celular girado) manda el alto, para que el tablero no se corte.
+const escalaAjustada = () => Math.max(0.05, Math.min(cw / ((N + 2) * CELL), (ch - 130) / ((N + 2) * CELL * TILT)));
 function ajustarCamara() {
   const s = escalaAjustada();
-  camMin = s * 0.8; camMax = s * 7;
+  camMin = camMax = s;
   cam.s = s;
   cam.ox = cw / 2 - (N * CELL * s) / 2;
-  cam.oy = ch / 2 - (N * CELL * s * TILT) / 2 + 12; // un poco más abajo: arriba están los botones
+  cam.oy = ch / 2 - (N * CELL * s * TILT) / 2; // centrado en la pantalla
   camTocada = false;
-}
-function zoom(f, mx, my) {
-  camTocada = true;
-  const s2 = clamp(cam.s * f, camMin, camMax), k = s2 / cam.s;
-  cam.ox = mx - (mx - cam.ox) * k;
-  cam.oy = my - (my - cam.oy) * k;
-  cam.s = s2;
 }
 // Casilla (gx, gy) → píxeles de pantalla, y al revés (vista inclinada: el eje vertical se aplasta por TILT)
 const P = (gx, gy) => [cam.ox + gx * CELL * cam.s, cam.oy + gy * CELL * cam.s * TILT];
@@ -833,17 +828,9 @@ cv.addEventListener("pointermove", (e) => {
   const nuevo = pos(e), viejo = dedos.get(e.pointerId);
   if (dedos.size === 1) {
     if (!g.moved && Math.hypot(nuevo.x - g.x0, nuevo.y - g.y0) > 8) g.moved = true;
-    if (g.moved) { cam.ox += nuevo.x - viejo.x; cam.oy += nuevo.y - viejo.y; camTocada = true; }
-    dedos.set(e.pointerId, nuevo);
+    dedos.set(e.pointerId, nuevo); // la vista es fija: arrastrar ya no mueve el tablero (solo cancela el toque)
   } else if (dedos.size === 2) {
-    const otro = [...dedos.entries()].find(([id]) => id !== e.pointerId)[1];
-    const d0 = Math.hypot(viejo.x - otro.x, viejo.y - otro.y) || 1;
-    const d1 = Math.hypot(nuevo.x - otro.x, nuevo.y - otro.y) || 1;
-    const m0 = { x: (viejo.x + otro.x) / 2, y: (viejo.y + otro.y) / 2 };
-    const m1 = { x: (nuevo.x + otro.x) / 2, y: (nuevo.y + otro.y) / 2 };
-    cam.ox += m1.x - m0.x; cam.oy += m1.y - m0.y;
-    zoom(d1 / d0, m1.x, m1.y);
-    g.moved = true;
+    g.moved = true; // pellizcar ya no hace zoom
     dedos.set(e.pointerId, nuevo);
   }
 });
@@ -864,11 +851,7 @@ function soltar(e) {
 }
 cv.addEventListener("pointerup", soltar);
 cv.addEventListener("pointercancel", soltar);
-cv.addEventListener("wheel", (e) => {
-  e.preventDefault();
-  const p = pos(e);
-  zoom(e.deltaY < 0 ? 1.15 : 1 / 1.15, p.x, p.y);
-}, { passive: false });
+cv.addEventListener("wheel", (e) => e.preventDefault(), { passive: false }); // sin zoom con la rueda
 
 $("reiniciar").addEventListener("click", () => cargarNivel(nivel));
 $("repetir").addEventListener("click", () => cargarNivel(nivel));
@@ -876,15 +859,8 @@ $("repetir").addEventListener("click", () => cargarNivel(nivel));
 $("al-mapa").addEventListener("click", () => { $("victoria").hidden = true; abrirMapa(nivel % 100 === 0); });
 $("siguiente").addEventListener("click", () => cargarNivel(Math.min(TOTAL_NIVELES, nivel + 1)));
 addEventListener("resize", () => {
-  const w0 = cw, h0 = ch;
   redim();
-  if (!camTocada || (w0 > h0) !== (cw > ch)) ajustarCamara(); // vista sin tocar, o el celular giró: se encuadra de nuevo
-  else { // el jugador ya movió la vista: se conserva y solo se recentra
-    cam.ox += (cw - w0) / 2; cam.oy += (ch - h0) / 2;
-    const s = escalaAjustada();
-    camMin = s * 0.8; camMax = s * 7;
-    cam.s = clamp(cam.s, camMin, camMax);
-  }
+  ajustarCamara(); // la vista es fija: siempre se vuelve a encuadrar al cambiar el tamaño o girar el celular
 });
 
 // ----- Mapa (menú principal), botón ☰ y menú de pausa -----
@@ -903,7 +879,6 @@ const TEXTO_INFO = [
   ["🚗 Objetivo", "Saca todos los autos del estacionamiento. Ganas cuando no queda ninguno."],
   ["👆 Cómo sacar un auto", "Toca un auto y avanzará hacia donde apunta su flecha hasta salir por las esquinas, dando la vuelta por la vía que rodea el tablero."],
   ["🚧 Si algo le estorba", "Un auto no puede salir si otro está en su camino: saca primero al que estorba. Si la vía de salida está ocupada, espera un instante y vuelve a tocarlo. En cuanto tocas un auto, ya no estorba: puedes tocar los demás de inmediato."],
-  ["🔍 Mover la vista", "Arrastra para mover el tablero y pellizca (o usa la rueda del ratón) para acercar o alejar."],
   ["💰 Monedas", "Ganas monedas la primera vez que terminas un nivel; mientras más grande el tablero, más monedas."],
   ["💥 Boosts", "Quitar un auto (30 monedas): toca el botón y luego el auto que quieres quitar. Paquete ×3 (50 monedas): te da 3 usos de quitar un auto. Bomba (100 monedas): elige una zona de 5×5 casillas y borra todos los autos que haya ahí."],
   ["🗺️ Mapa", "Los niveles se desbloquean en orden. Cada estado tiene 100 niveles; al terminarlo se desbloquea el siguiente y el agua del mapa sube. Con 🔄 reinicias el nivel y con ☰ Pausa puedes salir al mapa."],
