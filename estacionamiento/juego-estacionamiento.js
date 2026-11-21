@@ -1,5 +1,5 @@
 // Ruta: estacionamiento/juego-estacionamiento.js
-// Saca todos los autos de un estacionamiento cuadrado (vista 2D desde arriba). El tamaño cambia con cada nivel (de 10×10 a 50×50).
+// Saca todos los autos de un estacionamiento cuadrado (vista 2.5D: cuadrícula recta con cámara elevada e inclinada). El tamaño cambia con cada nivel (de 10×10 a 50×50).
 // - Cada auto avanza solo hacia donde apunta su flecha; si algo le estorba, no se mueve.
 // - Alrededor del estacionamiento hay una vía de un solo sentido (horario) con la salida en las 4 esquinas.
 // - Hay 22 600 niveles (3200 de México y 100 por cada país). Todos salen de niveles-estacionamiento.js: tamaño, autos y premio dependen solo del número
@@ -19,11 +19,11 @@ const VEL = 16;                     // casillas por segundo al salir
 const OSCURECER = 0.9;              // tonos de los autos: los mismos colores pero más oscuros (1 = como antes; menos = más oscuro)
 // Aspecto visual (NO cambia la lógica ni la hitbox: cada auto sigue ocupando sus casillas completas)
 const DPR_MAX = 1.5;                // resolución máxima del lienzo (2 se ve un poco más nítido pero pinta 78 % más píxeles)
-const TILT = 0.85;                  // altura de la cámara: 1 = vista cenital; menos = más inclinada (0.85 = casi desde arriba, como la referencia; antes 0.64)
+const TILT = 0.7;                   // inclinación de la cámara (vista 2.5D): 1 = vista cenital; menos = más inclinada (0.7 ≈ 46° sobre la vertical, como «Parking Jam»)
 const ANCHO_AUTO = 0.72;            // ancho del auto dentro de su casilla: queda un poco de aire alrededor
 const MARGEN_LARGO = 0.22;          // al largo del auto se le resta esto (en casillas): queda separación entre autos en fila
-const ALTO_CARROCERIA = 0.16, ALTO_CABINA = 0.06; // alturas (en casillas): carrocería baja y escalón del techo (los camiones tienen la caja más alta)
-const ALTO_TOQUE = 0.15;            // al tocar la pantalla se busca el auto a esta altura (a media carrocería), no en el suelo
+const ALTO_CARROCERIA = 0.22, ALTO_CABINA = 0.17, ALTO_CAJA = 0.36; // alturas (en casillas): carrocería, cabina de cristal con techo y caja del camión (volumen de la vista 2.5D)
+const ALTO_TOQUE = 0.22;            // al tocar la pantalla se busca el auto a esta altura (a media carrocería), no en el suelo
 const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0]; // 0 arriba, 1 derecha, 2 abajo, 3 izquierda
 const ID_JUEGO = "estacionamiento";
 const CLAVE = "estacionamiento-progreso";
@@ -499,9 +499,11 @@ function dibujarSuelo() {
   }
 }
 
-// Auto estilo «caricatura vista desde arriba» (referencia): contorno oscuro grueso, carrocería brillante con cristales azul claro, llantas que asoman,
-// espejos, faros y una flecha blanca grande sobre el techo. Todo se dibuja con rectángulos redondeados apilados en el plano del suelo (base),
-// así funciona con cualquier ángulo (los autos giran en las curvas de la vía) y con la inclinación TILT.
+// Auto 2.5D (vista elevada e inclinada, como «Parking Jam»): la cuadrícula sigue siendo recta, pero cada auto es un volumen con altura:
+// carrocería (con su pared visible hacia la cámara: costado con llantas y faros, frente con faros y parrilla, o parte de atrás con luces y placa),
+// cabina de cristal con techo, y una flecha blanca sobre el techo. Todo se dibuja apilando rectángulos redondeados en el plano del suelo (base),
+// así funciona con cualquier ángulo (los autos giran en las curvas de la vía) y con la inclinación TILT; los detalles de las paredes
+// (llantas, faros, parrilla) se dibujan en pantalla y solo cuando el auto está recto (se ve la pared de frente).
 // c = el auto (largo 2 = coche, 3 = camión); pose = { cx, cy, dx, dy, alfa, z } (z = salto en casillas, para el rebote).
 function pintarAuto(g, ds, c, ang, u, sx, sy, hz, alfa, det) {
   // g = contexto donde se pinta; ds = escala del contexto (dpr, o 1 si es un dibujo guardado); u = píxeles por casilla EN ESE contexto
@@ -510,12 +512,13 @@ function pintarAuto(g, ds, c, ang, u, sx, sy, hz, alfa, det) {
   const ca = Math.cos(ang), sa = Math.sin(ang);
   const col = (f, sat) => "hsl(" + c.tono + "," + (sat || 82) + "%," + Math.min(90, c.luz * f * OSCURECER).toFixed(1) + "%)";
   const CONTORNO = "#262033";
-  const hb = ALTO_CARROCERIA * u * 0.75, hr = ALTO_CABINA * u * (bus ? 1.8 : 0.6);
+  const hb = ALTO_CARROCERIA * u, hc = ALTO_CABINA * u, hcaja = ALTO_CAJA * u;
   const base = (h, salta = true) => g.setTransform(ds * ca, ds * K * sa, -ds * sa, ds * K * ca, ds * sx, ds * (sy - h - (salta ? hz : 0)));
+  const plano = (h = 0) => g.setTransform(ds, 0, 0, ds, ds * sx, ds * (sy - h - hz)); // sin giro: para dibujar paredes de frente (y = 0 es el centro del auto en el suelo)
   const pieza = (ox, oy, l, w, r, color) => { rr(ox - l / 2, oy - w / 2, l, w, r, g); g.fillStyle = color; g.fill(); };
   // Bloque: capas desde h0 hasta h1 (las paredes) y la tapa arriba
-  const bloque = (h0, h1, ox, oy, l, w, r, lado, tapa, maxN = 5) => {
-    const n = Math.max(1, Math.min(det === 2 ? maxN : 2, Math.ceil((h1 - h0) / 2.5)));
+  const bloque = (h0, h1, ox, oy, l, w, r, lado, tapa, maxN = 40) => {
+    const n = Math.max(1, Math.min(det === 2 ? maxN : 2, Math.ceil((h1 - h0) / 1.5)));
     for (let i = 0; i < n; i++) { base(h0 + ((h1 - h0) * i) / n); pieza(ox, oy, l, w, r, lado(n > 1 ? i / (n - 1) : 1)); }
     base(h1); pieza(ox, oy, l, w, r, tapa);
   };
@@ -528,76 +531,101 @@ function pintarAuto(g, ds, c, ang, u, sx, sy, hz, alfa, det) {
     return gr;
   };
   const degrade = (f0, f1, f2, sat) => grad(1, 1, [col(f0, sat), col(f1, sat), col(f2, sat)]);
-  const vidrio = () => grad(0.4, 0.6, ["#d9f3ff", "#9ad6f2", "#6fb3dd"]);
+  const cristal = (t) => "hsl(204," + (52 + 10 * t).toFixed(0) + "%," + (30 + 34 * t).toFixed(0) + "%)"; // pared de cristal: más oscura abajo, clara arriba
+  const lado = (t) => col(0.5 + 0.25 * t, 78);
   g.globalAlpha = alfa;
   g.lineJoin = "round";
 
+  // Altura del techo (donde va la flecha) y bloque de la cabina
+  const techo = bus ? hb + hcaja : hb + hc;
+
   if (det === 0) { // de lejos: un bloque de color con contorno
-    bloque(0, hb, 0, 0, L, W, 0.2 * u, () => CONTORNO, bus ? "#eef0f6" : col(1.05));
+    bloque(0, hb + (bus ? hcaja : hc) * 0.7, 0, 0, L, W, 0.2 * u, () => CONTORNO, bus ? "#eef0f6" : col(1.05));
     g.setTransform(ds, 0, 0, ds, 0, 0);
     g.globalAlpha = 1;
     return;
   }
 
-  // Sombra en el suelo (no salta con el auto)
-  base(0, false); pieza(0.03 * u, 0.05 * u, L + 0.08 * u, W + 0.08 * u, 0.24 * u, "rgba(20,15,30,.26)");
+  // Sombra en el suelo (no salta con el auto): un poco corrida hacia abajo-derecha, como si la luz viniera de arriba a la izquierda
+  base(0, false); pieza(0.06 * u, 0.1 * u, L + 0.1 * u, W + 0.08 * u, 0.26 * u, "rgba(20,15,30,.28)");
 
   const o = 0.07 * u;       // grosor del contorno
+  const hor = Math.abs(ca) > 0.98, ver = Math.abs(sa) > 0.98; // recto: se ve de frente una pared (el costado, o el frente/atrás)
   if (det === 2) {
-    // Llantas: asoman a los lados de la carrocería
+    // Llantas que asoman a los lados de la carrocería (las de la pared que da a la cámara se dibujan después, encima)
     const xs = bus ? [-0.34 * L, 0.3 * L] : [-0.28 * L, 0.28 * L];
-    for (const a of xs) for (const sg of [-1, 1]) bloque(0, 0.05 * u, a, sg * (W / 2 - 0.005 * u), 0.27 * u, 0.13 * u, 0.05 * u, () => "#15131c", "#2c2a36", 2);
-    // Espejos retrovisores (detrás del contorno)
-    const mx = bus ? L / 2 - 0.2 * L : 0.14 * L;
-    for (const sg of [-1, 1]) { base(hb * 0.8); pieza(mx, sg * (W / 2 + 0.03 * u), 0.11 * u, 0.1 * u, 0.04 * u, CONTORNO); pieza(mx, sg * (W / 2 + 0.025 * u), 0.08 * u, 0.07 * u, 0.03 * u, col(0.85)); }
+    for (const a of xs) for (const sg of [-1, 1]) bloque(0, 0.12 * u, a, sg * (W / 2 - 0.005 * u), 0.27 * u, 0.13 * u, 0.05 * u, () => "#15131c", "#2c2a36", 3);
     // Contorno oscuro grueso
     bloque(0.02 * u, hb, 0, 0, L + o, W + o, 0.26 * u, () => CONTORNO, CONTORNO);
   }
 
-  // Carrocería
-  bloque(0.02 * u, hb, 0, 0, L, W, 0.22 * u, (t) => col(0.5 + 0.25 * t, 78), degrade(1.28, 1.05, 0.78));
+  // Carrocería (con su pared visible)
+  bloque(0.02 * u, hb, 0, 0, L, W, 0.22 * u, lado, degrade(1.28, 1.05, 0.78));
 
-  let ac, A, hw, hr2;   // centro, largo y semiancho de la flecha, y altura del plano donde va
+  let ac, A, hw;   // centro, largo y semiancho de la flecha
   if (!bus) {
     if (det === 2) {
       base(hb);
-      pieza(L * 0.31, 0, L * 0.27, W * 0.8, 0.12 * u, "rgba(255,255,255,.16)");   // cofre
-      pieza(-L * 0.36, 0, L * 0.2, W * 0.76, 0.1 * u, "rgba(255,255,255,.1)");   // cajuela
-      // Cristales con marco oscuro: parabrisas y luneta
-      pieza(0.23 * L, 0, 0.13 * L + 0.05 * u, W * 0.84 + 0.05 * u, 0.09 * u, CONTORNO);
-      pieza(-0.25 * L, 0, 0.1 * L + 0.05 * u, W * 0.76 + 0.05 * u, 0.08 * u, CONTORNO);
-      pieza(0.23 * L, 0, 0.13 * L, W * 0.84, 0.07 * u, vidrio());
-      pieza(-0.25 * L, 0, 0.1 * L, W * 0.76, 0.06 * u, vidrio());
-      // Faros y luces traseras
-      for (const sg of [-1, 1]) {
-        pieza(L / 2 - 0.09 * u, sg * W * 0.31, 0.13 * u, 0.14 * u, 0.04 * u, CONTORNO);
-        pieza(L / 2 - 0.09 * u, sg * W * 0.31, 0.09 * u, 0.1 * u, 0.03 * u, "#fff6b0");
-        pieza(-L / 2 + 0.07 * u, sg * W * 0.31, 0.1 * u, 0.13 * u, 0.03 * u, CONTORNO);
-        pieza(-L / 2 + 0.07 * u, sg * W * 0.31, 0.06 * u, 0.09 * u, 0.02 * u, "#ff4d4d");
-      }
-    } else {
-      base(hb);
-      pieza(0.23 * L, 0, 0.13 * L, W * 0.84, 0.07 * u, vidrio());
-      pieza(-0.25 * L, 0, 0.1 * L, W * 0.76, 0.06 * u, vidrio());
+      pieza(L * 0.31, 0, L * 0.27, W * 0.8, 0.12 * u, "rgba(255,255,255,.14)");   // cofre
+      pieza(-L * 0.36, 0, L * 0.2, W * 0.76, 0.1 * u, "rgba(255,255,255,.08)");  // cajuela
     }
-    // Techo: un poco más claro, entre los cristales
-    base(hb + 0.01 * u);
-    pieza(-0.01 * L, 0, 0.3 * L, W * 0.84, 0.12 * u, degrade(1.4, 1.14, 0.92, 80));
-    ac = -0.01 * L; A = 0.5 * L; hw = W * 0.37; hr2 = hb;
+    // Cabina: paredes de cristal (parabrisas, luneta y ventanas) y techo con borde de color
+    const cox = -0.05 * L, cl = 0.4 * L, cw = 0.8 * W, hv = hc * 0.82;
+    bloque(hb, hb + hv, cox, 0, cl, cw, 0.1 * u, cristal, cristal(1), 12);
+    bloque(hb + hv, techo, cox, 0, cl + 0.05 * u, cw + 0.05 * u, 0.12 * u, lado, degrade(1.42, 1.16, 0.94, 80), 6);
+    ac = cox; A = 0.5 * L; hw = W * 0.31;
   } else {
-    // Camión: cabina (color del auto) al frente y caja blanca atrás
+    // Camión: cabina (color del auto, con cristal) al frente y caja blanca más alta atrás
     const bl = 0.68 * L, bc = -L / 2 + bl / 2 + 0.005 * u, cab = L - bl;
-    base(hb);
-    if (det === 2) {
-      for (const sg of [-1, 1]) { pieza(L / 2 - 0.09 * u, sg * W * 0.32, 0.13 * u, 0.14 * u, 0.04 * u, CONTORNO); pieza(L / 2 - 0.09 * u, sg * W * 0.32, 0.09 * u, 0.1 * u, 0.03 * u, "#fff6b0"); }
-      pieza(L / 2 - cab * 0.55, 0, cab * 0.5 + 0.05 * u, W * 0.84 + 0.05 * u, 0.09 * u, CONTORNO);
-    }
-    pieza(L / 2 - cab * 0.55, 0, cab * 0.5, W * 0.84, 0.07 * u, vidrio());
+    const cox = L / 2 - cab * 0.55, cl = cab * 0.7, hv = hc * 1.1;
+    bloque(hb, hb + hv * 0.8, cox, 0, cl, W * 0.82, 0.1 * u, cristal, cristal(1), 12);
+    bloque(hb + hv * 0.8, hb + hv, cox, 0, cl + 0.05 * u, W * 0.82 + 0.05 * u, 0.1 * u, lado, degrade(1.42, 1.16, 0.94, 80), 4);
     const blanco = (f) => "hsl(" + c.tono + ",10%," + Math.min(94, 84 * f).toFixed(1) + "%)";
-    if (det === 2) bloque(hb, hb + hr, bc, 0, bl + o, W * 0.96 + o, 0.14 * u, () => CONTORNO, CONTORNO, 3);
-    bloque(hb, hb + hr, bc, 0, bl, W * 0.96, 0.12 * u, (t) => blanco(0.7 + 0.2 * t), grad(1, 1, [blanco(1.12), blanco(0.98), blanco(0.8)]), 3);
-    if (det === 2) for (const f of [-0.17, 0.17]) pieza(bc + bl * f, 0, 0.02 * u, W * 0.88, 0.01 * u, "rgba(60,60,90,.18)"); // juntas de la caja
-    ac = bc; A = 0.66 * bl; hw = W * 0.36; hr2 = hb + hr;
+    if (det === 2) bloque(hb, techo, bc, 0, bl + o, W * 0.96 + o, 0.14 * u, () => CONTORNO, CONTORNO, 16);
+    bloque(hb, techo, bc, 0, bl, W * 0.96, 0.12 * u, (t) => blanco(0.68 + 0.22 * t), grad(1, 1, [blanco(1.12), blanco(0.98), blanco(0.8)]), 16);
+    if (det === 2) for (const f of [-0.17, 0.17]) { base(techo); pieza(bc + bl * f, 0, 0.02 * u, W * 0.88, 0.01 * u, "rgba(60,60,90,.18)"); } // juntas de la caja
+    ac = bc; A = 0.62 * bl; hw = W * 0.31;
+  }
+
+  // Detalles de la pared que se ve de frente (solo con el auto recto y de cerca)
+  if (det === 2 && (hor || ver)) {
+    plano(0);
+    if (hor) { // costado: llantas, puerta, faro delantero y luz trasera
+      const yb = (K * W) / 2, fx = ca > 0 ? 1 : -1;      // yb = borde de abajo del auto en el suelo
+      for (const a of bus ? [-0.34 * L, 0.3 * L] : [-0.28 * L, 0.28 * L]) {
+        const x = a * fx;
+        rr(x - 0.16 * u, yb - 0.17 * u, 0.32 * u, 0.22 * u, 0.09 * u, g); g.fillStyle = "#15131c"; g.fill();
+        rr(x - 0.08 * u, yb - 0.1 * u, 0.16 * u, 0.12 * u, 0.05 * u, g); g.fillStyle = "#8d8a99"; g.fill();
+      }
+      const yl = yb - hb * 0.62;
+      rr(fx * (L / 2 - 0.1 * u) - 0.06 * u, yl - 0.05 * u, 0.12 * u, 0.1 * u, 0.04 * u, g); g.fillStyle = CONTORNO; g.fill();
+      rr(fx * (L / 2 - 0.1 * u) - 0.04 * u, yl - 0.035 * u, 0.08 * u, 0.07 * u, 0.03 * u, g); g.fillStyle = "#fff6b0"; g.fill();
+      rr(-fx * (L / 2 - 0.08 * u) - 0.05 * u, yl - 0.05 * u, 0.1 * u, 0.1 * u, 0.03 * u, g); g.fillStyle = CONTORNO; g.fill();
+      rr(-fx * (L / 2 - 0.08 * u) - 0.03 * u, yl - 0.03 * u, 0.06 * u, 0.06 * u, 0.02 * u, g); g.fillStyle = "#ff4d4d"; g.fill();
+      if (!bus) { // línea de la puerta
+        g.strokeStyle = "rgba(0,0,0,.22)"; g.lineWidth = Math.max(0.8, 0.02 * u);
+        g.beginPath(); g.moveTo(-0.05 * L * fx, yb - hb * 0.92); g.lineTo(-0.05 * L * fx, yb - 0.04 * u); g.stroke();
+      }
+    } else if (sa > 0) { // frente: faros y parrilla
+      const yb = (K * L) / 2, yl = yb - hb * 0.6;
+      for (const sg of [-1, 1]) {
+        rr(sg * W * 0.3 - 0.085 * u, yl - 0.065 * u, 0.17 * u, 0.13 * u, 0.05 * u, g); g.fillStyle = CONTORNO; g.fill();
+        rr(sg * W * 0.3 - 0.06 * u, yl - 0.045 * u, 0.12 * u, 0.09 * u, 0.04 * u, g); g.fillStyle = "#fff6b0"; g.fill();
+      }
+      rr(-W * 0.17, yl - 0.045 * u, W * 0.34, 0.09 * u, 0.03 * u, g); g.fillStyle = "#2b2733"; g.fill();
+    } else {             // parte de atrás: luces rojas y placa
+      const yb = (K * L) / 2, yl = yb - hb * 0.6;
+      for (const sg of [-1, 1]) {
+        rr(sg * W * 0.33 - 0.08 * u, yl - 0.06 * u, 0.16 * u, 0.12 * u, 0.04 * u, g); g.fillStyle = CONTORNO; g.fill();
+        rr(sg * W * 0.33 - 0.055 * u, yl - 0.04 * u, 0.11 * u, 0.08 * u, 0.03 * u, g); g.fillStyle = "#ff4d4d"; g.fill();
+      }
+      rr(-0.1 * u, yl - 0.04 * u, 0.2 * u, 0.08 * u, 0.02 * u, g); g.fillStyle = "#f4f1e6"; g.fill();
+    }
+    if (hor && !bus) { // montante central entre las ventanas (pared de cristal de la cabina)
+      const fx = ca > 0 ? 1 : -1, yc = (K * 0.8 * W) / 2;
+      g.strokeStyle = "rgba(30,25,45,.55)"; g.lineWidth = Math.max(1, 0.04 * u);
+      g.beginPath(); g.moveTo(-0.05 * L * fx, yc - hb - hc * 0.82); g.lineTo(-0.05 * L * fx, yc - hb); g.stroke();
+    }
   }
 
   // Flecha blanca con contorno oscuro grueso, apoyada en el techo (con sombrita)
@@ -605,16 +633,16 @@ function pintarAuto(g, ds, c, ang, u, sx, sy, hz, alfa, det) {
   const flecha = (dy) => { g.beginPath();
     g.moveTo(x0, -sw + dy); g.lineTo(hbx, -sw + dy); g.lineTo(hbx, -hw + dy); g.lineTo(x1, dy);
     g.lineTo(hbx, hw + dy); g.lineTo(hbx, sw + dy); g.lineTo(x0, sw + dy); g.closePath(); };
-  base(hr2 + 0.015 * u);
+  base(techo + 0.015 * u);
   flecha(0.04 * u); g.fillStyle = "rgba(0,0,0,.28)"; g.fill();
   flecha(0);
   g.fillStyle = "#fffdf6"; g.fill();
-  g.lineWidth = Math.max(0.055 * u, 0.9); g.strokeStyle = CONTORNO; g.stroke();
+  g.lineWidth = Math.max(0.05 * u, 0.9); g.strokeStyle = CONTORNO; g.stroke();
 
   // Destello rojo cuando algo le estorba
   if (c.flash > 0) {
     const a = (0.6 * c.flash / 0.4).toFixed(2);
-    base(hb); pieza(0, 0, L, W, 0.22 * u, "rgba(255,50,50," + a + ")");
+    bloque(0.02 * u, techo, 0, 0, L, W, 0.22 * u, () => "rgba(255,50,50," + (a * 0.6).toFixed(2) + ")", "rgba(255,50,50," + a + ")", 8);
   }
   g.setTransform(ds, 0, 0, ds, 0, 0);
   g.globalAlpha = 1;
@@ -633,10 +661,10 @@ function dibujoGuardado(c, dir, k) {
   let sp = cacheAutos.get(llave);
   if (sp) return sp;
   const ds = dpr, U = Math.pow(PASO_ZOOM, k) * ds, ang = dir * Math.PI / 2;
-  const ca = Math.abs(Math.cos(ang)), sa = Math.abs(Math.sin(ang)), esc = c.len >= 3 ? 1.8 : 1;
+  const ca = Math.abs(Math.cos(ang)), sa = Math.abs(Math.sin(ang));
   const L = (c.len - MARGEN_LARGO) * U, W = ANCHO_AUTO * U;
   const hx = (ca * L + sa * W) / 2 + 0.3 * U, gy = (TILT * (sa * L + ca * W)) / 2;
-  const arriba = gy + (ALTO_CARROCERIA + ALTO_CABINA * esc) * U + 0.3 * U, abajo = gy + 0.35 * U;
+  const arriba = gy + (ALTO_CARROCERIA + (c.len >= 3 ? ALTO_CAJA : ALTO_CABINA)) * U + 0.3 * U, abajo = gy + 0.35 * U;
   const w = Math.ceil(2 * hx), h = Math.ceil(arriba + abajo);
   if (pixCache + w * h > MAX_PIXELES_CACHE) { cacheAutos.clear(); pixCache = 0; }
   const lienzo = document.createElement("canvas");

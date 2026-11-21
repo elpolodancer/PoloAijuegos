@@ -9,6 +9,17 @@
 <link rel="stylesheet" href="../compartido/estilos.css">
 <link rel="stylesheet" href="../compartido/inmersivo.css">
 <style>
+/* Respaldo del velo de inicio: copia de las reglas de compartido/inmersivo.css (si ese archivo ya las trae, no cambia nada; se puede borrar este bloque cuando esté actualizado) */
+[hidden] { display: none !important; }
+.velo-inicio { --ini: 56px; position: fixed; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 0 12px; background: rgba(8, 6, 4, .5); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); touch-action: none; }
+.fila-menu { --ini: 56px; display: flex; align-items: flex-start; justify-content: center; gap: 4px; }
+.velo-inicio .b3d { --t: var(--ini); flex-direction: column; gap: 2px; padding: 0 2px; margin: 0 0 5px; font-weight: 800; }
+.velo-inicio .b-ico { font-size: calc(var(--ini) * .46); line-height: 1; }
+.velo-inicio .b-rot { position: relative; font-size: 10px; font-weight: 700; line-height: 1.1; text-align: center; white-space: nowrap; }
+.velo-inicio .b3d.central { --t: calc(var(--ini) * 2); border-radius: 22px; }
+.velo-inicio .central .b-ico { font-size: calc(var(--ini) * .9); }
+.velo-inicio .central .b-rot { font-size: 17px; font-weight: 800; }
+@media (orientation: landscape) and (max-height: 560px) { .velo-inicio, .fila-menu { --ini: 46px; } .velo-inicio .central .b-rot { font-size: 14px; } }
 .pantalla { position: fixed; inset: 0; }
 .pantalla[hidden] { display: none; }
 /* Modo libre (pantalla de menú sobre la madera estándar; zona reservada arriba-izquierda ≈ 190 × 92). El menú principal es el velo de inicio (.velo-inicio, de inmersivo.css) */
@@ -84,8 +95,8 @@ body:not(.jugando) #juego .hud, body:not(.jugando) #juego .barra-inf { visibilit
 </head>
 <body class="inmersivo">
 <nav class="nav-juego" aria-label="Navegación">
-  <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Portal de Juegos</a>
-  <button class="b3d txt b-cielo" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> <span id="txt-menu">Pausa</span></button>
+  <a class="b3d b-azuloscuro" href="../" title="Volver al portal de juegos" aria-label="Volver al portal de juegos"><span class="b-ico">🎮</span></a>
+  <button class="b3d b-cielo" id="btn-menu" type="button" title="Pausa" aria-label="Pausa" hidden><span class="b-ico">☰</span></button>
 </nav>
 
 <!-- Modo libre: pantalla propia (no desplegable) -->

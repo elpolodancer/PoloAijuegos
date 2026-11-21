@@ -88,8 +88,7 @@ function cargarVista() {
 // ☰: «Pausa» dentro de una partida en curso, «Atrás» en el resto de pantallas (ESTANDARES-juegos.md, 7.4)
 function rotularMenu() {
   const jugando = pantalla === "juego" && !fin;
-  $("txt-menu").textContent = jugando ? "Pausa" : "Atrás";
-  btnMenu.title = jugando ? "Pausa" : "Volver al menú principal";
+  btnMenu.title = btnMenu.ariaLabel = jugando ? "Pausa" : "Volver al menú principal"; // solo icono ☰ (sin texto)
 }
 function aviso(txt, ms = 2200) {
   const t = $("toast"); t.textContent = txt; t.hidden = false;
