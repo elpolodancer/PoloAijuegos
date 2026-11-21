@@ -1,0 +1,114 @@
+<!doctype html>
+<!-- Ruta: estacionamiento/index-estacionamiento.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Estacionamiento</title>
+  <meta name="theme-color" content="#d9a866" />
+  <!-- Evita el parpadeo de la madera clara al abrir en modo oscuro -->
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    /* El fondo de madera lo pone compartido/fondo-madera.js; este color solo se ve un instante antes de que cargue */
+    html.inmersivo { --fondo-juego: #d9a866; }
+    html.inmersivo.oscura { --fondo-juego: #1d2024; }
+    body.inmersivo { background: transparent; }
+    .b3d:disabled { filter: grayscale(.85) brightness(.7); }
+
+    /* El estacionamiento ocupa toda la pantalla (se mueve con el dedo y se acerca con pellizco); los botones flotan encima.
+       El lienzo es TRANSPARENTE para que se vea la madera: el JS debe limpiar con clearRect, no pintar un fondo. */
+    #escena { position: absolute; inset: 0; }
+    #lienzo { display: block; width: 100%; height: 100%; background: transparent; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+
+    /* Arriba a la izquierda va la navegación estándar (.nav-juego); los contadores y el nivel pasan al centro */
+    .hud-centro { top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); }
+    /* Rótulo del nivel (arriba al centro): botón verde claro al doble de tamaño (68 px). No es pulsable */
+    .b3d.b-nivel { --c1: #e6ffd9; --c2: #9be88a; --c3: #3f9c3d; pointer-events: none; font-size: 30px; padding: 0 26px; color: #1f5a1d; text-shadow: 0 2px 0 rgba(255,255,255,.7); }
+    .b3d.b-nivel .b-ico { font-size: 1em; text-shadow: 0 2px 0 rgba(255,255,255,.7); }
+    .b3d.b-nivel small { margin-right: 8px; font-size: .55em; font-weight: 800; }
+    /* Fila de información, debajo del botón ☰ Pausa: monedas (dorado) · tamaño del tablero (negro) · movimientos (madera).
+       Los tres son «fichas» del mismo tamaño: 51 px de alto (68 − 25 %) */
+    .hud-info { top: calc(max(8px, env(safe-area-inset-top)) + 92px); left: max(8px, env(safe-area-inset-left)); max-width: calc(100vw - 70px); flex-wrap: wrap; gap: 8px; }
+    .chip-info { height: 51px; padding: 0 20px; font-size: 22.5px; white-space: nowrap; border-width: 2px; }
+    .chip.chip-info small { margin-right: 8px; font-size: 16px; }
+    /* Dorado */
+    .chip-monedas { color: #5a3300; text-shadow: 0 2px 0 rgba(255,255,255,.55); border-color: #a85d00;
+      background: linear-gradient(180deg, #fff08c 0%, #ffb020 55%, #e08a00 130%); box-shadow: 0 4px 0 #a85d00, inset 0 2px 0 rgba(255,255,255,.65); }
+    /* Madera (la del fondo, clara u oscura según el modo) */
+    .chip-madera { color: var(--txt-fondo, #4a2a10); text-shadow: var(--sombra-txt, 0 2px 0 rgba(255,240,210,.6));
+      background: url("../imagenes/fondomaderaclara.webp") center / cover no-repeat, #d9a866;
+      border-color: rgba(74,42,16,.6); box-shadow: 0 4px 0 rgba(74,42,16,.55), inset 0 2px 0 rgba(255,255,255,.35); }
+    html.oscura .chip-madera { background: url("../imagenes/fondomaderaoscura.webp") center / cover no-repeat, #1d2024; border-color: rgba(0,0,0,.7); box-shadow: 0 4px 0 rgba(0,0,0,.6), inset 0 2px 0 rgba(255,255,255,.12); }
+    .chip-madera small { color: var(--txt-fondo-suave, #6b4423); }
+    /* Negro: tamaño del tablero, con una etiqueta chiquita arriba y el número (más pequeño) abajo */
+    .chip-tam { flex-direction: column; justify-content: center; gap: 1px; padding: 0 16px; line-height: 1; color: #f1f2f4; text-shadow: 0 2px 0 rgba(0,0,0,.6);
+      background: linear-gradient(180deg, #3b3e45, #0d0e10); border-color: #000; box-shadow: 0 4px 0 #000, inset 0 2px 0 rgba(255,255,255,.18); }
+    .chip.chip-tam small { margin: 0; font-size: 9px; font-weight: 700; letter-spacing: .02em; color: #c9ccd3; text-shadow: none; }
+    .chip-tam b { font-size: 17px; }
+    /* Reiniciar: 25 % más grande que el resto de los botones chicos (40 → 50 px) */
+    #reiniciar { --t: 50px; border-radius: 15px; }
+    /* Moneda dibujada con CSS: el emoji 🪙 no se ve en sistemas viejos */
+    .moneda { position: relative; display: inline-block; flex: none; width: 1em; height: 1em; margin-right: 10px; border-radius: 50%; box-sizing: border-box;
+      background: radial-gradient(circle at 35% 30%, #fff7b8, #ffc928 55%, #d59100); border: .09em solid #a86a00; box-shadow: 0 .06em 0 rgba(0,0,0,.25), inset 0 .05em 0 rgba(255,255,255,.6); }
+    .moneda::after { content: "$"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: .62em; font-weight: 900; color: #a86a00; text-shadow: 0 1px 0 rgba(255,255,255,.55); }
+    .b-info .moneda { width: 1.15em; height: 1.15em; margin: 0 0 -.25em 3px; border-width: 1px; }
+    @media (max-aspect-ratio: 1/1) { .hud-centro { left: calc(126px + env(safe-area-inset-left, 0px)); transform: none; max-width: none; } } /* en vertical el nivel va a la derecha de los botones 🎮 y ☰ */
+    .hud-der { flex-direction: column; align-items: flex-end; gap: 6px; }
+    /* Abajo a la izquierda queda 🌙/☀️ y abajo a la derecha ⛶, así que el selector de nivel / boosts va al centro */
+    .hud-abajo { left: 50%; transform: translateX(-50%); gap: 8px; }
+    .chip small { margin-right: 5px; }
+
+    #msg { position: fixed; z-index: 6; left: 50%; top: calc(158px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); width: max-content; max-width: 92vw; padding: 6px 14px; text-align: center; color: #f1f2f4; background: rgba(10,10,12,.82); border: 1px solid var(--borde); border-radius: 16px; font-size: .9rem; pointer-events: none; opacity: 0; transition: opacity .2s; }
+    #msg.ver { opacity: 1; }
+
+    /* Fin de nivel: estándar «sobre el tablero» (.sobre-tablero en compartido/inmersivo.css); juego-estacionamiento.js lo coloca encima del tablero */
+    @media (max-aspect-ratio: 1/1) { #msg { top: calc(220px + env(safe-area-inset-top, 0px)); } }
+    @media (prefers-reduced-motion: reduce) { #msg { transition: none; } }
+  </style>
+</head>
+<body class="inmersivo" data-pantalla-auto>
+  <main id="escena">
+    <canvas id="lienzo" class="lienzo"></canvas>
+  </main>
+  <div id="msg" role="status" aria-live="polite"></div>
+
+  <!-- Navegación estándar: «🎮 Juegos» vuelve al portal; «☰ Pausa» abre el menú de pausa (arriba a la izquierda, mismo ancho) -->
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
+    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa"><span class="b-ico">☰</span> Pausa</button>
+  </nav>
+
+  <!-- Capas flotantes -->
+  <div class="hud hud-centro">
+    <span class="b3d txt grande b-nivel" id="chip-nivel"><span class="b-ico"><small>Nivel</small><b id="nivel-num">1</b></span></span>
+  </div>
+  <!-- Debajo de «☰ Pausa»: monedas (lo pone el JS al principio) · tamaño del tablero · movimientos -->
+  <div class="hud hud-info" id="fila-info">
+    <span class="chip chip-info chip-tam" id="tam" title="Tamaño del tablero"><small>Tamaño del tablero</small><b id="tam-txt"></b></span>
+    <span class="chip chip-info chip-madera"><small>Movs</small><b id="movs">0</b></span>
+  </div>
+  <div class="hud hud-der">
+    <button class="b3d chico b-verde" id="reiniciar" type="button" title="Reiniciar nivel" aria-label="Reiniciar nivel"><span class="b-ico">🔄</span></button>
+  </div>
+  <div class="hud hud-abajo" id="boosts"></div>
+
+  <div id="victoria" class="sobre-tablero" hidden>
+    <div class="sobre-texto">
+      <h2 id="vtitulo">¡Nivel completado!</h2>
+      <div id="vtexto"></div>
+    </div>
+    <button class="b3d txt grande b-verde" id="siguiente" type="button">Siguiente nivel ▶</button>
+    <div class="sobre-fila">
+      <button class="b3d txt b-gris" id="repetir" type="button">Repetir nivel</button>
+      <button class="b3d txt b-azul" id="al-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+    </div>
+  </div>
+
+  <script type="module" src="juego-estacionamiento.js"></script>
+  <!-- El menú de pausa, el mapa y el botón ☰ los crea juego-estacionamiento.js -->
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+</body>
+</html>

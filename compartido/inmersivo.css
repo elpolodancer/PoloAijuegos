@@ -25,11 +25,11 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
 .hud-der  { top: max(8px, env(safe-area-inset-top));    right: max(8px, env(safe-area-inset-right)); }
 .hud-abajo{ bottom: max(14px, env(safe-area-inset-bottom)); left: max(10px, env(safe-area-inset-left)); }
 
-/* ESTÁNDAR de navegación de todos los juegos: arriba a la izquierda, «🎮 Portal de Juegos» (vuelve al portal) y, solo fuera del menú
-   principal del juego, «☰ Pausa» justo debajo. Los dos del mismo ancho (el del más largo, «Portal de Juegos»).
-   El ☰ dice SIEMPRE «Pausa» y abre el MENÚ DE PAUSA (Continuar / opciones del juego / Salir): ver compartido/menu-pausa.js y los
-   estilos .pausa-* al final de este archivo. En las pantallas sin partida (mapa, niveles, dificultades) abre ese mismo menú y su
-   «Salir» vuelve al menú principal del juego. */
+/* ESTÁNDAR de navegación de todos los juegos: arriba a la izquierda, «🎮 Portal de Juegos» (vuelve al portal) y, justo debajo,
+   «☰ Pausa / Atrás» (SIEMPRE visible, también bajo la capa «Comenzar»). Los dos del mismo ancho (el del más largo, «Portal de Juegos»).
+   El ☰ dice «Pausa» dentro de una partida (o bajo la capa «Comenzar») y abre el MENÚ DE PAUSA (Continuar / Modo libre / Niveles / opciones del juego /
+   Menú principal): ver compartido/menu-pausa.js y los estilos .pausa-* al final de este archivo. En las pantallas sin partida (mapa, Modo libre,
+   resultados) dice «Atrás» y vuelve al juego con la capa «Comenzar». */
 .nav-juego { position: fixed; z-index: 6; top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); display: flex; flex-direction: column; align-items: stretch; }
 .nav-juego .b3d { --t: 40px; border-radius: 12px; font-size: 14px; }
 @media (max-width: 360px) { .nav-juego .b3d.txt { font-size: 13px; padding: 0 10px; } }   /* celulares muy angostos: «Portal de Juegos» sigue cabiendo */
@@ -53,9 +53,9 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
    Va en una zona libre: arriba-der. con el resto de chips, o (como en Estacionamiento) en una fila de información debajo de ☰.
 
    • 🎮 Portal de Juegos = vuelve al PORTAL (href="../"), siempre visible.
-     ☰ = UN solo botón con dos rótulos (ESTANDARES-juegos.md, sección 7.4): «Pausa» dentro de una partida (abre compartido/menu-pausa.js:
-     Continuar / opciones del juego / Menú principal) y «Atrás» en cualquier otra pantalla (mapa, niveles, Modo libre, resultados), donde
-     vuelve al menú principal del juego. Oculto en el menú principal.
+     ☰ = UN solo botón con dos rótulos (ESTANDARES-juegos.md, sección 7.4): «Pausa» dentro de una partida o bajo la capa «Comenzar» (abre
+     compartido/menu-pausa.js: Continuar / Modo libre / Niveles / opciones del juego / Menú principal) y «Atrás» en cualquier otra pantalla
+     (mapa, Modo libre, resultados), donde vuelve al juego con la capa «Comenzar». Siempre visible.
    • 🌙/☀️: 🌙 en madera clara (pasa a oscura), ☀️ en madera oscura. Guarda la elección en localStorage «fondo_madera».
    • Colores (degradado de arriba a abajo, ver .b-gris y .b-oro más abajo):
        gris  #d5d9e0 → #8b93a0 → #4f5662        oro  #fff08c → #ffb020 → #a85d00
@@ -75,34 +75,38 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
    =================================================================================================================== */
 
 /* ===================================================================================================================
-   MENÚ PRINCIPAL ESTÁNDAR = «BARRA DE INICIO» SOBRE EL JUEGO YA CARGADO (obligatorio en TODOS los juegos; ESTANDARES-juegos.md, secciones 7.0 y 7.1)
-   Al abrir un juego NO se ve una pantalla de menú aparte: se ve el juego ya cargado (el primer nivel, o el nivel donde va la cuenta de Google)
-   y, en la zona más alta de la pantalla, la barra de inicio con tres botones MUY JUNTOS, en ESTE orden de izquierda a derecha:
+   INICIO ESTÁNDAR = CAPA «COMENZAR» SOBRE EL JUEGO YA CARGADO (obligatorio en TODOS los juegos; ESTANDARES-juegos.md, 7.0 y 7.1)
+   Reemplaza al antiguo «velo de inicio» de tres botones y a las pantallas de menú principal. Al abrir un juego se ve el juego ya cargado
+   (el primer nivel, el nivel donde va la cuenta de Google o la última partida) DETRÁS de una capa negra semitransparente con un poco de
+   difuminado (.capa-comenzar). El juego se ve pero NO se puede jugar hasta tocar el único botón, verde y centrado:
 
-   | # | Botón                  | Color (clase)        | Tamaño               | Qué hace                                                                                         |
-   |---|------------------------|----------------------|----------------------|--------------------------------------------------------------------------------------------------|
-   | 1 | ♾️ Modo libre          | b-morado             | cuadrado (--ini)     | Abre la pantalla de Modo libre (tablero/dificultad/Jugar), que NO es un desplegable               |
-   | 2 | ▶ Continuar / Jugar    | b-verde, .central    | DOBLE (2 × --ini)    | SIEMPRE en el centro. Juega el nivel donde vas (retoma su partida guardada). Solo juegos con niveles |
-   | 3 | 🗂️ Niveles             | b-azul               | cuadrado (--ini)     | Abre el mapa de niveles (compartido/mapa-niveles.js) en la lista del estado o país donde vas        |
+              [   ▶ Comenzar   ]                ← b3d txt grande b-verde (68 px de alto, mínimo 200 de ancho)
 
-   • La barra desaparece con el primer movimiento del jugador (o al tocar «Continuar»); entonces el ☰ aparece como «Pausa». Volver al menú
-     principal (☰ «Atrás», «Menú principal» de la pausa) vuelve a mostrar el juego cargado con la barra.
-   • Juegos donde no se puede jugar «de inmediato» (tiempo real: Agario, Slither…): el nivel/mundo queda cargado detrás con una pantalla de
-     «Toca para jugar» (o pausa); juegos con varias partidas (supervivencia…): en su lugar la pantalla de partidas guardadas. La barra va igual.
-   • NO hay botón 🗺️ Mapa ni 🚪 Salir: al mapa se llega desde «Niveles» (◀ México / ◀ Mundo), y se sale al portal con «🎮 Portal de Juegos».
-   • Juegos sin niveles: solo ♾️ Modo libre (más ℹ️ Info si hace falta). Juegos con niveles aún sin crear: «Niveles» se muestra igual y al
-     tocar un nivel inexistente se avisa con «🚧 Los niveles todavía no están creados».
-   • MODO LIBRE = pantalla propia (no desplegable): título «♾️ Modo libre», frase, grupos con rótulo («Tablero», «Dificultad») que son filas de
-     botones b3d txt de 44 px (el elegido b-oro on, los demás b-cielo), nota de lo que cambia la dificultad, «🏆 Récord» de la combinación y,
-     al final, «▶ Jugar» (grande b-verde). Recuerda la última selección. Cada juego decide qué opciones y cuántas dificultades tiene.
-   • NIVELES Y MAPA: el mapa abre en la etapa del jugador; su vista principal lleva «Continuar · nivel N», «ℹ️ Info» y, cuando se desbloquea,
-     «🌍 Mundo». Los botones «◀ México» y «◀ Mundo» (b-cielo) suben un paso dentro del mapa (Esc hace lo mismo); el ☰ «Atrás» sale al menú.
-     El modo libre solo se entra desde el menú principal. El mundo y sus 194 países están ocultos hasta terminar los 32 estados (4A y 9).
-   • ☰ = «Pausa» en partida y «Atrás» fuera de ella (oculto mientras se ve la barra de inicio): ver ESTANDARES-juegos.md, sección 7.4.
-   • PAUSA (en partida): ▶ Continuar · 🔄 Reiniciar nivel · 📋 Niveles · 🚪 Menú principal. En Modo libre solo Continuar y «Salir a elegir tablero».
+   Estructura:  <div class="capa-comenzar" id="comenzar" hidden>
+                  <button class="b3d txt grande b-verde" id="btn-comenzar" type="button"><span class="b-ico">▶</span> Comenzar</button>
+                </div>
+   • Va por DEBAJO de 🎮 Portal de Juegos, ☰ y los chips de arriba a la derecha (z-index 4; .nav-juego y .hud están en 5-6): siguen usables.
+     El ☰ dice «Pausa» y abre el menú de pausa, que es donde están ♾️ Modo libre, 📋 Niveles, 🔄 Reiniciar y 🚪 Menú principal.
+   • Sin título, sin resumen y sin frases de instrucciones. El juego no responde (ni toques ni teclado) mientras esté puesta: lo controla una
+     bandera del juego (p. ej. «esperando»). El reloj y los movimientos no corren hasta tocar «Comenzar».
+   • Sale solo al abrir el juego y al volver con «Menú principal» o con «Atrás» desde Niveles / Modo libre. Entrar a un nivel desde Niveles,
+     Reiniciar o «Siguiente nivel» empieza directo, sin capa.
+   • Juegos de tiempo real (Slither, Agario…): detrás de la capa el mundo está en marcha pero sin jugador; aparece al tocar «Comenzar».
+   • MODO LIBRE = pantalla propia (no desplegable; se abre desde ☰ Pausa): título «♾️ Modo libre», frase, grupos con rótulo («Tablero»,
+     «Dificultad») que son filas de botones b3d txt de 44 px (el elegido b-oro on, los demás b-cielo), nota, «🏆 Récord» y, al final, «▶ Jugar»
+     (grande b-verde). Recuerda la última selección. Cada juego decide qué opciones y cuántas dificultades tiene.
+   • NIVELES Y MAPA (también desde ☰ Pausa): compartido/mapa-niveles.js abre en la etapa del jugador; las listas de niveles van en 5 columnas
+     (opción montarMapa({ columnas: 5 }), filas de 5 en 5). «◀ México» y «◀ Mundo» (b-cielo) suben un paso dentro del mapa (Esc hace lo
+     mismo); el ☰ «Atrás» sale al juego con la capa «Comenzar». El mundo y sus 194 países están ocultos hasta terminar los 32 estados.
+   • PAUSA: ▶ Continuar · ♾️ Modo libre · 📋 Niveles · 🔄 Reiniciar nivel · (ℹ️ Info) · 🚪 Menú principal. En Modo libre solo Continuar y
+     «Salir a elegir tablero». «Menú principal» vuelve a la capa «Comenzar».
    • «👤 Iniciar sesión» (b3d txt b-azul): SIEMPRE en la esquina superior derecha.
    • NO se generan niveles hasta que los estándares del juego estén completos (sección 10 de ESTANDARES-juegos.md).
    =================================================================================================================== */
+.capa-comenzar { position: fixed; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: 0 12px; touch-action: none;
+  background: rgba(16, 17, 20, .38); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+.capa-comenzar[hidden] { display: none; }
+.capa-comenzar .b3d.grande { min-width: 200px; }
 
 /* ===================================================================================================================
    DIFICULTAD DE LOS NIVELES DEL MAPA (común en la mayoría de los juegos por niveles; ver sección 8 de ESTANDARES-juegos.md)
@@ -240,7 +244,7 @@ html.inmersivo.oscura {
 .btn-fondo { position: fixed; z-index: 6; bottom: max(14px, env(safe-area-inset-bottom)); left: max(10px, env(safe-area-inset-left)); }
 
 /* ===================================================================================================================
-   PANTALLAS DE MENÚ SOBRE LA MADERA (ESTÁNDAR; ESTANDARES-juegos.md, secciones 7 y 11). Las usan el menú principal y la pantalla de Modo libre.
+   PANTALLAS DE MENÚ SOBRE LA MADERA (ESTÁNDAR; ESTANDARES-juegos.md, secciones 7 y 11). Las usa la pantalla de Modo libre (y los menús principales antiguos de los juegos sin migrar).
    Sin velo oscuro: el texto va directo sobre la madera (var(--txt-fondo)) y los botones son los .b3d de siempre. Referencia: «Slither».
    Estructura:  <div class="pant-menu" id="menu">
                   <h1>🐍 Slither</h1>  <p>Una frase corta.</p>
@@ -268,27 +272,39 @@ html.inmersivo.oscura {
 @media (max-height: 520px) { .pant-menu { gap: 8px; padding-top: 56px; } .pant-menu h1, .pant-menu h2 { font-size: 24px; } .pant-menu p { max-width: 560px; font-size: 14px; } }
 
 /* ===================================================================================================================
-   BARRA DE INICIO (menú principal estándar; ESTANDARES-juegos.md, 7.1): tres botones pegados arriba del juego ya cargado.
-   Estructura:  <div class="barra-inicio" id="barra-inicio">
-                  <button class="b3d b-morado"><span class="b-ico">♾️</span><span class="b-rot">Modo libre</span></button>
+   VELO DE INICIO + BARRA DE JUEGO — ANTIGUO. Ya NO es el estándar (lo reemplazó la capa «Comenzar», arriba). Se conserva solo para los juegos que
+   todavía no se migran (p. ej. Deslizante, Spider); al migrar un juego se quita de su HTML y, cuando no quede ninguno, de este archivo.
+   (Antes: menú principal estándar; ESTANDARES-juegos.md, 7.0 y 7.1 de la versión anterior)
+   Estructura:  <div class="velo-inicio" id="velo-inicio" hidden>
+                  <div class="fila-menu">
+                    <button class="b3d b-morado"><span class="b-ico">♾️</span><span class="b-rot">Modo libre</span></button>
+                    <button class="b3d b-azul"><span class="b-ico">🗂️</span><span class="b-rot">Niveles</span></button>
+                  </div>
                   <button class="b3d central b-verde"><span class="b-ico">▶</span><span class="b-rot">Continuar</span></button>
-                  <button class="b3d b-azul"><span class="b-ico">🗂️</span><span class="b-rot">Niveles</span></button>
                 </div>
-   • --ini = lado de los botones laterales (56 px). El central mide el DOBLE (2 × --ini = 112 px) y va SIEMPRE en el centro. Separación: 4 px.
-   • Posición: lo más arriba posible. Con ≥ 640 px de ancho va en la fila superior (arriba al centro, entre las esquinas). En pantallas más
-     angostas (celular vertical) no cabe junto a 🎮 y las monedas/sesión, así que va justo debajo de esa fila (52 px más abajo); el ☰ está
-     oculto mientras la barra se ve, así que no estorba.
-   • Altura total ≈ 2 × --ini + 5 (sombra). El juego deja ese espacio libre encima de su tablero (ejemplo: #juego.con-barra en Deslizante).
-   • Celular horizontal bajo (alto ≤ 560 px): --ini baja a 46 px (central 92 px).
+                <div class="barra-juego fila-menu" hidden>  ← dentro del juego: los mismos dos botones, SIN Continuar
+                  <button class="b3d b-morado">…Modo libre…</button> <button class="b3d b-azul">…Niveles…</button>
+                </div>
+   • .velo-inicio cubre la ventana (z-index 4, bajo 🎮/☰ y los chips de arriba a la derecha): capa negra al 50 % + difuminado de 3 px, y bloquea
+     los toques: el juego de atrás se ve pero no se puede jugar. Centra su contenido; el botón central .central mide el DOBLE de --ini.
+   • --ini = lado de los botones cuadrados (56 px; 46 px en celular horizontal bajo). Separación de 4 px entre los dos cuadrados.
+   • .barra-juego: lo más arriba posible. ≥ 640 px de ancho va en la fila superior, centrada. En celular vertical va 52 px más abajo (no cabe junto a
+     🎮 y la sesión). En celular horizontal bajo va arriba, a la derecha de 🎮, y el juego pone sus cuadros de datos debajo.
    =================================================================================================================== */
-.barra-inicio { --ini: 56px; position: fixed; z-index: 6; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 4px; }
-.barra-inicio[hidden] { display: none; }
-.barra-inicio .b3d { --t: var(--ini); flex-direction: column; gap: 2px; padding: 0 2px; margin: 0 0 5px; font-weight: 800; }
-.barra-inicio .b-ico { font-size: calc(var(--ini) * .46); line-height: 1; }
-.barra-inicio .b-rot { position: relative; font-size: 10px; font-weight: 700; line-height: 1.1; text-align: center; white-space: nowrap; }
-.barra-inicio .b3d.central { --t: calc(var(--ini) * 2); border-radius: 22px; }
-.barra-inicio .central .b-ico { font-size: calc(var(--ini) * .9); }
-.barra-inicio .central .b-rot { font-size: 17px; font-weight: 800; }
-@media (max-width: 639px) { .barra-inicio { top: calc(max(8px, env(safe-area-inset-top)) + 52px); } }
-@media (orientation: landscape) and (max-height: 560px) { .barra-inicio { --ini: 46px; } .barra-inicio .central .b-rot { font-size: 14px; } }
+.velo-inicio { --ini: 56px; position: fixed; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  padding: 0 12px; background: rgba(8, 6, 4, .5); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); touch-action: none; }
+.velo-inicio[hidden], .barra-juego[hidden] { display: none; }
+.fila-menu { --ini: 56px; display: flex; align-items: flex-start; justify-content: center; gap: 4px; }
+.barra-juego { position: fixed; z-index: 6; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); }
+.velo-inicio .b3d, .barra-juego .b3d { --t: var(--ini); flex-direction: column; gap: 2px; padding: 0 2px; margin: 0 0 5px; font-weight: 800; }
+.velo-inicio .b-ico, .barra-juego .b-ico { font-size: calc(var(--ini) * .46); line-height: 1; }
+.velo-inicio .b-rot, .barra-juego .b-rot { position: relative; font-size: 10px; font-weight: 700; line-height: 1.1; text-align: center; white-space: nowrap; }
+.velo-inicio .b3d.central { --t: calc(var(--ini) * 2); border-radius: 22px; }
+.velo-inicio .central .b-ico { font-size: calc(var(--ini) * .9); }
+.velo-inicio .central .b-rot { font-size: 17px; font-weight: 800; }
+@media (max-width: 639px) { .barra-juego { top: calc(max(8px, env(safe-area-inset-top)) + 52px); } }
+@media (orientation: landscape) and (max-height: 560px) {
+  .velo-inicio, .fila-menu { --ini: 46px; }
+  .velo-inicio .central .b-rot { font-size: 14px; }
+  .barra-juego { top: max(8px, env(safe-area-inset-top)); left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; }
+}

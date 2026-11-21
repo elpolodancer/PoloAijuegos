@@ -1,0 +1,200 @@
+<!doctype html>
+<!-- Ruta: deslizante/index-deslizante.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Puzle deslizante</title>
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script> <!-- evita el parpadeo de la madera clara en modo oscuro -->
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    /* El fondo (madera clara u oscura) lo pone compartido/inmersivo.css; los textos sueltos usan --txt-fondo, --txt-fondo-suave y --sombra-txt */
+    main { color: var(--txt-fondo); }
+
+    /* Pantallas (inicio, niveles y juego): solo una visible a la vez */
+    .pantalla { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+      padding: calc(104px + env(safe-area-inset-top, 0px)) 12px calc(56px + env(safe-area-inset-bottom, 0px)); } /* 104px arriba: botones de navegación; 56px abajo: el ⛶ */
+
+    /* Navegación arriba a la izquierda: botones cuadrados solo con icono (🎮 azul oscuro, ☰ verde claro) */
+    .nav-juego .b3d { font-size: 20px; }
+    .b-azuloscuro { --c1: #6c8ee0; --c2: #2a4fa8; --c3: #122a66; }
+    .b-verdeclaro { --c1: #e4ffd6; --c2: #9be87a; --c3: #4aa22f; }
+
+    /* Niveles */
+    #pantalla-niveles, #pantalla-libre { justify-content: flex-start; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+    #pantalla-niveles h2, #pantalla-libre h2 { margin: 0; font-size: 1.4rem; }
+    /* Modo libre: tamaños disponibles */
+    .nota-libre { flex: none; width: min(100%, 520px); margin: 0; text-align: center; color: var(--txt-fondo-suave); font-size: .85rem; }
+    .rejilla-libre { flex: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 8px; width: min(100%, 520px); }
+    .rejilla-libre .b3d { width: 100%; --t: 46px; font-size: 15px; font-weight: 800; }
+    .grupo { flex: none; width: min(100%, 520px); }
+    .grupo h3 { margin: 8px 0 8px; font-size: 1rem; color: var(--txt-fondo-suave); }
+    .rejilla-niveles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px 8px; }
+    /* Cuadrados (el doble de alto que antes): número del nivel arriba y mejor tiempo abajo */
+    .rejilla-niveles .b3d { width: 100%; height: auto; aspect-ratio: 1 / 1; min-width: 0; padding: 0 2px; flex-direction: column; gap: 3px; border-radius: 16px; font-size: 16px; font-weight: 800; }
+    .nivel-num { position: relative; font-size: 24px; line-height: 1; }
+    .nivel-t { position: relative; font-size: 11px; font-weight: 700; line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; opacity: .95; }
+    .proximamente { flex: none; width: min(100%, 520px); margin: 6px 0 0; text-align: center; color: var(--txt-fondo-suave); font-size: .85rem; }
+
+    /* Juego */
+    /* Anterior / siguiente: arriba a la derecha, justo debajo de la sesión (cabe en los 104px de margen superior de la pantalla) */
+    .nav-nivel { position: fixed; z-index: 6; display: flex; gap: 8px; top: calc(max(8px, env(safe-area-inset-top)) + 42px); right: max(8px, env(safe-area-inset-right)); }
+    .nav-nivel[hidden] { display: none; }
+    /* Pantalla de juego: el TABLERO va centrado en la ventana (arriba 50 %, centrado en x) y ocupa todo el ancho en celular vertical (tapa la madera de los lados).
+       --T = espacio que se deja arriba y abajo (barra de juego + cuadros de datos); --S = lado del tablero. */
+    #juego { display: block; padding: 0; --T: calc(190px + env(safe-area-inset-top, 0px)); --S: max(200px, min(100vw, calc(100vh - 2 * var(--T)), 700px)); --S: max(200px, min(100vw, calc(100dvh - 2 * var(--T)), 700px)); }
+    .titulo-nivel { font-weight: 800; font-size: 1rem; text-align: center; }
+    .titulo-nivel small { display: block; color: var(--txt-fondo-suave); font-weight: 600; font-size: .75rem; }
+    /* Cuadros de movimientos, tiempo y mejor tiempo: justo debajo de la barra de juego (Modo libre · Niveles) */
+    .datos { position: absolute; left: 50%; transform: translateX(-50%); top: calc(max(8px, env(safe-area-inset-top)) + 127px); display: flex; justify-content: center; gap: 8px; width: min(calc(100% - 24px), 360px); }
+    .datos div { flex: 1; max-width: 130px; padding: 4px 8px; text-align: center; color: var(--suave); font-size: .7rem; background: linear-gradient(180deg, #3a3d45, #262830); border: 2px solid #121316; border-radius: 12px; box-shadow: 0 3px 0 #121316, inset 0 2px 0 rgba(255,255,255,.15); }
+    .datos b { display: block; color: var(--texto); font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+    /* Título del nivel, estrellas y mensajes: justo debajo del tablero */
+    .abajo { position: absolute; left: 50%; transform: translateX(-50%); top: calc(50% + var(--S) / 2 + 10px); width: min(calc(100% - 24px), 420px); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    #msg { margin: 0; min-height: 1.3em; text-align: center; font-size: .8rem; }
+    #reiniciar { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); margin: 0; }
+    #reiniciar:active { transform: translateX(-50%) translateY(4px); }
+
+    #tablero { --n: 3; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: var(--S);
+      aspect-ratio: 1 / 1; container-type: inline-size; background: #1a1b20; border: 2px solid var(--borde); border-radius: 16px; padding: 6px;
+      box-shadow: 0 6px 0 #0c0d0f, 0 12px 20px rgba(0,0,0,.5); touch-action: none; user-select: none; }
+    #fichas { position: relative; width: 100%; height: 100%; }
+    .ficha { position: absolute; top: 0; left: 0; width: calc(100% / var(--n)); height: calc(100% / var(--n)); padding: 3px;
+      transition: transform .16s ease-out; cursor: pointer; }
+    .ficha > span { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; border-radius: 12%;
+      font-weight: 800; color: #fff; font-size: calc(100cqw / var(--n) * .42); text-shadow: 0 2px 3px rgba(0,0,0,.35);
+      box-shadow: inset 0 -4px 0 rgba(0,0,0,.25), 0 2px 4px rgba(0,0,0,.3); }
+    .ficha.bien > span { outline: 3px solid rgba(255,255,255,.55); outline-offset: -3px; }
+    #victoria { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+      background: rgba(10,10,12,.88); border-radius: 14px; text-align: center; padding: 12px; color: var(--texto); } /* panel oscuro: texto claro en cualquier fondo */
+    #victoria h2 { margin: 0; font-size: 1.6rem; }
+    #victoria .botones { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+    #victoria { overflow-y: auto; justify-content: safe center; gap: 6px; }
+    #victoria h2 { font-size: 1.4rem; }
+
+    /* La sesión puede tener un nombre largo: se recorta con «…» para no tapar el botón de monedas ni «Menú principal» */
+    #sesion { display: inline-block; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 30px; }
+    #sesion:empty { display: none; }
+
+    /* ----- Estrellas: doradas y moradas (las moradas brillan con reflejo de arcoíris y centellean) ----- */
+    /* El tamaño se cambia con --e en el contenedor (.fila-est o su padre) */
+    .fila-est { display: inline-flex; align-items: center; gap: 3px; position: relative; }
+    .est { position: relative; display: inline-block; flex: none; width: var(--e, 16px); height: var(--e, 16px); }
+    .est::before { content: ""; position: absolute; inset: 0;
+      clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+    .est.vacia::before { background: rgba(255,255,255,.16); }
+    .est.oro { filter: drop-shadow(0 1px 1px rgba(0,0,0,.55)); }
+    .est.oro::before { background: linear-gradient(160deg, #fff6b0 0%, #ffc61f 45%, #c97a00 100%); }
+    .est.mor { filter: drop-shadow(0 0 3px rgba(200,130,255,.95)) drop-shadow(0 0 9px rgba(120,80,255,.6)); }
+    .est.mor::before {
+      background:
+        linear-gradient(115deg, transparent 38%, rgba(255,255,255,.95) 48%, rgba(255,255,255,0) 58%) 150% 0 / 260% 100% no-repeat, /* destello que cruza */
+        linear-gradient(135deg, rgba(255,70,200,.5), rgba(255,225,90,.42), rgba(70,255,170,.42), rgba(70,200,255,.5), rgba(180,70,255,.5), rgba(255,70,200,.5)) 0% 50% / 200% 200%, /* reflejo de arcoíris */
+        radial-gradient(circle at 35% 28%, #f0c8ff, #a52df0 50%, #5a0fa8);                                                                                                   /* base morada */
+      animation: reflejo 2.2s linear infinite; }
+    .est.mor::after { content: ""; position: absolute; inset: -35%; pointer-events: none; /* brillitos alrededor */
+      background:
+        radial-gradient(circle at 12% 22%, #fff 0 1px, transparent 1.7px),
+        radial-gradient(circle at 88% 30%, #ffd1f5 0 1px, transparent 1.7px),
+        radial-gradient(circle at 78% 86%, #c9f3ff 0 1px, transparent 1.7px),
+        radial-gradient(circle at 20% 80%, #fff2a8 0 1px, transparent 1.7px),
+        radial-gradient(circle at 50% 8%, #b8ffd9 0 1px, transparent 1.7px);
+      animation: centelleo 1.3s ease-in-out infinite alternate; }
+    @keyframes reflejo { to { background-position: -60% 0, 100% 50%, 0 0; } }
+    @keyframes centelleo { from { opacity: .2; transform: scale(.85) rotate(0deg); } to { opacity: 1; transform: scale(1.1) rotate(25deg); } }
+    .est.pop { animation: pop .55s cubic-bezier(.2,1.7,.4,1) both; animation-delay: calc(var(--i, 0) * .22s); }
+    @keyframes pop { from { transform: scale(0) rotate(-120deg); opacity: 0; } to { transform: none; opacity: 1; } }
+    /* Estela de brillantina que suelta cada estrella morada al ganar (la crea el JS) */
+    .chispa { position: absolute; width: var(--tam, 3px); height: var(--tam, 3px); border-radius: 50%; pointer-events: none; box-shadow: 0 0 6px 1px rgba(255,255,255,.9); animation: estela .9s ease-out forwards; }
+    @keyframes estela { from { opacity: 1; transform: translate(0,0) scale(1); } to { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(.2); } }
+
+    .meta-estrellas { display: flex; align-items: center; justify-content: center; gap: 8px; --e: 16px; color: var(--txt-fondo-suave); font-size: .75rem; }
+    html:not(.oscura) .meta-estrellas .est.vacia::before { background: rgba(90,50,20,.22); } /* estrella vacía visible sobre madera clara */
+    .rejilla-niveles .fila-est { --e: 12px; gap: 2px; }
+    .estrellas-vic { --e: 40px; }
+    .estrellas-vic .fila-est { gap: 8px; }
+    .monedas-vic { font-weight: 800; color: #ffe08a; }
+    .meta-vic { color: var(--suave); font-size: .8rem; }
+    @media (prefers-reduced-motion: reduce) { .est::before, .est::after, .est.pop, .chispa { animation: none !important; } }
+    @media (prefers-reduced-motion: reduce) { .ficha { transition: none; } }
+
+    /* ≥ 640 px de ancho: la barra de juego va en la fila superior, así que sobra espacio arriba */
+    @media (min-width: 640px) {
+      #juego { --T: calc(140px + env(safe-area-inset-top, 0px)); }
+      .datos { top: calc(max(8px, env(safe-area-inset-top)) + 75px); }
+    }
+    /* Celular horizontal: barra, cuadros y textos pasan a una columna a la izquierda y el tablero sigue centrado en la ventana */
+    @media (orientation: landscape) and (max-height: 560px) {
+      #juego { --S: max(160px, min(calc(100vh - 16px), calc(100vw - 508px), 700px)); --S: max(160px, min(calc(100dvh - 16px), calc(100vw - 508px), 700px)); }
+      .datos { left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; top: calc(max(8px, env(safe-area-inset-top)) + 57px); width: 190px; gap: 4px; }
+      .datos div { padding: 3px 4px; font-size: .6rem; }
+      .datos b { font-size: .95rem; }
+      .abajo { left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; top: calc(max(8px, env(safe-area-inset-top)) + 118px); width: 190px; }
+      #reiniciar { left: calc(64px + env(safe-area-inset-left, 0px)); transform: none; }
+      #reiniciar:active { transform: translateY(4px); }
+      #pantalla-niveles, #pantalla-libre { padding-top: calc(96px + env(safe-area-inset-top, 0px)); }
+    }
+  </style>
+</head>
+<body class="inmersivo" data-pantalla-auto>
+  <!-- Navegación estándar (compartido/inmersivo.css): «Juegos» siempre; «Menú principal» solo fuera del menú de inicio -->
+  <nav class="nav-juego">
+    <a class="b3d chico b-azuloscuro" href="../" title="Juegos: volver al portal" aria-label="Juegos: volver al portal"><span class="b-ico">🎮</span></a>
+    <button class="b3d chico b-verdeclaro" id="btn-menu" type="button" title="Volver al menú principal" aria-label="Volver al menú principal" hidden><span class="b-ico">☰</span></button>
+  </nav>
+  <div class="hud hud-der"><span class="chip" id="monedas" title="Monedas ganadas con las estrellas"></span><span class="chip" id="sesion"></span></div>
+  <!-- Nivel anterior / siguiente: solo dentro de un nivel (no en modo libre); cada botón aparece solo si ese nivel existe y está abierto -->
+  <div class="nav-nivel" id="nav-nivel" hidden>
+    <button class="b3d chico b-azul" id="btn-anterior" type="button" title="Nivel anterior" aria-label="Nivel anterior" hidden><span class="b-ico">◀</span></button>
+    <button class="b3d chico b-verde" id="btn-siguiente" type="button" title="Siguiente nivel" aria-label="Siguiente nivel" hidden><span class="b-ico">▶</span></button>
+  </div>
+
+  <!-- INICIO (estándar, compartido/inmersivo.css): el juego ya cargado se ve detrás, un poco difuminado y oscurecido, y no se puede jugar hasta tocar «Continuar».
+       Arriba del botón grande van Modo libre y Niveles. Todo el grupo va centrado en la pantalla. -->
+  <div class="velo-inicio" id="velo-inicio" hidden>
+    <div class="fila-menu">
+      <button class="b3d b-morado" id="btn-libre" type="button" title="Modo libre" aria-label="Modo libre"><span class="b-ico">♾️</span><span class="b-rot">Modo libre</span></button>
+      <button class="b3d b-azul" id="btn-niveles" type="button" title="Niveles" aria-label="Niveles"><span class="b-ico">🗂️</span><span class="b-rot">Niveles</span></button>
+    </div>
+    <button class="b3d central b-verde" id="btn-jugar" type="button"><span class="b-ico">▶</span><span class="b-rot">Jugar</span></button>
+  </div>
+  <!-- Ya dentro del juego: solo Modo libre y Niveles (sin Continuar), arriba; los cuadros de datos van justo debajo -->
+  <div class="barra-juego fila-menu" id="barra-juego" hidden>
+    <button class="b3d b-morado" id="btn-libre2" type="button" title="Modo libre" aria-label="Modo libre"><span class="b-ico">♾️</span><span class="b-rot">Modo libre</span></button>
+    <button class="b3d b-azul" id="btn-niveles2" type="button" title="Niveles" aria-label="Niveles"><span class="b-ico">🗂️</span><span class="b-rot">Niveles</span></button>
+  </div>
+
+  <main>
+    <section class="pantalla" id="pantalla-niveles" hidden>
+      <h2>Niveles</h2>
+      <div id="lista-niveles" style="display:contents"></div>
+    </section>
+
+    <section class="pantalla" id="pantalla-libre" hidden>
+      <h2>♾️ Modo libre</h2>
+      <p class="nota-libre">Tableros al azar, sin fin. Cada tamaño se abre al desbloquear su etapa en «Niveles».</p>
+      <div class="rejilla-libre" id="rejilla-libre"></div>
+    </section>
+
+    <section class="pantalla" id="juego" hidden>
+      <div class="datos">
+        <div>Movimientos<b id="movs">0</b></div>
+        <div>Tiempo<b id="tiempo">0:00</b></div>
+        <div>Mejor tiempo<b id="mejor">–</b></div>
+      </div>
+      <div id="tablero"><div id="fichas"></div></div>
+      <div class="abajo">
+        <div class="titulo-nivel" id="titulo"></div>
+        <div class="meta-estrellas" id="meta-estrellas" hidden></div>
+        <p id="msg"></p>
+      </div>
+      <button class="b3d chico b-oro" id="reiniciar" type="button" title="Reiniciar nivel" aria-label="Reiniciar nivel"><span class="b-ico">🔄</span></button>
+    </section>
+  </main>
+  <script type="module" src="juego-deslizante.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+</body>
+</html>

@@ -1,0 +1,630 @@
+// Ruta: slither/juego-slither.js
+// «Slither»: tú y bots en una arena redonda. Come bolitas para crecer; si tu cabeza toca el cuerpo de otra serpiente o la orilla, mueres
+// y te conviertes en comida. Los ajustes están aquí arriba.
+const ID = "slither";
+
+// ---------- AJUSTES ----------
+let R = 2600;                 // radio de la arena (lo fija el mapa elegido: ver MAPAS)
+let NUM_BOTS = 24;
+let NUM_COMIDA = 1500;        // bolitas fijas repartidas por la arena
+const M0 = 10;                // masa inicial (define el largo)
+const M_MIN = 12;             // al acelerar no se baja de esta masa
+const VEL = 190, VEL_TURBO = 330;   // px por segundo
+const GIRO = 4.2;             // rad/s de giro (las grandes giran menos)
+const DRENA = 1.4;            // masa que gasta el turbo por segundo
+const V_COMIDA = 0.35;        // masa por bolita normal
+const V_CADAVER = 0.7;        // fracción de la masa que suelta una serpiente al morir
+const DURA_SUELTA = 70;       // segundos que duran en el suelo las bolitas sueltas
+const CAS = 200;              // tamaño de casilla de búsqueda de comida
+const PUNTOS_POR_MASA = 10;   // 1 punto de perfil por cada 10 de masa máxima (menos el primero)
+const PUNTOS_LIBRE = false;   // ESTÁNDAR (ESTANDARES-juegos.md, 7.2): el Modo libre no da puntos de perfil (si no, se podría repetir sin límite). true = la regla antigua
+let NUM_ESPECIALES = 30;      // bolitas doradas repartidas por la arena (poco frecuentes)
+const V_ESPECIAL = V_COMIDA * 10;   // una dorada vale 10 bolitas normales
+const ESPERA_ESPECIAL = [8, 22];    // segundos que tarda en reaparecer (en otro sitio) una dorada que se comieron
+// 3 MAPAS (el pequeño es el de siempre). Comida y bots crecen con el AREA para que la densidad sea la misma.
+const MAPAS = [
+  { nombre: "Pequeño", R: 2600, bots: 24, comida: 1500, dorados: 30 },
+  { nombre: "Mediano", R: 3800, bots: 36, comida: 3200, dorados: 64 },
+  { nombre: "Grande", R: 5200, bots: 50, comida: 6000, dorados: 120 },
+];
+// 3 DIFICULTADES de los bots (la Normal es el comportamiento de siempre).
+//   espera [a, b]: cada cuántos segundos piensa un bot = a + azar·b (menos = reacciona más rápido)
+//   look: qué tan lejos ven (peligros, presas y comida) · caza: probabilidad de perseguir a una presa
+//   turbo: a qué distancia de su presa aceleran (0 = nunca) · giro y vel: multiplicadores de su giro y su velocidad
+//   rea [a, b]: segundos que tardan en reaparecer tras morir (a + azar·b) · masa: multiplicador del tamaño con el que nacen
+const DIFICULTADES = [
+  { nombre: "Fácil", espera: [0.28, 0.14], look: 0.7, caza: 0.25, turbo: 0, giro: 0.8, vel: 0.92, rea: [4, 4], masa: 0.5 },
+  { nombre: "Normal", espera: [0.1, 0.08], look: 1, caza: 0.7, turbo: 330, giro: 1, vel: 1, rea: [2, 3], masa: 1 },
+  { nombre: "Difícil", espera: [0.05, 0.04], look: 1.5, caza: 0.95, turbo: 420, giro: 1.12, vel: 1.04, rea: [1, 1.5], masa: 1.6 },
+];
+let cfg = { dif: 1, mapa: 0 }, DIF = DIFICULTADES[1], mundoCfg = "";
+let nivel = null;   // el nivel que se está jugando (de niveles-slither.js); null = Juego libre
+const claveCfg = () => { const c = nivel || cfg; return c.dif + "-" + c.mapa; };
+try { const g = JSON.parse(localStorage.getItem("slither_config")) || {}; cfg = { dif: Math.max(0, Math.min(2, Math.floor(g.dif))) || 0, mapa: Math.max(0, Math.min(2, Math.floor(g.mapa))) || 0 }; if (g.dif === undefined) cfg.dif = 1; } catch (e) {}
+function aplicarConfig() {
+  const c = nivel || cfg, M = MAPAS[c.mapa];
+  R = M.R; GW = Math.ceil(2 * R / CAS); NUM_BOTS = M.bots; NUM_COMIDA = M.comida; NUM_ESPECIALES = M.dorados; DIF = DIFICULTADES[c.dif];
+}
+
+const NOMBRES = ["Pepe","Lupita","Chuy","Nacho","Tona","Memo","Paco","Rosa","Beto","Güero","Mapache","Tlacuache","Colibrí","Ajolote","Nopal","Jaguar","Coyote","Quetzal","Churro","Taco","Elote","Mole","Pozole","Tamal","Piñata","Mariachi","Chile","Frijol","Mango","Tejón","Chapulín","Alebrije","Tejocote","Mezcal","Conejo","Venado","Zopilote","Ocelote","Cenzontle","Guajolote","Camote","Jícama","Tuna","Mamey","Chayote","Atole","Birria","Tlayuda","Cajeta","Pulque","Huarache","Sombrero","Tianguis","Tecolote"];
+
+import { encolarPuntos } from "../compartido/cola-puntos.js";
+import { crearMenuPausa } from "../compartido/menu-pausa.js";
+import { crearEtapas } from "../compartido/etapas-mapa.js";
+import { montarMapa } from "../compartido/mapa-niveles.js";
+import { nivelDe, TOTAL, POR_ETAPA, puntosNivel, abrev } from "./niveles-slither.js";
+
+// ---------- Elementos y récord ----------
+const $ = (id) => document.getElementById(id);
+const lienzo = $("lienzo"), ctx = lienzo.getContext("2d");
+let W = 0, H = 0, dpr = 1;
+function ajustar() { dpr = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight; lienzo.width = Math.round(W * dpr); lienzo.height = Math.round(H * dpr); }
+addEventListener("resize", ajustar); ajustar();
+
+const puntaje = (m) => Math.round(m * 10);
+// Progreso: { record, max, hecho } = récord del Juego libre, nivel más alto abierto y más alto terminado. Local primero y sincronizado
+// con la cuenta (compartido/progreso.js); al unir gana el mayor de cada dato. (Antes el récord era un número suelto en «slither_record».)
+const CLAVE_PROG = "slither_progreso_v1";
+const entero = (v, a, b, d) => Math.max(a, Math.min(b, Math.floor(Number(v)) || d));
+const normProg = (p) => { if (typeof p === "number") p = { record: p }; p = p || {}; return { record: entero(p.record, 0, 1e9, 0), max: entero(p.max, 1, TOTAL, 1), hecho: entero(p.hecho, 0, TOTAL, 0) }; };
+const unirProg = (a, b) => {
+  if (a == null && b == null) return null;
+  a = normProg(a); b = normProg(b);
+  return { record: Math.max(a.record, b.record), max: Math.max(a.max, b.max), hecho: Math.max(a.hecho, b.hecho) };
+};
+let prog = normProg(null);
+try { const g = localStorage.getItem(CLAVE_PROG); prog = normProg(g ? JSON.parse(g) : Number(localStorage.getItem("slither_record")) || null); } catch (e) {}
+let record = prog.record;
+const pintarRecord = () => { $("record").textContent = nivel ? "" : "Récord: " + Math.round(record); };
+let nube = null;
+function guardarProg() {
+  prog.record = Math.max(prog.record, record);
+  try { localStorage.setItem(CLAVE_PROG, JSON.stringify(prog)); } catch (e) {}
+  if (nube) nube.guardado();
+}
+pintarRecord();
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: CLAVE_PROG,
+    fusionar: unirProg,
+    alCambiar: (v) => { prog = normProg(v); record = prog.record; pintarRecord(); pintarMenu(); pintarOpciones(); mapaNiveles.refrescar(); },
+  });
+}).catch(() => {});
+try { $("nombre").value = localStorage.getItem("slither_nombre") || ""; } catch (e) {}
+
+// ---------- Utilidades ----------
+const azar = (a, b) => a + Math.random() * (b - a);
+const rad = (m) => Math.min(26, 8 + Math.sqrt(m) * 1.1);
+const nseg = (m) => Math.min(220, 12 + Math.floor(m * 1.2));
+const angDif = (a, b) => { const d = b - a; return Math.atan2(Math.sin(d), Math.cos(d)); };
+function puntoArena(margen) { const a = Math.random() * 6.2832, d = Math.sqrt(Math.random()) * (R - margen); return { x: Math.cos(a) * d, y: Math.sin(a) * d }; }
+
+// ---------- Estado ----------
+let serps = [], jug = null, estado = "menu", pausado = false;   // estado: menu (menú principal) | mapa (niveles) | inicio (Modo libre) | listo (nivel a la vista, esperando «Comenzar») | jugando | fin
+let pendEsp = [];   // momentos en que reaparecen las doradas comidas
+let t = 0, t0 = 0, maxM = 0, matados = 0, enviados = 0;
+let cam = { x: 0, y: 0, z: 0.8 };
+let tabla = [], tTabla = 0, rango = 0, tSuelta = 0;
+
+// ---------- Comida (casillas) ----------
+let GW = Math.ceil(2 * R / CAS);
+let casillas = [], sueltas = [];
+const idx = (x, y) => Math.max(0, Math.min(GW - 1, Math.floor((y + R) / CAS))) * GW + Math.max(0, Math.min(GW - 1, Math.floor((x + R) / CAS)));
+function meter(p) { p.k = idx(p.x, p.y); casillas[p.k].push(p); }
+function quitar(p) { const a = casillas[p.k], i = a.indexOf(p); if (i >= 0) { a[i] = a[a.length - 1]; a.pop(); } p.comido = true; }
+function ponerEspecial() { const q = puntoArena(60); meter({ x: q.x, y: q.y, v: V_ESPECIAL, h: 48, k: 0, esp: true }); }
+function crearComida() {
+  casillas = Array.from({ length: GW * GW }, () => []); sueltas = []; pendEsp = [];
+  for (let i = 0; i < NUM_ESPECIALES; i++) ponerEspecial();
+  for (let i = 0; i < NUM_COMIDA; i++) { const q = puntoArena(30); meter({ x: q.x, y: q.y, v: V_COMIDA, h: Math.floor(Math.random() * 360), k: 0 }); }
+}
+function soltar(x, y, v, h, vence) { const p = { x, y, v, h, k: 0, comido: false, vence }; meter(p); sueltas.push(p); }
+function comerComida(s) {
+  const hd = s.pts[0], er = rad(s.m) * 1.5 + 10;
+  const x0 = Math.max(0, Math.floor((hd.x - er + R) / CAS)), x1 = Math.min(GW - 1, Math.floor((hd.x + er + R) / CAS));
+  const y0 = Math.max(0, Math.floor((hd.y - er + R) / CAS)), y1 = Math.min(GW - 1, Math.floor((hd.y + er + R) / CAS));
+  for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+    const a = casillas[cy * GW + cx];
+    for (let i = a.length - 1; i >= 0; i--) {
+      const p = a[i];
+      if ((p.x - hd.x) ** 2 + (p.y - hd.y) ** 2 < er * er) {
+        s.m += p.v;
+        if (p.esp) { quitar(p); pendEsp.push(t + azar(ESPERA_ESPECIAL[0], ESPERA_ESPECIAL[1])); } else if (p.vence) quitar(p); else { a[i] = a[a.length - 1]; a.pop(); const q = puntoArena(30); p.x = q.x; p.y = q.y; meter(p); }
+      }
+    }
+  }
+}
+function comidaCerca(hd, rd) {
+  const x0 = Math.max(0, Math.floor((hd.x - rd + R) / CAS)), x1 = Math.min(GW - 1, Math.floor((hd.x + rd + R) / CAS));
+  const y0 = Math.max(0, Math.floor((hd.y - rd + R) / CAS)), y1 = Math.min(GW - 1, Math.floor((hd.y + rd + R) / CAS));
+  let mejor = null, md = rd * rd;
+  for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) for (const p of casillas[cy * GW + cx]) {
+    const d = (p.x - hd.x) ** 2 + (p.y - hd.y) ** 2 + (1 - Math.min(3, p.v) / 4) * 4000;
+    if (d < md) { md = d; mejor = p; }
+  }
+  return mejor;
+}
+
+// ---------- Serpientes ----------
+function crearSerp(x, y, ang, m, bot, nombre) {
+  const s = { bot, nombre, h: Math.floor(Math.random() * 360), m, ang, tgt: ang, turbo: false, pts: [], muerta: false, tc: 0, prox: 0, rea: 0 };
+  const sp = rad(m) * 0.6;
+  for (let i = 0; i < nseg(m); i++) s.pts.push({ x: x - Math.cos(ang) * i * sp, y: y - Math.sin(ang) * i * sp });
+  serps.push(s);
+  return s;
+}
+function aparecerBot(b) {
+  const q = puntoArena(300), nueva = crearSerp(q.x, q.y, Math.random() * 6.2832, M0 + Math.pow(Math.random(), 3) * 80 * DIF.masa, true, b.nombre);
+  Object.assign(b, nueva); serps.pop(); if (!serps.includes(b)) serps.push(b); b.rea = 0;
+}
+function mover(s, dt) {
+  const r = rad(s.m), sp = r * 0.6, n = nseg(s.m);
+  const giro = GIRO * Math.max(0.45, 1 - r / 60) * (s.bot ? DIF.giro : 1) * dt, d = angDif(s.ang, s.tgt);
+  s.ang += Math.max(-giro, Math.min(giro, d));
+  if (s.m <= M_MIN) s.turbo = false;
+  const v = (s.turbo ? VEL_TURBO : VEL) * (s.bot ? DIF.vel : 1), hd = s.pts[0];
+  hd.x += Math.cos(s.ang) * v * dt; hd.y += Math.sin(s.ang) * v * dt;
+  while (s.pts.length < n) s.pts.push({ x: s.pts[s.pts.length - 1].x, y: s.pts[s.pts.length - 1].y });
+  s.pts.length = n;
+  for (let i = 1; i < n; i++) {
+    const p = s.pts[i], q = s.pts[i - 1], dx = p.x - q.x, dy = p.y - q.y, l = Math.hypot(dx, dy);
+    if (l > sp) { p.x = q.x + dx / l * sp; p.y = q.y + dy / l * sp; }
+  }
+  if (s.turbo) {
+    s.m -= DRENA * dt; s.tc -= dt;
+    if (s.tc <= 0) { s.tc = 0.25; const c = s.pts[n - 1]; soltar(c.x, c.y, DRENA * 0.25 * 0.6, s.h, t + DURA_SUELTA); }
+  }
+}
+function chocó(s) {
+  const hd = s.pts[0], r = rad(s.m);
+  if (Math.hypot(hd.x, hd.y) > R - r * 0.3) return true;
+  for (const o of serps) {
+    if (o === s || o.muerta) continue;
+    const ro = rad(o.m), lim = o.pts.length * ro * 0.6 + ro + r, oh = o.pts[0];
+    if (Math.abs(oh.x - hd.x) > lim || Math.abs(oh.y - hd.y) > lim) continue;
+    const um = (ro + r) * 0.8, um2 = um * um;
+    for (let i = 1; i < o.pts.length; i += 2) { const p = o.pts[i]; if ((p.x - hd.x) ** 2 + (p.y - hd.y) ** 2 < um2) return true; }
+  }
+  return false;
+}
+function morirSerp(s, culpable) {
+  s.muerta = true;
+  const n = s.pts.length, v = Math.max(0.5, s.m * V_CADAVER / (n / 2));
+  for (let i = 0; i < n; i += 2) { const p = s.pts[i]; soltar(p.x + azar(-8, 8), p.y + azar(-8, 8), v, s.h, t + DURA_SUELTA); }
+  if (s === jug) finalizar();
+  else s.rea = DIF.rea[0] + Math.random() * DIF.rea[1];
+}
+
+// ---------- Cerebro de los bots ----------
+function pensar(s) {
+  const hd = s.pts[0], r = rad(s.m), look = (90 + r * 4) * DIF.look, c = Math.cos(s.ang), sn = Math.sin(s.ang);
+  s.turbo = false;
+  if (Math.hypot(hd.x, hd.y) > R - 320) { s.tgt = Math.atan2(-hd.y, -hd.x); return; }
+  let peligro = 0, cruz = 0, presa = null, dp = 520;
+  for (const o of serps) {
+    if (o === s || o.muerta) continue;
+    const ro = rad(o.m), oh = o.pts[0], dh = Math.hypot(oh.x - hd.x, oh.y - hd.y);
+    if (dh > look + o.pts.length * ro * 0.6 + ro) continue;
+    for (let i = 0; i < o.pts.length; i += 2) {
+      const p = o.pts[i], dx = p.x - hd.x, dy = p.y - hd.y, d = Math.hypot(dx, dy) || 1;
+      if (d < look + ro && (dx * c + dy * sn) / d > 0.25) { const w = 1 - d / (look + ro); if (w > peligro) { peligro = w; cruz = c * dy - sn * dx; } }
+    }
+    if (o.m < s.m * 0.8 && dh < dp) { presa = o; dp = dh; }
+  }
+  if (peligro > 0) { s.tgt = s.ang + (cruz > 0 ? -1.5 : 1.5); return; }
+  if (presa && s.m > 20 && Math.random() < DIF.caza) {       // intenta cerrarle el paso
+    s.tgt = Math.atan2(presa.pts[0].y + Math.sin(presa.ang) * 180 - hd.y, presa.pts[0].x + Math.cos(presa.ang) * 180 - hd.x);
+    s.turbo = dp < DIF.turbo && s.m > 30; return;
+  }
+  const f = comidaCerca(hd, (450 + r * 4) * DIF.look);
+  if (f) s.tgt = Math.atan2(f.y - hd.y, f.x - hd.x);
+  else s.tgt = s.ang + azar(-0.6, 0.6);
+}
+
+// ---------- Entrada ----------
+const teclas = {};
+let raton = { x: 0, y: 0, activo: false }, joy = null, turboRaton = false, turboBtn = false, turboTecla = false;
+function anguloEntrada() {
+  const x = (teclas.der ? 1 : 0) - (teclas.izq ? 1 : 0), y = (teclas.abajo ? 1 : 0) - (teclas.arriba ? 1 : 0);
+  if (x || y) return Math.atan2(y, x);
+  if (joy) { const dx = joy.x - joy.ox, dy = joy.y - joy.oy; return Math.hypot(dx, dy) > 8 ? Math.atan2(dy, dx) : null; }
+  if (raton.activo) { const dx = raton.x - W / 2, dy = raton.y - H / 2; return Math.hypot(dx, dy) > 10 ? Math.atan2(dy, dx) : null; }
+  return null;
+}
+const pos = (e) => { const b = lienzo.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
+lienzo.addEventListener("pointerdown", (e) => {
+  const p = pos(e);
+  if (e.pointerType === "mouse") { raton = { ...p, activo: true }; turboRaton = true; return; }
+  lienzo.setPointerCapture(e.pointerId); joy = { ox: p.x, oy: p.y, x: p.x, y: p.y };
+});
+lienzo.addEventListener("pointermove", (e) => {
+  const p = pos(e);
+  if (e.pointerType === "mouse") raton = { ...p, activo: true }; else if (joy) { joy.x = p.x; joy.y = p.y; }
+});
+const soltarPuntero = (e) => { if (e.pointerType === "mouse") turboRaton = false; else joy = null; };
+lienzo.addEventListener("pointerup", soltarPuntero); lienzo.addEventListener("pointercancel", soltarPuntero);
+const mapa = { ArrowLeft: "izq", a: "izq", A: "izq", ArrowRight: "der", d: "der", D: "der", ArrowUp: "arriba", w: "arriba", W: "arriba", ArrowDown: "abajo", s: "abajo", S: "abajo" };
+addEventListener("keydown", (e) => {
+  if (e.target && e.target.tagName === "INPUT") return;
+  if (mapa[e.key]) { teclas[mapa[e.key]] = true; e.preventDefault(); }
+  if (e.key === " ") { turboTecla = true; e.preventDefault(); }
+});
+addEventListener("keyup", (e) => { if (mapa[e.key]) teclas[mapa[e.key]] = false; if (e.key === " ") turboTecla = false; });
+addEventListener("blur", () => { for (const k in teclas) teclas[k] = false; joy = null; turboRaton = turboTecla = turboBtn = false; });
+const bt = $("turbo");
+bt.addEventListener("pointerdown", (e) => { e.preventDefault(); turboBtn = true; });
+for (const ev of ["pointerup", "pointerleave", "pointercancel"]) bt.addEventListener(ev, () => { turboBtn = false; });
+
+// ---------- Partida y menús ----------
+function crearMundo() {
+  aplicarConfig(); mundoCfg = claveCfg();
+  serps = []; crearComida();
+  for (let i = 0; i < NUM_BOTS; i++) { const b = { nombre: NOMBRES[i % NOMBRES.length] }; aparecerBot(b); }
+}
+function menuBoton() {   // ESTANDARES-juegos.md 7.4: oculto en el menú principal; «Pausa» en partida y «Atrás» en el resto
+  const b = $("btn-menu"), enPartida = estado === "jugando" || estado === "listo";
+  document.body.dataset.estado = estado;
+  b.hidden = estado === "menu";
+  $("txt-menu").textContent = enPartida ? "Pausa" : "Atrás";
+  b.title = enPartida ? "Pausa" : "Volver al menú principal";
+}
+const limpiar = () => { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, lienzo.width, lienzo.height); };   // sin partida a la vista: se ve la madera
+const mostrar = (id, si) => { $(id).hidden = !si; };
+// Punto de aparición del jugador lejos de las demás serpientes (así nadie nace encima de un bot)
+function puntoSeguro() {
+  let mejor = null, md = -1;
+  for (let i = 0; i < 25; i++) {
+    const q = puntoArena(600); let d = Infinity;
+    for (const s of serps) { if (s.muerta) continue; for (let k = 0; k < s.pts.length; k += 3) { const p = s.pts[k], dd = (p.x - q.x) ** 2 + (p.y - q.y) ** 2; if (dd < d) d = dd; } }
+    if (d > 500 * 500) return q;
+    if (d > md) { md = d; mejor = q; }
+  }
+  return mejor;
+}
+function iniciar(n) {   // n = número de nivel; sin n = Juego libre
+  nivel = n ? nivelDe(n) : null;
+  if (mundoCfg !== claveCfg()) crearMundo();   // el nivel trae sus propios bots y su propio mapa
+  let nombre;
+  if (n) { try { nombre = localStorage.getItem("slither_nombre"); } catch (e) {} nombre = nombre || "Jugador"; }
+  else { nombre = ($("nombre").value || "").trim().slice(0, 14) || "Jugador"; try { localStorage.setItem("slither_nombre", nombre); } catch (e) {} }
+  pintarRecord(); if (nivel) $("largo").textContent = "Largo: " + puntaje(M0) + " / " + nivel.meta;
+  if (jug) { jug.muerta = true; serps = serps.filter((s) => s !== jug); }
+  const q = puntoSeguro();
+  jug = crearSerp(q.x, q.y, Math.random() * 6.2832, M0, false, nombre);
+  cam.x = q.x; cam.y = q.y;
+  estado = "jugando"; pausado = false; t0 = t; maxM = M0; matados = 0; enviados = 0;
+  mostrar("menu", false); mostrar("inicio", false); mostrar("fin", false); mostrar("comenzar", false); bt.classList.add("activo"); menuBoton();
+}
+function enviarPerfil() {
+  if (nivel || !PUNTOS_LIBRE) return 0;   // en los niveles los puntos del perfil los da pasar el nivel (victoria), no la masa; el Modo libre no da
+  const debe = Math.max(0, Math.floor(maxM / PUNTOS_POR_MASA) - 1) - enviados;
+  if (debe <= 0) return 0;
+  enviados += debe; encolarPuntos(ID, debe);
+  import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {});
+  return debe;
+}
+const tiempoTxt = () => { const seg = Math.round(t - t0); return Math.floor(seg / 60) + ":" + String(seg % 60).padStart(2, "0"); };
+function botonesFin(enNivel, gano) {   // «Siguiente nivel», «Mapa de niveles» y «Cambiar mapa y bots» según el modo
+  const hay = enNivel && gano && nivel.n < TOTAL;
+  $("sig").hidden = !hay;
+  $("otra").className = "b3d txt " + (hay ? "b-azul" : "grande b-verde");   // el primer botón de la ventana es el más grande
+  $("otra").innerHTML = enNivel ? (gano ? '<span class="b-ico">🔄</span>&nbsp;Repetir nivel' : '<span class="b-ico">🔁</span>&nbsp;Reintentar') : '<span class="b-ico">🔄</span>&nbsp;Jugar otra vez';
+  $("aMapa").hidden = !enNivel;
+  $("aAjustes").hidden = enNivel;
+}
+function finalizar() {   // el jugador murió
+  if (estado !== "jugando") return;
+  estado = "fin"; bt.classList.remove("activo");
+  const pts = Math.max(0, Math.floor(maxM / PUNTOS_POR_MASA) - 1);
+  enviarPerfil();
+  $("finTitulo").textContent = "Te chocaron";
+  if (nivel) {
+    $("finTexto").textContent = "Llegaste a " + puntaje(maxM) + " de los " + nivel.meta + " puntos de la meta · Tiempo: " + tiempoTxt() + " · Serpientes derrotadas: " + matados + ".";
+  } else {
+    $("finTexto").textContent = "Largo máximo: " + puntaje(maxM) + " · Tiempo: " + tiempoTxt() +
+      " · Serpientes derrotadas: " + matados + (PUNTOS_LIBRE && pts ? " · +" + pts + " puntos para tu perfil (se envían cuando haya internet y hayas entrado con Google)" : "") +
+      (puntaje(maxM) >= record && maxM > M0 ? ". ¡Nuevo récord!" : ".");
+  }
+  botonesFin(!!nivel, false);
+  mostrar("fin", true); menuBoton();
+}
+function victoria() {   // llegó a la meta del nivel
+  const n = nivel.n, primera = n > prog.hecho;
+  estado = "fin"; bt.classList.remove("activo");
+  jug.muerta = true; serps = serps.filter((s) => s !== jug);
+  let pts = 0;
+  if (primera) {
+    prog.hecho = n; pts = puntosNivel(nivel.meta); encolarPuntos(ID, pts);
+    import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {});
+  }
+  prog.max = Math.max(prog.max, Math.min(TOTAL, n + 1));
+  guardarProg();
+  $("finTitulo").textContent = n >= TOTAL ? "🏆 ¡Terminaste todos los niveles!" : "🎉 ¡Nivel " + n + " superado!";
+  $("finTexto").textContent = "Meta: " + nivel.meta + " puntos · Tiempo: " + tiempoTxt() + " · Serpientes derrotadas: " + matados +
+    (pts ? " · +" + pts + " puntos para tu perfil (se envían cuando haya internet y hayas entrado con Google)" : " · (nivel repetido: no da puntos de perfil)");
+  botonesFin(true, true);
+  mostrar("fin", true); menuBoton();
+}
+// Cada salida de la partida termina en uno de tres sitios: menú principal, mapa de niveles o pantalla de Modo libre
+function salirPartida() {
+  enviarPerfil();
+  if (jug) { jug.muerta = true; serps = serps.filter((s) => s !== jug); jug = null; }
+  pausado = false; bt.classList.remove("activo");
+  mostrar("fin", false); mostrar("inicio", false); mostrar("menu", false); mostrar("info", false); mostrar("comenzar", false); mapaNiveles.cerrar();
+  limpiar();
+}
+function pintarMenu() { $("txt-continuar").textContent = "Continuar · nivel " + prog.max; }
+function irAlMenu() {   // MENÚ PRINCIPAL
+  salirPartida(); nivel = null; pintarRecord(); pintarMenu();
+  estado = "menu"; mostrar("menu", true); menuBoton();
+  try { $("m-libre").focus({ preventScroll: true }); } catch (e) {}
+}
+function irAListo(n) {   // ARRANQUE: el nivel n a la vista (los bots se mueven), sin jugador, con la capa «Comenzar»
+  nivel = nivelDe(n);
+  if (mundoCfg !== claveCfg()) crearMundo();
+  pintarRecord(); $("largo").textContent = "Largo: " + puntaje(M0) + " / " + nivel.meta;
+  jug = null; pausado = false;
+  estado = "listo"; mostrar("comenzar", true); menuBoton();
+  try { $("btn-comenzar").focus({ preventScroll: true }); } catch (e) {}
+}
+function irAlMapa(n) {   // lista de niveles de la etapa del nivel n (o la del jugador); al pasar el último de una etapa se ve subir el agua
+  const completada = !!n && n % POR_ETAPA === 0 && prog.hecho >= n;
+  salirPartida(); nivel = null; pintarRecord();
+  estado = "mapa"; mapaNiveles.abrir(n || prog.max, completada); menuBoton();
+}
+function irALibre() {   // MODO LIBRE
+  salirPartida(); nivel = null; pintarRecord(); pintarOpciones();
+  estado = "inicio"; mostrar("inicio", true); menuBoton();
+}
+// Pausa estándar (7.5). Niveles: Continuar · 🔄 Reiniciar nivel · 📋 Niveles · 🚪 Menú principal. Modo libre: solo Continuar y «Salir a elegir mapa y bots».
+const pausa = crearMenuPausa({
+  boton: $("btn-menu"), puedeAbrir: () => estado === "jugando" || estado === "listo",
+  alAbrir: () => { pausado = true; }, alContinuar: () => { pausado = false; },
+  extras: () => (nivel ? [
+    { icono: "🔄", texto: "Reiniciar nivel", clase: "b-azul", ayuda: "Vuelves a empezar este nivel con tus puntos de antes.", alElegir: () => { pausado = false; iniciar(nivel.n); } },
+    { icono: "📋", texto: "Niveles", clase: "b-azul", ayuda: "Vas a la zona de niveles. Se pierde lo avanzado en este nivel.", alElegir: () => irAlMapa(nivel.n) },
+  ] : []),
+  get textoSalir() { return nivel ? "Menú principal" : "Salir a elegir mapa y bots"; },
+  ayudaSalir: () => (nivel ? "Se pierde lo avanzado en este nivel." : "La partida termina; tu mejor largo se guarda en el récord."),
+  alSalir: () => (nivel ? irAlMenu() : irALibre()),
+});
+// ☰ fuera de una partida = «Atrás»: vuelve al menú principal (dentro de la partida lo atiende la pausa)
+$("btn-menu").addEventListener("click", () => { if (estado !== "jugando" && estado !== "listo") irAlMenu(); });
+$("btn-comenzar").addEventListener("click", () => { if (estado === "listo" && !pausado) iniciar(nivel.n); });
+// Menú principal (7.1)
+$("m-libre").addEventListener("click", irALibre);
+$("m-continuar").addEventListener("click", () => { mostrar("menu", false); iniciar(prog.max); });
+$("m-niveles").addEventListener("click", () => irAlMapa(prog.max));
+$("m-info").addEventListener("click", () => abrirInfo());
+$("aAjustes").addEventListener("click", irALibre);
+$("jugar").addEventListener("click", () => iniciar());
+$("otra").addEventListener("click", () => iniciar(nivel ? nivel.n : undefined));
+$("sig").addEventListener("click", () => iniciar(nivel.n + 1));
+$("aMapa").addEventListener("click", () => irAlMapa(nivel ? nivel.n : prog.max));
+$("nombre").addEventListener("keydown", (e) => { if (e.key === "Enter") iniciar(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden && estado === "jugando") enviarPerfil(); });
+addEventListener("pagehide", () => { if (estado === "jugando") enviarPerfil(); });
+
+// ---------- Actualización ----------
+function actualizar(dt) {
+  t += dt;
+  if (jug && !jug.muerta && estado === "jugando") {
+    const a = anguloEntrada(); if (a !== null) jug.tgt = a;
+    jug.turbo = (turboRaton || turboBtn || turboTecla) && jug.m > M_MIN;
+  }
+  for (const s of serps) {
+    if (s.muerta) { if (s.bot && (s.rea -= dt) <= 0) aparecerBot(s); continue; }
+    if (s.bot && t >= s.prox) { pensar(s); s.prox = t + DIF.espera[0] + Math.random() * DIF.espera[1]; }
+    mover(s, dt); comerComida(s);
+  }
+  // choques (el primero que choca cae; se revisa con las posiciones ya movidas)
+  const caen = serps.filter((s) => !s.muerta && chocó(s));
+  for (const s of caen) {
+    morirSerp(s);
+    if (s !== jug && jug && !jug.muerta) { const c = jug.pts[0], h = s.pts[0]; if (Math.hypot(c.x - h.x, c.y - h.y) < 700) matados++; }
+  }
+  serps = serps.filter((s) => !s.muerta || s.bot);
+  if (pendEsp.length) { const k = pendEsp.findIndex((x) => t >= x); if (k >= 0) { pendEsp.splice(k, 1); ponerEspecial(); } }
+  if (t >= tSuelta) { tSuelta = t + 3; sueltas = sueltas.filter((p) => { if (p.comido) return false; if (t > p.vence) { quitar(p); return false; } return true; }); }
+
+  if (estado === "jugando" && jug && !jug.muerta) {
+    if (jug.m > maxM) maxM = jug.m;
+    if (!nivel && puntaje(maxM) > record) { record = puntaje(maxM); pintarRecord(); guardarProg(); }
+    $("largo").textContent = "Largo: " + puntaje(jug.m) + (nivel ? " / " + nivel.meta : rango ? " · Puesto " + rango : "");
+    if (nivel && puntaje(jug.m) >= nivel.meta) victoria();
+  }
+  if (t >= tTabla) {
+    tTabla = t + 0.4;
+    const l = serps.filter((s) => !s.muerta).map((s) => ({ nombre: s.nombre, m: s.m, yo: s === jug })).sort((a, b) => b.m - a.m);
+    tabla = l.slice(0, 8);
+    const i = l.findIndex((x) => x.yo); rango = i >= 0 ? i + 1 : 0;
+    if (i >= 8) tabla.push(l[i]);
+  }
+  // cámara: sigue tu cabeza (o a la más larga en los menús)
+  let f = jug && !jug.muerta ? jug : null;
+  if (!f) for (const s of serps) if (!s.muerta && (!f || s.m > f.m)) f = s;
+  if (f) {
+    const hd = f.pts[0], zo = (Math.min(W, H) / 620) * Math.max(0.42, 1.05 - (rad(f.m) - 11) * 0.03);
+    cam.x += (hd.x - cam.x) * Math.min(1, dt * 8); cam.y += (hd.y - cam.y) * Math.min(1, dt * 8); cam.z += (zo - cam.z) * Math.min(1, dt * 2);
+  }
+}
+
+// ---------- Dibujo ----------
+function dibujarSerp(s, vx0, vx1, vy0, vy1) {
+  const r = rad(s.m), n = s.pts.length;
+  for (let i = n - 1; i >= 0; i--) {
+    const p = s.pts[i];
+    if (p.x < vx0 - r || p.x > vx1 + r || p.y < vy0 - r || p.y > vy1 + r) continue;
+    if (s.turbo && i % 2 === 0) { ctx.fillStyle = "hsla(" + s.h + ",90%,70%,.22)"; ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.5, 0, 6.2832); ctx.fill(); }
+    ctx.fillStyle = "hsl(" + s.h + ",78%," + ((i % 6 < 3 ? 52 : 44) + (s.turbo ? 10 : 0)) + "%)";
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.2832); ctx.fill();
+  }
+  const hd = s.pts[0], c = Math.cos(s.ang), sn = Math.sin(s.ang), e = r * 0.5;
+  for (const lado of [-1, 1]) {
+    const ex = hd.x + c * r * 0.45 - sn * lado * e, ey = hd.y + sn * r * 0.45 + c * lado * e;
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(ex, ey, r * 0.33, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = "#111"; ctx.beginPath(); ctx.arc(ex + c * r * 0.12, ey + sn * r * 0.12, r * 0.17, 0, 6.2832); ctx.fill();
+  }
+  if (r * cam.z > 7) {
+    const tam = 13 / cam.z; ctx.font = "700 " + tam + "px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+    ctx.lineWidth = tam * 0.16; ctx.strokeStyle = "rgba(0,0,0,.6)"; ctx.lineJoin = "round";
+    ctx.strokeText(s.nombre, hd.x, hd.y - r - 8 / cam.z); ctx.fillStyle = "#fff"; ctx.fillText(s.nombre, hd.x, hd.y - r - 8 / cam.z);
+  }
+}
+function dibujar() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);   // transparente: se ve la madera
+  const z = cam.z;
+  ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * (W / 2 - cam.x * z), dpr * (H / 2 - cam.y * z));
+  const vx0 = cam.x - W / 2 / z, vx1 = cam.x + W / 2 / z, vy0 = cam.y - H / 2 / z, vy1 = cam.y + H / 2 / z;
+  // arena redonda con cuadrícula
+  ctx.fillStyle = "#10151f"; ctx.beginPath(); ctx.arc(0, 0, R, 0, 6.2832); ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.arc(0, 0, R, 0, 6.2832); ctx.clip();
+  ctx.strokeStyle = "#192233"; ctx.lineWidth = 2; ctx.beginPath();
+  const G = 110;
+  for (let x = Math.floor(vx0 / G) * G; x <= vx1; x += G) { ctx.moveTo(x, vy0); ctx.lineTo(x, vy1); }
+  for (let y = Math.floor(vy0 / G) * G; y <= vy1; y += G) { ctx.moveTo(vx0, y); ctx.lineTo(vx1, y); }
+  ctx.stroke(); ctx.restore();
+  ctx.strokeStyle = "#ff5c7a"; ctx.lineWidth = 14; ctx.beginPath(); ctx.arc(0, 0, R + 7, 0, 6.2832); ctx.stroke();
+  // comida
+  const cx0 = Math.max(0, Math.floor((vx0 + R) / CAS)), cx1 = Math.min(GW - 1, Math.floor((vx1 + R) / CAS));
+  const cy0 = Math.max(0, Math.floor((vy0 + R) / CAS)), cy1 = Math.min(GW - 1, Math.floor((vy1 + R) / CAS));
+  for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) for (const p of casillas[cy * GW + cx]) {
+    if (p.vence && t > p.vence - 5 && Math.floor(t * 8) % 2) continue;
+    if (p.esp) { // bolita dorada: grande, con brillo que late
+      const l = 1 + 0.18 * Math.sin(t * 5 + p.x);
+      ctx.fillStyle = "rgba(255,214,64,.28)"; ctx.beginPath(); ctx.arc(p.x, p.y, 24 * l, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = "#ffd23f"; ctx.beginPath(); ctx.arc(p.x, p.y, 13, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = "#fff6bf"; ctx.beginPath(); ctx.arc(p.x - 3.5, p.y - 3.5, 4, 0, 6.2832); ctx.fill();
+      continue;
+    }
+    ctx.fillStyle = "hsl(" + p.h + ",90%,62%)"; ctx.beginPath(); ctx.arc(p.x, p.y, 4 + Math.min(8, p.v * 4), 0, 6.2832); ctx.fill();
+  }
+  // serpientes (las más cortas primero)
+  for (const s of serps.filter((q) => !q.muerta).sort((a, b) => a.m - b.m)) dibujarSerp(s, vx0, vx1, vy0, vy1);
+  // capa de pantalla
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (nivel && estado === "jugando" && t - t0 < 4) {   // al empezar un nivel: qué hay que hacer
+    ctx.globalAlpha = Math.min(1, 4 - (t - t0)); ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(0, H * 0.3, W, 70);
+    ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = "800 22px system-ui, sans-serif"; ctx.fillText("Nivel " + nivel.n + " · llega a " + nivel.meta + " puntos", W / 2, H * 0.3 + 25);
+    ctx.font = "600 14px system-ui, sans-serif"; ctx.fillText("Bots " + ["fáciles", "normales", "difíciles"][nivel.dif] + " · mapa " + MAPAS[nivel.mapa].nombre.toLowerCase(), W / 2, H * 0.3 + 52);
+    ctx.globalAlpha = 1;
+  }
+  const bx = W - 160, by = 62;
+  ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.roundRect(bx - 6, by, 156, 24 + tabla.length * 18, 10); ctx.fill();
+  ctx.font = "700 13px system-ui, sans-serif"; ctx.textBaseline = "middle"; ctx.textAlign = "center"; ctx.fillStyle = "#fff"; ctx.fillText("Mejores", bx + 72, by + 13);
+  tabla.forEach((f, i) => {
+    const y = by + 33 + i * 18;
+    ctx.fillStyle = f.yo ? "#ffe066" : "#e6ebff"; ctx.font = (f.yo ? "800 " : "600 ") + "12px system-ui, sans-serif";
+    ctx.textAlign = "left"; ctx.fillText((i < 8 ? i + 1 : rango) + ". " + f.nombre.slice(0, 11), bx, y);
+    ctx.textAlign = "right"; ctx.fillText(String(puntaje(f.m)), bx + 144, y);
+  });
+  if (estado === "jugando" && jug && !jug.muerta) {       // minimapa redondo (arriba del botón ⛶)
+    const S = 46, mx = W - S - 14, my = H - S - 78, k = S / R;
+    ctx.fillStyle = "rgba(0,0,0,.5)"; ctx.beginPath(); ctx.arc(mx, my, S, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = "#ffe066"; ctx.beginPath(); ctx.arc(mx + jug.pts[0].x * k, my + jug.pts[0].y * k, 3, 0, 6.2832); ctx.fill();
+  }
+  if (joy) {
+    ctx.strokeStyle = "rgba(255,255,255,.45)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(joy.ox, joy.oy, 60, 0, 6.2832); ctx.stroke();
+    const l = Math.min(60, Math.hypot(joy.x - joy.ox, joy.y - joy.oy)), a = Math.atan2(joy.y - joy.oy, joy.x - joy.ox);
+    ctx.fillStyle = "rgba(255,255,255,.55)"; ctx.beginPath(); ctx.arc(joy.ox + Math.cos(a) * l, joy.oy + Math.sin(a) * l, 20, 0, 6.2832); ctx.fill();
+  }
+}
+
+// ---------- Ciclo ----------
+let ultimo = 0;
+function cuadro(ahora) {
+  requestAnimationFrame(cuadro);
+  if (!ultimo) ultimo = ahora;
+  const dt = Math.min(0.05, (ahora - ultimo) / 1000); ultimo = ahora;
+  if (estado === "menu" || estado === "mapa" || estado === "inicio") return;   // pantallas sobre la madera (menú, niveles, Modo libre): no se simula ni se dibuja
+  if (!pausado) actualizar(dt);
+  dibujar();
+}
+// ---------- Info (ventana estándar «Cómo se juega»), mapa de niveles y Modo libre ----------
+// 22 600 niveles (100 por estado y por país, niveles-slither.js). El mapa (compartido/mapa-niveles.js) se abre desde «📋 Niveles»; el Modo libre, desde el menú principal.
+let previoInfo = null;
+function abrirInfo() { previoInfo = document.activeElement; mostrar("info", true); try { $("infoVolver").focus({ preventScroll: true }); } catch (e) {} }
+function cerrarInfo() { if ($("info").hidden) return; mostrar("info", false); try { if (previoInfo && previoInfo.focus) previoInfo.focus({ preventScroll: true }); } catch (e) {} }
+$("infoVolver").addEventListener("click", cerrarInfo);
+$("info").addEventListener("click", (e) => { if (e.target === $("info")) cerrarInfo(); });
+addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("info").hidden) { e.preventDefault(); e.stopImmediatePropagation(); cerrarInfo(); } }, true);
+const mapaNiveles = montarMapa({
+  prefijo: ID,
+  etapas: crearEtapas({ porEtapa: POR_ETAPA }),
+  progreso: () => ({ max: prog.max, hecho: prog.hecho }),
+  jugarNivel: (n) => { mapaNiveles.cerrar(); iniciar(n); },
+  // el color indica los bots, el número la meta de puntos y la letra el mapa
+  infoNivel: (n) => {
+    const L = nivelDe(n);
+    return { sub: abrev(L.meta) + " " + "PMG"[L.mapa], clase: ["b-verde", "b-azul", "b-rojo"][L.dif],
+      aria: "bots " + ["fáciles", "normales", "difíciles"][L.dif] + ", mapa " + MAPAS[L.mapa].nombre.toLowerCase() + ", meta " + L.meta + " puntos" };
+  },
+  leyenda: "Color = bots (verde fáciles · azul normales · rojo difíciles) · número = puntos de meta · P / M / G = tamaño del mapa",
+  alInfo: abrirInfo,
+  avisoPrincipal: () => "Nivel " + prog.max + ": llega a " + nivelDe(prog.max).meta + " puntos",
+  alCambiarVista: () => menuBoton(),
+});
+// ---------- Opciones del Modo libre: dificultad de los bots y tamaño del mapa (elegido b-oro on, resto b-cielo) ----------
+function pintarOpciones() {
+  for (const g of ["dif", "mapa"]) for (let i = 0; i < 3; i++) { const b = $("op-" + g + i); b.className = "b3d txt " + (cfg[g] === i ? "b-oro on" : "b-cielo"); b.setAttribute("aria-pressed", String(cfg[g] === i)); }
+  const M = MAPAS[cfg.mapa];
+  $("infoOp").textContent = "Bots " + DIFICULTADES[cfg.dif].nombre.toLowerCase() + " · mapa " + M.nombre.toLowerCase() + " con " + M.bots + " bots. En el Modo libre no hay metas ni puntos de perfil.";
+  $("libreRecord").textContent = "🏆 Récord: " + Math.round(record);
+}
+for (const g of ["dif", "mapa"]) for (let i = 0; i < 3; i++) $("op-" + g + i).addEventListener("click", () => {
+  if (cfg[g] === i) return;
+  cfg[g] = i;
+  try { localStorage.setItem("slither_config", JSON.stringify(cfg)); } catch (e) {}
+  pintarOpciones();   // el mundo se arma al darle a Jugar (iniciar compara la combinación)
+});
+// ---------- Sesión: «👤 Iniciar sesión» (arriba a la derecha del menú principal). Se carga con import() para que el menú funcione sin internet ----------
+import("../compartido/jugador.js").then((m) => {
+  let usuario = null;
+  m.alCambiarSesion((u) => {
+    usuario = u;
+    $("txt-sesion").textContent = u ? "Cerrar sesión" : "Iniciar sesión";
+    $("btn-sesion").title = u ? "Cerrar la sesión de " + (u.displayName || "Google") : "Iniciar sesión con Google";
+  });
+  $("btn-sesion").addEventListener("click", async () => {
+    try { if (usuario) await m.salir(); else await m.entrar(); } catch (e) { console.warn("sesión:", e.code || e.message); }
+  });
+}).catch(() => { $("btn-sesion").addEventListener("click", () => { $("txt-sesion").textContent = "Sin conexión"; setTimeout(() => { $("txt-sesion").textContent = "Iniciar sesión"; }, 2500); }); });
+pintarOpciones(); pintarMenu();
+// Arranque: directo al nivel donde va el jugador (o el 1), con la capa «Comenzar». El menú principal se alcanza desde ☰ Pausa → Menú principal.
+irAListo(prog.max);
+requestAnimationFrame(cuadro);
+
+// ---------- Herramienta de desarrollo: calibración de las metas (no hace nada si la dirección no termina en #calibrar) ----------
+// Abre index-slither.html#calibrar y en la consola:   await __calibrar(50, 12)
+// Simula «minutos» de juego por cada combinación de mapa y bots con «pilotos» jugadores automáticos (la IA de los bots, nivel Normal, que
+// reaparecen al morir) y mide el PICO de Largo de cada vida. Devuelve la tabla CALIBRACION lista para pegar en niveles-slither.js. README-slither.md.
+if (location.hash === "#calibrar") {
+  const sonda = async (mapa, dif, minutos, pilotos) => {
+    const guardado = cfg; cfg = { dif, mapa }; nivel = null; crearMundo();
+    const normal = DIFICULTADES[1], real = DIF, picos = [];
+    const nuevo = () => { const q = puntoSeguro(), s = crearSerp(q.x, q.y, Math.random() * 6.2832, M0, false, "piloto"); s.t0 = t; s.pico = M0; s.prox = 0; return s; };
+    let pil = Array.from({ length: pilotos }, nuevo);
+    const pasos = Math.round(minutos * 60 / 0.016);
+    for (let i = 0; i < pasos; i++) {
+      for (const s of pil) if (!s.muerta && t >= s.prox) { DIF = normal; pensar(s); DIF = real; s.prox = t + 0.1 + Math.random() * 0.08; }
+      actualizar(0.016);
+      pil = pil.map((s) => { if (s.m > s.pico) s.pico = s.m; if (!s.muerta) return s; picos.push([puntaje(s.pico), Math.round(t - s.t0)]); return nuevo(); });
+      if (i % 3000 === 0) await new Promise((r) => setTimeout(r));
+    }
+    cfg = guardado; crearMundo();
+    return picos;
+  };
+  window.__sonda = sonda;
+  window.__calibrar = async (minutos = 50, pilotos = 12) => {
+    const T = [[], [], []]; let vidas = 0;
+    for (let m = 0; m < 3; m++) for (let d = 0; d < 3; d++) {
+      const a = (await sonda(m, d, minutos, pilotos)).map((x) => x[0]).sort((x, y) => x - y); vidas += a.length;
+      T[m][d] = Array.from({ length: 19 }, (_, i) => Math.round(a[Math.min(a.length - 1, Math.floor(((i + 1) / 20) * a.length))] / 10) * 10);
+      console.log(MAPAS[m].nombre, DIFICULTADES[d].nombre, a.length + " vidas");
+    }
+    console.log("vidas medidas:", vidas);
+    return JSON.stringify(T);
+  };
+}

@@ -1,0 +1,113 @@
+<!doctype html>
+<!-- Ruta: 2048/index-2048.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>2048</title>
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    body.inmersivo { touch-action: none; }
+    #juego { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 100px 12px calc(60px + env(safe-area-inset-bottom, 0px)); }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: var(--ancho); }
+    h1 { margin: 0; font-size: 2.6rem; line-height: 1; letter-spacing: -1px; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    .marcas { display: flex; gap: 8px; }
+    .marcas div { min-width: 74px; padding: 5px 10px; text-align: center; background: linear-gradient(180deg, #3a3d45, #262830); border: 2px solid #121316; border-radius: 12px; box-shadow: 0 3px 0 #121316, inset 0 2px 0 rgba(255,255,255,.15); }
+    .marcas small { display: block; color: var(--suave); font-size: .7rem; }
+    .marcas b { font-size: 1.15rem; }
+    .barra2 { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; width: var(--ancho); }
+    #acciones { display: flex; gap: 8px; align-items: center; }
+    #tablero { position: relative; flex: none; background: #1a1b20; border-radius: 16px; box-shadow: 0 6px 0 #0c0d0f, 0 12px 20px rgba(0,0,0,.5); }
+    .celda { position: absolute; background: #2c2f37; border-radius: 10px; }
+    .ficha { position: absolute; left: 0; top: 0; display: flex; align-items: center; justify-content: center; border-radius: 10px; font-weight: 800; color: #fff; box-shadow: inset 0 -4px 0 rgba(0,0,0,.18), inset 0 2px 0 rgba(255,255,255,.18); transition: transform var(--desliza, 150ms) ease-out; will-change: transform; }
+    .ficha span { display: block; }
+    .ficha.nueva span { animation: aparece .18s .1s backwards; }
+    .ficha.suma span { animation: pop .18s; }
+    @keyframes aparece { from { transform: scale(0); } to { transform: scale(1); } }
+    @keyframes pop { 50% { transform: scale(1.25); } }
+    /* Con «reducir movimiento» se quitan el pop y la aparición, pero NO el deslizamiento: es lo que muestra que la ficha se movió y se sumó */
+    @media (prefers-reduced-motion: reduce) { .ficha span { animation: none !important; } }
+    .ayuda { margin: 0; width: var(--ancho); color: var(--txt-fondo-suave); font-size: .8rem; text-align: center; }
+    #velo { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 20px; text-align: center; background: rgba(10,10,12,.86); }
+    #velo h2 { margin: 0; font-size: 1.8rem; }
+    #velo p { margin: 0; color: var(--suave); }
+    #velo .fila { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+    /* Menú principal y selección de tablero (estándar: ESTANDARES-juegos.md, sección 7) */
+    .pantalla { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 100px 16px 16px; overflow-y: auto; touch-action: pan-y; }
+    .pantalla > :first-child { margin-top: auto; }
+    .pantalla > :last-child { margin-bottom: auto; }
+    .pantalla .b3d { min-width: 230px; }
+    #pantalla-tamanos h2 { margin: 0 0 6px; font-size: 1.6rem; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    #tamanos { display: flex; flex-direction: column; gap: 10px; }
+    /* Modo libre: elegir tablero */
+    #pantalla-tamanos p { margin: 0; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
+    /* Capa de inicio: cubre la partida (transparentosa) con el botón verde «Comenzar». Queda por debajo de 🎮, ☰ y los avisos. */
+    .nav-juego { z-index: 9; }
+    .capa-comenzar { position: fixed; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; background: rgba(16,17,20,.38); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+    .capa-comenzar[hidden] { display: none; }
+    .capa-comenzar .b3d { min-width: 200px; }
+    #aviso { position: fixed; z-index: 8; left: 50%; transform: translateX(-50%); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 70px); max-width: min(92vw, 420px); padding: 10px 16px; font-size: 14px; font-weight: 700; text-align: center; color: #fff; background: #101114ee; border: 2px solid #3b3e46; border-radius: 14px; pointer-events: none; }
+    #aviso[hidden] { display: none; }
+    @media (max-height: 560px) {
+      .pantalla { padding: calc(10px + env(safe-area-inset-top, 0px)) 130px 10px; gap: 8px; }
+      #tamanos { display: grid; grid-template-columns: repeat(3, auto); }
+      .pantalla .b3d { min-width: 150px; }
+    }
+    /* Celular en horizontal (poco alto): tablero a la izquierda y controles a la derecha (🎮 Juegos y ☰ quedan libres a la izquierda) */
+    @media (orientation: landscape) and (max-height: 520px) {
+      #juego { display: grid; grid-template-columns: auto minmax(0, 280px); grid-template-rows: auto auto 1fr; align-content: center; justify-content: center; align-items: start; gap: 10px 22px;
+        padding: calc(8px + env(safe-area-inset-top, 0px)) 12px calc(8px + env(safe-area-inset-bottom, 0px)) calc(130px + env(safe-area-inset-left, 0px)); }
+      #juego > header { grid-column: 2; grid-row: 1; width: auto; }
+      .barra2 { grid-column: 2; grid-row: 2; width: auto; }
+      .ayuda { grid-column: 2; grid-row: 3; width: auto; text-align: left; }
+      #tablero { grid-column: 1; grid-row: 1 / 4; align-self: center; }
+      h1 { font-size: 2rem; }
+    }
+  </style>
+</head>
+<body class="inmersivo" data-pantalla-auto>
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Portal de Juegos</a>
+    <button class="b3d txt b-cielo" id="btn-menu" type="button" title="Pausa"><span class="b-ico">☰</span> <span id="txt-menu">Pausa</span></button>
+  </nav>
+  <section id="pantalla-tamanos" class="pantalla" aria-label="Elige el tablero" hidden>
+    <h2>♾️ Modo libre</h2>
+    <p>Elige las medidas del tablero.</p>
+    <div id="tamanos" role="group" aria-label="Tamaño del tablero"></div>
+  </section>
+  <main id="juego" hidden>
+    <header>
+      <h1>2048</h1>
+      <div class="marcas">
+        <div><small>Puntos</small><b id="pts">0</b></div>
+        <div><small>Mejor</small><b id="mejor">0</b></div>
+      </div>
+    </header>
+    <div class="barra2">
+      <div id="acciones">
+        <button class="b3d chico b-oro" id="deshacer" type="button" title="Deshacer" aria-label="Deshacer"><span class="b-ico">↶</span></button>
+        <button class="b3d chico b-rojo" id="nueva" type="button" title="Nueva partida" aria-label="Nueva partida"><span class="b-ico">🔄</span></button>
+      </div>
+    </div>
+    <div id="tablero" aria-label="Tablero"></div>
+    <p class="ayuda">Desliza el dedo (o usa las flechas / WASD). Junta dos números iguales para sumarlos y llega a 2048.</p>
+  </main>
+  <!-- CAPA DE INICIO: al abrir el juego se ve la partida, tapada por esta capa con el botón verde -->
+  <div id="comenzar" class="capa-comenzar" hidden>
+    <button class="b3d txt grande b-verde" id="btn-comenzar" type="button"><span class="b-ico">▶</span> Comenzar</button>
+  </div>
+  <p id="aviso" role="status" hidden></p>
+  <div id="velo" hidden>
+    <h2 id="veloTitulo"></h2>
+    <p id="veloTexto"></p>
+    <p id="msg"></p>
+    <div class="fila" id="veloBotones"></div>
+  </div>
+  <script type="module" src="juego-2048.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>

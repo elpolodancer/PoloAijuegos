@@ -21,6 +21,7 @@
 //     infoNivel: (n) => ({ sub, clase, aria, sinMarca }), // cómo se ve el botón del nivel n: sub = texto chico bajo el número, clase = b-verde, b-azul…,
 //                                              //   aria = texto para lectores de pantalla, sinMarca = true quita el ✓ de los terminados
 //     leyenda: "texto sobre la lista de niveles",
+//     columnas: 5,                             // columnas fijas en la lista de niveles de cada etapa (sin esto, las que quepan en la pantalla)
 //     botonesExtra: [{ icono, texto, clase, fn }], // van a la derecha de «Continuar» (por ejemplo ♾️ Juego libre)
 //     alInfo: () => { ... },                   // botón «Info» de la vista principal
 //     avisoPrincipal: () => "texto",           // línea de información bajo el título de la vista principal
@@ -327,6 +328,7 @@ export function montarMapa(o) {
     const p = prog();
     if (o.leyenda) cuerpo.appendChild(h("p", "m-leyenda", o.leyenda));
     const rej = h("div", "m-rej");
+    if (o.columnas > 0) { rej.style.gridTemplateColumns = "repeat(" + o.columnas + ",minmax(0,1fr))"; rej.style.maxWidth = Math.min(880, o.columnas * 84) + "px"; }   // filas de «columnas» en «columnas»
     let actual = null;
     for (let k = 1; k <= NIVELES_POR_ETAPA; k++) {
       const n = base + k, inf = (o.infoNivel && o.infoNivel(n)) || {};

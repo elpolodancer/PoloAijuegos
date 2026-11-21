@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es" class="inmersivo">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#d9a866">
+<title>Spider</title>
+<script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+<link rel="stylesheet" href="../compartido/estilos.css">
+<link rel="stylesheet" href="../compartido/inmersivo.css">
+<style>
+/* Respaldo del velo de inicio: copia de las reglas de compartido/inmersivo.css (si ese archivo ya las trae, no cambia nada; se puede borrar este bloque cuando esté actualizado) */
+[hidden] { display: none !important; }
+.velo-inicio { --ini: 56px; position: fixed; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 0 12px; background: rgba(8, 6, 4, .5); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); touch-action: none; }
+.fila-menu { --ini: 56px; display: flex; align-items: flex-start; justify-content: center; gap: 4px; }
+.velo-inicio .b3d { --t: var(--ini); flex-direction: column; gap: 2px; padding: 0 2px; margin: 0 0 5px; font-weight: 800; }
+.velo-inicio .b-ico { font-size: calc(var(--ini) * .46); line-height: 1; }
+.velo-inicio .b-rot { position: relative; font-size: 10px; font-weight: 700; line-height: 1.1; text-align: center; white-space: nowrap; }
+.velo-inicio .b3d.central { --t: calc(var(--ini) * 2); border-radius: 22px; }
+.velo-inicio .central .b-ico { font-size: calc(var(--ini) * .9); }
+.velo-inicio .central .b-rot { font-size: 17px; font-weight: 800; }
+@media (orientation: landscape) and (max-height: 560px) { .velo-inicio, .fila-menu { --ini: 46px; } .velo-inicio .central .b-rot { font-size: 14px; } }
+.pantalla { position: fixed; inset: 0; }
+.pantalla[hidden] { display: none; }
+/* Modo libre (pantalla de menú sobre la madera estándar; zona reservada arriba-izquierda ≈ 190 × 92). El menú principal es el velo de inicio (.velo-inicio, de inmersivo.css) */
+.capa { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 104px 16px 72px; overflow-y: auto; text-align: center; color: var(--txt-fondo); }
+.capa h1, .capa h2 { margin: 0; font-size: clamp(1.8rem, 7vw, 2.6rem); text-shadow: var(--sombra-txt); }
+.capa p { margin: 0; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
+.grupo { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.rotulo { font-size: .95rem; font-weight: 700; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+.fila { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.capa .fila .b3d.txt { --t: 44px; }
+.nota { min-height: 2.6em; max-width: 440px; font-size: .85rem; }
+.record-libre { font-weight: 800; color: var(--txt-fondo) !important; }
+.info-texto { margin: 0 0 14px; text-align: left; font-size: .9rem; line-height: 1.4; color: #e3e5ea; }
+.info-texto p { margin: 0 0 8px; color: inherit; text-shadow: none; }
+.info-texto ul { margin: 0 0 8px; padding-left: 18px; }
+/* Arriba a la derecha: monedas y 👤 Iniciar sesión (solo fuera de la partida; en partida están los marcadores) */
+#hud-sesion { z-index: 6; }
+body.jugando #hud-sesion { display: none; }
+/* Con el velo de inicio puesto (no se está jugando) el juego de atrás se ve pero no se usa: sin marcadores ni botones de ayuda encima del velo */
+body:not(.jugando) #juego .hud, body:not(.jugando) #juego .barra-inf { visibility: hidden; }
+/* Mesa */
+/* Tablero = fila superior + mesa de columnas. La fila superior NO tiene fondo: son cartas como las de la partida, con los mismos límites
+   que las columnas (series terminadas desde el borde izquierdo de la 1.ª columna; el mazo, carta boca abajo, sobre la última columna).
+   Su alto y las medidas las ajusta juego-spider.js (medidas). */
+#tablero { position: absolute; left: 0; right: 0; top: 100px; bottom: 68px; display: flex; flex-direction: column; } /* a todo el ancho: sin bordes de madera a los lados */
+@media (min-aspect-ratio: 1/1) { #tablero { left: 196px; top: 52px; } } /* 196: «🎮 Portal de Juegos» + ☰ miden ≈ 190 de ancho */
+#barra { position: relative; flex: none; height: 56px; margin-bottom: 6px; }
+#series { position: absolute; inset: 0; pointer-events: none; }
+#mesa { position: relative; flex: 1; min-height: 0; }
+.fantasma { pointer-events: none; will-change: transform; }
+/* Brillo de la serie terminada: trazo delgado luminoso alrededor de cada carta (dura toda la animación) y chispas que se sueltan */
+.fantasma.brillo::after { content: ""; position: absolute; inset: -3px; border-radius: 9px; border: 2px solid #fff4a8; pointer-events: none;
+  box-shadow: 0 0 9px 2px rgba(255,214,64,.9), inset 0 0 6px rgba(255,214,64,.7); animation: brillar .6s ease-in-out infinite alternate; }
+@keyframes brillar { from { opacity: .6; } to { opacity: 1; } }
+.fantasma.apagando::after { animation: none; opacity: 0; transition: opacity .3s; }
+.chispa { position: absolute; z-index: 200; pointer-events: none; border-radius: 50%; background: radial-gradient(circle, #fff 0 30%, #ffe36a 55%, rgba(255,200,40,0) 75%); }
+.chispa.estrella { border-radius: 0; background: #fff3a8; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
+.mazo { position: absolute; left: var(--x9, 0px); top: 0; width: var(--cw, 34px); height: var(--ch, 48px); padding: 0; cursor: pointer; touch-action: manipulation;
+  background: repeating-linear-gradient(45deg, #2b4d9b 0 4px, #3b63c4 4px 8px); border: 1px solid #14285c; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.4); } /* = una carta boca abajo de la partida */
+.mazo:active:not(:disabled) { transform: translateY(1px); }
+.mazo:disabled { opacity: .35; cursor: default; }
+.mazo:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.mazo-n { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); min-width: 20px; padding: 0 5px; font: 800 11px/16px system-ui, sans-serif; text-align: center; color: #fff; background: #1b1d22; border: 2px solid #fff; border-radius: 999px; }
+.col { position: absolute; top: 0; bottom: 0; }
+.hueco { position: absolute; left: 0; top: 0; border: 2px dashed var(--txt-fondo-suave); border-radius: 6px; opacity: .55; }
+.carta { position: absolute; left: 0; display: flex; justify-content: flex-start; align-items: flex-start; padding: 2px 3px; font-weight: 800; line-height: 1; color: #1b1d22; background: linear-gradient(180deg, #fff, #ecebe6); border: 1px solid #555; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+.carta.roja { color: #c4261d; }
+.carta .pl { position: absolute; left: 0; right: 0; bottom: 6%; text-align: center; opacity: .85; }
+.carta.dorso { background: repeating-linear-gradient(45deg, #2b4d9b 0 4px, #3b63c4 4px 8px); border-color: #14285c; }
+.carta.sel { outline: 3px solid #ffb020; outline-offset: -1px; transform: translateY(-3px); z-index: 3; }
+/* Avisos sobre la mesa: recuadro ROJO delgado con triple parpadeo (tramo bloqueado), recuadro VERDE (pista de movimiento)
+   y «Repartir» en AMARILLO OSCURO cuando ya no quedan movimientos. Los recuadros no reciben toques. */
+.zona { position: absolute; pointer-events: none; opacity: 0; border: 2px solid #e0201b; border-radius: 8px; box-shadow: 0 0 5px rgba(224,32,27,.6); }
+.zona-mal { animation: triple .42s steps(1, end) 3 forwards; }
+@keyframes triple { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 0; } }
+.zona-pista { border-color: #16a34a; box-shadow: 0 0 8px rgba(22,163,74,.9); animation: pulso 1s ease-in-out infinite; }
+.zona-dest { border-style: dashed; }
+@keyframes pulso { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+.alerta-rep { outline: 4px solid #b8860b; outline-offset: 3px; animation: amarillo .8s ease-in-out infinite; }
+@keyframes amarillo { 50% { outline-color: rgba(184,134,11,.1); } }
+@media (prefers-reduced-motion: reduce) { .zona-mal, .zona-pista { animation: none; opacity: 1; } .alerta-rep { animation: none; } }
+.barra-inf { position: fixed; z-index: 5; bottom: max(14px, env(safe-area-inset-bottom)); left: 64px; right: 64px; display: flex; justify-content: center; align-items: center; gap: 12px; pointer-events: none; }
+.barra-inf > * { pointer-events: auto; }
+.chip small { margin-right: 4px; }
+/* Estrellas y metas al ganar un nivel (ventana sobre el tablero) */
+.estrellas { margin: 6px 0 2px; font-size: 2rem; letter-spacing: .12em; color: #ffd34d; text-shadow: 0 2px 0 rgba(0,0,0,.5); }
+.estrellas .no { color: #8d92a0; text-shadow: none; }
+.sobre-texto .meta { font-size: .85rem; color: #c9ccd3; }
+.sobre-texto .meta.ok { color: #fff4c2; }
+#toast { position: fixed; z-index: 8; left: 50%; bottom: 80px; transform: translateX(-50%); padding: 8px 16px; font-weight: 800; color: #fff; background: rgba(20,22,26,.9); border-radius: 999px; }
+#toast[hidden] { display: none; }
+</style>
+</head>
+<body class="inmersivo">
+<nav class="nav-juego" aria-label="Navegación">
+  <a class="b3d b-azuloscuro" href="../" title="Volver al portal de juegos" aria-label="Volver al portal de juegos"><span class="b-ico">🎮</span></a>
+  <button class="b3d b-cielo" id="btn-menu" type="button" title="Pausa" aria-label="Pausa" hidden><span class="b-ico">☰</span></button>
+</nav>
+
+<!-- Modo libre: pantalla propia (no desplegable) -->
+<main class="pantalla capa" id="libre" hidden>
+  <h2>♾️ Modo libre</h2>
+  <p>Repartos al azar sin fin. No da monedas ni puntos.</p>
+  <div class="grupo"><span class="rotulo">Palos</span><div class="fila" id="palos" role="group" aria-label="Palos de la baraja"></div></div>
+  <div class="grupo"><span class="rotulo">Dificultad</span><div class="fila" id="dificultades" role="group" aria-label="Dificultad del reparto"></div></div>
+  <p id="desc-dif" class="nota"></p>
+  <p class="record-libre">🏆 Récord: <span id="mejores">–</span></p>
+  <button class="b3d txt grande b-verde" id="b-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
+</main>
+
+<div class="hud hud-der" id="hud-sesion">
+  <span id="monedas-barra" class="chip chip-monedas" title="Tus monedas"><span class="moneda"></span><span id="monedas-n">0</span></span>
+  <button id="entrar" class="b3d chico txt b-azul" type="button" hidden title="Entrar con Google para guardar puntos"><span class="b-ico">👤</span> Iniciar sesión</button>
+</div>
+
+<section class="pantalla" id="juego" hidden aria-label="Partida">
+  <div class="hud hud-der">
+    <span class="chip" id="c-tiempo">0:00</span>
+    <span class="chip"><small>Mov.</small><span id="c-movs">0</span></span>
+    <span class="chip"><small>Series</small><span id="c-series">0/8</span></span>
+  </div>
+  <div id="tablero">
+    <div id="barra" aria-label="Series terminadas y mazo de repartos">
+      <div id="series" aria-hidden="true"></div>
+      <button class="mazo" id="b-repartir" type="button" title="Repartir" aria-label="Repartir una carta en cada columna"><span class="mazo-n" id="n-rep">5</span></button>
+    </div>
+    <div id="mesa"></div>
+  </div>
+  <div class="barra-inf">
+    <button class="b3d txt b-azul" id="b-deshacer" type="button"><span class="b-ico">↶</span> <span id="t-deshacer">Deshacer</span><span class="b-info" id="p-deshacer" hidden></span></button>
+    <button class="b3d txt b-oro" id="b-pista" type="button"><span class="b-ico">💡</span> <span id="t-pista">Pista</span><span class="b-info" id="p-pista" hidden></span></button>
+    <span class="chip chip-monedas" id="chip-monedas-juego" title="Tus monedas" hidden><span class="moneda"></span><span id="monedas-juego">0</span></span>
+    <span class="chip" id="c-estado"></span>
+  </div>
+</section>
+<!-- Menú principal = VELO DE INICIO sobre el juego ya cargado (ESTANDARES-juegos.md, 7.0 y 7.1; estilos en compartido/inmersivo.css) -->
+<div class="velo-inicio" id="velo-inicio" role="dialog" aria-label="Menú principal" hidden>
+  <div class="fila-menu">
+    <button class="b3d b-morado" id="b-libre" type="button" title="Modo libre"><span class="b-ico">♾️</span><span class="b-rot">Modo libre</span></button>
+    <button class="b3d b-azul" id="b-niveles" type="button" title="Niveles"><span class="b-ico">🗂️</span><span class="b-rot">Niveles</span></button>
+  </div>
+  <button class="b3d central b-verde" id="b-continuar" type="button"><span class="b-ico">▶</span><span class="b-rot" id="txt-continuar">Continuar</span></button>
+  <button class="b3d chico b-cielo" id="b-info" type="button" title="Cómo se juega"><span class="b-ico">ℹ️</span><span class="b-rot">Info</span></button>
+</div>
+<div id="toast" hidden role="status"></div>
+
+<!-- Ventana «Cómo se juega» -->
+<div id="info-fondo" class="pausa-fondo" hidden role="dialog" aria-modal="true" aria-label="Cómo se juega">
+  <div class="pausa-panel">
+    <h2>ℹ️ Cómo se juega</h2>
+    <div class="info-texto">
+      <p>Forma escaleras del mismo palo de K a A en las columnas; cada escalera completa se quita. Gana quien quita las 8 series.</p>
+      <ul>
+        <li>Toca un tramo de cartas y luego la columna donde quieres ponerlo. Solo se mueven tramos del mismo palo y en orden.</li>
+        <li>Una carta va sobre otra con un valor más alto (no importa el palo); en una columna vacía cabe cualquiera.</li>
+        <li>El mazo reparte una carta en cada columna (5 veces) y no se puede repartir si hay una columna vacía.</li>
+        <li>↶ Deshacer y 💡 Pista: en Fácil y Normal son gratis e ilimitados, y si pasas 15 segundos sin mover aparece una pista sola.</li>
+        <li>En Difícil y Experto son boosts de pago (monedas) con un tope por intento de nivel; en Maestro no hay deshacer y la pista es de pago.</li>
+        <li>La primera vez que pasas un nivel ganas monedas (más cuanto más difícil). Repetirlo no da monedas.</li>
+        <li>Cada nivel guarda tu mejor tiempo y tiene 3 estrellas: pasarlo, pasarlo en el tiempo del nivel y un reto que cambia de nivel en nivel. Las estrellas no dan monedas.</li>
+      </ul>
+      <p>Con 1 palo es lo más fácil; con 4, lo más difícil. En el Modo libre no hay monedas ni puntos, el deshacer es gratis (menos en «Maestro») y la pista también.</p>
+    </div>
+    <div class="pausa-opciones"><button id="info-ok" class="b3d txt b-verde" type="button">Entendido</button></div>
+  </div>
+</div>
+
+<script type="module" src="juego-spider.js"></script>
+<script type="module" src="../compartido/fondo-madera.js"></script>
+<script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>

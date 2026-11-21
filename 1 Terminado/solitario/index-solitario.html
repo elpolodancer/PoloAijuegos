@@ -1,0 +1,222 @@
+<!doctype html>
+<!-- Ruta: solitario/index-solitario.html (página del juego «solitario»)
+     Menú principal estándar (ESTANDARES-juegos.md, secciones 1, 2, 7 y 9): madera clara/oscura, 🎮 Portal de Juegos, ☰ Pausa/Atrás,
+     ♾️ Modo libre · ▶ Continuar · 📋 Niveles · ℹ️ Info, 💰 monedas y 👤 Iniciar sesión arriba a la derecha. -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Solitario</title>
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <link rel="stylesheet" href="estilos-solitario.css" />
+  <link rel="stylesheet" href="mesa-solitario.css" />
+  <style>
+    /* Esta hoja va DESPUÉS de estilos-solitario.css y mesa-solitario.css: solo adapta la página al modo inmersivo.
+       El fondo de html/body lo pone la madera estándar (inmersivo.css + fondo-madera.js): aquí no se define ninguno. */
+
+    /* Marcadores: solo se ven durante la partida (body.jugando) */
+    .solo-juego { display: none !important; }
+    body.jugando .solo-juego { display: inline-flex !important; }
+    body.jugando div.solo-juego { display: flex !important; }
+    body.jugando #entrar { display: none !important; }   /* «👤 Iniciar sesión» es del menú principal; en partida no hay sitio */
+    .hud .chip { height: 30px; padding: 0 7px; font-size: 13px; }
+    .hud .chip small { margin-right: 3px; font-size: 13px; }
+    .hud-der { align-items: flex-start; }
+    .hud-der .chip { height: 34px; font-size: 15px; }
+    .hud-der .chip .moneda { margin-right: 6px; }
+
+    /* Fila de marcadores: justo debajo de 🎮 Portal de Juegos + ☰ Pausa (zona reservada ≈ 190 × 92) */
+    .hud-juego { top: calc(max(8px, env(safe-area-inset-top)) + 96px); left: max(8px, env(safe-area-inset-left)); gap: 5px; flex-wrap: wrap; max-width: calc(100vw - 16px); }
+    /* Nivel / modo y récord: debajo de las monedas (arriba a la derecha) */
+    .hud-titulo { top: calc(max(8px, env(safe-area-inset-top)) + 44px); right: max(8px, env(safe-area-inset-right)); flex-direction: column; align-items: flex-end; gap: 4px; }
+    #titulo-partida { margin: 0; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #titulo-partida:empty { display: none; }
+
+    /* Botones de la partida: abajo y centrados, entre 🌙 (izquierda) y ⛶ (derecha), que son zona reservada */
+    .hud-abajo { left: 66px; right: 66px; justify-content: center; flex-wrap: wrap; gap: 6px; }
+    .hud .b3d.chico { --t: 40px; }
+    .hud-abajo .b3d .b-info { top: -9px; right: -9px; min-width: 18px; padding: 0 4px; font-size: 10px; line-height: 14px; }
+    #boost.on .b-info { display: none; }
+
+    /* Mensaje flotante de la partida: reaparece con cada texto nuevo y se desvanece solo (lo reinicia el JS) */
+    #estado { position: fixed; z-index: 4; left: 50%; transform: translateX(-50%); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 52px); width: min(92vw, 440px); margin: 0; padding: 8px 12px; font-size: 12.5px; line-height: 1.35; text-align: center; color: #fff; background: #101114e6; border: 2px solid #3b3e46; border-radius: 12px; pointer-events: none; }
+    #estado:empty { display: none; }
+    #estado.flota { animation: desv .6s 8s forwards; }
+    @keyframes desv { to { opacity: 0; visibility: hidden; } }
+    @media (prefers-reduced-motion: reduce) { #estado.flota { animation-duration: .01s; } }
+
+    /* Aviso corto (por ejemplo «🚧 Los niveles todavía no están creados»): por encima del mapa y de los menús */
+    #aviso { position: fixed; z-index: 8; left: 50%; transform: translateX(-50%); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 70px); max-width: min(92vw, 420px); padding: 10px 16px; font-size: 14px; font-weight: 700; text-align: center; color: #fff; background: #101114ee; border: 2px solid #3b3e46; border-radius: 14px; pointer-events: none; }
+
+    /* Mesa: ocupa toda la ventana. El ancho de carta (--w) se calcula para que quepan 7 columnas
+       y también las pilas más largas (≈10,6 veces el ancho de una carta) sin scroll. */
+    #tablero {
+      --w: min(calc((100vw - 16px) / 7.6), calc((100vh - 214px) / 10.6), 84px);
+      --w: min(calc((100vw - 16px) / 7.6), calc((100dvh - 214px) / 10.6), 84px);
+      position: fixed; inset: 0; overflow: hidden; border: 0; border-radius: 0; box-shadow: none;
+      align-content: start; justify-content: center;
+      padding: calc(env(safe-area-inset-top, 0px) + 136px) 8px calc(env(safe-area-inset-bottom, 0px) + 64px);
+    }
+
+
+    /* Capa de inicio: cubre la partida (transparentosa) con el botón verde «Comenzar». Queda por debajo de 🎮 y ☰. */
+    .capa-comenzar { position: fixed; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center;
+      background: rgba(16, 17, 20, .38); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+    .capa-comenzar[hidden] { display: none; }
+    .capa-comenzar .b3d.grande { min-width: 200px; }
+    body.esperando #estado { display: none; }
+
+    /* Pantallas de menú: capas a pantalla completa sobre la madera (sin fondo propio), con scroll interno */
+    .capa { position: fixed; inset: 0; z-index: 3; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
+      padding: calc(env(safe-area-inset-top, 0px) + 104px) 16px calc(env(safe-area-inset-bottom, 0px) + 72px);
+      color: var(--txt-fondo); }
+    .capa.centrada { display: flex; }
+    .capa.centrada > .panel { margin: auto; width: min(100%, 340px); }
+    .panel { gap: 14px; }
+    .panel h1, .panel h2 { margin: 0; font-size: 1.7rem; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    .panel p { color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
+    .menu-col { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 6px; }
+    .menu-col .b3d.grande { width: 100%; }
+    .menu-col .b3d.grande .b-ico { font-size: 1.25em; }
+    .menu-col .b3d.info { --t: 44px; }
+
+    /* Modo libre */
+    .grupo { display: flex; flex-direction: column; gap: 8px; }
+    .rotulo { font-size: .95rem; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    .fila-botones { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+    .fila-botones .b3d { --t: 44px; }
+    .nota { min-height: 2.6em; font-size: .85rem; }
+    .record-libre { font-weight: 800; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+
+    /* Ventana «Cómo se juega» (usa los estilos .pausa-* de inmersivo.css) */
+    .info-texto { margin: 0 0 14px; text-align: left; font-size: .9rem; line-height: 1.4; color: #e3e5ea; }
+    .info-texto p { margin: 0 0 8px; }
+    .info-texto ul { margin: 0 0 8px; padding-left: 18px; }
+
+    /* Celulares angostos en vertical: marcadores compactos */
+    @media (max-width: 420px) and (orientation: portrait) {
+      .hud .chip { padding: 0 5px; font-size: 12px; }
+      .hud .chip small { margin-right: 2px; font-size: 12px; }
+      .hud-der .chip { font-size: 14px; }
+    }
+
+    /* Celular en horizontal (poco alto): marcadores en columna bajo ☰, botones de la partida en una columna a la derecha
+       (sobre ⛶) y la mesa usa casi todo el alto. */
+    @media (orientation: landscape) and (max-height: 520px) {
+      #tablero {
+        --w: min(calc((100vw - 420px) / 7.6), calc((100vh - 14px) / 10.6), 84px);
+        --w: min(calc((100vw - 420px) / 7.6), calc((100dvh - 14px) / 10.6), 84px);
+        padding: calc(env(safe-area-inset-top, 0px) + 6px) 8px calc(env(safe-area-inset-bottom, 0px) + 8px);
+      }
+      .hud-juego { flex-direction: column; align-items: flex-start; gap: 4px; flex-wrap: nowrap; }
+      .hud-abajo { left: auto; right: max(8px, env(safe-area-inset-right)); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 52px); justify-content: flex-end; flex-direction: column-reverse; flex-wrap: wrap; gap: 2px 6px; max-height: calc(100dvh - 190px); }
+      #estado { left: auto; transform: none; right: max(8px, env(safe-area-inset-right)); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 50px);
+        width: min(22vw, 200px); font-size: 11.5px; text-align: left; }
+      .capa { padding-top: calc(env(safe-area-inset-top, 0px) + 100px); }
+    }
+  </style>
+</head>
+<body class="inmersivo" data-pantalla-auto>
+  <!-- Navegación estándar (arriba a la izquierda): 🎮 siempre; ☰ solo fuera del menú principal («Pausa» en partida, «Atrás» en el resto) -->
+  <nav class="nav-juego" aria-label="Navegación">
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Portal de Juegos</a>
+    <button class="b3d txt b-cielo" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> <span id="txt-menu">Pausa</span></button>
+  </nav>
+
+  <!-- Arriba a la derecha: monedas y, siempre al final (a la derecha), 👤 Iniciar sesión -->
+  <div class="hud hud-der">
+    <span id="monedas-barra" class="chip chip-monedas" title="Tus monedas"><span class="moneda"></span><span id="monedas-n">0</span></span>
+    <button id="entrar" class="b3d txt b-azul" type="button" hidden title="Entrar con Google para guardar puntos"><span class="b-ico">👤</span> Iniciar sesión</button>
+  </div>
+
+  <!-- Marcadores de la partida (solo en partida) -->
+  <div class="hud hud-juego solo-juego">
+    <span class="chip" title="Puntos"><small>⭐</small><b id="marcador">0</b></span>
+    <span class="chip" title="Movimientos"><small>👣</small><b id="movs">0</b></span>
+    <span class="chip" title="Tiempo"><small>⏱</small><b id="tiempo">0:00</b></span>
+    <span id="chip-recic" class="chip" title="Reciclajes del mazo"><small>↻</small><b id="recic">∞</b></span>
+  </div>
+  <div class="hud hud-titulo solo-juego">
+    <span class="chip" id="titulo-partida"></span>
+    <span class="chip" id="record-wrap" title="Tu mejor tiempo" hidden><small>🏆</small><b id="record">–</b></span>
+  </div>
+
+  <!-- Botones de la partida (abajo, al centro; 🌙 queda a la izquierda y ⛶ a la derecha) -->
+  <div class="hud hud-abajo solo-juego">
+    <button id="nueva" class="b3d chico b-azul" type="button" aria-label="Nueva partida" title="Nueva partida"><span class="b-ico">🔄</span></button>
+    <button id="deshacer" class="b3d chico b-oro" type="button" aria-label="Deshacer" title="Deshacer"><span class="b-ico">↩️</span></button>
+    <button id="boost" class="b3d chico b-morado" type="button" hidden aria-label="Boost: deshacer sin límite" title="Boost: deshacer sin límite"><span class="b-ico">⚡</span><span class="b-info">10🪙</span></button>
+    <button id="rellenar" class="b3d chico b-verde" type="button" hidden aria-label="Rellenar todo" title="Rellenar todo"><span class="b-ico">✨</span></button>
+    <button id="siguiente" class="b3d chico b-verde" type="button" hidden aria-label="Siguiente nivel" title="Siguiente nivel"><span class="b-ico">➡️</span></button>
+  </div>
+
+  <main style="padding:0;max-width:none;margin:0">
+    <!-- Menú principal: ♾️ Modo libre · ▶ Continuar · 📋 Niveles · ℹ️ Info -->
+    <section id="vista-menu" class="capa centrada">
+      <div class="panel">
+        <h1>🃏 Solitario</h1>
+        <p>Ordena todas las cartas en las 4 bases.</p>
+        <div class="menu-col">
+          <button id="ir-libre" class="b3d txt grande b-morado" type="button"><span class="b-ico">♾️</span> Modo libre</button>
+          <button id="ir-continuar" class="b3d txt grande b-verde" type="button"><span class="b-ico">▶</span> <span id="txt-continuar">Continuar · nivel 1</span></button>
+          <button id="ir-niveles" class="b3d txt grande b-azul" type="button"><span class="b-ico">📋</span> Niveles</button>
+          <button id="ir-info" class="b3d txt info b-cielo" type="button"><span class="b-ico">ℹ️</span> Info</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Modo libre: pantalla propia (no desplegable) -->
+    <section id="vista-libre" class="capa centrada" hidden>
+      <div class="panel">
+        <h2>♾️ Modo libre</h2>
+        <p>Repartos al azar sin fin. No da monedas ni puntos.</p>
+        <div class="grupo">
+          <span class="rotulo">Dificultad</span>
+          <div id="fila-dif" class="fila-botones"></div>
+        </div>
+        <p id="nota-dif" class="nota"></p>
+        <p class="record-libre">🏆 Récord: <span id="libre-record">–</span></p>
+        <button id="libre-jugar" class="b3d txt grande b-verde" type="button"><span class="b-ico">▶</span> Jugar</button>
+      </div>
+    </section>
+
+    <!-- Partida: la mesa ocupa toda la ventana -->
+    <section id="vista-juego" hidden>
+      <div id="tablero" class="tablero"></div>
+      <div id="capa-comenzar" class="capa-comenzar" hidden>
+        <button id="btn-comenzar" class="b3d txt grande b-verde" type="button"><span class="b-ico">▶</span> Comenzar</button>
+      </div>
+      <p id="estado">Arrastra una carta, o tócala y luego toca el lugar donde quieres ponerla. Toca una carta seleccionada otra vez para subirla a la base.</p>
+    </section>
+  </main>
+
+  <!-- Ventana «Cómo se juega» -->
+  <div id="info-fondo" class="pausa-fondo" hidden role="dialog" aria-modal="true" aria-label="Cómo se juega">
+    <div class="pausa-panel">
+      <h2>ℹ️ Cómo se juega</h2>
+      <div class="info-texto">
+        <p>Sube todas las cartas a las 4 bases, cada palo en orden, del A al K.</p>
+        <ul>
+          <li>En las columnas, las cartas bajan alternando color (roja sobre negra) y de mayor a menor.</li>
+          <li>Solo un K puede ocupar una columna vacía.</li>
+          <li>Toca el mazo para robar. Cuando se acaba, tócalo otra vez para reciclar el descarte (según la dificultad hay un límite).</li>
+          <li>Arrastra una carta, o tócala y luego toca su destino. Tocarla otra vez la sube a la base.</li>
+        </ul>
+        <p>En los niveles ganas monedas; con ellas compras el boost ⚡ para deshacer sin límite. El Modo libre no da monedas ni puntos.</p>
+      </div>
+      <div class="pausa-opciones">
+        <button id="info-ok" class="b3d txt b-verde" type="button">Entendido</button>
+      </div>
+    </div>
+  </div>
+
+  <p id="aviso" role="status" hidden></p>
+
+  <script type="module" src="juego-solitario.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+</body>
+</html>
