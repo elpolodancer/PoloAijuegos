@@ -1,4 +1,6 @@
-// Ruta: ajedrez/juego-ajedrez.js
+// PROYECTO: Portal Juegos · Ruta: ajedrez/juego-ajedrez.js
+// Inicio estándar (ESTANDARES-juegos.md, secciones 6, 7 y 9): el juego abre ya cargado en el nivel donde va el jugador, tapado por la capa «Comenzar».
+// ♾️ Modo libre y 📋 Niveles se abren desde ☰ Pausa. No hay pantalla de menú principal.
 import { INICIO, desdeFEN, legales, hacer, deshacer, enJaque, estadoPartida, clave } from "./logica-ajedrez.js";
 import { mejorJugada } from "./ia-ajedrez.js";
 import { encolarPuntos } from "../compartido/cola-puntos.js";
@@ -20,8 +22,10 @@ const NIVELES = [
   { nombre: "Experto",      icono: "🦅", desc: "Calcula profundo y castiga cualquier error.",     prof: 6, tiempo: 2500, azar: 0,    ruido: 2,   puntos: 80 },
   { nombre: "Maestro",      icono: "👑", desc: "El más fuerte: puede tardar unos segundos.",      prof: 8, tiempo: 3000, azar: 0,    ruido: 0,   puntos: 100 },
 ];
-const TAM_MAX = 84;     // tamaño máximo de casilla (px)
-const COLOR_NIVEL = ["b-verde", "b-azul", "b-morado", "b-oro", "b-rojo", "b-gris", "b-azuloscuro", "b-rojo"]; // color del botón de cada nivel (de fácil a difícil)
+const TAM_MAX = 84;        // tamaño máximo de casilla (px)
+// El estándar (7.2) dice que el Modo libre NO da puntos de perfil. El Ajedrez siempre los dio (⭐ y puntos la primera vez que se vence
+// cada dificultad) y la gente ya tiene ese progreso, así que se conserva. Poner false para cumplir el estándar al pie de la letra.
+const PUNTOS_LIBRE = true;
 // ===================
 
 const GLIFO = { 1: "♟", 2: "♞", 3: "♝", 4: "♜", 5: "♛", 6: "♚" };
@@ -30,12 +34,21 @@ const FIN = {
   ahogado: "Tablas: rey ahogado.", 50: "Tablas por la regla de las 50 jugadas.",
   material: "Tablas: no hay material para dar mate.", repeticion: "Tablas por repetición de posición.",
 };
+const AYUDA = "Toca una pieza tuya y luego la casilla a donde quieres moverla (los puntos marcan las jugadas posibles). ↩ deshace tu última jugada y 🔄 empieza otra. " +
+  "Los niveles del mapa son ejercicios y partidas; ♾️ Modo libre es ajedrez completo contra la computadora en 8 dificultades.";
 
 const $ = (id) => document.getElementById(id);
-const tab = $("tablero");
-let nivel = Math.min(NIVELES.length, Math.max(1, +localStorage.getItem(ID + ":nivel") || 1));
+const fmt = (n) => n.toLocaleString("es-MX");
+const DEV = new URLSearchParams(location.search).has("dev"); // ?dev=1 → botón para superar niveles sin contenido y ver subir el agua
+const tab = $("tablero"), zonaJuego = document.querySelector(".aj"), btnMenu = $("btn-menu");
+
+let nivel = Math.min(NIVELES.length, Math.max(1, +localStorage.getItem(ID + ":nivel") || 1)); // dificultad del Modo libre
 let jugador = localStorage.getItem(ID + ":color") === "-1" ? -1 : 1;
-let est, pila, claves, legs, sel, ult, fin, msgFin, pensando, partida = 0, nube = null, nubeMapa = null, nivelN = 0, nivelD = null, fotos = [];
+let est, pila, claves, legs, sel, ult, fin, msgFin, resultado, pensando, partida = 0, nube = null, nubeMapa = null, nivelN = 0, nivelD = null, fotos = [];
+let pantalla = "juego";   // "juego" | "libre" (Modo libre) | "niveles" (mapa)
+let esperando = true;     // true = capa «Comenzar» puesta: el juego no responde ni corre
+let enLibre = false;      // true = se está jugando una partida que se empezó desde la pantalla de Modo libre
+let pausada = false, retraso = false;
 
 const ganados = () => { try { return JSON.parse(localStorage.getItem(ID + ":ganados")) || {}; } catch (e) { return {}; } };
 
@@ -57,11 +70,11 @@ const horizontal = matchMedia("(min-aspect-ratio: 23/20)"); // mismo punto de co
 function ajustarTam() {
   const h = horizontal.matches;
   const ancho = h ? innerWidth - 520 : innerWidth - 20;
-  const alto = h ? innerHeight - 24 : innerHeight - 370;
+  const alto = h ? innerHeight - 72 : innerHeight - 340;
   const t = Math.max(30, Math.floor(Math.min(ancho, alto, TAM_MAX * 8) / 8));
   tab.style.setProperty("--t", t + "px");
 }
-window.addEventListener("resize", ajustarTam);
+addEventListener("resize", () => { ajustarTam(); colocarFin(); });
 
 // ----- Dibujo -----
 function render() {
@@ -91,55 +104,49 @@ function render() {
   else if (pensando) txt = "Pensando…";
   else txt = "Tu turno" + (enJaque(est, est.turno) ? ": ¡jaque!" : "");
   $("estado").textContent = txt;
-  $("bBlancas").classList.toggle("on", jugador === 1);
-  $("bNegras").classList.toggle("on", jugador === -1);
-  $("desc").textContent = nivelD ? nivelD.titulo + ": " + nivelD.txt : NIVELES[nivel - 1].nombre + ": " + NIVELES[nivel - 1].desc + " (+" + NIVELES[nivel - 1].puntos + " pts la primera vez que lo vences)";
+  $("desc").textContent = nivelD ? nivelD.titulo + ": " + nivelD.txt : NIVELES[nivel - 1].nombre + ": " + NIVELES[nivel - 1].desc;
+  const rot = nivelD ? "Reiniciar nivel" : "Nueva partida";
+  $("bNueva").title = rot; $("bNueva").setAttribute("aria-label", rot);
 }
 
-function botonesNivel() {
-  const g = ganados(), z = $("niveles");
-  z.innerHTML = "";
-  NIVELES.forEach((n, i) => {
-    const b = document.createElement("button");
-    b.className = "b3d chico " + COLOR_NIVEL[i] + (i + 1 === nivel ? " on" : "");
-    b.innerHTML = '<span class="b-ico">' + n.icono + '</span><span class="b-info">' + (i + 1) + (g[i + 1] ? "⭐" : "") + "</span>";
-    b.title = n.nombre;
-    b.setAttribute("aria-label", "Nivel " + (i + 1) + ", " + n.nombre + (g[i + 1] ? ", ya vencido" : ""));
-    b.addEventListener("click", () => cambiar(() => { nivel = i + 1; localStorage.setItem(ID + ":nivel", nivel); }));
-    z.appendChild(b);
-  });
+// ----- Ventanas de aviso / Info / confirmar (estilo .pausa-*; confirm() del navegador saca de la pantalla completa) -----
+// textos: { si, no, titulo }; con no = null solo queda un botón (aviso)
+function preguntar(texto, siFn, { si = "Sí", no = "No", titulo = "" } = {}) {
+  $("dialogo-tit").textContent = titulo; $("dialogo-tit").hidden = !titulo;
+  $("dialogo-txt").textContent = texto;
+  $("dialogo-si").textContent = si;
+  $("dialogo-no").textContent = no || ""; $("dialogo-no").hidden = !no;
+  $("dialogo").hidden = false;
+  $("dialogo-si").onclick = () => { $("dialogo").hidden = true; if (siFn) siFn(); };
+  $("dialogo-no").onclick = () => { $("dialogo").hidden = true; };
+  try { $("dialogo-si").focus({ preventScroll: true }); } catch (e) {}
 }
+const infoJuego = () => preguntar(nivelD && nivelD.tuto ? nivelD.titulo + ": " + nivelD.txt + " " + AYUDA : AYUDA, null, { si: "Entendido", no: null, titulo: "ℹ️ Cómo se juega" });
 
-// Cambiar nivel o color empieza otra partida (pide confirmar si hay una en curso)
+// Cambiar de partida pide confirmar si hay una en curso
 function cambiar(fn) {
-  if (pila.length && !fin) return preguntar("Esto empieza una partida nueva. ¿Seguro?", () => { fn(); nueva(); });
+  if ((pila.length || fotos.length) && !fin) return preguntar("Esto empieza otra vez. ¿Seguro?", () => { fn(); nueva(); });
   fn();
   nueva();
-}
-
-// Pregunta dentro de la página (confirm() del navegador saca de la pantalla completa)
-// textos: { si, no }; con no = null solo queda un botón (aviso)
-function preguntar(texto, siFn, { si = "Sí", no = "No" } = {}) {
-  $("avisoTxt").textContent = texto;
-  $("avisoSi").textContent = si;
-  $("avisoNo").textContent = no || "";
-  $("avisoNo").hidden = !no;
-  $("aviso").hidden = false;
-  $("avisoSi").onclick = () => { $("aviso").hidden = true; if (siFn) siFn(); };
-  $("avisoNo").onclick = () => { $("aviso").hidden = true; };
 }
 
 // ----- Partida -----
 function nueva() {
   partida++;
   est = desdeFEN(nivelD && nivelD.tuto ? nivelD.fen : INICIO);
-  fotos = []; pila = []; claves = [clave(est)]; sel = null; ult = null; fin = false; msgFin = ""; pensando = false;
+  fotos = []; pila = []; claves = [clave(est)]; sel = null; ult = null; fin = false; msgFin = ""; resultado = ""; pensando = false; retraso = false;
   $("promo").hidden = true;
+  $("fin").hidden = true;
   legs = nivelD && nivelD.tuto ? tutoLegales() : legales(est);
-  botonesNivel();
   ajustarTam();
   render();
-  if (est.turno !== jugador) pensar();
+  if (!esperando && est.turno !== jugador) pensar(); // con la capa puesta la computadora no mueve: arranca al tocar «Comenzar»
+}
+
+// Reanuda lo que quedó esperando (la jugada de la computadora) cuando el juego vuelve a correr
+function arrancar() {
+  if (retraso) { retraso = false; pensar(); }
+  else if (!fin && !pensando && est.turno !== jugador) pensar();
 }
 
 function jugar(m) {
@@ -152,7 +159,8 @@ function jugar(m) {
   const r = estadoPartida(est, legs, claves);
   if (r) terminar(r);
   render();
-  if (!fin && est.turno !== jugador) pensar();
+  if (fin) mostrarFin();
+  else if (est.turno !== jugador) pensar();
 }
 
 function pensar() {
@@ -161,7 +169,7 @@ function pensar() {
   const id = partida;
   setTimeout(() => {
     if (id !== partida) return;
-    if (pausada) { retraso = true; return; } // se pausó mientras «pensaba»: sigue al continuar
+    if (pausada || esperando) { retraso = true; return; } // se pausó mientras «pensaba»: sigue al continuar
     const m = mejorJugada(est, NIVELES[(nivelD ? nivelD.ia : nivel) - 1]);
     pensando = false;
     if (m) jugar(m);
@@ -171,25 +179,25 @@ function pensar() {
 function terminar(r) {
   fin = true;
   if (r.fin === "mate") {
-    if (r.ganador === jugador) { msgFin = "¡Jaque mate! Ganaste."; if (nivelD) superado(); else premio(); }
-    else msgFin = "Jaque mate. Gana la computadora.";
-  } else msgFin = FIN[r.fin];
+    if (r.ganador === jugador) { resultado = "gana"; msgFin = "¡Jaque mate! Ganaste."; if (nivelD) superado(); else premio(); }
+    else { resultado = "pierde"; msgFin = "Jaque mate. Gana la computadora."; }
+  } else { resultado = "tablas"; msgFin = FIN[r.fin]; }
 }
 
 async function premio() {
-  const g = ganados(), n = NIVELES[nivel - 1], id = partida;
-  if (g[nivel]) { msgFin += " (ya habías vencido este nivel)"; return; }
+  if (!PUNTOS_LIBRE) return;
+  const g = ganados(), n = NIVELES[nivel - 1];
+  if (g[nivel]) { msgFin += " (ya habías vencido esta dificultad)"; return; }
   g[nivel] = true;
   localStorage.setItem(ID + ":ganados", JSON.stringify(g));
   if (nube) nube.guardado();
   msgFin += " +" + n.puntos + " pts";
-  botonesNivel();
   encolarPuntos(ID, n.puntos); // se anotan en el dispositivo y se envían al perfil cuando haya internet y sesión
   try { (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
 }
 
 function tocarCasilla(sq) {
-  if (fin || pensando || est.turno !== jugador) return;
+  if (esperando || pausada || fin || pensando || est.turno !== jugador) return;
   if (sel !== null) {
     const ms = legs.filter((m) => m.de === sel && m.a === sq);
     if (ms.length === 1) return jugar(ms[0]);
@@ -205,7 +213,7 @@ function pedirCoronacion(ms) {
   z.innerHTML = "";
   ms.forEach((m) => {
     const b = document.createElement("button");
-    b.className = "b3d b-gris " + (jugador === 1 ? "bl" : "ng");
+    b.className = "b3d b-cielo " + (jugador === 1 ? "bl" : "ng");
     b.textContent = GLIFO[m.prom] + "\uFE0E";
     b.setAttribute("aria-label", "Coronar a " + NOMBRE[m.prom]);
     b.addEventListener("click", () => jugar(m));
@@ -215,96 +223,201 @@ function pedirCoronacion(ms) {
 }
 
 function deshacerJugada() {
-  if (pensando) return;
+  if (esperando || pausada || pensando) return;
   if (nivelD && nivelD.tuto) { // ejercicio: se vuelve a la foto anterior
     const f = fotos.pop();
     if (!f) return;
     Object.assign(est, { b: f.b, enr: f.enr, ap: f.ap, rel: f.rel, rey: f.rey, turno: jugador });
-    ult = f.ult; fin = false; msgFin = ""; sel = null; $("promo").hidden = true;
+    ult = f.ult; fin = false; msgFin = ""; resultado = ""; sel = null; $("promo").hidden = true; $("fin").hidden = true;
     legs = tutoLegales();
     return render();
   }
   const n = est.turno === jugador ? 2 : 1;
   if (pila.length < n) return;
   for (let i = 0; i < n; i++) { deshacer(est, pila.pop()); claves.pop(); }
-  fin = false; msgFin = ""; sel = null;
+  fin = false; msgFin = ""; resultado = ""; sel = null; $("fin").hidden = true;
   ult = pila.length ? pila[pila.length - 1].m : null;
   $("promo").hidden = true;
   legs = legales(est);
   render();
 }
 
-$("bNueva").addEventListener("click", () => cambiar(() => {}));
+$("bNueva").addEventListener("click", () => { if (!esperando) cambiar(() => {}); });
 $("bDeshacer").addEventListener("click", deshacerJugada);
-$("bBlancas").addEventListener("click", () => { if (jugador !== 1) cambiar(() => { jugador = 1; localStorage.setItem(ID + ":color", "1"); }); });
-$("bNegras").addEventListener("click", () => { if (jugador !== -1) cambiar(() => { jugador = -1; localStorage.setItem(ID + ":color", "-1"); }); });
 
-// ===== Pantalla principal = mapa de niveles (3 200 en México + 19 400 en el mundo); «Juego libre» = el ajedrez de siempre =====
-const DEV = new URLSearchParams(location.search).has("dev"); // ?dev=1 → botón para superar niveles y ver subir el agua
-const fmt = (n) => n.toLocaleString("es-MX");
-const zonaJuego = document.querySelector(".aj"), btnMenu = $("btn-menu");
-let pantalla = "mapa", pausada = false, retraso = false; // pantalla: "mapa" | "juego"
-const rotular = (t) => { btnMenu.innerHTML = '<span class="b-ico">☰</span> ' + t; };
+// ===== Fin de nivel / de partida: ventana SOBRE el tablero (estándar, sección 6) =====
+function colocarFin() {
+  const f = $("fin");
+  if (f.hidden) return;
+  const r = tab.getBoundingClientRect();
+  const x = Math.max(0, r.left), y = Math.max(0, r.top), x2 = Math.min(innerWidth, r.right), y2 = Math.min(innerHeight, r.bottom);
+  Object.assign(f.style, { left: x + "px", top: y + "px", width: Math.max(0, x2 - x) + "px", height: Math.max(0, y2 - y) + "px" });
+}
+const boton = (texto, icono, clase, fn) => {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "b3d txt " + clase;
+  const i = document.createElement("span"); i.className = "b-ico"; i.textContent = icono;
+  b.append(i, document.createTextNode(" " + texto));
+  b.addEventListener("click", fn);
+  return b;
+};
+function mostrarFin() {
+  const id = partida;
+  setTimeout(() => { // un instante para ver la última jugada
+    if (id !== partida || !fin || pantalla !== "juego") return;
+    const gana = resultado === "gana", f = $("fin");
+    $("fin-tit").textContent = nivelD && gana ? "¡Nivel " + fmt(nivelN) + " completado!" : gana ? "¡Ganaste!" : resultado === "tablas" ? "Tablas" : resultado === "pierde" ? "Perdiste" : "¡Listo!";
+    $("fin-txt").textContent = msgFin;
+    const fila = [], ver = boton("Ver tablero", "👁️", "b-cielo", () => { $("fin").hidden = true; });
+    let primario;
+    if (nivelD && gana) {
+      const sig = nivelN + 1, repetir = boton("Repetir nivel", "🔄", "b-cielo", () => nueva());
+      if (nivelN % ETAPAS.porEtapa === 0) primario = boton("Ver el mapa", "🗺️", "grande b-verde", () => irANiveles(nivelN, true)); // terminó la etapa: el agua sube
+      else if (datosNivel(sig)) { primario = boton("Siguiente nivel", "▶", "grande b-verde", () => empezarNivel(sig, datosNivel(sig))); fila.push(repetir); }
+      else primario = boton("Repetir nivel", "🔄", "grande b-verde", () => nueva());   // último nivel con contenido: no hay «Siguiente»
+      fila.push(boton("Niveles", "📋", "b-cielo", () => irANiveles()));
+    } else if (nivelD) {
+      primario = boton("Reintentar", "🔄", "grande b-verde", () => nueva());
+      fila.push(boton("Niveles", "📋", "b-cielo", () => irANiveles()));
+    } else {
+      primario = boton("Jugar otra vez", "🔄", "grande b-verde", () => nueva());
+      if (enLibre) fila.push(boton("Cambiar dificultad", "⚙️", "b-cielo", () => irALibre()));
+    }
+    fila.push(ver);
+    $("fin-prim").replaceChildren(primario);
+    $("fin-fila").replaceChildren(...fila);
+    f.hidden = false;
+    colocarFin();
+  }, 650);
+}
 
+// ===== Pantallas =====
+function rotular(t) { $("txt-menu").textContent = btnMenu.title = t; }
+function mostrar(p, n, alcanzado) {
+  pantalla = p;
+  if (p !== "juego") esperando = false;
+  $("comenzar").hidden = !(p === "juego" && esperando);
+  zonaJuego.hidden = p !== "juego";
+  zonaJuego.toggleAttribute("inert", p === "juego" && esperando);
+  $("libre").hidden = p !== "libre";
+  if (p === "niveles") mapa.abrir(n || leerMapa().max, alcanzado); else mapa.cerrar();
+  if (p !== "juego") $("fin").hidden = true;
+  rotular(p === "juego" ? "Pausa" : "Atrás");
+  if (p === "juego") {
+    ajustarTam(); render();
+    if (esperando) { try { $("btn-comenzar").focus({ preventScroll: true }); } catch (e) {} }
+  }
+}
+// Suelta lo que la partida en curso tenía pendiente (la jugada de la computadora, la pausa)
+function abandonar() { partida++; pensando = false; retraso = false; pausada = false; $("promo").hidden = true; }
+
+// Deja el juego cargado en el nivel donde va el jugador (lo del dispositivo y, con sesión, lo de su cuenta) y pone la capa «Comenzar»
+function cargarInicio() {
+  abandonar();
+  esperando = true; enLibre = false;
+  const n = leerMapa().max, d = datosNivel(n);
+  if (d) prepararNivel(n, d); else prepararLibre(); // sin contenido en ese nivel: se ve el ajedrez de siempre detrás de la capa
+  mostrar("juego");
+}
+const volverAlInicio = () => cargarInicio();
+
+function prepararNivel(n, d) {
+  nivelN = n; nivelD = d; jugador = d.color === -1 ? -1 : 1;
+  zonaJuego.classList.add("en-nivel");
+  nueva();
+}
+function prepararLibre() {
+  nivelN = 0; nivelD = null;
+  jugador = localStorage.getItem(ID + ":color") === "-1" ? -1 : 1;
+  zonaJuego.classList.remove("en-nivel");
+  nueva();
+}
+function empezarNivel(n, d) { // desde Niveles, «Siguiente nivel» o Reintentar: directo, sin capa
+  abandonar();
+  esperando = false; enLibre = false;
+  prepararNivel(n, d);
+  mostrar("juego");
+}
+function irANiveles(n, alcanzado) { abandonar(); mostrar("niveles", n, alcanzado); }
+function irALibre() { abandonar(); mostrar("libre"); pintarLibre(); }
+function empezarLibre() {
+  abandonar();
+  esperando = false; enLibre = true;
+  prepararLibre();
+  mostrar("juego");
+}
+
+// ----- ♾️ Modo libre: dificultad y color; se recuerda la última selección -----
+function opcionLibre(texto, icono, elegido, fn, etiqueta) {
+  const b = boton(texto, icono, elegido ? "b-oro on" : "b-cielo", fn);
+  if (etiqueta) { b.title = etiqueta; b.setAttribute("aria-label", etiqueta); }
+  b.setAttribute("aria-pressed", String(!!elegido));
+  return b;
+}
+function pintarLibre() {
+  const g = ganados();
+  $("libre-niveles").replaceChildren(...NIVELES.map((n, i) => opcionLibre((i + 1) + (g[i + 1] ? "⭐" : ""), n.icono, i + 1 === nivel,
+    () => { nivel = i + 1; localStorage.setItem(ID + ":nivel", nivel); pintarLibre(); },
+    "Dificultad " + (i + 1) + ", " + n.nombre + (g[i + 1] ? ", ya vencida" : ""))));
+  $("libre-color").replaceChildren(
+    opcionLibre("Blancas", "♔", jugador === 1, () => { jugador = 1; localStorage.setItem(ID + ":color", "1"); pintarLibre(); }),
+    opcionLibre("Negras", "♚", jugador === -1, () => { jugador = -1; localStorage.setItem(ID + ":color", "-1"); pintarLibre(); }));
+  const n = NIVELES[nivel - 1];
+  $("libre-nota").textContent = n.nombre + ": " + n.desc + (PUNTOS_LIBRE ? (g[nivel] ? " ⭐ Ya la venciste." : " +" + n.puntos + " pts la primera vez que la venzas.") : "");
+}
+$("libre-jugar").addEventListener("click", empezarLibre);
+
+// ----- ☰ Pausa (7.5): Continuar · ♾️ Modo libre · 📋 Niveles · 🔄 Reiniciar nivel · ℹ️ Info · 🚪 Menú principal -----
+const reanudar = () => { pausada = false; if (!esperando) arrancar(); };
+const hayAvance = () => !fin && (pila.length > 0 || fotos.length > 0);
 const pausa = crearMenuPausa({
-  puedeAbrir: () => pantalla === "juego",
+  puedeAbrir: () => pantalla === "juego" && $("dialogo").hidden,
   alAbrir: () => { pausada = true; },
-  alContinuar: () => { pausada = false; if (retraso) { retraso = false; pensar(); } },
-  extras: () => [{ icono: "🔄", texto: nivelD && nivelD.tuto ? "Reiniciar nivel" : "Nueva partida", clase: "b-azul", alElegir: () => { pausada = false; retraso = false; nueva(); } }],
-  textoSalir: "Salir al mapa",
-  ayudaSalir: "Se pierde la partida en curso.",
-  alSalir: () => { pausada = false; retraso = false; volverAlMapa(nivelN || undefined); },
+  alContinuar: reanudar,
+  extras: () => enLibre ? [] : [ // en una partida de Modo libre solo hay Continuar y «Salir a elegir tablero»
+    { icono: "♾️", texto: "Modo libre", clase: "b-morado", ayuda: "Eliges la dificultad y tu color. " + (hayAvance() ? "Se pierde la partida en curso." : "Tu progreso queda guardado."), alElegir: irALibre },
+    { icono: "📋", texto: "Niveles", clase: "b-azul", ayuda: hayAvance() ? "Se pierde lo avanzado en este nivel." : "Lista de niveles. Tu progreso queda guardado.", alElegir: () => irANiveles() },
+    nivelD ? { icono: "🔄", texto: "Reiniciar nivel", clase: "b-azul", ayuda: "Vuelves a empezar este nivel.", alElegir: () => { reanudar(); nueva(); } } : null,
+    { icono: "ℹ️", texto: "Info", clase: "b-cielo", alElegir: () => { reanudar(); infoJuego(); } },
+  ],
+  get textoSalir() { return enLibre ? "Salir a elegir tablero" : "Menú principal"; },
+  ayudaSalir: () => enLibre ? "La partida termina. Las dificultades que ya venciste quedan guardadas." : hayAvance() ? "Se pierde lo avanzado en este nivel." : "Tu progreso queda guardado en este dispositivo.",
+  alSalir: () => { if (enLibre) irALibre(); else volverAlInicio(); },
+});
+btnMenu.addEventListener("click", () => { if (pantalla === "juego") pausa.abrir(); else volverAlInicio(); }); // «Pausa» en el juego, «Atrás» en el resto
+
+// ----- Capa «Comenzar» (7.0) -----
+$("btn-comenzar").addEventListener("click", () => {
+  esperando = false;
+  $("comenzar").hidden = true;
+  zonaJuego.removeAttribute("inert");
+  arrancar(); // si la computadora mueve primero (nivel con negras), arranca ahora
 });
 
+// ----- Mapa de niveles (7.3): México y mundo; listas de 5 columnas; «Modo libre» NO va aquí, está en ☰ Pausa -----
 const mapa = montarMapa({
   prefijo: ID,
   etapas: ETAPAS,
   progreso: leerMapa,
   jugarNivel,
+  columnas: 5,
   leyenda: "Los niveles se abren en orden.",
-  infoNivel: (n) => { const d = datosNivel(n); return d ? { sub: d.icono, clase: d.tuto ? "b-verde" : "b-oro" } : {}; },
-  botonesExtra: [{ icono: "♾️", texto: "Juego libre", clase: "b-morado", fn: juegoLibre }],
-  alInfo: () => preguntar("100 niveles por estado y por país: 3 200 en México y 19 400 en el mundo. ♾️ Juego libre: partidas contra la computadora en 5 niveles.", null, { si: "Entendido", no: null }),
+  infoNivel: (n) => { const d = datosNivel(n); return d ? { sub: d.icono, clase: d.tuto ? "b-verde" : "b-oro" } : { sub: "🚧" }; },
+  alInfo: () => preguntar("100 niveles por estado y por país: 3 200 en México y 19 400 en el mundo. Los primeros enseñan cada pieza; luego vienen partidas.", null, { si: "Entendido", no: null, titulo: "ℹ️ Niveles" }),
   avisoPrincipal: () => "Nivel " + fmt(leerMapa().max) + " de " + fmt(ETAPAS.total),
-  alCambiarVista: (principal) => { btnMenu.hidden = principal; if (!principal) rotular("Menú principal"); }, // en el menú principal no se muestra ☰
 });
 
-btnMenu.addEventListener("click", () => { if (pantalla === "mapa") mapa.principal(); else pausa.abrir(); });
-
-function volverAlMapa(n, alcanzado) {
-  pantalla = "mapa"; partida++; pensando = false;
-  nivelD = null; nivelN = 0; zonaJuego.classList.remove("en-nivel");
-  zonaJuego.hidden = true;
-  $("aviso").hidden = true;
-  mapa.abrir(n, alcanzado);
-}
-function juegoLibre() {
-  pantalla = "juego"; nivelD = null; nivelN = 0; zonaJuego.classList.remove("en-nivel");
-  jugador = localStorage.getItem(ID + ":color") === "-1" ? -1 : 1;
-  mapa.cerrar();
-  zonaJuego.hidden = false;
-  btnMenu.hidden = false; rotular("Pausa");
-  nueva();
-}
 function jugarNivel(n) {
   const d = datosNivel(n);
   if (d) return empezarNivel(n, d);
   const txt = "Nivel " + fmt(n) + " (" + ETAPAS.nombreEtapa(n) + ", nivel " + ETAPAS.etapaDe(n).k + "): todavía no tiene contenido.";
-  if (DEV) preguntar(txt + " ¿Marcarlo como superado (prueba)?", () => { superarNivel(n); if (nubeMapa) nubeMapa.guardado(); volverAlMapa(n, true); }, { si: "✅ Superar", no: "Cerrar" });
-  else preguntar(txt, null, { si: "Entendido", no: null });
+  if (DEV) preguntar(txt + " ¿Marcarlo como superado (prueba)?", () => { superarNivel(n); if (nubeMapa) nubeMapa.guardado(); irANiveles(n, true); }, { si: "✅ Superar", no: "Cerrar" });
+  else preguntar("🚧 Los niveles todavía no están creados. " + txt, null, { si: "Entendido", no: null });
 }
 
 // ----- Niveles del mapa: ejercicios de enseñanza (solo mueven las blancas) y partidas -----
 const sqDe = (s) => "abcdefgh".indexOf(s[0]) + (8 - +s[1]) * 8;
 const tutoLegales = () => legales(est).filter((m) => est.b[m.a] !== -6); // en los ejercicios no se captura el rey negro
-function empezarNivel(n, d) {
-  nivelN = n; nivelD = d; jugador = d.color === -1 ? -1 : 1;
-  pantalla = "juego";
-  mapa.cerrar();
-  zonaJuego.hidden = false; zonaJuego.classList.add("en-nivel");
-  btnMenu.hidden = false; rotular("Pausa");
-  nueva();
-}
 function jugarTuto(m) {
   fotos.push({ b: est.b.slice(), enr: est.enr, ap: est.ap, rel: est.rel, rey: est.rey.slice(), ult });
   const meta = nivelD.meta;
@@ -318,25 +431,42 @@ function jugarTuto(m) {
   else if (meta.mate) ok = (estadoPartida(est, legales(est), [clave(est)]) || {}).fin === "mate";
   est.turno = jugador; // las negras no responden
   legs = tutoLegales();
-  fin = ok; msgFin = ok ? "¡Muy bien! Nivel superado." : "";
+  fin = ok; msgFin = ok ? "¡Muy bien! Nivel superado." : ""; resultado = ok ? "gana" : "";
   if (ok) superado();
   render();
+  if (ok) mostrarFin();
 }
 function superado() {
   superarNivel(nivelN);
   if (nubeMapa) nubeMapa.guardado();
-  setTimeout(() => { if (nivelD) preguntar("¡Nivel " + fmt(nivelN) + " superado!", () => volverAlMapa(nivelN), { si: "Continuar", no: "Seguir viendo" }); }, 700);
 }
 
-zonaJuego.hidden = true;
-mapa.abrir();
+// ----- 👤 Iniciar sesión (arriba a la derecha). jugador.js se carga aparte para que el juego funcione sin internet -----
+let sesion = null, usuario = null;
+const btnSesion = $("btn-sesion");
+function pintarSesion() {
+  $("txt-sesion").textContent = usuario ? (usuario.displayName || "Jugador").split(" ")[0] : "Iniciar sesión";
+  btnSesion.title = usuario ? "Cerrar sesión" : "Iniciar sesión con Google";
+}
+btnSesion.addEventListener("click", async () => {
+  if (!sesion) return preguntar("Necesitas internet para iniciar sesión.", null, { si: "Entendido", no: null });
+  if (usuario) return preguntar("¿Cerrar la sesión de " + (usuario.displayName || "esta cuenta") + "?", () => sesion.salir(), { si: "Cerrar sesión", no: "Cancelar" });
+  try { await sesion.entrar(); } catch (e) { preguntar("No se pudo iniciar sesión. Intenta de nuevo.", null, { si: "Entendido", no: null }); }
+});
+import("../compartido/jugador.js").then((m) => { sesion = m; m.alCambiarSesion((u) => { usuario = u; pintarSesion(); }); }).catch(() => {});
 
-// Sincroniza los niveles vencidos (⭐) con la cuenta de Google: un nivel vencido en cualquier lado cuenta.
+// ----- Arranque: el juego ya cargado, con la capa «Comenzar» -----
+cargarInicio();
+
+// Sincroniza los niveles vencidos (⭐) y el progreso del mapa con la cuenta de Google: lo más alto de cada lado cuenta.
 import("../compartido/progreso.js").then((m) => {
   nube = m.conectar(ID, {
     clave: ID + ":ganados",
     fusionar: (a, b) => (!a && !b ? null : { ...(b || {}), ...(a || {}) }),
-    alCambiar: () => botonesNivel(),
+    alCambiar: () => { if (pantalla === "libre") pintarLibre(); },
   });
-  nubeMapa = m.conectar(ID + "-mapa", { clave: CLAVE_MAPA, fusionar: fusionarMapa, alCambiar: () => mapa.refrescar() }); // progreso del mapa (revisar que las reglas de Firestore acepten este id)
+  nubeMapa = m.conectar(ID + "-mapa", { clave: CLAVE_MAPA, fusionar: fusionarMapa, alCambiar: () => {
+    mapa.refrescar();
+    if (esperando && pantalla === "juego") cargarInicio(); // la capa sigue puesta: se muestra el nivel de la cuenta (una vez tocado «Comenzar» no se toca el tablero)
+  } });
 }).catch(() => {});
