@@ -2,14 +2,14 @@
 
 Pegar en el README principal (o dejar como `ESTANDARES-juegos.md` en la raíz). La especificación de medidas y colores vive en `compartido/inmersivo.css`; aquí está lo que hay que respetar y por qué. Cada juego tiene su propio README con sus detalles.
 
-Referencias: **Conecta gominolas** (menú principal, Modo libre, mapa, botón ☰ «Pausa/Atrás» y menú de pausa: secciones 1 y 7), **Slither** (lo mismo con un juego a pantalla completa: menú y Modo libre con las clases `.pant-menu`, fin «sobre el tablero» sin velo; secciones 6, 7 y 11), **Estacionamiento** (mapa, niveles, monedas) y **Rubik** (juego sin niveles). De **Puzle deslizante** solo se tomó la idea del botón azul oscuro del portal.
+Referencias: **Conecta gominolas** (menú principal, Modo libre, mapa, botón ☰ «Pausa/Atrás» y menú de pausa: secciones 1 y 7), **Slither** (lo mismo con un juego a pantalla completa: menú y Modo libre con las clases `.pant-menu`, fin «sobre el tablero» sin velo; secciones 6, 7 y 11), **Estacionamiento** (mapa, niveles, monedas) y **Rubik** (juego sin niveles). De **Puzle deslizante** se tomó la idea del botón azul oscuro del portal y la **barra de inicio sobre el juego ya cargado** (7.0 y 7.1).
 
 ## 1. Botones fijos (en TODOS los juegos)
 
 | Botón | Esquina | Forma y color |
 |---|---|---|
 | **🎮 Portal de Juegos** (vuelve al portal, `href="../"`) | arriba-izquierda | **Alargado** (`b3d txt`), **azul oscuro** (`b-azuloscuro`: `#7d9cea → #3b63c4 → #1c3a82`). Siempre visible |
-| **☰ Pausa / Atrás** | arriba-izquierda, justo debajo | **Alargado, del mismo ancho** que 🎮 Portal de Juegos, **azul cielo** (`b-cielo`: `#c4ecff → #4db8f0 → #1f72ab`). Oculto en la pantalla del menú principal. Dice **«Pausa»** dentro de una partida y **«Atrás»** en cualquier otra pantalla (sección 7.4) |
+| **☰ Pausa / Atrás** | arriba-izquierda, justo debajo | **Alargado, del mismo ancho** que 🎮 Portal de Juegos, **azul cielo** (`b-cielo`: `#c4ecff → #4db8f0 → #1f72ab`). Oculto mientras se ve la barra de inicio (7.1). Dice **«Pausa»** dentro de una partida y **«Atrás»** en cualquier otra pantalla (sección 7.4) |
 | **🌙 / ☀️** (madera clara / oscura) | abajo-izquierda | 40×40, oro. Lo crea `compartido/fondo-madera.js` |
 | **⛶ / ✕** (pantalla completa) | abajo-derecha | 40×40, gris (el único gris fijo). Lo crea `compartido/pantalla-completa.js` |
 | **👤 Iniciar sesión** | arriba-derecha | Alargado (`b3d txt`, alto 40), azul (`b-azul`). **Siempre** en esa esquina, lo más a la derecha de la fila `.hud-der` (sección 7) |
@@ -58,7 +58,7 @@ El menú de niveles **siempre es un mapa**:
 3. Cada estado o país es un punto: al tocarlo se ven sus niveles. Cuántos niveles tiene cada etapa lo decide cada juego (en Estacionamiento son 100; en Supermercado y Zuma, 10).
 4. Los niveles se abren en orden; se guarda «nivel más alto abierto» y «más alto terminado».
 
-**Menú de inicio.** Sustituido por el **menú principal estándar de la sección 7** (Modo libre · Continuar · Niveles · Info). Lo que sigue describe cómo era antes, cuando el mapa era la pantalla principal; al tocar un juego se migra a la sección 7:
+**Menú de inicio.** Sustituido por la **barra de inicio estándar de la sección 7** (Modo libre · Continuar · Niveles). Lo que sigue describe cómo era antes, cuando el mapa era la pantalla principal; al tocar un juego se migra a la sección 7:
 
 **Menú de inicio** (el mapa es la pantalla principal) con estos botones, en este orden:
 
@@ -81,7 +81,7 @@ El juego solo indica cuántos niveles tiene cada etapa (`porEtapa`), el progreso
 
 ### B) Juegos sin niveles (Rubik)
 
-**No llevan mapa ni niveles.** Su menú principal sigue la sección 7 pero solo con «♾️ Modo libre» (y «ℹ️ Info» si la necesitan): no tienen Continuar ni Niveles. Antes tenía lo mínimo: el selector de lo que se juega (en Rubik, el modelo de cubo) y, dentro de la partida, el botón de revolver. Todo sobre el fondo de madera clara u oscura y con los botones fijos de la sección 1. Detalle en `rubik/README-rubik.md`.
+**No llevan mapa ni niveles.** Su inicio sigue la sección 7 pero la barra lleva solo «♾️ Modo libre» (y «ℹ️ Info» si la necesitan): no tienen Continuar ni Niveles. Antes tenía lo mínimo: el selector de lo que se juega (en Rubik, el modelo de cubo) y, dentro de la partida, el botón de revolver. Todo sobre el fondo de madera clara u oscura y con los botones fijos de la sección 1. Detalle en `rubik/README-rubik.md`.
 
 ## 5. Para registrar un juego nuevo o cambiado
 Anotarlo en `juegos.js`, en `JUEGOS` de `sw.js`, subir `VERSION`, y agregar su fila y nota «Estado» al README principal. Para **pasarlo a la zona «Juegos» (terminado)** ver la sección 11.
@@ -96,27 +96,46 @@ En todos los juegos con niveles, al terminar un nivel el botón **Siguiente nive
 - En el último nivel del juego el botón «Siguiente» se oculta.
 - **Juegos donde el tablero es toda la ventana** (Slither, Agario…): no se asignan `left/top/width/height`; la ventana cubre la pantalla y centra su contenido (sigue sin bloquear los toques). En el botón principal de la ventana, si no hay «Siguiente» (derrota, Modo libre), el primero y más grande es «Reintentar» / «Jugar otra vez»; las demás opciones (Mapa de niveles, Cambiar mapa y bots) van debajo en `.sobre-fila` y en `b-cielo`.
 
-## 7. Menú principal, Modo libre, mapa, ☰ y pausa (estándar de TODOS los juegos)
+## 7. Inicio del juego, menú principal, Modo libre, mapa, ☰ y pausa (estándar de TODOS los juegos)
 
-Referencia: **Conecta gominolas** (`gominolas/index-gominolas.html` y `juego-gominolas.js`). Cuando se pida «crear el menú como dicta el inmersivo», se copia su estructura, textos y colores. La especificación de medidas también está en `compartido/inmersivo.css`.
+Referencia de Modo libre, mapa, ☰ y pausa: **Conecta gominolas** (`gominolas/index-gominolas.html` y `juego-gominolas.js`). Referencia de la **barra de inicio** (7.0 y 7.1): **Puzle deslizante** (`deslizante/`). Cuando se pida «crear el menú como dicta el inmersivo», se copia su estructura, textos y colores. La especificación de medidas también está en `compartido/inmersivo.css`.
 
-### 7.1 Menú principal
+### 7.0 Al abrir un juego: el juego ya está cargado (regla general)
 
-Pantalla de inicio: un título (`h1`, emoji + nombre del juego), una frase corta y, debajo, una columna de botones centrada sobre la madera, **en este orden**:
+**Nunca se abre en una pantalla de menú vacía.** Cuando alguien abre un juego, en pantalla debe verse **el juego ya cargado**, y el menú principal es solo la **barra de inicio** (7.1) pegada arriba. Qué se carga depende de la jugabilidad:
 
-| # | Botón | Color | Qué hace |
-|---|---|---|---|
-| 1 | **♾️ Modo libre** | `b-morado`, `grande` | **Siempre el primero.** Abre la pantalla de Modo libre (7.2) |
-| 2 | **▶ Continuar · nivel N** | `b-verde`, `grande` | Juega directo el nivel donde va el jugador. Solo juegos con niveles |
-| 3 | **📋 Niveles** | `b-azul`, `grande` | Abre el mapa en la lista de niveles del estado o país donde va el jugador (`mapa.abrir(nivelActual)`). Solo juegos con niveles |
-| 4 | **ℹ️ Info** | `b-cielo`, tamaño normal | Ventana «Cómo se juega» (estilos `.pausa-*`) con un botón verde «Entendido». Más chico que los otros tres |
+| Tipo de juego | Qué se ve al abrir | Ejemplos |
+|---|---|---|
+| **A) Jugable de inmediato** | El **primer nivel** (primera vez) o **el nivel donde va el jugador** (lo que haya en el dispositivo y, con sesión, lo que traiga su cuenta de Google), listo para tocar y jugar sin pulsar nada. | Puzle deslizante, Gominolas, Estacionamiento… |
+| **B) Tiempo real** (no se puede empezar solo) | El primer nivel / mundo **cargado detrás**, con una **pantalla de pausa o «Toca para jugar»** encima (clase `.sobre-tablero`, sección 6). Nada corre hasta que el jugador toca. | Agario, Slither… |
+| **C) Varias partidas guardadas** | La **pantalla de partidas guardadas** (elegir, continuar o crear una nueva). | Supervivencia y similares |
 
-- **Estilos ya hechos:** `compartido/inmersivo.css` trae `.pant-menu` (pantalla sobre la madera, texto con `--txt-fondo`, se desplaza si no cabe y deja libre la zona de 🎮 / ☰), `.menu-columna` (la columna de botones; los `.grande` miden igual, hasta 300 px) y, para el Modo libre, `.modo-grupo` y `.modo-fila`. El juego solo pone el HTML (ver el comentario de esas clases); no copia CSS propio.
+Reglas comunes:
+- **Con sesión:** al llegar el progreso de la nube (`alCambiar` de `conectar()`), si el jugador **todavía no ha tocado nada**, se recarga el nivel mostrado con el de la cuenta. Si ya empezó a jugar, no se le quita el tablero.
+- **La barra de inicio desaparece** con el primer movimiento (A) o al tocar «Continuar»/«Jugar» (B, C). Entonces el ☰ pasa a decir «Pausa» (7.4).
+- Volver al «menú principal» (☰ «Atrás» o «Menú principal» de la pausa) **no abre otra pantalla**: vuelve a mostrar el juego cargado con la barra encima.
+- «Niveles» y «Modo libre» **sí** son pantallas propias; su ☰ «Atrás» regresa al juego cargado.
+
+### 7.1 Menú principal = barra de inicio
+
+Tres botones **cuadrados y muy juntos** (4 px de separación) en la **zona más alta posible** de la pantalla, en este orden de izquierda a derecha:
+
+| Posición | Botón | Color | Tamaño | Qué hace |
+|---|---|---|---|---|
+| Izquierda | **♾️ Modo libre** | `b-morado` | cuadrado, `--ini` (56 px) | Abre la pantalla de Modo libre (7.2) |
+| **Centro** | **▶ Continuar** (o «Jugar» si aún no pasó ningún nivel) | `b-verde` + `.central` | **el doble**: 2 × `--ini` (112 px) | Juega el nivel donde va el jugador; si tiene partida guardada de ese nivel, la retoma. Solo juegos con niveles |
+| Derecha | **🗂️ Niveles** | `b-azul` | cuadrado, `--ini` | Abre el mapa en la lista del estado o país donde va el jugador (`mapa.abrir(nivelActual)`). Solo juegos con niveles |
+
+Cada botón lleva el icono arriba y su nombre debajo. El verde va **siempre en el centro**, aunque falte alguno de los otros dos.
+
+- **Estilos ya hechos:** `compartido/inmersivo.css` trae `.barra-inicio` (la barra), `.central` (el botón del doble de tamaño) y el reparto de la posición: con **≥ 640 px de ancho** va en la fila superior, arriba al centro; en **celular vertical** va justo debajo de esa fila (52 px más abajo, porque no cabe junto a 🎮 y la sesión). El ☰ está oculto mientras se ve la barra, así que no estorba. El juego solo pone el HTML (ver el comentario de la clase); no copia CSS propio.
+- **Espacio para la barra:** mide ≈ 2 × `--ini` + 5 px de alto. El juego deja ese espacio libre encima de su tablero mientras la barra se ve (ejemplo: `#juego.con-barra` en `deslizante/index-deslizante.html`).
 - **No hay botón 🗺️ Mapa ni 🚪 Salir.** Al mapa se llega desde «Niveles» (con «◀ México» / «◀ Mundo») y al portal se sale con «🎮 Portal de Juegos».
-- Juegos sin niveles (sección 4B): solo «♾️ Modo libre» (y «ℹ️ Info» si el juego la necesita).
+- Juegos sin niveles (sección 4B): la barra lleva solo «♾️ Modo libre», que ocupa el centro y sigue siendo el doble de grande.
 - Si el juego aún no tiene niveles, «Continuar» y «Niveles» se muestran igual y al tocar un nivel inexistente se avisa con «🚧 Los niveles todavía no están creados».
-- El ☰ no se ve en esta pantalla.
-- **👤 Iniciar sesión**: botón alargado azul (`b3d txt b-azul`) **siempre en la esquina superior derecha** del menú principal, con las funciones de `compartido/jugador.js` (`alCambiarSesion`, `entrar`, `salir`) cargado con `import()` dinámico y `try/catch`, para que el menú funcione sin internet. Si el juego tiene monedas, sonido u otros chips arriba a la derecha, van a su izquierda: el de sesión es siempre el último de la fila.
+- **ℹ️ Info** (si el juego la necesita): botón chico `b3d chico b-cielo` centrado **debajo** de la barra; abre la ventana «Cómo se juega» (`.pausa-*`) con «Entendido». *(Ubicación provisional, por confirmar.)*
+- El ☰ no se ve mientras la barra está visible.
+- **👤 Iniciar sesión**: botón alargado azul (`b3d txt b-azul`) **siempre en la esquina superior derecha**, con las funciones de `compartido/jugador.js` (`alCambiarSesion`, `entrar`, `salir`) cargado con `import()` dinámico y `try/catch`, para que el juego funcione sin internet. Si el juego tiene monedas, sonido u otros chips arriba a la derecha, van a su izquierda: el de sesión es siempre el último de la fila.
 
 ### 7.2 Modo libre (pantalla propia, no desplegable)
 
@@ -140,7 +159,7 @@ Es el mismo botón y se rotula según la pantalla:
 
 | Pantalla | ☰ | Al tocarlo |
 |---|---|---|
-| Menú principal | oculto | — |
+| Juego cargado con la barra de inicio visible | oculto | — |
 | Niveles / mapa, Modo libre, resultado de un nivel o ronda | **◀ Atrás** | Vuelve al menú principal del juego |
 | Partida en curso | **☰ Pausa** | Congela el juego y abre el menú de pausa (7.5) |
 
@@ -195,8 +214,8 @@ Cuando se pida crear el menú principal en un juego que no lo tiene o que está 
 
 1. **Fondo de madera clara y oscura.** `<html class="inmersivo">` y `<body class="inmersivo">`; el script del `<head>` contra el parpadeo; `compartido/fondo-madera.js` al final del `<body>`; el botón **🌙 / ☀️** abajo a la izquierda; los `<canvas>` transparentes (`clearRect`); ningún fondo propio en `html`/`body`.
 2. **Botón azul oscuro «🎮 Portal de Juegos»** (`b3d txt b-azuloscuro`, `href="../"`), arriba a la izquierda. Se eliminan las versiones viejas: «🎮 Juegos», flechas «←», botones de volver propios.
-3. **Botón azul cielo «☰ Pausa / Atrás»** (`b3d txt b-cielo`, con el icono de las tres rayitas y un `<span id="txt-menu">`), justo debajo del anterior y del mismo ancho. Oculto en el menú principal; dice «Pausa» en partida y «Atrás» en el resto (7.4, con `menuBoton()`).
-4. **Menú principal** (7.1): título, frase y columna centrada de botones **♾️ Modo libre · ▶ Continuar · 📋 Niveles · ℹ️ Info** (sin Mapa ni Salir; sin Continuar ni Niveles si el juego no tiene niveles).
+3. **Botón azul cielo «☰ Pausa / Atrás»** (`b3d txt b-cielo`, con el icono de las tres rayitas y un `<span id="txt-menu">`), justo debajo del anterior y del mismo ancho. Oculto mientras se ve la barra de inicio; dice «Pausa» en partida y «Atrás» en el resto (7.4, con `menuBoton()`).
+4. **Inicio del juego y barra de inicio** (7.0 y 7.1): el juego se abre ya cargado (nivel actual de la cuenta, pantalla de «Toca para jugar» o partidas guardadas, según el tipo) con la barra **♾️ Modo libre · ▶ Continuar (centro, doble de grande) · 🗂️ Niveles** pegada arriba (sin Mapa ni Salir; sin Continuar ni Niveles si el juego no tiene niveles).
 5. **Botón «👤 Iniciar sesión»** siempre en la **esquina superior derecha** (7.1).
 6. **Pantalla de Modo libre** (7.2): filas de opciones (elegido `b-oro on`, resto `b-cielo`), nota, récord y «▶ Jugar».
 7. **Mapa con México y mundo armados.** El juego usa `crearEtapas` + `montarMapa` con las dos zonas completas desde el primer día: 32 estados y 194 países, cada uno con su cantidad de niveles. Se comprueba que (a) el mundo y el botón 🌍 **no se ven** hasta terminar todos los niveles de México, (b) después aparece **un país a la vez**, en el orden de `PAISES_BASE`, y los no desbloqueados no se listan, y (c) el progreso guarda «más alto abierto» y «más alto terminado». «Niveles» abre el mapa en la etapa actual y «◀ México / ◀ Mundo» van en `b-cielo`. Esto se deja funcionando aunque el juego todavía no tenga niveles creados.
@@ -220,7 +239,7 @@ Mientras un juego está en `EN_DESARROLLO` y sin publicar, sus niveles se pueden
 
 Mientras un juego está en `EN_DESARROLLO` (`juegos.js`) sus puntos **nunca suman al total** (`jugador.js`: solo guardan la mejor marca y, si juega el administrador, van a `totalPrueba`). Al pasarlo a «Juegos» **empiezan a contar para todos**, así que antes de pasarlo se revisa esta lista, en este orden:
 
-1. **Estándares completos** (secciones 1, 2, 7 y 9): 🎮 Portal de Juegos, ☰ Pausa/Atrás en `b-cielo`, madera, ⛶, menú principal con **♾️ Modo libre · ▶ Continuar · 📋 Niveles · ℹ️ Info**, 👤 Iniciar sesión, pantalla de Modo libre, mapa armado con el mundo oculto, pausa estándar y fin de nivel sobre el tablero (6). Ningún `b-gris` en menús ni `velo` oscuro propio: las pantallas de menú usan `.pant-menu` y la ayuda («Cómo se juega») la ventana `.pausa-*` con «Entendido».
+1. **Estándares completos** (secciones 1, 2, 7 y 9): 🎮 Portal de Juegos, ☰ Pausa/Atrás en `b-cielo`, madera, ⛶, juego cargado al abrir con la barra de inicio **♾️ Modo libre · ▶ Continuar · 🗂️ Niveles**, 👤 Iniciar sesión, pantalla de Modo libre, mapa armado con el mundo oculto, pausa estándar y fin de nivel sobre el tablero (6). Ningún `b-gris` en menús ni `velo` oscuro propio: las pantallas de menú usan `.pant-menu` y la ayuda («Cómo se juega») la ventana `.pausa-*` con «Entendido».
 2. **Puntos revisados.** El Modo libre no da puntos de perfil (7.2). Los niveles dan puntos **solo la primera vez** que se pasan y con tope por envío (`MAX_PUNTOS_POR_ENVIO` = 1000 en `jugador.js` y `cola-puntos.js`, igual que las reglas de Firestore). Se comprueba que no hay forma de repetir algo sin límite y que sume.
 3. **Niveles completos y comprobados:** los 22 600 (o los que el juego declare) generados **después** de los estándares (sección 10), con su verificador en consola (`verificar-<juego>.mjs`, «Todo cumple»). Si el reparto de dificultad se aparta de la sección 8, el README del juego lo explica (Slither: 50/40/10 → 25/35/40).
 4. **Progreso local primero** con `conectar()` y puntos pendientes con `encolarPuntos()`; `jugador.js` y `progreso.js` se cargan con `import()` y `try/catch` para que el juego abra sin internet.

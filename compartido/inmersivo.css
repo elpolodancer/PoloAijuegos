@@ -75,16 +75,20 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
    =================================================================================================================== */
 
 /* ===================================================================================================================
-   MENÚ PRINCIPAL ESTÁNDAR (obligatorio en TODOS los juegos; referencia: «Conecta gominolas», gominolas/index-gominolas.html)
-   Pantalla de inicio: título (h1 con emoji + nombre) y una frase, y debajo una columna de botones centrada sobre la madera, en ESTE orden:
+   MENÚ PRINCIPAL ESTÁNDAR = «BARRA DE INICIO» SOBRE EL JUEGO YA CARGADO (obligatorio en TODOS los juegos; ESTANDARES-juegos.md, secciones 7.0 y 7.1)
+   Al abrir un juego NO se ve una pantalla de menú aparte: se ve el juego ya cargado (el primer nivel, o el nivel donde va la cuenta de Google)
+   y, en la zona más alta de la pantalla, la barra de inicio con tres botones MUY JUNTOS, en ESTE orden de izquierda a derecha:
 
-   | # | Botón                  | Color (clase)        | Qué hace                                                                                         |
-   |---|------------------------|----------------------|--------------------------------------------------------------------------------------------------|
-   | 1 | ♾️ Modo libre          | b-morado (grande)    | SIEMPRE el primero. Abre la pantalla de Modo libre (tablero/dificultad/Jugar), que NO es un desplegable |
-   | 2 | ▶ Continuar · nivel N  | b-verde (grande)     | Juega directo el nivel donde vas. Solo juegos con niveles                                        |
-   | 3 | 📋 Niveles             | b-azul (grande)      | Abre el mapa de niveles (compartido/mapa-niveles.js) en la lista del estado o país donde vas. Solo juegos con niveles |
-   | 4 | ℹ️ Info                | b-cielo (normal)     | Ventana «Cómo se juega» con un botón verde «Entendido». Más chico que los otros tres               |
+   | # | Botón                  | Color (clase)        | Tamaño               | Qué hace                                                                                         |
+   |---|------------------------|----------------------|----------------------|--------------------------------------------------------------------------------------------------|
+   | 1 | ♾️ Modo libre          | b-morado             | cuadrado (--ini)     | Abre la pantalla de Modo libre (tablero/dificultad/Jugar), que NO es un desplegable               |
+   | 2 | ▶ Continuar / Jugar    | b-verde, .central    | DOBLE (2 × --ini)    | SIEMPRE en el centro. Juega el nivel donde vas (retoma su partida guardada). Solo juegos con niveles |
+   | 3 | 🗂️ Niveles             | b-azul               | cuadrado (--ini)     | Abre el mapa de niveles (compartido/mapa-niveles.js) en la lista del estado o país donde vas        |
 
+   • La barra desaparece con el primer movimiento del jugador (o al tocar «Continuar»); entonces el ☰ aparece como «Pausa». Volver al menú
+     principal (☰ «Atrás», «Menú principal» de la pausa) vuelve a mostrar el juego cargado con la barra.
+   • Juegos donde no se puede jugar «de inmediato» (tiempo real: Agario, Slither…): el nivel/mundo queda cargado detrás con una pantalla de
+     «Toca para jugar» (o pausa); juegos con varias partidas (supervivencia…): en su lugar la pantalla de partidas guardadas. La barra va igual.
    • NO hay botón 🗺️ Mapa ni 🚪 Salir: al mapa se llega desde «Niveles» (◀ México / ◀ Mundo), y se sale al portal con «🎮 Portal de Juegos».
    • Juegos sin niveles: solo ♾️ Modo libre (más ℹ️ Info si hace falta). Juegos con niveles aún sin crear: «Niveles» se muestra igual y al
      tocar un nivel inexistente se avisa con «🚧 Los niveles todavía no están creados».
@@ -94,9 +98,9 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
    • NIVELES Y MAPA: el mapa abre en la etapa del jugador; su vista principal lleva «Continuar · nivel N», «ℹ️ Info» y, cuando se desbloquea,
      «🌍 Mundo». Los botones «◀ México» y «◀ Mundo» (b-cielo) suben un paso dentro del mapa (Esc hace lo mismo); el ☰ «Atrás» sale al menú.
      El modo libre solo se entra desde el menú principal. El mundo y sus 194 países están ocultos hasta terminar los 32 estados (4A y 9).
-   • ☰ = «Pausa» en partida y «Atrás» fuera de ella (oculto en el menú principal): ver ESTANDARES-juegos.md, sección 7.4.
+   • ☰ = «Pausa» en partida y «Atrás» fuera de ella (oculto mientras se ve la barra de inicio): ver ESTANDARES-juegos.md, sección 7.4.
    • PAUSA (en partida): ▶ Continuar · 🔄 Reiniciar nivel · 📋 Niveles · 🚪 Menú principal. En Modo libre solo Continuar y «Salir a elegir tablero».
-   • «👤 Iniciar sesión» (b3d txt b-azul): SIEMPRE en la esquina superior derecha del menú principal.
+   • «👤 Iniciar sesión» (b3d txt b-azul): SIEMPRE en la esquina superior derecha.
    • NO se generan niveles hasta que los estándares del juego estén completos (sección 10 de ESTANDARES-juegos.md).
    =================================================================================================================== */
 
@@ -262,3 +266,29 @@ html.inmersivo.oscura {
 .pant-menu .nota { font-size: 13px; }
 .pant-menu input { font: inherit; font-size: 18px; width: 240px; padding: 10px 14px; text-align: center; color: #fff; background: #23252b; border: 2px solid #4a4e58; border-radius: 12px; text-shadow: none; -webkit-user-select: text; user-select: text; }
 @media (max-height: 520px) { .pant-menu { gap: 8px; padding-top: 56px; } .pant-menu h1, .pant-menu h2 { font-size: 24px; } .pant-menu p { max-width: 560px; font-size: 14px; } }
+
+/* ===================================================================================================================
+   BARRA DE INICIO (menú principal estándar; ESTANDARES-juegos.md, 7.1): tres botones pegados arriba del juego ya cargado.
+   Estructura:  <div class="barra-inicio" id="barra-inicio">
+                  <button class="b3d b-morado"><span class="b-ico">♾️</span><span class="b-rot">Modo libre</span></button>
+                  <button class="b3d central b-verde"><span class="b-ico">▶</span><span class="b-rot">Continuar</span></button>
+                  <button class="b3d b-azul"><span class="b-ico">🗂️</span><span class="b-rot">Niveles</span></button>
+                </div>
+   • --ini = lado de los botones laterales (56 px). El central mide el DOBLE (2 × --ini = 112 px) y va SIEMPRE en el centro. Separación: 4 px.
+   • Posición: lo más arriba posible. Con ≥ 640 px de ancho va en la fila superior (arriba al centro, entre las esquinas). En pantallas más
+     angostas (celular vertical) no cabe junto a 🎮 y las monedas/sesión, así que va justo debajo de esa fila (52 px más abajo); el ☰ está
+     oculto mientras la barra se ve, así que no estorba.
+   • Altura total ≈ 2 × --ini + 5 (sombra). El juego deja ese espacio libre encima de su tablero (ejemplo: #juego.con-barra en Deslizante).
+   • Celular horizontal bajo (alto ≤ 560 px): --ini baja a 46 px (central 92 px).
+   =================================================================================================================== */
+.barra-inicio { --ini: 56px; position: fixed; z-index: 6; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 4px; }
+.barra-inicio[hidden] { display: none; }
+.barra-inicio .b3d { --t: var(--ini); flex-direction: column; gap: 2px; padding: 0 2px; margin: 0 0 5px; font-weight: 800; }
+.barra-inicio .b-ico { font-size: calc(var(--ini) * .46); line-height: 1; }
+.barra-inicio .b-rot { position: relative; font-size: 10px; font-weight: 700; line-height: 1.1; text-align: center; white-space: nowrap; }
+.barra-inicio .b3d.central { --t: calc(var(--ini) * 2); border-radius: 22px; }
+.barra-inicio .central .b-ico { font-size: calc(var(--ini) * .9); }
+.barra-inicio .central .b-rot { font-size: 17px; font-weight: 800; }
+@media (max-width: 639px) { .barra-inicio { top: calc(max(8px, env(safe-area-inset-top)) + 52px); } }
+@media (orientation: landscape) and (max-height: 560px) { .barra-inicio { --ini: 46px; } .barra-inicio .central .b-rot { font-size: 14px; } }
