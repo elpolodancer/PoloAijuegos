@@ -47,6 +47,12 @@
       background: linear-gradient(180deg, #3b3e45, #0d0e10); border-color: #000; box-shadow: 0 4px 0 #000, inset 0 2px 0 rgba(255,255,255,.18); }
     .chip.chip-tam small { margin: 0; font-size: 9px; font-weight: 700; letter-spacing: .02em; color: #c9ccd3; text-shadow: none; }
     .chip-tam b { font-size: 17px; }
+    /* Corazones: rojo */
+    .chip-vidas { color: #fff; text-shadow: 0 2px 0 rgba(90,0,0,.6); border-color: #7d0f1a;
+      background: linear-gradient(180deg, #ff8a95 0%, #e0283c 60%, #b3121f 130%); box-shadow: 0 4px 0 #7d0f1a, inset 0 2px 0 rgba(255,255,255,.45); }
+    .chip-vidas.poco { animation: latido .8s ease-in-out infinite; }
+    @keyframes latido { 50% { transform: scale(1.08); } }
+    @media (prefers-reduced-motion: reduce) { .chip-vidas.poco { animation: none; } }
     /* Reiniciar: 25 % más grande que el resto de los botones chicos (40 → 50 px) */
     #reiniciar { --t: 50px; border-radius: 15px; }
     /* Moneda dibujada con CSS: el emoji 🪙 no se ve en sistemas viejos */
@@ -87,6 +93,7 @@
   <!-- Debajo de «☰ Pausa»: monedas (lo pone el JS al principio) · tamaño del tablero · movimientos -->
   <div class="hud hud-info" id="fila-info">
     <span class="chip chip-info chip-tam" id="tam" title="Tamaño del tablero"><small>Tamaño del tablero</small><b id="tam-txt"></b></span>
+    <span class="chip chip-info chip-vidas" id="vidas" title="Corazones: pierdes uno al tocar un auto que tiene otro enfrente"><small>❤️</small><b id="vidas-txt">0</b></span>
     <span class="chip chip-info chip-madera"><small>Movs</small><b id="movs">0</b></span>
   </div>
   <div class="hud hud-der">
@@ -103,6 +110,19 @@
     <div class="sobre-fila">
       <button class="b3d txt b-gris" id="repetir" type="button">Repetir nivel</button>
       <button class="b3d txt b-azul" id="al-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+    </div>
+  </div>
+
+  <!-- Sin corazones: también va «sobre el tablero» (lo coloca juego-estacionamiento.js igual que la ventana de victoria) -->
+  <div id="derrota" class="sobre-tablero" hidden>
+    <div class="sobre-texto">
+      <h2>¡Sin corazones! 💔</h2>
+      <div id="dtexto">Tocaste autos que tenían otro enfrente.</div>
+    </div>
+    <button class="b3d txt grande b-rojo" id="d-vida" type="button"></button>
+    <div class="sobre-fila">
+      <button class="b3d txt b-gris" id="d-repetir" type="button">Reintentar nivel</button>
+      <button class="b3d txt b-azul" id="d-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
     </div>
   </div>
 

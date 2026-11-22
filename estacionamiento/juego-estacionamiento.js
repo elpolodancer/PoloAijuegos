@@ -5,7 +5,7 @@
 // - Hay 22 600 niveles (3200 de México y 100 por cada país). Todos salen de niveles-estacionamiento.js: tamaño, autos y premio dependen solo del número
 //   de nivel, y siempre tienen solución (cada auto se coloca con su camino libre respecto a los ya colocados).
 
-import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
+import { encolarNivel } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
 import { TOTAL_NIVELES, DIFICULTADES, configNivel, generarNivel } from "./niveles-estacionamiento.js";
 import { montarMapa } from "./mapa-estacionamiento.js";   // menú principal: México con agua, mundo y listas de niveles
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
@@ -851,12 +851,12 @@ function victoria() {
     // No se anotan aparte: salen de prog.hecho (ver monedas()), así que no se pueden duplicar al sincronizar.
     txt += " +" + cfg.premio + " monedas";
     // Los puntos del nivel se dan una sola vez: se anotan en la cola local (nunca se pierden) y se envían al haber sesión y conexión
-    pts = 10 * cfg.premio; // 200 (medio) o 350 (difícil) puntos según el tamaño del nivel (antes 100 × nivel, que en el nivel 22 600 sería enorme)
+    pts = 1; // 1 punto del portal por nivel pasado por primera vez (ESTANDARES-juegos.md, sección 12). Antes: 200 o 350 según la dificultad
     prog.hecho = mio;
-    encolarPuntos(ID_JUEGO, pts);
+    encolarNivel(ID_JUEGO);
     import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).then((faltan) => {
       // el ✓ solo sale si de verdad ya se enviaron
-      if (faltan === 0 && ganado && nivel === mio && !$("victoria").hidden) $("vtexto").textContent = txt + " +" + pts + " puntos ✓";
+      if (faltan === 0 && ganado && nivel === mio && !$("victoria").hidden) $("vtexto").textContent = txt + " +1 punto ✓";
     }).catch(() => {});
   }
   prog.max = Math.max(prog.max, Math.min(TOTAL_NIVELES, nivel + 1));
@@ -865,7 +865,7 @@ function victoria() {
   pintarMonedas(); // ya con prog.hecho al día
   const ultimo = nivel >= TOTAL_NIVELES;
   $("vtitulo").textContent = ultimo ? "¡Terminaste los " + TOTAL_NIVELES.toLocaleString("es-MX") + " niveles! 🎉" : "¡Nivel " + nivel + " completado!";
-  $("vtexto").textContent = txt + (pts ? " +" + pts + " puntos" : "");
+  $("vtexto").textContent = txt + (pts ? " +1 punto" : "");
   $("siguiente").hidden = ultimo;
   $("victoria").hidden = false;
   colocarVictoria();

@@ -110,7 +110,7 @@ Recordatorio: `niveles-estacionamiento.js` debe ir en la lista `ARCHIVOS` de `sw
 2. **Rendimiento.** Con tableros de máximo 10×10 (100 casillas) ya no es un problema; la vista es fija (sin zoom ni arrastre) y la vía completa ocupa todo el ancho de la pantalla.
 3. **Guardado «local primero».** Guardar en `localStorage` y sincronizar con `compartido/progreso.js`. Como los niveles se abren en orden, basta guardar **«nivel más alto completado»** (no una lista de 22 600 booleanos). Las monedas se gastan, así que no se pueden fusionar con `unirMaximos`: hace falta una regla propia (por ejemplo, ganar la partida con `t` más reciente con `unirRecientes`).
 4. **Registro del juego.** Cuando esté listo: quitar `estacionamiento` de `EN_DESARROLLO` en `juegos.js`, anotar sus archivos en `ARCHIVOS` de `sw.js` y subir `VERSION`.
-5. **Puntos al perfil.** Usar `encolarPuntos("estacionamiento", n)` de `compartido/cola-puntos.js` (tope 1 000 por envío).
+5. **Puntos al perfil.** Desde el 21 nov 2026: **1 punto por nivel pasado por primera vez**, con `encolarNivel("estacionamiento")` de `compartido/cola-puntos.js` (estándar, sección 12 de `ESTANDARES-juegos.md`). Antes se daban 200 (medio) o 350 (difícil) con `encolarPuntos`. Las monedas (20 o 35) no cambian.
 
 ## 9. Orden de trabajo sugerido
 
@@ -143,7 +143,7 @@ Para ajustar la dificultad, los números a tocar están en `DIFICULTADES` y en `
 1. ✅ `N` variable por nivel (vía, esquinas, suelo, cámara). Probado resolviendo niveles de 10×10 a 50×50 sin pantalla.
 2. ✅ `NIVELES` de 5 entradas reemplazado por `configNivel(n)`.
 3. ✅ Fondo transparente (`clearRect`).
-4. ✅ Puntos: ahora `10 × monedas del nivel` (ahora 200 o 350) en vez de `100 × nivel`. Fácil de cambiar en `victoria()`.
+4. ✅ Puntos: **1 punto por nivel pasado por primera vez** (`encolarNivel`, ver sección 8, punto 5). Antes fueron `100 × nivel` y luego `10 × monedas`.
 5. **Selector de nivel.** Es provisional (◀ Nivel ▶ con tamaño y premio). El mapa lo reemplaza.
 6. ✅ **Rendimiento.** Con máximo 10×10 ya no hace falta optimizar el dibujo.
 7. **Progreso.** `prog = { max, hecho }` con `unirMaximos` sirve tal cual para «nivel más alto». Las monedas y boosts necesitan otra regla de fusión (se gastan).
@@ -186,7 +186,6 @@ Hoy el juego abre directo en el mapa de México y ahí solo hay **▶ Continuar 
 ### Pendiente ⏳ (para la próxima sesión)
 - **Probar en el celular los corazones y la bomba:** que 4 botones de boost quepan abajo, que el chip ❤️ no desacomode la fila de arriba, que la ventana de derrota se vea sobre el tablero y que la vista previa de la bomba (8 autos en rojo) se entienda.
 - **Ajustar números a gusto:** corazones (15 / 8), +3 por vida extra, precios y premios (20 / 35).
-- **Puntos al perfil:** ahora son `10 × premio` (200 / 350 por nivel); revisar si está bien.
 - **Probar en un celular real** el juego completo con tableros 10×10 y la vista fija (cuánto miden las casillas, que se toquen bien los autos, que la ventana de victoria `.sobre-tablero` quede bien).
 - **Jugar los 10 primeros niveles** y ajustar a gusto: cambiar `TAMS_INICIALES`, el tope `MAX_CADENA` de `semillas-iniciales.mjs`, o correr el buscador de nuevo y pegar el resultado en `SEMILLAS_INICIALES`.
 - **Revisar los niveles 11–100** (primer estado, Quintana Roo): ¿se sienten divertidos? Si hace falta, subir `minLibres` de la dificultad 1 o cambiar el número de difíciles por etapa en `sorteo-dificultades.mjs` (`DIF_PRIMERA`, `DIF_ULTIMA`).
