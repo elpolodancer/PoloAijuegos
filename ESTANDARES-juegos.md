@@ -137,9 +137,21 @@ Las opciones que antes estaban en el menú principal (♾️ Modo libre, 📋 Ni
 
 ### 7.2 Modo libre (pantalla propia, no desplegable)
 
-- Se entra desde **☰ Pausa → ♾️ Modo libre**. Título «♾️ Modo libre», una frase y grupos con su rótulo («Tablero», «Dificultad»…). Cada grupo es una **fila de botones** `b3d txt` de 44 px: **el elegido es `b-oro on`** y los demás **`b-cielo`**. En 2048 el grupo es «las medidas del tablero» (4×4 a 8×8, cuadrados) y elegir una medida entra directo a jugar.
-- Debajo: una nota que explica qué cambia la dificultad, el «🏆 Récord» de la combinación elegida y, al final, **«▶ Jugar»** (`b3d txt grande b-verde`) cuando el juego tiene más de una opción que confirmar.
-- Se recuerda la última selección. Cada juego decide qué grupos tiene y **cuántas dificultades** (Gominolas: 🙂 Fácil · 😐 Medio · 😈 Difícil, según cuántas negras nuevas salen por jugada fallida).
+- Se entra desde **☰ Pausa → ♾️ Modo libre**. **Es una pantalla de opciones y nada más: nunca muestra niveles, mapa ni listas de niveles** (los niveles solo se ven en 📋 Niveles). Título «♾️ Modo libre» y grupos con su rótulo, **en este orden: primero «Dificultad», debajo «Tablero» (o la medida/opción principal del juego) y después las demás opciones**. Cada grupo es una **fila de botones** `b3d txt` de 44 px: **el elegido es `b-oro on`** y los demás **`b-cielo`**. En 2048 el grupo es «las medidas del tablero» (4×4 a 8×8, cuadrados) y elegir una medida entra directo a jugar.
+- Debajo de los grupos: una nota que explica qué cambia la dificultad, el «🏆 Récord» de la combinación elegida y, al final, **«▶ Jugar»** (`b3d txt grande b-verde`) cuando el juego tiene más de una opción que confirmar.
+- Se recuerda la última selección (clave de `localStorage` terminada en `_v1`, para que entre en la copia de `almacen.js`). Cada juego decide qué grupos tiene y qué significa cada dificultad (lo explica en su README).
+- **Dificultad: 5 opciones estándar** (grupo «Dificultad», siempre **el primero**, rótulo «Dificultad»). Son botones **solo con emoji** (`b3d txt`, el elegido `b-oro on`, los demás `b-cielo`; el nombre va en `title` y `aria-label`) y debajo, una línea con el emoji, el nombre y qué cambia. De la más fácil a la más difícil:
+
+| # | Emoji | Nombre | Rostro |
+|---|---|---|---|
+| 1 | 😁 | Muy fácil | feliz (verde) |
+| 2 | 😬 | Fácil | serio con dientes |
+| 3 | 😐 | Normal | serio |
+| 4 | 😡 | Difícil | enojado |
+| 5 | 😈 | Demoníaco | endemoniado (el más difícil) |
+
+  Los juegos que hoy tienen otro número de dificultades (Gominolas: 🙂 😐 😈) se alinean a estas 5 cuando se vuelvan a tocar. Si un juego conserva récords de antes, deja la clave vieja en la dificultad que ya equivalía (en Deslizante, «Demoníaco» = tablero totalmente al azar).
+- El récord se guarda **por combinación** (dificultad + tablero); el «🏆 Récord» mostrado es el de lo elegido.
 - Sin monedas ni **puntos de perfil** (como en la sección 4A) y sin barra de boosts: el Modo libre solo guarda el récord. Esto cuenta desde que el juego pasa a la zona «Juegos» (sección 11), porque desde ahí sus puntos suman al total de todos. Si el juego quiere apartarse, lo deja en una constante (`PUNTOS_LIBRE`, en Slither) y lo explica en su README. Al terminar una ronda, el botón del resultado dice «⚙️ Cambiar tablero» y vuelve a esta pantalla.
 - El ☰ dice «Atrás» y vuelve al juego con la capa «Comenzar».
 

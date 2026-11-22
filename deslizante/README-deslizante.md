@@ -16,7 +16,7 @@ Ruta: `deslizante/README-deslizante.md` · Aquí se anotan las especificaciones 
   - *Niveles* muestra los niveles agrupados por tamaño.
   - Mientras está el velo no se ven el ☰ ni ◀ ▶. Al volver al «menú principal» (☰ «Atrás» o «Salir» de la pausa) se vuelve a ver el juego cargado con el velo.
   - Si la nube trae un progreso más avanzado y el velo sigue puesto, el tablero de atrás se cambia al nivel de su cuenta.
-- **Modo libre**: lista los tamaños del 3×3 al 30×30; se elige uno y salen tableros al azar sin fin.
+- **Modo libre**: dificultad (5 emojis) + tamaño del 3×3 al 30×30; salen tableros al azar sin fin (ver «Modo libre»). No muestra niveles.
 - **Niveles**: pasado = verde, disponible = azul, bloqueado = gris con 🔒.
 - **Juego** (ya sin velo): arriba, solo **Modo libre** y **Niveles** (sin Continuar); **justo debajo**, los tres cuadros de **Movimientos · Tiempo · Mejor tiempo**. El **tablero va centrado en la ventana** y en celular vertical ocupa todo el ancho (tapa la madera de los lados). Debajo del tablero: título del nivel, estrellas y avisos; abajo al centro, 🔄 para reiniciar. Ya no hay mensaje de «toca una ficha…». En celular horizontal bajo, la barra, los cuadros y los textos pasan a una columna a la izquierda.
   - Dentro de un nivel (no en modo libre), arriba a la derecha bajo el nombre de sesión: **◀** lleva al nivel anterior (si existe) y **▶** al siguiente (solo si ya está desbloqueado, por ejemplo después de pasar el nivel actual o si ya se había pasado). Cada uno se oculta cuando no aplica. Cambiar de nivel así reinicia el cronómetro.
@@ -49,11 +49,22 @@ Ruta: `deslizante/README-deslizante.md` · Aquí se anotan las especificaciones 
 - **Pendientes:** ninguno: los 280 niveles están hechos.
 
 ## Modo libre
-- **Aleatorio e infinito** (es lo único del juego que sí lo es): cada tablero se mezcla al momento con solución garantizada (hueco al final y número par de inversiones). Los niveles de «Niveles» siguen siendo fijos.
-- **Qué tamaños se pueden elegir:** un tamaño se abre cuando se desbloquea su etapa, es decir, cuando se puede jugar el primer nivel de ese tamaño (se pasaron los 10 del tamaño anterior). El 3×3 siempre está abierto. Los demás salen con 🔒.
-- **Guarda** por tamaño la mejor marca (menos movimientos; si empatan, menos tiempo) y cuántos tableros se resolvieron (`libre` dentro de `deslizante_progreso`, también sincronizado con la cuenta).
+- Pantalla de opciones (estándar 7.2), **sin niveles**: primero **Dificultad** (5 emojis), debajo **Tablero** (3×3 al 30×30), el «🏆 Récord» de la combinación elegida y **▶ Jugar**. Se recuerda la última selección (`deslizante_libre_v1`).
+- **Dificultad** (qué tan revuelto sale el tablero; siempre con solución). Se arma desde el tablero resuelto con jugadas legales al azar (sin deshacer la anterior); `pasos` = jugadas por casilla (n·n) y se ajusta en `DIFICULTADES` (`juego-deslizante.js`):
+
+| Emoji | Nombre | Cómo se mezcla |
+|---|---|---|
+| 😁 | Muy fácil | 0.5 × n² jugadas |
+| 😬 | Fácil | 1.5 × n² jugadas |
+| 😐 | Normal | 4 × n² jugadas |
+| 😡 | Difícil | 12 × n² jugadas |
+| 😈 | Demoníaco | totalmente al azar (hueco al final y número par de inversiones) |
+
+- **Aleatorio e infinito** (es lo único del juego que sí lo es). Los niveles de «Niveles» siguen siendo fijos.
+- **Qué tamaños se pueden elegir:** un tamaño se abre cuando se desbloquea su etapa (se pasaron los 10 del tamaño anterior). El 3×3 siempre está abierto; los demás salen con 🔒 y desactivados.
+- **Guarda** por combinación (tamaño + dificultad) la mejor marca (menos movimientos; si empatan, menos tiempo) y cuántos tableros se resolvieron (`libre` dentro de `deslizante_progreso`, sincronizado con la cuenta). Clave: `"<tamaño>"` para 😈 (así se conservan los récords de antes) y `"<tamaño>-<0 a 3>"` para las otras cuatro.
 - **Puntos:** el modo libre NO da puntos al perfil (así no se pueden repetir sin límite). Solo los da la primera vez que se pasa cada nivel de «Niveles».
-- Los tableros grandes al azar quedan totalmente revueltos, así que son mucho más difíciles que los niveles del mismo tamaño.
+- Al terminar un tablero: «Otro tablero» y «⚙️ Cambiar tablero» (vuelve a esta pantalla).
 
 ## Cómo se sabe que un nivel tiene solución
 No hace falta probar jugadas ni hacer backtracking: la solubilidad depende solo de la paridad de las inversiones (parejas de fichas donde una mayor va antes que una menor) y, en tableros de lado par, de la fila del hueco. Medio total de las mezclas posibles NO tiene solución, así que un nivel armado a mano o al azar puede ser imposible; por eso se genera mezclando desde el tablero resuelto con jugadas válidas y se comprueba con `esResoluble()` (el juego avisa en consola si alguno falla).
@@ -95,5 +106,6 @@ No hace falta probar jugadas ni hacer backtracking: la solubilidad depende solo 
 - Nombre definitivo del juego (se busca el del juguete de plástico mexicano).
 
 ## Cambios recientes
+- **Modo libre nuevo**: grupo «Dificultad» (😁 😬 😐 😡 😈) arriba y «Tablero» debajo, con «▶ Jugar»; ya no sale ninguna lista de niveles. Récords por combinación. Estándar anotado en `ESTANDARES-juegos.md` (7.2) y `inmersivo.css`. NO probado en navegador/celular.
 - **Velo de inicio** (estándar 7.0/7.1): el juego abre cargado detrás de un velo difuminado con Modo libre · Niveles · Continuar centrados. Sin resumen ni textos. Ya en el juego: barra con Modo libre y Niveles + cuadros de datos debajo + tablero centrado a todo el ancho. Se quitó el mensaje «Toca una ficha…».
 - OJO: los botones Modo libre / Niveles de la barra de juego también funcionan a media partida y salen sin guardar (como «Salir» de la pausa). NO se ha probado en navegador/celular: revisar la altura del tablero y los cuadros de datos en vertical y en horizontal.

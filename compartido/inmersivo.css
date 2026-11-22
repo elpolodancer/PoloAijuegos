@@ -92,9 +92,10 @@ body.inmersivo { position: fixed; inset: 0; background: transparent; -webkit-use
    • Sale solo al abrir el juego y al volver con «Menú principal» o con «Atrás» desde Niveles / Modo libre. Entrar a un nivel desde Niveles,
      Reiniciar o «Siguiente nivel» empieza directo, sin capa.
    • Juegos de tiempo real (Slither, Agario…): detrás de la capa el mundo está en marcha pero sin jugador; aparece al tocar «Comenzar».
-   • MODO LIBRE = pantalla propia (no desplegable; se abre desde ☰ Pausa): título «♾️ Modo libre», frase, grupos con rótulo («Tablero»,
-     «Dificultad») que son filas de botones b3d txt de 44 px (el elegido b-oro on, los demás b-cielo), nota, «🏆 Récord» y, al final, «▶ Jugar»
-     (grande b-verde). Recuerda la última selección. Cada juego decide qué opciones y cuántas dificultades tiene.
+   • MODO LIBRE = pantalla propia (no desplegable; se abre desde ☰ Pausa) y SIN niveles: título «♾️ Modo libre», primero el grupo «Dificultad»
+     (5 botones solo con emoji: 😁 Muy fácil · 😬 Fácil · 😐 Normal · 😡 Difícil · 😈 Demoníaco) y debajo «Tablero» (u otras opciones): filas de
+     botones b3d txt de 44 px (el elegido b-oro on, los demás b-cielo), nota, «🏆 Récord» y, al final, «▶ Jugar» (grande b-verde).
+     Recuerda la última selección. Cada juego decide qué significa cada dificultad y la explica en su README.
    • NIVELES Y MAPA (también desde ☰ Pausa): compartido/mapa-niveles.js abre en la etapa del jugador; las listas de niveles van en 5 columnas
      (opción montarMapa({ columnas: 5 }), filas de 5 en 5). «◀ México» y «◀ Mundo» (b-cielo) suben un paso dentro del mapa (Esc hace lo
      mismo); el ☰ «Atrás» sale al juego con la capa «Comenzar». El mundo y sus 194 países están ocultos hasta terminar los 32 estados.

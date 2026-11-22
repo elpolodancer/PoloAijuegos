@@ -25,10 +25,14 @@
     /* Niveles */
     #pantalla-niveles, #pantalla-libre { justify-content: flex-start; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
     #pantalla-niveles h2, #pantalla-libre h2 { margin: 0; font-size: 1.4rem; }
-    /* Modo libre: tamaños disponibles */
+    /* Modo libre (estándar 7.2): Dificultad (5 emojis) y Tablero (tamaños). Usa .modo-grupo y .modo-fila de compartido/inmersivo.css */
+    #pantalla-libre { gap: 10px; }
     .nota-libre { flex: none; width: min(100%, 520px); margin: 0; text-align: center; color: var(--txt-fondo-suave); font-size: .85rem; }
-    .rejilla-libre { flex: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 8px; width: min(100%, 520px); }
-    .rejilla-libre .b3d { width: 100%; --t: 46px; font-size: 15px; font-weight: 800; }
+    #pantalla-libre .modo-fila { width: min(100%, 520px); }
+    #dif-fila .b3d.txt { --t: 52px; padding: 0 10px; font-size: 28px; }
+    #dif-fila .b3d.txt .b-ico { font-size: 1em; }
+    #dif-nombre { flex: none; margin: 0; font-weight: 800; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    #libre-record { flex: none; margin: 0; font-size: .9rem; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
     .grupo { flex: none; width: min(100%, 520px); }
     .grupo h3 { margin: 8px 0 8px; font-size: 1rem; color: var(--txt-fondo-suave); }
     .rejilla-niveles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px 8px; }
@@ -174,8 +178,14 @@
 
     <section class="pantalla" id="pantalla-libre" hidden>
       <h2>♾️ Modo libre</h2>
-      <p class="nota-libre">Tableros al azar, sin fin. Cada tamaño se abre al desbloquear su etapa en «Niveles».</p>
-      <div class="rejilla-libre" id="rejilla-libre"></div>
+      <p class="modo-grupo">Dificultad</p>
+      <div class="modo-fila" id="dif-fila" role="group" aria-label="Dificultad"></div>
+      <p id="dif-nombre"></p>
+      <p class="modo-grupo">Tablero</p>
+      <div class="modo-fila" id="tam-fila" role="group" aria-label="Tamaño del tablero"></div>
+      <p class="nota-libre" id="nota-libre">Cada tamaño se abre al desbloquear su etapa en «Niveles».</p>
+      <p id="libre-record"></p>
+      <button class="b3d txt grande b-verde" id="btn-libre-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
     </section>
 
     <section class="pantalla" id="juego" hidden>

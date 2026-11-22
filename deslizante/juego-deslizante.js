@@ -7,6 +7,7 @@ import { crearMenuPausa } from "../compartido/menu-pausa.js";
 import { NIVELES, POR_TAMANO, TAMANO_MAX, puntosDe } from "./niveles-deslizante.js";
 
 const ID = "deslizante";
+let libreN = 3;                                    // modo libre: tamaño elegido
 const $ = (id) => document.getElementById(id);
 
 // ----- Progreso (local primero; se sincroniza con la cuenta de Google si hay internet y sesión) -----
@@ -195,7 +196,7 @@ function mostrar(nombre) {
   if (enInicio) { modo = "nivel"; idx = siguientePendiente(); empezar(true); pintarInicio(); } // carga el nivel que toca (con su partida guardada si la tiene)
   pintarNavNivel();
   pintarMonedas();
-  if (nombre === "pantalla-niveles") pintarNiveles();
+  if (nombre === "pantalla-niveles") pintarNiveles(); else $("lista-niveles").replaceChildren();   // los niveles solo se ven en su pantalla
   if (nombre === "pantalla-libre") pintarLibre();
 }
 // Botones «◀ anterior» y «▶ siguiente» (arriba a la derecha): solo en un nivel fijo, y cada uno solo si ese nivel existe y está abierto
@@ -255,27 +256,58 @@ function pintarNiveles() {
   }
 }
 
+// Modo libre (estándar 7.2): grupo «Dificultad» (5 emojis) y grupo «Tablero» (tamaños). Aquí NO se muestra ningún nivel.
+// Se recuerda la última selección en el dispositivo (clave terminada en _v1 para que entre en la copia de seguridad de almacen.js).
+const CLAVE_LIBRE = "deslizante_libre_v1";
+// Las 5 dificultades estándar. «pasos» = jugadas al azar desde el tablero resuelto, por casilla (n·n); null = totalmente revuelto.
+const DIFICULTADES = [
+  { emoji: "😁", nombre: "Muy fácil",  pasos: 0.5, nota: "Casi armado: pocas fichas fuera de lugar." },
+  { emoji: "😬", nombre: "Fácil",      pasos: 1.5, nota: "Algo revuelto, se arregla rápido." },
+  { emoji: "😐", nombre: "Normal",     pasos: 4,   nota: "Bien revuelto." },
+  { emoji: "😡", nombre: "Difícil",    pasos: 12,  nota: "Muy revuelto." },
+  { emoji: "😈", nombre: "Demoníaco",  pasos: null, nota: "Totalmente al azar (el más difícil)." },
+];
+let libreDif = 2;                                  // dificultad elegida (índice de DIFICULTADES)
+try { const g = JSON.parse(localStorage.getItem(CLAVE_LIBRE)); if (g) { if (DIFICULTADES[g.d]) libreDif = g.d; if (g.n >= 3 && g.n <= TAMANO_MAX) libreN = g.n; } } catch (e) {}
+const guardarLibre = () => { try { localStorage.setItem(CLAVE_LIBRE, JSON.stringify({ d: libreDif, n: libreN })); } catch (e) {} };
+// Clave del récord: «Demoníaco» conserva las claves viejas (solo el tamaño) porque antes todo era totalmente al azar
+const claveLibre = (m, d = libreDif) => (DIFICULTADES[d].pasos === null ? String(m) : m + "-" + d);
+
 function pintarLibre() {
-  const cont = $("rejilla-libre");
-  cont.innerHTML = "";
-  for (let m = 3; m <= TAMANO_MAX; m++) {
-    const abierto = tamanoAbierto(m), r = prog.libre[m];
+  if (!tamanoAbierto(libreN)) libreN = 3;          // el tamaño recordado ya no está abierto (p. ej. otra cuenta)
+  const df = $("dif-fila"), tf = $("tam-fila");
+  df.replaceChildren(); tf.replaceChildren();
+  DIFICULTADES.forEach((d, i) => {
     const b = document.createElement("button");
-    b.className = "b3d txt " + (abierto ? "b-morado" : "b-gris");
+    b.type = "button";
+    b.className = "b3d txt " + (i === libreDif ? "b-oro on" : "b-cielo");
+    b.innerHTML = '<span class="b-ico">' + d.emoji + "</span>";
+    b.title = d.nombre; b.setAttribute("aria-label", d.nombre); b.setAttribute("aria-pressed", String(i === libreDif));
+    b.addEventListener("click", () => { libreDif = i; guardarLibre(); pintarLibre(); });
+    df.appendChild(b);
+  });
+  $("dif-nombre").textContent = DIFICULTADES[libreDif].emoji + " " + DIFICULTADES[libreDif].nombre + " · " + DIFICULTADES[libreDif].nota;
+  for (let m = 3; m <= TAMANO_MAX; m++) {
+    const abierto = tamanoAbierto(m);
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "b3d txt " + (m === libreN ? "b-oro on" : "b-cielo");
     b.textContent = abierto ? m + "×" + m : "🔒 " + m;
     b.disabled = !abierto;
-    b.title = abierto ? (r ? "Mejor tiempo: " + fmtMs(r.ms) + " · mejor: " + r.mov + " mov. · " + r.ganados + " resueltos" : "Aún sin resolver") : "Se abre al desbloquear la etapa " + m + "×" + m + " en Niveles";
-    b.setAttribute("aria-label", abierto ? "Modo libre " + m + "×" + m : m + "×" + m + " bloqueado");
-    if (abierto && r && r.ganados) { const i = document.createElement("span"); i.className = "b-info"; i.textContent = "×" + r.ganados; b.appendChild(i); }
-    b.addEventListener("click", () => jugarLibre(m));
-    cont.appendChild(b);
+    b.title = abierto ? m + "×" + m : "Se abre al desbloquear la etapa " + m + "×" + m + " en Niveles";
+    b.setAttribute("aria-label", abierto ? "Tablero " + m + "×" + m : m + "×" + m + " bloqueado");
+    b.setAttribute("aria-pressed", String(m === libreN));
+    b.addEventListener("click", () => { libreN = m; guardarLibre(); pintarLibre(); });
+    tf.appendChild(b);
   }
+  const r = prog.libre[claveLibre(libreN)];
+  $("libre-record").textContent = r ? "🏆 Récord " + libreN + "×" + libreN + " " + DIFICULTADES[libreDif].emoji + ": " + fmtMs(r.ms) + " · " + r.mov + " mov. · " + r.ganados + " resueltos" : "🏆 Aún sin resolver en esta combinación";
 }
 
 // ----- Juego -----
 let enInicio = false;                              // ¿se ve la barra de inicio sobre el juego cargado?
 let modo = "nivel";                                // "nivel" (niveles fijos) o "libre" (tableros al azar sin fin)
-let libreN = 3, libreNum = 0, inicial = [];        // modo libre: tamaño, número de tablero de esta sesión y tablero de partida
+let libreNum = 0, inicial = [];                    // modo libre: número de tablero de esta sesión y tablero de partida (libreN y libreDif están arriba)
 let idx = 0, n = 3, t = [];                        // t[pos] = número de la ficha (0 = hueco)
 let movs = 0, inicio = 0, reloj = null, jugando = false;
 let previo = 0, pausadoMs = 0, enPausa = false;     // ms ya jugados antes de empezar/retomar · ms al abrir la pausa · ¿pausa abierta?
@@ -346,7 +378,7 @@ function mover(dx, dy) {                            // flechas: mueve la ficha q
 
 const transcurrido = () => Date.now() - inicio;     // milisegundos desde el primer movimiento
 function mostrarTiempo() { $("tiempo").textContent = fmtMs(transcurrido()); }
-const mejorActual = () => (modo === "libre" ? prog.libre[libreN] : prog.mejores[idx + 1]);
+const mejorActual = () => (modo === "libre" ? prog.libre[claveLibre(libreN)] : prog.mejores[idx + 1]);
 // Fila de estrellas bajo el título del nivel: las que llevas y qué falta para la siguiente (solo en niveles con estrellas)
 function pintarMetaJuego() {
   const caja = $("meta-estrellas");
@@ -358,9 +390,29 @@ function pintarMetaJuego() {
 }
 function pintarMejor() { const m = mejorActual(); $("mejor").textContent = m ? fmtMs(m.ms) : "–"; }
 
-// Tablero al azar con solución garantizada (hueco al final y número par de inversiones)
-function mezclarAzar(m) {
+// Tablero al azar con solución garantizada. d = índice de DIFICULTADES:
+//  · «Demoníaco» (pasos null): totalmente revuelto (hueco al final y número par de inversiones).
+//  · Las demás: se parte del tablero resuelto y se hacen jugadas legales al azar (sin deshacer la anterior), así siempre tiene solución.
+function mezclarAzar(m, d = DIFICULTADES.length - 1) {
+  const pasos = DIFICULTADES[d].pasos;
   let a;
+  if (pasos !== null) {
+    const total = Math.max(3, Math.round(pasos * m * m));
+    do {
+      a = Array.from({ length: m * m }, (_, i) => (i + 1) % (m * m));   // resuelto: 1…, hueco (0) al final
+      let h = m * m - 1, ant = -1;
+      for (let s = 0; s < total; s++) {
+        const f = Math.floor(h / m), c = h % m, vec = [];
+        if (f > 0) vec.push(h - m);
+        if (f < m - 1) vec.push(h + m);
+        if (c > 0) vec.push(h - 1);
+        if (c < m - 1) vec.push(h + 1);
+        const op = vec.filter((x) => x !== ant), x = op[Math.floor(Math.random() * op.length)];
+        a[h] = a[x]; a[x] = 0; ant = h; h = x;
+      }
+    } while (a.every((v, i) => (i === a.length - 1 ? v === 0 : v === i + 1)));   // que no salga ya resuelto
+    return a;
+  }
   do {
     a = Array.from({ length: m * m - 1 }, (_, i) => i + 1);
     for (let i = a.length - 1; i > 0; i--) { const k = Math.floor(Math.random() * (i + 1)); [a[i], a[k]] = [a[k], a[i]]; }
@@ -387,7 +439,7 @@ async function ganar() {
   const antes = cE ? tierNivel(idx) : 0;
   const nuevoTier = Math.max(antes, cE ? tierPorTiempo(n, ms) : 0);
   const ganadas = MONEDAS[nuevoTier] - MONEDAS[antes];
-  if (libre) prog.libre[libreN] = { ...nueva, ganados: ((prog.libre[libreN] && prog.libre[libreN].ganados) || 0) + 1 };
+  if (libre) { const k = claveLibre(libreN); prog.libre[k] = { ...nueva, ganados: ((prog.libre[k] && prog.libre[k].ganados) || 0) + 1 }; }
   else {
     prog.mejores[idx + 1] = nueva; prog.hechos[idx] = true; if (cE) prog.estrellas[idx + 1] = nuevoTier;
     if (prog.parciales[idx + 1]) prog.parciales[idx + 1] = { ts: Date.now() };   // el nivel ya se resolvió: su partida guardada deja de existir
@@ -411,7 +463,7 @@ async function ganar() {
   const boton = (texto, clase, fn) => { const b = document.createElement("button"); b.className = "b3d txt " + clase; b.textContent = texto; b.addEventListener("click", fn); caja.appendChild(b); };
   if (libre) {
     boton("Otro tablero", "b-verde", () => jugarLibre(libreN));
-    boton("Tamaños", "b-morado", () => mostrar("pantalla-libre"));
+    boton("⚙️ Cambiar tablero", "b-cielo", () => mostrar("pantalla-libre"));
   } else {
     if (hay) boton("Siguiente nivel", "b-verde", () => jugarNivel(idx + 1));
     boton("Repetir", "b-oro", () => empezar());
@@ -437,7 +489,7 @@ function empezar(retomar) {
   let pp = null;                                    // partida guardada que se retoma (solo en niveles)
   if (modo === "libre") {
     n = libreN; t = inicial.slice();
-    $("titulo").innerHTML = "♾️ Modo libre · " + n + "×" + n + "<small>Tablero " + libreNum + " de esta sesión</small>";
+    $("titulo").innerHTML = "♾️ Modo libre · " + n + "×" + n + " " + DIFICULTADES[libreDif].emoji + "<small>" + DIFICULTADES[libreDif].nombre + " · tablero " + libreNum + " de esta sesión</small>";
   } else {
     const l = NIVELES[idx], d = info(idx);
     n = l.n; t = l.fichas.slice();
@@ -461,7 +513,7 @@ function jugarNivel(i) {
 }
 function jugarLibre(m) {
   if (!tamanoAbierto(m)) return;
-  modo = "libre"; libreN = m; libreNum++; inicial = mezclarAzar(m);
+  modo = "libre"; libreN = m; libreNum++; inicial = mezclarAzar(m, libreDif); guardarLibre();
   mostrar("juego");
   empezar();
 }
@@ -469,6 +521,7 @@ function jugarLibre(m) {
 // ----- Botones y teclado -----
 $("btn-jugar").addEventListener("click", () => jugarNivel(siguientePendiente()));
 for (const id of ["btn-niveles", "btn-niveles2"]) $(id).addEventListener("click", () => mostrar("pantalla-niveles"));
+$("btn-libre-jugar").addEventListener("click", () => jugarLibre(libreN));
 for (const id of ["btn-libre", "btn-libre2"]) $(id).addEventListener("click", () => mostrar("pantalla-libre"));
 // ☰: dentro de una partida abre la pausa (compartido/menu-pausa.js); en las demás pantallas vuelve al menú principal
 const hayAvance = () => jugando !== "fin" && movs > 0;   // ya hay algo que guardar (o que perder)
