@@ -17,9 +17,11 @@ const pedir = raiz.requestFullscreen || raiz.webkitRequestFullscreen;
 const salirFn = document.exitFullscreen || document.webkitExitFullscreen;
 const activa = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
 
-const instalada = matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: fullscreen)").matches || navigator.standalone === true;
+// En celular instalado la app ya abre a pantalla completa; en PC abre en una ventana, así que ahí el botón ⛶ sigue sirviendo
+const tactil = matchMedia("(pointer: coarse)").matches;
+const instalada = matchMedia("(display-mode: fullscreen)").matches || (tactil && (matchMedia("(display-mode: standalone)").matches || navigator.standalone === true));
 
-// Solo si el navegador lo permite (iOS no) y la app no está ya instalada (ahí ya va a pantalla completa)
+// Solo si el navegador lo permite (iOS no) y la app no está ya a pantalla completa (celular instalado)
 if (pedir && !instalada) {
   const auto = document.body.dataset.pantallaAuto;
   const horizontal = async () => {
