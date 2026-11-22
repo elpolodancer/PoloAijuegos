@@ -43,9 +43,12 @@
     .proximamente { flex: none; width: min(100%, 520px); margin: 6px 0 0; text-align: center; color: var(--txt-fondo-suave); font-size: .85rem; }
 
     /* Juego */
-    /* Anterior / siguiente: arriba a la derecha, justo debajo de la sesión (cabe en los 104px de margen superior de la pantalla) */
-    .nav-nivel { position: fixed; z-index: 6; display: flex; gap: 8px; top: calc(max(8px, env(safe-area-inset-top)) + 42px); right: max(8px, env(safe-area-inset-right)); }
-    .nav-nivel[hidden] { display: none; }
+    /* Nombre del nivel en curso: botón verde arriba al centro (misma posición que tenía la barra de Modo libre · Niveles) */
+    .barra-nombre { --t: 50px; position: fixed; z-index: 6; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 24px); pointer-events: none; font-size: 17px; }
+    .barra-nombre > span { position: relative; overflow: hidden; text-overflow: ellipsis; }
+    .barra-nombre[hidden] { display: none; }
+    @media (max-width: 639px) { .barra-nombre { top: calc(max(8px, env(safe-area-inset-top)) + 52px); } }
+
     /* Pantalla de juego: el TABLERO va centrado en la ventana (arriba 50 %, centrado en x) y ocupa todo el ancho en celular vertical (tapa la madera de los lados).
        --T = espacio que se deja arriba y abajo (barra de juego + cuadros de datos); --S = lado del tablero. */
     #juego { display: block; padding: 0; --T: calc(190px + env(safe-area-inset-top, 0px)); --S: max(200px, min(100vw, calc(100vh - 2 * var(--T)), 700px)); --S: max(200px, min(100vw, calc(100dvh - 2 * var(--T)), 700px)); }
@@ -132,6 +135,7 @@
     /* Celular horizontal: barra, cuadros y textos pasan a una columna a la izquierda y el tablero sigue centrado en la ventana */
     @media (orientation: landscape) and (max-height: 560px) {
       #juego { --S: max(160px, min(calc(100vh - 16px), calc(100vw - 508px), 700px)); --S: max(160px, min(calc(100dvh - 16px), calc(100vw - 508px), 700px)); }
+      .barra-nombre { top: max(8px, env(safe-area-inset-top)); left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; max-width: 190px; font-size: 14px; --t: 44px; }
       .datos { left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; top: calc(max(8px, env(safe-area-inset-top)) + 57px); width: 190px; gap: 4px; }
       .datos div { padding: 3px 4px; font-size: .6rem; }
       .datos b { font-size: .95rem; }
@@ -149,12 +153,6 @@
     <button class="b3d chico b-verdeclaro" id="btn-menu" type="button" title="Volver al menú principal" aria-label="Volver al menú principal" hidden><span class="b-ico">☰</span></button>
   </nav>
   <div class="hud hud-der"><span class="chip" id="monedas" title="Monedas ganadas con las estrellas"></span><span class="chip" id="sesion"></span></div>
-  <!-- Nivel anterior / siguiente: solo dentro de un nivel (no en modo libre); cada botón aparece solo si ese nivel existe y está abierto -->
-  <div class="nav-nivel" id="nav-nivel" hidden>
-    <button class="b3d chico b-azul" id="btn-anterior" type="button" title="Nivel anterior" aria-label="Nivel anterior" hidden><span class="b-ico">◀</span></button>
-    <button class="b3d chico b-verde" id="btn-siguiente" type="button" title="Siguiente nivel" aria-label="Siguiente nivel" hidden><span class="b-ico">▶</span></button>
-  </div>
-
   <!-- INICIO (estándar, compartido/inmersivo.css): el juego ya cargado se ve detrás, un poco difuminado y oscurecido, y no se puede jugar hasta tocar «Continuar».
        Arriba del botón grande van Modo libre y Niveles. Todo el grupo va centrado en la pantalla. -->
   <div class="velo-inicio" id="velo-inicio" hidden>
@@ -164,11 +162,8 @@
     </div>
     <button class="b3d central b-verde" id="btn-jugar" type="button"><span class="b-ico">▶</span><span class="b-rot">Jugar</span></button>
   </div>
-  <!-- Ya dentro del juego: solo Modo libre y Niveles (sin Continuar), arriba; los cuadros de datos van justo debajo -->
-  <div class="barra-juego fila-menu" id="barra-juego" hidden>
-    <button class="b3d b-morado" id="btn-libre2" type="button" title="Modo libre" aria-label="Modo libre"><span class="b-ico">♾️</span><span class="b-rot">Modo libre</span></button>
-    <button class="b3d b-azul" id="btn-niveles2" type="button" title="Niveles" aria-label="Niveles"><span class="b-ico">🗂️</span><span class="b-rot">Niveles</span></button>
-  </div>
+  <!-- Ya dentro del juego: botón verde con el nombre del nivel (solo informa; no hace nada al tocarlo) -->
+  <button class="b3d txt b-verde barra-nombre" id="barra-juego" type="button" tabindex="-1" hidden><span id="nombre-nivel"></span></button>
 
   <main>
     <section class="pantalla" id="pantalla-niveles" hidden>

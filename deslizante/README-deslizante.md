@@ -14,30 +14,26 @@ Ruta: `deslizante/README-deslizante.md` · Aquí se anotan las especificaciones 
 - **Inicio (juego ya cargado, con velo)**: al abrir el juego se ve directamente el nivel donde va el jugador (el primero si es nuevo; con sesión, el de su cuenta de Google; y su partida guardada si la tiene) **detrás de un velo negro transparente con un poco de difuminado** (`.velo-inicio` de `compartido/inmersivo.css`; `ESTANDARES-juegos.md`, 7.0 y 7.1). El juego se ve pero no responde (ni toques ni flechas) hasta tocar **Continuar**. En el centro de la pantalla, todo el grupo centrado: **Modo libre** y **Niveles** (cuadrados, juntos) un poco arriba y, debajo, **Jugar / Continuar** (verde, del doble de tamaño). No hay título ni texto de resumen.
   - *Jugar* / *Continuar* quita el velo y deja jugar el primer nivel sin pasar (dice «Continuar» si ya se pasó alguno), retomando su partida guardada. Si ya se pasaron todos, abre el último.
   - *Niveles* muestra los niveles agrupados por tamaño.
-  - Mientras está el velo no se ven el ☰ ni ◀ ▶. Al volver al «menú principal» (☰ «Atrás» o «Salir» de la pausa) se vuelve a ver el juego cargado con el velo.
+  - Mientras está el velo no se ve el ☰. Al volver al «menú principal» (☰) se vuelve a ver el juego cargado con el velo.
   - Si la nube trae un progreso más avanzado y el velo sigue puesto, el tablero de atrás se cambia al nivel de su cuenta.
 - **Modo libre**: dificultad (5 emojis) + tamaño del 3×3 al 30×30; salen tableros al azar sin fin (ver «Modo libre»). No muestra niveles.
 - **Niveles**: pasado = verde, disponible = azul, bloqueado = gris con 🔒.
-- **Juego** (ya sin velo): arriba, solo **Modo libre** y **Niveles** (sin Continuar); **justo debajo**, los tres cuadros de **Movimientos · Tiempo · Mejor tiempo**. El **tablero va centrado en la ventana** y en celular vertical ocupa todo el ancho (tapa la madera de los lados). Debajo del tablero: título del nivel, estrellas y avisos; abajo al centro, 🔄 para reiniciar. Ya no hay mensaje de «toca una ficha…». En celular horizontal bajo, la barra, los cuadros y los textos pasan a una columna a la izquierda.
-  - Dentro de un nivel (no en modo libre), arriba a la derecha bajo el nombre de sesión: **◀** lleva al nivel anterior (si existe) y **▶** al siguiente (solo si ya está desbloqueado, por ejemplo después de pasar el nivel actual o si ya se había pasado). Cada uno se oculta cuando no aplica. Cambiar de nivel así reinicia el cronómetro.
+- **Juego** (ya sin velo): arriba, un **botón verde con el nombre del nivel** («Nivel 3 · 4×4», o «♾️ Modo libre · 5×5 😐»); solo informa, no hace nada al tocarlo. **Justo debajo**, los tres cuadros de **Movimientos · Tiempo · Mejor tiempo**. El **tablero va centrado en la ventana** y en celular vertical ocupa todo el ancho (tapa la madera de los lados). Debajo del tablero: título del nivel, estrellas y avisos; abajo al centro, 🔄 para reiniciar. En celular horizontal bajo, el botón verde, los cuadros y los textos pasan a una columna a la izquierda.
+  - Ya **no hay** botones de Modo libre y Niveles dentro de la partida, ni ◀ ▶ para cambiar de nivel. Se cambia de nivel con «Siguiente nivel» al ganar, o desde ☰ → menú principal → Niveles.
 
 ## Navegación (estándar de `compartido/inmersivo.css`)
 - Arriba a la izquierda, **🎮** (vuelve al portal), siempre visible: botón **cuadrado de 40 px, azul oscuro** (`b-azuloscuro`), solo icono (el texto «Juegos» va en `title` y `aria-label`).
-- Justo debajo, el botón **☰**, **cuadrado, verde claro** (`b-verdeclaro`) y solo icono, visible en todas las pantallas menos en el propio menú de inicio. En «Niveles» y «Modo libre» vuelve al menú de inicio («Volver al menú principal» en su `title`); **dentro de una partida abre el menú de pausa** (ver abajo).
+- Justo debajo, el botón **☰**, **cuadrado, verde claro** (`b-verdeclaro`) y solo icono, visible en todas las pantallas menos en el propio menú de inicio. En todas las pantallas, **también dentro de una partida**, vuelve al menú principal (el juego cargado con el velo y Modo libre · Niveles · Continuar). No hay menú de pausa.
 
 ## Fondo de madera
 - Todas las pantallas (inicio, niveles, modo libre y partida) van sobre el fondo estándar de madera de `compartido/fondo-madera.js`: **madera clara** por defecto y **madera oscura con luna** con el botón **🌙/☀️** de abajo a la izquierda (`compartido/fondo-madera.js`; la elección se guarda en el dispositivo y vale para todos los juegos).
 - Los textos sueltos sobre la madera (título, notas, encabezados de tamaño, título del nivel) usan `--txt-fondo`, `--txt-fondo-suave` y `--sombra-txt`; los paneles oscuros (datos, victoria, tablero) conservan sus colores.
 - La página trae un `<script>` pequeño en el `<head>` que pone la clase `oscura` antes de pintar, para que no parpadee la madera clara.
 
-## Pausa y guardar progreso del nivel
-- Dentro de una partida, **☰** (o la tecla **Esc**) abre el menú de pausa estándar de `compartido/menu-pausa.js`. Mientras está abierto el **cronómetro se detiene** y el tablero no responde. Opciones, en este orden:
-  1. **▶ Continuar**: cierra el menú y el tiempo sigue donde iba (también con Esc o tocando fuera de la ventana).
-  2. **💾 Guardar progreso de este nivel y salir** (solo en niveles; en modo libre no aparece): guarda el tablero tal como está, los movimientos y el tiempo, y vuelve al menú de inicio. Está desactivada hasta que se haga al menos un movimiento.
-  3. **🚪 Salir**: vuelve al menú de inicio **sin guardar** lo que se avanzó (lo avisa debajo del botón). Una partida guardada antes no se toca.
-- **Retomar:** al abrir un nivel que tiene partida guardada (desde «Continuar», «Niveles», ◀ o ▶) se carga el tablero guardado y el tiempo sigue desde lo guardado (el cronómetro arranca con el siguiente movimiento). Los niveles con partida guardada llevan 💾 en «Niveles».
-- **Cuándo se borra la partida guardada:** al resolver el nivel y al pulsar 🔄 (reiniciar). Cambiar de nivel con ◀ ▶ o salir con «Salir» no la borran, pero tampoco guardan el avance de la partida en curso: solo «Guardar progreso de este nivel y salir» guarda.
-- Se guarda por nivel en `parciales` dentro de `deslizante_progreso` y se sincroniza con la cuenta (gana la más reciente; al borrar queda una marca `{ ts }` para que no regrese de la nube). «Continuar» del menú de inicio sigue yendo al primer nivel sin pasar (y ese nivel retoma su partida guardada si la tiene).
+## Salir de una partida (sin menú de pausa)
+- **☰** (arriba a la izquierda, bajo 🎮) vuelve directo al menú principal, también en plena partida. Ya no existe el menú de pausa (`compartido/menu-pausa.js` ya no se usa aquí) y la tecla **Esc** ya no hace nada.
+- Al salir **no se guarda** lo que se avanzó en esa partida (movimientos y tiempo se pierden). Ya no existe «Guardar progreso de este nivel y salir».
+- **Partidas guardadas de antes** (`parciales` en `deslizante_progreso`): siguen funcionando. Al abrir un nivel que tiene una, se retoma (el tiempo sigue desde lo guardado y el cronómetro arranca con el siguiente movimiento) y lleva 💾 en «Niveles». Se borra al resolver el nivel o al pulsar 🔄. Como ya no hay forma de crear partidas nuevas, solo quedan las viejas. «Continuar» sigue yendo al primer nivel sin pasar.
 
 ## Niveles
 - 10 niveles por tamaño: del 3×3 al 30×30 (280 en total).
@@ -106,6 +102,6 @@ No hace falta probar jugadas ni hacer backtracking: la solubilidad depende solo 
 - Nombre definitivo del juego (se busca el del juguete de plástico mexicano).
 
 ## Cambios recientes
+- **Sin pausa ni barra en partida**: se quitaron Modo libre · Niveles de la zona de juego, el menú de pausa (☰ ahora vuelve al menú principal) y los botones ◀ ▶. En su lugar, botón verde con el nombre del nivel. NO probado en navegador/celular (revisar que el botón no choque con los cuadros de datos en vertical y horizontal).
 - **Modo libre nuevo**: grupo «Dificultad» (😁 😬 😐 😡 😈) arriba y «Tablero» debajo, con «▶ Jugar»; ya no sale ninguna lista de niveles. Récords por combinación. Estándar anotado en `ESTANDARES-juegos.md` (7.2) y `inmersivo.css`. NO probado en navegador/celular.
 - **Velo de inicio** (estándar 7.0/7.1): el juego abre cargado detrás de un velo difuminado con Modo libre · Niveles · Continuar centrados. Sin resumen ni textos. Ya en el juego: barra con Modo libre y Niveles + cuadros de datos debajo + tablero centrado a todo el ancho. Se quitó el mensaje «Toca una ficha…».
-- OJO: los botones Modo libre / Niveles de la barra de juego también funcionan a media partida y salen sin guardar (como «Salir» de la pausa). NO se ha probado en navegador/celular: revisar la altura del tablero y los cuadros de datos en vertical y en horizontal.

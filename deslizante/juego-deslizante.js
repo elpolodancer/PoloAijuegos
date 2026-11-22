@@ -3,7 +3,6 @@
 // Al abrir se ve el nivel donde va el jugador ya cargado y listo para jugar, con la barra de inicio arriba (Modo libre · Continuar · Niveles).
 // Niveles fijos que se desbloquean en orden (ver niveles-deslizante.js).
 import { encolarPuntos } from "../compartido/cola-puntos.js";
-import { crearMenuPausa } from "../compartido/menu-pausa.js";
 import { NIVELES, POR_TAMANO, TAMANO_MAX, puntosDe } from "./niveles-deslizante.js";
 
 const ID = "deslizante";
@@ -179,7 +178,7 @@ function brillantina(caja) {
 // ----- Pantallas -----
 // «inicio» = el JUEGO cargado en el nivel que toca (el de la cuenta o el primero) visto detrás de un velo difuminado y oscuro (#velo-inicio).
 // No se puede jugar hasta tocar «Continuar» (jugarNivel → mostrar("juego")). Ya en el juego solo queda la barra con Modo libre y Niveles.
-function textoMenuPausa() { return enInicio ? "" : !$("juego").hidden ? "Pausa: continuar, guardar progreso y salir, o salir" : "Volver al menú principal"; }
+function textoMenuPausa() { return enInicio ? "" : "Volver al menú principal"; }   // ☰: siempre vuelve al menú principal (el juego cargado con el velo)
 function pintarBotonMenu() {
   $("btn-menu").hidden = enInicio;                  // el ☰ no se ve mientras está el velo de inicio
   $("btn-menu").innerHTML = '<span class="b-ico">☰</span>'; // cuadrado, solo icono: el texto va en title y aria-label
@@ -194,19 +193,9 @@ function mostrar(nombre) {
   pintarBotonMenu();
   if (pant !== "juego") { clearInterval(reloj); clearInterval(chispas); }
   if (enInicio) { modo = "nivel"; idx = siguientePendiente(); empezar(true); pintarInicio(); } // carga el nivel que toca (con su partida guardada si la tiene)
-  pintarNavNivel();
   pintarMonedas();
   if (nombre === "pantalla-niveles") pintarNiveles(); else $("lista-niveles").replaceChildren();   // los niveles solo se ven en su pantalla
   if (nombre === "pantalla-libre") pintarLibre();
-}
-// Botones «◀ anterior» y «▶ siguiente» (arriba a la derecha): solo en un nivel fijo, y cada uno solo si ese nivel existe y está abierto
-function pintarNavNivel() {
-  const enNivel = !$("juego").hidden && !enInicio && modo === "nivel"; // en el inicio aún no se cambia de nivel con ◀ ▶
-  const hayAnt = enNivel && idx > 0 && desbloqueado(idx - 1);
-  const haySig = enNivel && idx + 1 < NIVELES.length && desbloqueado(idx + 1);
-  $("btn-anterior").hidden = !hayAnt;
-  $("btn-siguiente").hidden = !haySig;
-  $("nav-nivel").hidden = !(hayAnt || haySig);
 }
 function pintarInicio() {
   const pasados = prog.hechos.filter(Boolean).length;
@@ -310,7 +299,7 @@ let modo = "nivel";                                // "nivel" (niveles fijos) o 
 let libreNum = 0, inicial = [];                    // modo libre: número de tablero de esta sesión y tablero de partida (libreN y libreDif están arriba)
 let idx = 0, n = 3, t = [];                        // t[pos] = número de la ficha (0 = hueco)
 let movs = 0, inicio = 0, reloj = null, jugando = false;
-let previo = 0, pausadoMs = 0, enPausa = false;     // ms ya jugados antes de empezar/retomar · ms al abrir la pausa · ¿pausa abierta?
+let previo = 0;                                    // ms ya jugados antes de empezar/retomar una partida guardada
 let chispas = null;                                // intervalo de la brillantina de la victoria
 const fichas = new Map();                          // número → elemento
 
@@ -356,7 +345,7 @@ function pintar() {
 }
 
 function tocar(pos) {
-  if (pos < 0 || jugando === "fin" || enPausa || enInicio) return;
+  if (pos < 0 || jugando === "fin" || enInicio) return;
   const h = t.indexOf(0);
   const fp = Math.floor(pos / n), cp = pos % n, fh = Math.floor(h / n), ch = h % n;
   if (fp !== fh && cp !== ch) return;               // solo misma fila o columna que el hueco
@@ -448,7 +437,6 @@ async function ganar() {
   pintarMejor();
   pintarMonedas();
   pintarMetaJuego();
-  pintarNavNivel();                                 // si este nivel abrió el siguiente, aparece ▶
 
   const l = libre ? {} : NIVELES[idx], hay = !libre && idx + 1 < NIVELES.length;
   const v = document.createElement("div");
@@ -483,16 +471,20 @@ async function ganar() {
     : "+" + pts + " puntos anotados: se enviarán a tu perfil cuando tengas internet y hayas entrado con Google.";
 }
 
+// Botón verde de arriba (donde estaban Modo libre y Niveles): el nombre del nivel que se está jugando
+function pintarNombre(texto) { $("nombre-nivel").textContent = texto; $("barra-juego").setAttribute("aria-label", texto); }
 function empezar(retomar) {
   clearInterval(reloj); clearInterval(chispas);
   const v = $("victoria"); if (v) v.remove();
   let pp = null;                                    // partida guardada que se retoma (solo en niveles)
   if (modo === "libre") {
     n = libreN; t = inicial.slice();
+    pintarNombre("♾️ Modo libre · " + n + "×" + n + " " + DIFICULTADES[libreDif].emoji);
     $("titulo").innerHTML = "♾️ Modo libre · " + n + "×" + n + " " + DIFICULTADES[libreDif].emoji + "<small>" + DIFICULTADES[libreDif].nombre + " · tablero " + libreNum + " de esta sesión</small>";
   } else {
     const l = NIVELES[idx], d = info(idx);
     n = l.n; t = l.fichas.slice();
+    pintarNombre("Nivel " + d.num + " · " + n + "×" + n);
     pp = retomar === true ? parcialDe(idx) : null;
     if (pp) t = pp.t.slice();
     $("titulo").innerHTML = "Nivel " + d.num + " · " + n + "×" + n + (() => { const mk = prog.mejores[idx + 1], p = []; if (l.optimo) p.push("Mínimo posible: " + l.optimo); if (mk) p.push("Tu mejor: " + mk.mov + " mov."); return p.length ? "<small>" + p.join(" · ") + "</small>" : ""; })();
@@ -502,7 +494,6 @@ function empezar(retomar) {
   $("tiempo").textContent = fmtMs(previo);
   $("msg").textContent = pp ? "💾 Retomaste tu partida guardada. El tiempo sigue desde donde lo dejaste; usa 🔄 para empezar de cero." : "";
   construir(); pintar(); pintarMejor();
-  pintarNavNivel();
   pintarMetaJuego();
 }
 function jugarNivel(i) {
@@ -520,46 +511,15 @@ function jugarLibre(m) {
 
 // ----- Botones y teclado -----
 $("btn-jugar").addEventListener("click", () => jugarNivel(siguientePendiente()));
-for (const id of ["btn-niveles", "btn-niveles2"]) $(id).addEventListener("click", () => mostrar("pantalla-niveles"));
+$("btn-niveles").addEventListener("click", () => mostrar("pantalla-niveles"));
 $("btn-libre-jugar").addEventListener("click", () => jugarLibre(libreN));
-for (const id of ["btn-libre", "btn-libre2"]) $(id).addEventListener("click", () => mostrar("pantalla-libre"));
-// ☰: dentro de una partida abre la pausa (compartido/menu-pausa.js); en las demás pantallas vuelve al menú principal
-const hayAvance = () => jugando !== "fin" && movs > 0;   // ya hay algo que guardar (o que perder)
-function guardarYSalir() {
-  enPausa = false;
-  if (modo === "nivel" && hayAvance()) {
-    prog.parciales[idx + 1] = { t: t.slice(), movs, ms: Math.round(pausadoMs), ts: Date.now() };
-    guardarProg();
-    mostrar("inicio");
-  } else mostrar("inicio");
-}
-const pausa = crearMenuPausa({
-  titulo: "Pausa",
-  puedeAbrir: () => !$("juego").hidden && !enInicio,
-  alAbrir() {                                       // congela el cronómetro
-    pausadoMs = jugando === true ? transcurrido() : previo;
-    if (jugando === true) clearInterval(reloj);
-    enPausa = true;
-  },
-  alContinuar() {                                   // lo reanuda justo donde iba
-    enPausa = false;
-    if (jugando === true) { inicio = Date.now() - pausadoMs; reloj = setInterval(mostrarTiempo, 100); }
-  },
-  extras: () => modo !== "nivel" ? [] : [{
-    icono: "💾", texto: "Guardar progreso de este nivel y salir", clase: "b-oro",
-    deshabilitado: !hayAvance(),
-    ayuda: hayAvance() ? "Podrás retomar este tablero con «Continuar» o desde «Niveles»." : "Haz al menos un movimiento para poder guardar.",
-    alElegir: guardarYSalir,
-  }],
-  ayudaSalir: () => (hayAvance() ? "No se guarda lo que avanzaste en esta partida." : ""),
-  alSalir() { enPausa = false; mostrar("inicio"); },
-});
-$("btn-menu").addEventListener("click", () => ($("juego").hidden ? mostrar("inicio") : pausa.abrir()));
-$("btn-anterior").addEventListener("click", () => jugarNivel(idx - 1));
-$("btn-siguiente").addEventListener("click", () => jugarNivel(idx + 1));
+$("btn-libre").addEventListener("click", () => mostrar("pantalla-libre"));
+// ☰: en cualquier pantalla (también dentro de una partida) vuelve al menú principal: el juego cargado con el velo. No hay menú de pausa;
+// lo que se avanzó en la partida en curso no se guarda (una partida guardada antes no se toca).
+$("btn-menu").addEventListener("click", () => mostrar("inicio"));
 $("reiniciar").addEventListener("click", () => { if (modo === "nivel") descartarParcial(idx + 1); empezar(); });   // reiniciar también borra la partida guardada de ese nivel
 addEventListener("keydown", (e) => {
-  if ($("juego").hidden || enPausa || enInicio) return;
+  if ($("juego").hidden || enInicio) return;
   const d = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [1, 0], ArrowRight: [-1, 0] }[e.key];
   if (d) { e.preventDefault(); mover(d[0], d[1]); }
 });
@@ -600,7 +560,7 @@ import("../compartido/progreso.js").then((m) => {
       if (!$("pantalla-niveles").hidden) pintarNiveles();
       if (!$("pantalla-libre").hidden) pintarLibre();
       pintarMonedas();
-      if (!$("juego").hidden && !enInicio) { pintarMejor(); pintarNavNivel(); pintarMetaJuego(); }
+      if (!$("juego").hidden && !enInicio) { pintarMejor(); pintarMetaJuego(); }
     },
   });
   nube.guardado(); // sube lo que ya hubiera en el dispositivo
