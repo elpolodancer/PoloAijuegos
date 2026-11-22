@@ -1,6 +1,6 @@
 // Ruta: estacionamiento/niveles-estacionamiento.js
 // Generador de los 22 600 niveles del Estacionamiento (tableros de 10×10 —los 10 primeros suben de 6×6—, siempre completamente llenos, dificultad 1 o 2: ver generarNivel). No toca la página (no usa document), así que se puede probar en Node.
-//   - configNivel(n)   → { n, zona, etapa, k, tam, dificultad, seed, obj, p3, enredo, premio }  (todo sale del número de nivel: iguales para todos)
+//   - configNivel(n)   → { n, zona, etapa, k, tam, dificultad, seed, obj, p3, enredo, extra, premio, corazones }  (todo sale del número de nivel: iguales para todos)
 //   - generarNivel(cfg) → lista de autos del nivel; SIEMPRE tiene solución (se resuelve quitando los autos del último al primero)
 //
 // Niveles: 1–3200 = México (32 estados × 100) · 3201–22600 = mundo (194 países × 100). Ver README, secciones 1 a 4.
@@ -22,15 +22,16 @@ const TAMS_INICIALES = [6, 6, 7, 7, 8, 8, 9, 9, 10, 10]; // tamaño de los nivel
 // (poco enredo = casi todos los autos salen de una; más enredo = algunas cadenas de 2 o 3 autos que se estorban).
 export const DIFICULTADES = {
   // minLibres = % de autos que pueden salir desde el primer toque · minOla = la «ola» más chica (cuello de botella) · maxProf = cadena más larga de autos que se estorban
-  1: { nombre: "Medio", p3: 0.3, enredo: 0, extra: 0, premio: 15, minLibres: 0.40, minOla: 3, maxProf: 4 },
-  2: { nombre: "Difícil", p3: 0.4, enredo: 0.5, extra: 99, premio: 25, minLibres: 0.28, minOla: 2, maxProf: 6 },
+  // premio = monedas al terminar el nivel por primera vez · corazones = errores que se permiten (tocar un auto que tiene otro enfrente cuesta uno)
+  1: { nombre: "Medio", p3: 0.3, enredo: 0, extra: 0, premio: 20, corazones: 15, minLibres: 0.40, minOla: 3, maxProf: 4 },
+  2: { nombre: "Difícil", p3: 0.4, enredo: 0.5, extra: 99, premio: 35, corazones: 8, minLibres: 0.28, minOla: 2, maxProf: 6 },
 };
 // Qué nivel es medio y cuál difícil NO se calcula aquí: sale del sorteo de dificultades-estacionamiento.js (lo escribe sorteo-dificultades.mjs).
 // Semillas escogidas a mano (probadas con probar-niveles-estacionamiento.mjs) para que los 10 primeros niveles salgan lindos.
 // null = se usa la semilla normal del nivel. Para cambiar un nivel: probar otras semillas con «node semillas-iniciales.mjs».
 const SEMILLAS_INICIALES = [1053, 2141, 3332, 4040, 5249, 6595, 7419, 8164, 9184, 10561];
 
-// ----- Monedas por terminar un nivel: según la dificultad (1 → 15, 2 → 25) -----
+// ----- Monedas por terminar un nivel: según la dificultad (1 → 20, 2 → 35) -----
 export function premioMonedas(dificultad) {
   return (DIFICULTADES[dificultad] || DIFICULTADES[1]).premio;
 }
@@ -70,13 +71,13 @@ export function configNivel(n) {
   const inicial = n <= TAMS_INICIALES.length;
   const tam = inicial ? TAMS_INICIALES[n - 1] : TAM_ESTANDAR;
   const dificultad = dificultadSorteada(n);
-  const { p3, enredo, extra, premio } = DIFICULTADES[dificultad];
+  const { p3, enredo, extra, premio, corazones } = DIFICULTADES[dificultad];
   return {
     n, zona, etapa, k, tam, dificultad,
     seed: (inicial && SEMILLAS_INICIALES[n - 1]) || mezclar(n, 12345),
     p3, enredo, extra,
     obj: Math.round((tam * tam) / (2 + p3)), // autos aproximados (informativo: el tablero se llena por completo)
-    premio,
+    premio, corazones,
   };
 }
 

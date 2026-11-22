@@ -311,13 +311,13 @@ export function montarMapa(o) {
   // Lista de los 100 niveles de una etapa. base = nivel anterior al primero de la etapa.
   function rejillaNiveles(base) {
     const p = prog();
-    const leyenda = h("p", "m-leyenda", "El color indica la dificultad: 🟩 medio (15 monedas) · 🟦 difícil (25 monedas) — el número chico es el tamaño del tablero.");
+    const leyenda = h("p", "m-leyenda", "El color indica la dificultad: 🟩 medio (20 monedas, 15 ❤️) · 🟦 difícil (35 monedas, 8 ❤️) — el número chico es el tamaño del tablero.");
     const rej = h("div", "m-rej");
     let actual = null;
     for (let k = 1; k <= NIVELES_POR_ETAPA; k++) {
       const n = base + k, cfg = configNivel(n);
       const bloq = n > p.max, hecho = n <= p.hecho, esActual = !hecho && n === p.max;
-      const clase = cfg.premio <= 15 ? "b-verde" : cfg.premio <= 25 ? "b-azul" : cfg.premio <= 35 ? "b-morado" : cfg.premio <= 45 ? "b-oro" : "b-rojo"; // el color sale de las monedas del nivel
+      const clase = cfg.dificultad === 1 ? "b-verde" : "b-azul"; // medio = verde, difícil = azul
       const b = h("button", "b3d m-nv " + clase + (esActual ? " activo" : ""));
       b.type = "button";
       b.disabled = bloq;

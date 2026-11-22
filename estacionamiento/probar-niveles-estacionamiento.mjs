@@ -20,8 +20,9 @@ for (let n = 1; n <= TOTAL_NIVELES; n++) {
 console.log(`Dificultad: México ${cuentaMex[1]} medios / ${cuentaMex[2]} difíciles · Total ${cuenta[1]} medios / ${cuenta[2]} difíciles (${(cuenta[2] / TOTAL_NIVELES * 100).toFixed(0)} % difíciles)`);
 
 // 3) Monedas
-if (premioMonedas(1) !== 15 || premioMonedas(2) !== 25) mal("premios 15 / 25");
-console.log("Monedas: medio 15 · difícil 25");
+if (premioMonedas(1) !== 20 || premioMonedas(2) !== 35) mal("premios 20 / 35");
+for (let n = 1; n <= TOTAL_NIVELES; n++) { const c = configNivel(n); if (c.premio !== (c.dificultad === 1 ? 20 : 35) || c.corazones !== (c.dificultad === 1 ? 15 : 8)) { mal(`nivel ${n}: premio/corazones mal`); break; } }
+console.log("Monedas: medio 20 · difícil 35 · Corazones: medio 15 · difícil 8");
 
 // 4) Determinismo
 if (JSON.stringify(generarNivel(configNivel(1234))) !== JSON.stringify(generarNivel(configNivel(1234)))) mal("no determinista"); else console.log("Determinista: mismo nivel = mismo tablero");

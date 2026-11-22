@@ -40,28 +40,32 @@ Principio: **los niveles no deben ser complicados; deben ser divertidos, entrete
 - **Dificultad: solo 1 y 2** (de una escala original de 5; las 3, 4 y 5 se descartaron). Ver sección 14.
 - Todos los jugadores ven el mismo nivel N (todo sale de una semilla fija).
 
-| Dificultad | Nombre | Qué se pide del tablero | Monedas |
-|---|---|---|---|
-| 1 | Medio | ≥ 40 % de los autos pueden salir desde el primer toque · ninguna «ola» con menos de 3 autos · cadena de autos que se estorban ≤ 4 | 15 |
-| 2 | Difícil | ≥ 28 % libres al inicio · ola mínima ≥ 2 · cadena ≤ 6 | 25 |
+| Dificultad | Nombre | Qué se pide del tablero | Monedas | Corazones |
+|---|---|---|---|---|
+| 1 | Medio | ≥ 40 % de los autos pueden salir desde el primer toque · ninguna «ola» con menos de 3 autos · cadena de autos que se estorban ≤ 4 | 20 | 15 |
+| 2 | Difícil | ≥ 28 % libres al inicio · ola mínima ≥ 2 · cadena ≤ 6 | 35 | 8 |
 
 **Sorteo de la dificultad (hecho, sin generar tableros):** `dificultades-estacionamiento.js` guarda la dificultad de cada uno de los 22 600 niveles (una línea de 100 dígitos por etapa; `1` = medio, `2` = difícil). Lo escribe `node sorteo-dificultades.mjs` con semilla fija (siempre da lo mismo). Reglas: los niveles 1–10 son siempre medios; cada etapa tiene un número EXACTO de difíciles, de 15 en la primera etapa a 50 en la última (226); nunca más de 3 difíciles seguidos. Resultado: **15 255 medios y 7 345 difíciles (32.5 %)**; en México (3 200 niveles) 557 difíciles. Para cambiar un nivel a mano, cambia su dígito en esa línea.
 
 ## 4. Monedas
 
-Se ganan al **terminar un nivel**: **15 monedas** en un nivel medio y **25** en uno difícil (ya no dependen del tamaño, porque todos son 10×10). Salen de `configNivel(n).premio`, y el saldo se recalcula desde `prog.hecho`, así que **el saldo de quien ya tenía progreso cambia** con este rediseño.
+Se ganan al **terminar un nivel por primera vez**: **20 monedas** en un nivel medio y **35** en uno difícil (`DIFICULTADES[...].premio`; promedio ≈ 25 por nivel). Repetir un nivel no da monedas. Las ganadas se calculan desde `prog.hecho` (no se guardan), y lo gastado se anota por dispositivo (ver el comentario de `juego-estacionamiento.js`), así que **al cambiar los premios cambia el saldo de quien ya tenía progreso**.
 
-Por decidir: si las monedas se dan solo la primera vez que se pasa el nivel (así funciona hoy: repetirlo no da monedas).
+## 5. Corazones y boosts
 
-## 5. Boosts (se compran con monedas)
+### Corazones ❤️
+Cada nivel trae corazones según su dificultad: **15 en los medios y 8 en los difíciles** (`DIFICULTADES[...].corazones`). **Se pierde un corazón al tocar un auto que tiene otro enfrente** (un doble toque mientras el auto rebota no cuenta dos veces). La vía de salida ocupada NO cuesta corazón. Con 0 corazones se pierde el nivel y sale la ventana «¡Sin corazones! 💔» (sobre el tablero, `#derrota`) con **Seguir con +3 ❤️ · 30🪙**, **Reintentar nivel** y **Mapa**. Los corazones se ven en un chip rojo (fila de arriba: monedas · tamaño · ❤️ · movs) que late cuando quedan 3 o menos.
+
+### Boosts (se compran con monedas, abajo al centro)
 
 | Boost | Precio | Efecto |
 |---|---|---|
-| Quitar un auto | 30 🪙 | Elimina 1 auto a elección |
-| Paquete ×3 | 50 🪙 | 3 usos de «quitar un auto» (sale a ~16.7 🪙 c/u) |
-| Bomba | 100 🪙 | Cae en una zona de **5×5 casillas** y elimina todos los autos de esa área |
+| 🚗 Quitar un auto | 30 🪙 | Elimina 1 auto a elección (se paga al usarlo, o gasta un uso ya comprado) |
+| 📦 Paquete ×3 | 50 🪙 | 3 usos de «quitar un auto» (~16.7 🪙 c/u) |
+| 💣 Bomba | 100 🪙 | Se toca un lugar: se marcan en rojo los **8 autos más cercanos** a ese punto (el que está debajo y los de alrededor); tocar otra vez el 💣 la suelta y **desaparecen** (con explosión). Si quedan menos de 8, se llevan todos. Se paga al soltarla |
+| ❤️ Vida extra | 30 🪙 | **+3 corazones** (tope 30). También sirve para seguir jugando después de quedarte sin corazones |
 
-Interfaz sugerida: botones `.b3d` en la parte baja central (ver sección 6), con la cantidad disponible en la etiqueta `.b-info` (`×2`) y el precio cuando aún no se tiene (`30🪙`, clase `.sin`), como ya define `inmersivo.css`. Al activar la bomba, mostrar sobre el tablero el cuadro de 5×5 que se va a borrar.
+Ritmo de la economía: un nivel da ~25 monedas en promedio, así que una bomba cuesta ≈ 4 niveles, una vida extra ≈ 1 y quitar un auto ≈ 1.
 
 ## 6. Interfaz y fondos (estándar de todos los juegos)
 
@@ -128,7 +132,7 @@ Recordatorio: `niveles-estacionamiento.js` debe ir en la lista `ARCHIVOS` de `sw
 - **Dificultad (`dificultad`, 1 o 2):** tabla `DIFICULTADES` en `niveles-estacionamiento.js` (proporción de autos largos `p3`, «enredo», monedas y los mínimos que debe cumplir el tablero). Cuál nivel es medio y cuál difícil sale del sorteo (sección 3).
 - **Tablero siempre COMPLETAMENTE lleno y amable.** `generarNivel` **tesela** el tablero con autos de 2 y 3 casillas y lo **desarma** prefiriendo los autos con menos estorbos (`desarmar`). Si sobra una casilla suelta, se atora y habría un hueco, o el tablero no cumple lo que pide su dificultad (`analizar`: autos libres al inicio, ola más chica y cadena más larga), se **descarta y se genera otro** con el siguiente tramo del mismo azar (máx. 3 000 intentos). Medido en los 22 600 niveles: 100 % llenos, 100 % resolubles, 0 fuera de meta. Un 10×10 trae ~43 autos.
 - **Solución garantizada:** el orden en que se desarma el tablero es una solución (el primero en salir recibe el id más alto); se comprueba con `esResoluble` quitando los autos del último al primero. Probado en los 22 600 niveles. Si algún día el desarmado se atorara, se descarta un auto al azar (queda un hueco); en las pruebas no ha pasado.
-- **Monedas por nivel** (`premioMonedas(dificultad)`): 15 (medio) / 25 (difícil). El color de los botones del mapa sale de eso (🟩 / 🟦).
+- **Monedas por nivel** (`premioMonedas(dificultad)`): 20 (medio) / 35 (difícil). El color de los botones del mapa sale de eso (🟩 / 🟦).
 - **Velocidad:** media 0.4 ms por nivel, máximo ~13 ms.
 
 Para ajustar la dificultad, los números a tocar están en `DIFICULTADES` y en `sorteo-dificultades.mjs`.
@@ -139,7 +143,7 @@ Para ajustar la dificultad, los números a tocar están en `DIFICULTADES` y en `
 1. ✅ `N` variable por nivel (vía, esquinas, suelo, cámara). Probado resolviendo niveles de 10×10 a 50×50 sin pantalla.
 2. ✅ `NIVELES` de 5 entradas reemplazado por `configNivel(n)`.
 3. ✅ Fondo transparente (`clearRect`).
-4. ✅ Puntos: ahora `10 × monedas del nivel` (150–600) en vez de `100 × nivel`. Fácil de cambiar en `victoria()`.
+4. ✅ Puntos: ahora `10 × monedas del nivel` (ahora 200 o 350) en vez de `100 × nivel`. Fácil de cambiar en `victoria()`.
 5. **Selector de nivel.** Es provisional (◀ Nivel ▶ con tamaño y premio). El mapa lo reemplaza.
 6. ✅ **Rendimiento.** Con máximo 10×10 ya no hace falta optimizar el dibujo.
 7. **Progreso.** `prog = { max, hecho }` con `unirMaximos` sirve tal cual para «nivel más alto». Las monedas y boosts necesitan otra regla de fusión (se gastan).
@@ -177,12 +181,16 @@ Hoy el juego abre directo en el mapa de México y ahí solo hay **▶ Continuar 
 5. `mapa-estacionamiento.js`: color de los botones por monedas (🟩 15 / 🟦 25) y leyenda nueva. Texto de «Monedas» en la ventana Info.
 6. `probar-niveles-estacionamiento.mjs` reescrito: tamaños, dificultades, monedas, determinismo, los 10 primeros y los 22 600 niveles (llenos, resolubles, dentro de meta).
 
+7. **Corazones y boosts nuevos** (sección 5): 15 / 8 corazones por dificultad, ventana de derrota, bomba de «los 8 autos más cercanos» (reemplaza la de zona 5×5), boost de vida extra, premios 20 / 35. Probada con un script sin pantalla la selección de los 8 autos; **el juego completo en navegador NO se ha probado**.
+
 ### Pendiente ⏳ (para la próxima sesión)
+- **Probar en el celular los corazones y la bomba:** que 4 botones de boost quepan abajo, que el chip ❤️ no desacomode la fila de arriba, que la ventana de derrota se vea sobre el tablero y que la vista previa de la bomba (8 autos en rojo) se entienda.
+- **Ajustar números a gusto:** corazones (15 / 8), +3 por vida extra, precios y premios (20 / 35).
+- **Puntos al perfil:** ahora son `10 × premio` (200 / 350 por nivel); revisar si está bien.
 - **Probar en un celular real** el juego completo con tableros 10×10 y la vista fija (cuánto miden las casillas, que se toquen bien los autos, que la ventana de victoria `.sobre-tablero` quede bien).
 - **Jugar los 10 primeros niveles** y ajustar a gusto: cambiar `TAMS_INICIALES`, el tope `MAX_CADENA` de `semillas-iniciales.mjs`, o correr el buscador de nuevo y pegar el resultado en `SEMILLAS_INICIALES`.
 - **Revisar los niveles 11–100** (primer estado, Quintana Roo): ¿se sienten divertidos? Si hace falta, subir `minLibres` de la dificultad 1 o cambiar el número de difíciles por etapa en `sorteo-dificultades.mjs` (`DIF_PRIMERA`, `DIF_ULTIMA`).
 - **Decidir si la dificultad 2 debe notarse más.** Hoy la diferencia es sutil (libres al inicio 45 % vs 38 %, cadena más larga media 3.0 vs 3.6) porque en un tablero lleno de 10×10 la geometría limita mucho. Ideas: más autos largos (`p3`), exigir menos autos libres (`minLibres`), o más 3 autos en cadena.
-- **Economía de monedas:** ahora 15 / 25 por nivel contra precios de 30 (quitar auto), 50 (paquete ×3) y 100 (bomba). Revisar si se siente bien.
 - **Mapa:** el número chico de cada botón ya es siempre «10×10» (salvo los 10 primeros); considerar mostrar otra cosa (por ejemplo ⭐ medio / ⭐⭐ difícil).
 - **Limpieza del README:** las secciones 11 y 12 mencionan «10×10 a 50×50» en pasos ya hechos; el modo ♾️ Juego libre (sección 12) debe ofrecer dificultad 1 o 2 en vez de tamaños 10 a 50.
 - Pasos de siempre del README: monedas y boosts guardados con sincronización, mapa mundial tras el nivel 3 200, registro en `juegos.js` y `sw.js` (subir `VERSION`).

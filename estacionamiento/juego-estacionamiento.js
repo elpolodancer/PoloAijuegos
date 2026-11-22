@@ -6,7 +6,7 @@
 //   de nivel, y siempre tienen solución (cada auto se coloca con su camino libre respecto a los ya colocados).
 
 import { encolarPuntos } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
-import { TOTAL_NIVELES, configNivel, generarNivel } from "./niveles-estacionamiento.js";
+import { TOTAL_NIVELES, DIFICULTADES, configNivel, generarNivel } from "./niveles-estacionamiento.js";
 import { montarMapa } from "./mapa-estacionamiento.js";   // menú principal: México con agua, mundo y listas de niveles
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
 
@@ -107,12 +107,14 @@ const pintarMonedas = () => { chipMonedas.innerHTML = MONEDA + monedas().toLocal
 pintarMonedas();
 ($("fila-info") || document.querySelector(".nav-juego") || document.body).prepend(chipMonedas); // primero de la fila: monedas · tamaño del tablero · movimientos
 
-// ----- Boosts (paso 2a): «Quitar un auto» (30 🪙, o gratis si ya tienes usos) y «Paquete ×3» (50 🪙 = 3 usos). La bomba va aparte (2b). -----
+// ----- Boosts: «Quitar un auto» (30 🪙, o gratis si ya tienes usos), «Paquete ×3» (50 🪙 = 3 usos), «Bomba» (100 🪙) y «Vida extra» (30 🪙) -----
+// Economía: un nivel medio da 20 monedas y uno difícil 35 (solo la primera vez), así que la bomba sale en ~4 niveles y una vida extra en ~1.
 // «Quitar un auto» se paga AL USARLO: tocas el botón, tocas el auto y entonces se gasta un uso (o 30 monedas). Si te arrepientes, tocas el botón otra vez.
 const PRECIO_QUITAR = 30, PRECIO_PAQUETE = 50, USOS_PAQUETE = 3;
-const PRECIO_BOMBA = 100, LADO_BOMBA = 5; // la bomba se paga al soltarla (no se guarda en inventario) y borra una zona de 5×5 casillas
+const PRECIO_BOMBA = 100, AUTOS_BOMBA = 8; // la bomba se paga al soltarla (no se guarda en inventario) y elimina los 8 autos más cercanos al punto elegido
+const PRECIO_VIDA = 30, VIDAS_EXTRA = 3, VIDAS_TOPE = 30; // vida extra: +3 corazones por 30 monedas (también sirve para seguir jugando al quedarte sin corazones)
 let modoQuitar = false;
-let modoBomba = false, zonaBomba = null, efectoBomba = null; // zonaBomba = { x, y } esquina de la zona de 5×5 elegida; efectoBomba = destello tras explotar
+let modoBomba = false, puntoBomba = null, efectoBomba = null; // puntoBomba = { x, y } casilla elegida; efectoBomba = explosión { x, y, t, autos: [{ cx, cy }] }
 
 function botonBoost(clase, icono, titulo) {
   const b = document.createElement("button");
@@ -125,12 +127,14 @@ function botonBoost(clase, icono, titulo) {
 const bQuitar = botonBoost("b-azul", "🚗", "Quitar un auto");
 const bPaquete = botonBoost("b-oro sin", "📦", "Paquete ×3: tres usos de «Quitar un auto»");
 bPaquete.info.innerHTML = PRECIO_PAQUETE + MONEDA;
-const bBomba = botonBoost("b-rojo sin", "💣", "Bomba: borra los autos de una zona de 5×5");
+const bBomba = botonBoost("b-rojo sin", "💣", "Bomba: elimina los " + AUTOS_BOMBA + " autos más cercanos al punto que elijas");
 bBomba.info.innerHTML = PRECIO_BOMBA + MONEDA;
+const bVida = botonBoost("b-morado sin", "❤️", "Vida extra: +" + VIDAS_EXTRA + " corazones");
+bVida.info.innerHTML = PRECIO_VIDA + MONEDA;
 const zBoosts = document.createElement("div");
 zBoosts.style.cssText = "display:flex;gap:10px";
 zBoosts.setAttribute("role", "group"); zBoosts.setAttribute("aria-label", "Boosts");
-zBoosts.append(bQuitar.b, bPaquete.b, bBomba.b);
+zBoosts.append(bQuitar.b, bPaquete.b, bBomba.b, bVida.b);
 ($("boosts") || document.querySelector(".hud-abajo") || document.body).appendChild(zBoosts); // los boosts van abajo al centro (el rótulo del nivel ahora va arriba)
 
 function pintarBoosts() {
@@ -148,13 +152,13 @@ function salirModoQuitar() {
   pintarBoosts();
 }
 function salirModoBomba() {
-  modoBomba = false; zonaBomba = null;
+  modoBomba = false; puntoBomba = null; escenaVer++;
   $("lienzo").style.cursor = "";
   pintarBoosts();
 }
 bQuitar.b.addEventListener("click", () => {
   if (modoQuitar) { salirModoQuitar(); return; }
-  if (ganado) return;
+  if (ganado || perdido) return;
   if (usosQuitar() <= 0 && monedas() < PRECIO_QUITAR) { aviso("Necesitas " + PRECIO_QUITAR + " monedas"); return; }
   salirModoBomba();
   modoQuitar = true;
@@ -164,13 +168,13 @@ bQuitar.b.addEventListener("click", () => {
 });
 bBomba.b.addEventListener("click", () => {
   if (modoBomba) { salirModoBomba(); return; }
-  if (ganado) return;
+  if (ganado || perdido) return;
   if (monedas() < PRECIO_BOMBA) { aviso("Necesitas " + PRECIO_BOMBA + " monedas"); return; }
   salirModoQuitar();
-  modoBomba = true; zonaBomba = null;
+  modoBomba = true; puntoBomba = null;
   $("lienzo").style.cursor = "crosshair";
   pintarBoosts();
-  aviso("Toca donde quieres la bomba; toca otra vez dentro del cuadro para soltarla");
+  aviso("Toca el centro de la bomba; toca otra vez el mismo lugar para soltarla");
 });
 bPaquete.b.addEventListener("click", () => {
   if (monedas() < PRECIO_PAQUETE) { aviso("Necesitas " + PRECIO_PAQUETE + " monedas"); return; }
@@ -178,6 +182,7 @@ bPaquete.b.addEventListener("click", () => {
   pintarMonedas(); pintarBoosts();
   aviso("Paquete comprado: +" + USOS_PAQUETE + " usos de quitar un auto");
 });
+bVida.b.addEventListener("click", () => comprarVida());
 pintarBoosts();
 
 // ----- Niveles: el generador vive en niveles-estacionamiento.js -----
@@ -185,6 +190,7 @@ const cabeza = (c) => [c.dir === 1 ? c.x + c.len - 1 : c.x, c.dir === 2 ? c.y + 
 
 // ----- Estado -----
 let nivel = 1, cfg = null, autos = [], occ = [], restantes = 0, movs = 0, T = 0, ganado = false;
+let vidas = 0, vidasMax = 0, perdido = false; // corazones: cada nivel trae los de su dificultad; al tocar un auto con otro enfrente se pierde uno
 let escenaVer = 0, firmaPrev = "", animPrev = false; // para dibujar solo cuando algo cambió (ver bucle)
 let cam = { s: 1, ox: 0, oy: 0 }, camMin = 0.3, camMax = 6;
 let camTocada = false; // true cuando el jugador movió o acercó la vista (así un cambio de tamaño de ventana no se la deshace)
@@ -203,6 +209,9 @@ function cargarNivel(n) {
   }
   restantes = autos.length;
   movs = 0; ganado = false;
+  vidas = vidasMax = cfg.corazones; perdido = false;
+  const dr = $("derrota"); if (dr) dr.hidden = true;
+  pintarVidas();
   escenaVer++;
   salirModoQuitar();
   salirModoBomba();
@@ -294,36 +303,88 @@ function retirarAuto(c) {
   c.estado = 2;
   restantes--;
 }
-// Bomba: el primer toque coloca el cuadro de 5×5 (centrado en la casilla tocada, sin salirse del tablero); un toque dentro del cuadro la suelta
+// Bomba: el primer toque coloca la bomba en una casilla (se ven marcados los 8 autos que se llevaría); tocar otra vez la misma casilla la suelta.
+// Elimina los AUTOS_BOMBA autos más cercanos a ese punto (el que esté debajo y los de alrededor); desaparecen al instante y sus casillas quedan libres.
+function autosDeBomba(x, y) {
+  const lista = [];
+  for (const c of autos) {
+    if (c.estado !== 0) continue; // los que ya van saliendo no cuentan
+    let d = 1e9;
+    for (const [cx, cy] of celdasDe(c)) d = Math.min(d, Math.hypot(cx - x, cy - y));
+    const [hx, hy] = cabeza(c);
+    lista.push({ c, d, e: Math.hypot(hx - x, hy - y) }); // e = desempate
+  }
+  lista.sort((p, q) => p.d - q.d || p.e - q.e || p.c.id - q.c.id);
+  return lista.slice(0, AUTOS_BOMBA).map((o) => o.c);
+}
 function tocarBomba(p) {
-  if (ganado) return;
+  if (ganado || perdido) return;
   const [gx, gy] = suelo(p.x, p.y);
   const x = Math.floor(gx), y = Math.floor(gy);
   if (x < 0 || y < 0 || x >= N || y >= N) return;
-  const z = zonaBomba;
-  if (z && x >= z.x && x < z.x + LADO_BOMBA && y >= z.y && y < z.y + LADO_BOMBA) { soltarBomba(); return; }
-  zonaBomba = { x: clamp(x - 2, 0, N - LADO_BOMBA), y: clamp(y - 2, 0, N - LADO_BOMBA) };
+  if (puntoBomba && puntoBomba.x === x && puntoBomba.y === y) { soltarBomba(); return; }
+  puntoBomba = { x, y };
+  escenaVer++;
+  aviso("Toca otra vez el 💣 para soltarla (o toca otro lugar para moverla)");
 }
 function soltarBomba() {
-  const z = zonaBomba;
-  const dentro = (c) => celdasDe(c).some(([x, y]) => x >= z.x && x < z.x + LADO_BOMBA && y >= z.y && y < z.y + LADO_BOMBA);
-  const blancos = autos.filter((c) => c.estado === 0 && dentro(c)); // los autos que ya van saliendo no cuentan
-  if (!blancos.length) { aviso("No hay autos en esa zona: mueve el cuadro"); return; } // no se cobra
+  const pt = puntoBomba;
+  const blancos = autosDeBomba(pt.x, pt.y);
+  if (!blancos.length) { aviso("No quedan autos"); salirModoBomba(); return; } // no se cobra
   if (monedas() < PRECIO_BOMBA) { aviso("Necesitas " + PRECIO_BOMBA + " monedas"); salirModoBomba(); return; }
   anotar("gastado", PRECIO_BOMBA);
+  const puntos = blancos.map((c) => { const q = poseDe(c); return { cx: q.cx, cy: q.cy }; });
   for (const c of blancos) retirarAuto(c);
-  efectoBomba = { x: z.x, y: z.y, t: 0.5 };
+  efectoBomba = { x: pt.x + 0.5, y: pt.y + 0.5, t: 0.5, autos: puntos };
   pintarMonedas();
   aviso("💥 " + blancos.length + (blancos.length === 1 ? " auto eliminado" : " autos eliminados"));
   salirModoBomba();
 }
 
+// ----- Corazones -----
+function pintarVidas() {
+  const t = $("vidas-txt"), chip = $("vidas");
+  if (t) t.textContent = vidas;
+  if (chip) { chip.classList.toggle("poco", vidas > 0 && vidas <= 3); chip.setAttribute("aria-label", vidas + " corazones"); }
+}
+function perderVida() {
+  vidas = Math.max(0, vidas - 1);
+  pintarVidas();
+  if (vidas <= 0) derrota();
+  else aviso("Algo le estorba · te " + (vidas === 1 ? "queda 1 corazón" : "quedan " + vidas + " corazones"));
+}
+function pintarBotonDerrota() {
+  const b = $("d-vida"); if (!b) return;
+  b.innerHTML = '<span class="b-ico">❤️</span> Seguir con +' + VIDAS_EXTRA + ' · ' + PRECIO_VIDA + MONEDA;
+  b.disabled = monedas() < PRECIO_VIDA;
+  b.title = b.disabled ? "Necesitas " + PRECIO_VIDA + " monedas" : "Vida extra: +" + VIDAS_EXTRA + " corazones";
+}
+function derrota() {
+  perdido = true;
+  salirModoQuitar(); salirModoBomba();
+  pintarBotonDerrota();
+  const d = $("derrota"); if (d) d.hidden = false;
+  colocarVictoria();
+}
+// Vida extra: +3 corazones por 30 monedas (se paga al usarla). Si ya te quedaste sin corazones, sigues jugando el mismo tablero.
+function comprarVida() {
+  if (ganado) return;
+  if (monedas() < PRECIO_VIDA) { aviso("Necesitas " + PRECIO_VIDA + " monedas"); return; }
+  if (!perdido && vidas >= VIDAS_TOPE) { aviso("Ya tienes muchos corazones"); return; }
+  anotar("gastado", PRECIO_VIDA);
+  vidas = Math.min(VIDAS_TOPE, vidas + VIDAS_EXTRA);
+  if (perdido) { perdido = false; const d = $("derrota"); if (d) d.hidden = true; }
+  pintarMonedas(); pintarVidas();
+  aviso("❤️ +" + VIDAS_EXTRA + " corazones");
+}
+
 function tocarAuto(c) {
-  if (c.estado !== 0 || ganado) return;
+  if (c.estado !== 0 || ganado || perdido) return;
   if (modoQuitar) { quitarAuto(c); return; }
   if (!caminoLibre(c)) {
+    if (c.bump > 0) return; // ya está rebotando: un doble toque no cuesta otro corazón
     c.bump = 0.35; c.flash = 0.4;
-    aviso("Algo le estorba");
+    perderVida(); // tocar un auto que tiene otro enfrente cuesta un corazón (la vía ocupada, en cambio, NO cuesta: no es culpa del jugador)
     return;
   }
   const plan = planear(c);
@@ -705,24 +766,37 @@ function dibujar() {
   }
   vis.sort((a, b) => a.k - b.k); // los de más arriba primero: el de abajo tapa la pared del de arriba
   for (const v of vis) dibujarAuto(v.c, v.p);
-  if (modoBomba && zonaBomba) { // vista previa de la zona que borrará la bomba
-    const [a, b] = P(zonaBomba.x, zonaBomba.y), [e, f] = P(zonaBomba.x + LADO_BOMBA, zonaBomba.y + LADO_BOMBA);
-    rr(a, b, e - a, f - b, 0.2 * u);
-    ctx.fillStyle = "rgba(255,70,50,.28)"; ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,110,70,.95)"; ctx.stroke();
+  if (modoBomba && puntoBomba) { // vista previa: los autos que se llevaría la bomba (en rojo) y la bomba en la casilla elegida
+    ctx.fillStyle = "rgba(255,70,50,.38)"; ctx.strokeStyle = "rgba(255,110,70,.95)"; ctx.lineWidth = Math.max(1.5, 0.06 * u);
+    for (const c of autosDeBomba(puntoBomba.x, puntoBomba.y)) for (const [cx, cy] of celdasDe(c)) {
+      const [a, b] = P(cx, cy);
+      rr(a + 0.04 * u, b + 0.04 * u * TILT, 0.92 * u, 0.92 * u * TILT, 0.14 * u);
+      ctx.fill(); ctx.stroke();
+    }
+    const [bx, by] = P(puntoBomba.x + 0.5, puntoBomba.y + 0.5);
+    ctx.beginPath(); ctx.ellipse(bx, by, 0.55 * u, 0.55 * u * TILT, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(20,20,24,.82)"; ctx.fill();
+    ctx.lineWidth = Math.max(2, 0.08 * u); ctx.strokeStyle = "#ffd23a"; ctx.stroke();
+    ctx.font = Math.round(0.8 * u) + "px system-ui,sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "#fff"; ctx.fillText("💣", bx, by);
   }
-  if (efectoBomba) { // destello que crece y se desvanece
-    const f = efectoBomba.t / 0.5, g2 = (1 - f) * 1.2, e = efectoBomba;
-    const [a, b] = P(e.x - g2, e.y - g2), [a2, b2] = P(e.x + LADO_BOMBA + g2, e.y + LADO_BOMBA + g2);
+  if (efectoBomba) { // explosión: una bola de fuego en cada auto eliminado y un anillo en el punto de la bomba; crecen y se desvanecen
+    const f = efectoBomba.t / 0.5, g2 = 0.5 + (1 - f) * 0.9, e = efectoBomba;
     ctx.globalAlpha = f;
-    rr(a, b, a2 - a, b2 - b, 0.3 * u);
-    ctx.fillStyle = "rgba(255,170,40,.8)"; ctx.fill();
+    ctx.fillStyle = "rgba(255,170,40,.85)";
+    for (const q of e.autos) {
+      const [ex, ey] = P(q.cx, q.cy);
+      ctx.beginPath(); ctx.ellipse(ex, ey, g2 * u, g2 * u * TILT, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    const [rx, ry] = P(e.x, e.y);
+    ctx.beginPath(); ctx.ellipse(rx, ry, (1 + (1 - f) * 3) * u, (1 + (1 - f) * 3) * u * TILT, 0, 0, Math.PI * 2);
+    ctx.lineWidth = Math.max(2, 0.12 * u); ctx.strokeStyle = "rgba(255,230,120,.95)"; ctx.stroke();
     ctx.globalAlpha = 1;
   }
 }
 
 // ----- Bucle -----
-const firmaVista = () => [cam.s, cam.ox, cam.oy, cw, ch, dpr, escenaVer, restantes, modoBomba && zonaBomba ? zonaBomba.x + "," + zonaBomba.y : "-"].join("|");
+const firmaVista = () => [cam.s, cam.ox, cam.oy, cw, ch, dpr, escenaVer, restantes, modoBomba && puntoBomba ? puntoBomba.x + "," + puntoBomba.y : "-"].join("|");
 function hayAnimacion() {
   if (efectoBomba) return true;
   for (const c of autos) if (c.estado === 1 || c.bump > 0 || c.flash > 0) return true;
@@ -745,25 +819,27 @@ function actualizar(dt) {
       restantes--;
     }
   }
-  if (!ganado && restantes <= 0) victoria();
+  if (!ganado && !perdido && restantes <= 0) victoria();
   if (movs !== ultMovs) { ultMovs = movs; const em = $("movs"); if (em) em.textContent = movs; }
 }
 
 // Fin de nivel «sobre el tablero» (estándar en compartido/inmersivo.css, clase .sobre-tablero): la ventana con «Siguiente nivel ▶» se coloca
 // encima del cuadro del tablero, recortado a la ventana; si casi no se ve (muy acercado o movido), ocupa toda la ventana. Sigue al tablero si se mueve la vista.
-let ultColoc = "";
-function colocarVictoria() {
-  const v = $("victoria");
-  if (v.hidden) { ultColoc = ""; return; }
+const ultColoc = {};
+function colocarSobre(id) {
+  const v = $(id);
+  if (!v) return;
+  if (v.hidden) { ultColoc[id] = ""; return; }
   const r = cv.getBoundingClientRect(), [x0, y0] = P(0, 0), [x1, y1] = P(N, N);
   let a = Math.max(0, x0), b = Math.max(0, y0), c = Math.min(cw, x1), d = Math.min(ch, y1);
   if (c - a < 200 || d - b < 200) { a = 0; b = 0; c = cw; d = ch; }
   const css = [r.left + a, r.top + b, c - a, d - b].map((n) => Math.round(n) + "px").join(" ");
-  if (css === ultColoc) return;
-  ultColoc = css;
+  if (css === ultColoc[id]) return;
+  ultColoc[id] = css;
   const m = css.split(" ");
   v.style.left = m[0]; v.style.top = m[1]; v.style.width = m[2]; v.style.height = m[3];
 }
+function colocarVictoria() { colocarSobre("victoria"); colocarSobre("derrota"); } // las dos ventanas «sobre el tablero»
 
 function victoria() {
   ganado = true;
@@ -775,7 +851,7 @@ function victoria() {
     // No se anotan aparte: salen de prog.hecho (ver monedas()), así que no se pueden duplicar al sincronizar.
     txt += " +" + cfg.premio + " monedas";
     // Los puntos del nivel se dan una sola vez: se anotan en la cola local (nunca se pierden) y se envían al haber sesión y conexión
-    pts = 10 * cfg.premio; // 150 a 600 puntos según el tamaño del nivel (antes 100 × nivel, que en el nivel 22 600 sería enorme)
+    pts = 10 * cfg.premio; // 200 (medio) o 350 (difícil) puntos según el tamaño del nivel (antes 100 × nivel, que en el nivel 22 600 sería enorme)
     prog.hecho = mio;
     encolarPuntos(ID_JUEGO, pts);
     import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).then((faltan) => {
@@ -855,6 +931,9 @@ cv.addEventListener("wheel", (e) => e.preventDefault(), { passive: false }); // 
 
 $("reiniciar").addEventListener("click", () => cargarNivel(nivel));
 $("repetir").addEventListener("click", () => cargarNivel(nivel));
+$("d-repetir").addEventListener("click", () => cargarNivel(nivel));
+$("d-vida").addEventListener("click", () => comprarVida());
+$("d-mapa").addEventListener("click", () => abrirMapa(false));
 // Al terminar el último nivel de un estado/país se abre el mapa principal para VER SUBIR el agua; si no, la lista de niveles de su etapa
 $("al-mapa").addEventListener("click", () => { $("victoria").hidden = true; abrirMapa(nivel % 100 === 0); });
 $("siguiente").addEventListener("click", () => cargarNivel(Math.min(TOTAL_NIVELES, nivel + 1)));
@@ -879,8 +958,9 @@ const TEXTO_INFO = [
   ["🚗 Objetivo", "Saca todos los autos del estacionamiento. Ganas cuando no queda ninguno."],
   ["👆 Cómo sacar un auto", "Toca un auto y avanzará hacia donde apunta su flecha hasta salir por las esquinas, dando la vuelta por la vía que rodea el tablero."],
   ["🚧 Si algo le estorba", "Un auto no puede salir si otro está en su camino: saca primero al que estorba. Si la vía de salida está ocupada, espera un instante y vuelve a tocarlo. En cuanto tocas un auto, ya no estorba: puedes tocar los demás de inmediato."],
-  ["💰 Monedas", "Ganas monedas la primera vez que terminas un nivel: 15 en los medios y 25 en los difíciles."],
-  ["💥 Boosts", "Quitar un auto (30 monedas): toca el botón y luego el auto que quieres quitar. Paquete ×3 (50 monedas): te da 3 usos de quitar un auto. Bomba (100 monedas): elige una zona de 5×5 casillas y borra todos los autos que haya ahí."],
+  ["❤️ Corazones", "Cada nivel trae corazones: " + DIFICULTADES[1].corazones + " en los medios y " + DIFICULTADES[2].corazones + " en los difíciles. Si tocas un auto que tiene otro enfrente, pierdes uno. Si se acaban, pierdes el nivel (puedes seguir con una vida extra o reintentar)."],
+  ["💰 Monedas", "Ganas monedas la primera vez que terminas un nivel: " + DIFICULTADES[1].premio + " en los medios y " + DIFICULTADES[2].premio + " en los difíciles."],
+  ["💥 Boosts", "Quitar un auto (30 monedas): toca el botón y luego el auto que quieres quitar. Paquete ×3 (50 monedas): te da 3 usos de quitar un auto. Bomba (100 monedas): toca un lugar, mira los 8 autos marcados en rojo y toca otra vez para soltarla: desaparecen. Vida extra (30 monedas): +3 corazones."],
   ["🗺️ Mapa", "Los niveles se desbloquean en orden. Cada estado tiene 100 niveles; al terminarlo se desbloquea el siguiente y el agua del mapa sube. Con 🔄 reinicias el nivel y con ☰ Pausa puedes salir al mapa."],
 ];
 let infoAbierta = null;
@@ -924,6 +1004,7 @@ const mapa = montarMapa({
 });
 function abrirMapa(aguaSube) {
   $("victoria").hidden = true;
+  $("derrota").hidden = true;
   mapa.abrir(nivel, !!aguaSube);
   botonMenu();
 }
