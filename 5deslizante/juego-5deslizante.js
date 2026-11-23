@@ -272,29 +272,27 @@ function animarVictoria(v, tier) {
 }
 
 // ----- Celebración al pasar un nivel (sustituye al panel de victoria) -----
-// 1) Las estrellas ganadas (doradas o moradas) salen del centro de la pantalla UNA TRAS OTRA: cada una se desliza hacia su lugar dejando brillos,
-//    separadas entre sí, y se queda moviéndose un poco.
-// 2) Después suben juntas un poquito hacia la esquina de arriba a la derecha (sin pegarse a los bordes). Ya ahí, un velo oscuro tapa el juego y debajo se abre
-//    el mapa: el contorno del país donde juega (mapa.abrir); el velo se aparta y las estrellas siguen arriba a la derecha.
-// 2b) Mientras esperan arriba, sale de ellas el texto «N estrellas», se coloca justo encima, sube un poco creciendo y se desvanece.
+// 1) Las estrellas ganadas (hasta 3: doradas, moradas o mezcladas; las moradas van primero) salen UNA TRAS OTRA del centro de la pantalla y, sin detenerse,
+//    vuelan dejando brillos hasta su lugar: arriba a la derecha (sin pegarse a los bordes).
+// 2) Ya ahí, sale de ellas el texto «N estrellas» (sube un poco creciendo y se desvanece) mientras un velo oscuro tapa el juego y debajo se abre el mapa:
+//    el contorno del país donde juega (mapa.abrir); el velo se aparta y las estrellas siguen arriba a la derecha.
 // 3) Desde ahí las estrellas caen UNA POR UNA hacia el centro del país, se hacen pequeñas hasta desaparecer y, cuando cada una entra, el país hace «pop»
 //    (se hincha, destella y rebota). Al final aparece el botón «Continuar» del centro con un rebote.
-// Tocar la pantalla salta la animación. Con «reducir movimiento» solo abre el mapa. Los tiempos están juntos en TIEMPOS para ajustarlos fácil.
+// Tocar la pantalla (con un toque NUEVO, no el que terminó el nivel) salta la animación. Los tiempos están juntos en TIEMPOS para ajustarlos fácil.
 const RESPETAR_MOVIMIENTO_REDUCIDO = false;   // false = la celebración se ve siempre (en muchos PC y celulares «reducir movimiento» viene activado sin que la persona lo sepa y la animación nunca salía; igual que en el Solitario). true = con «reducir movimiento» solo se abre el mapa
 const TIEMPOS = {
-  entraSep: 420,      // ms entre una estrella y la siguiente al aparecer
-  entraDur: 750,      // lo que tarda cada una en deslizarse a su lugar
-  quieta: 400,        // cuánto se mueven las estrellas después de llegar la última, antes de subir a la esquina (quieta + sube + arriba = 1300, lo que antes duraba solo «quieta»)
-  velo: 450,          // lo que tarda el velo en tapar (y en apartarse)
-  espera: 700,        // país ya visible, antes de que empiece a caer la primera estrella
-  caeSep: 800,        // ms entre una estrella y la siguiente al caer al país
-  caeDur: 850,        // lo que dura la caída (y el encogerse hasta desaparecer) de cada estrella
-  final: 700,         // tras el pop de la última, antes de quitar todo
-  sube: 650,          // lo que tardan las estrellas en subir hacia la esquina de arriba a la derecha
-  arriba: 250,        // se quedan ahí un instante antes de que el velo cambie la escena
-  texto: 1800,        // lo que dura el texto «N estrellas» (sale de las estrellas, se pone encima, sube un poco creciendo y se desvanece) mientras esperan arriba al mapa
+  entraSep: 90,       // ms entre una estrella y la siguiente al salir del centro
+  entraDur: 280,      // lo que tarda cada una en volar del centro a su lugar (arriba a la derecha); empieza a moverse en cuanto aparece
+  arriba: 100,        // ya todas arriba: instante antes de que el velo cambie la escena (aquí sale el texto «N estrellas»)
+  texto: 480,         // lo que dura el texto «N estrellas» (sale de las estrellas, se pone encima, sube un poco creciendo y se desvanece)
+  velo: 100,          // lo que tarda el velo en tapar (y en apartarse)
+  espera: 120,        // país ya visible, antes de que empiece a caer la primera estrella
+  caeSep: 150,        // ms entre una estrella y la siguiente al caer al país
+  caeDur: 200,        // lo que dura la caída (y el encogerse hasta desaparecer) de cada estrella
+  final: 100,         // tras el pop de la última, antes de quitar todo
+  continuar: 90,      // tras entrar la última estrella, cuando aparece «Continuar» con su rebote
 };
-const RITMO = 0.375;  // 1 = velocidad original; 0.75 = 25 % menos; 0.375 = la mitad de lo que duraba con 0.75 (~2,9 s con 3 estrellas). Todos los tiempos de arriba se multiplican por este número
+const RITMO = 1;      // 1 = los tiempos de arriba tal cual (~1,5 s con 3 estrellas); 2 = el doble de lento; 0.5 = el doble de rápido. Multiplica todos los tiempos de arriba
 for (const k in TIEMPOS) TIEMPOS[k] = Math.round(TIEMPOS[k] * RITMO);
 let celId = 0, celTimers = [], celEl = null;
 function quitarCelebracion() {
@@ -332,37 +330,38 @@ function celebrar(tier, i) {
   ov.append(velo, fila);
   document.body.appendChild(ov);
   celEl = ov;
-  ov.addEventListener("click", () => { abrir(); quitarCelebracion(); });   // tocar = saltar la animación
+  // Tocar = saltar la animación, pero solo con un toque NUEVO sobre la celebración: en celulares el «clic» del mismo dedo que terminó el nivel
+  // caía sobre la celebración (las fichas se mueven al tocar, con pointerdown) y la cerraba al instante, por eso en celular parecía no existir.
+  let tocado = false;
+  ov.addEventListener("pointerdown", () => { tocado = true; });
+  ov.addEventListener("click", () => { if (!tocado) return; abrir(); quitarCelebracion(); });
   const colores = (w) => w.firstChild.classList.contains("mor") ? ["#ffffff", "#ffd1f5", "#d9c2ff", "#c9f3ff"] : ["#fff6b0", "#ffc61f", "#ffffff"];
   const centro = (w) => { const r = w.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
 
-  // 1) una tras otra: salen del centro de la pantalla, giran y se deslizan a su lugar soltando brillos por el camino
+  // 1) la fila ya se coloca en su lugar final (arriba a la derecha) y cada estrella sale del centro de la pantalla y vuela hasta su lugar soltando brillos
   const rf = fila.getBoundingClientRect(), cxFila = rf.left + rf.width / 2, cyFila = rf.top + rf.height / 2;
+  const tx = Math.min(innerWidth * 0.78, innerWidth - rf.width / 2 - 28), ty = Math.max(innerHeight * (innerWidth < 640 ? 0.3 : 0.2), rf.height / 2 + 80);   // sin llegar a los bordes ni a los botones de arriba
+  fila.style.transform = "translate(" + (tx - cxFila) + "px," + (ty - cyFila) + "px)";
+  const cxPantalla = innerWidth / 2, cyPantalla = innerHeight / 2;
   ests.forEach((w, k) => {
-    const r = w.getBoundingClientRect(), dx = cxFila - (r.left + r.width / 2), dy = cyFila - (r.top + r.height / 2);
+    const r = w.getBoundingClientRect(), dx = cxPantalla - (r.left + r.width / 2), dy = cyPantalla - (r.top + r.height / 2);   // de su lugar al centro de la pantalla
     w.animate([
       { transform: "translate(" + dx + "px," + dy + "px) scale(0) rotate(-200deg)", opacity: 0, offset: 0 },
-      { transform: "translate(" + dx * 0.4 + "px," + dy * 0.4 + "px) scale(1.25) rotate(-60deg)", opacity: 1, offset: 0.35 },
+      { transform: "translate(" + dx * 0.8 + "px," + dy * 0.8 + "px) scale(1.3) rotate(-120deg)", opacity: 1, offset: 0.18 },   // aparece en el centro y ya va en camino
       { transform: "none", opacity: 1, offset: 1 },
     ], { duration: T.entraDur, delay: k * T.entraSep, easing: "cubic-bezier(.25,.9,.35,1.15)", fill: "backwards" });
-    for (const f of [0.25, 0.5, 0.75]) tras(k * T.entraSep + T.entraDur * f, () => { const c = centro(w); chisporroteo(ov, c.x, c.y, 4, colores(w)); });   // brillos en el camino
-    tras(k * T.entraSep + T.entraDur, () => { const c = centro(w); chisporroteo(ov, c.x, c.y, 8, colores(w)); });                                         // y un destello al llegar
+    for (const f of [0.3, 0.6]) tras(k * T.entraSep + T.entraDur * f, () => { const c = centro(w); chisporroteo(ov, c.x, c.y, 4, colores(w)); });   // brillos en el camino
+    tras(k * T.entraSep + T.entraDur, () => { const c = centro(w); chisporroteo(ov, c.x, c.y, 8, colores(w)); });                                      // y un destello al llegar
   });
 
-  // 2) cambio de escena: el velo cubre el juego, se abre el mapa debajo y el velo se aparta
+  // 2) cambio de escena: con todas ya arriba, el velo cubre el juego, se abre el mapa debajo y el velo se aparta
   const tLlega = (cuantas - 1) * T.entraSep + T.entraDur;
-  const tSube = tLlega + T.quieta;                   // las estrellas suben (todas juntas, con su fila) hacia arriba a la derecha
-  tras(tSube, () => {
-    const r = fila.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-    const tx = Math.min(innerWidth * 0.78, innerWidth - r.width / 2 - 28), ty = Math.max(innerHeight * (innerWidth < 640 ? 0.3 : 0.2), r.height / 2 + 80);   // sin llegar a los bordes ni a los botones de arriba
-    fila.animate([{ transform: "none" }, { transform: "translate(" + (tx - cx) + "px," + (ty - cy) + "px)" }], { duration: T.sube, easing: "ease-in-out", fill: "forwards" });
-  });
-  const tVelo = tSube + T.sube + T.arriba, tMapa = tVelo + T.velo;
+  const tVelo = tLlega + T.arriba, tMapa = tVelo + T.velo;
   tras(tVelo, () => velo.classList.add("on"));
   tras(tMapa, () => { mapa.retenerContinuar(true); abrir(); velo.classList.remove("on"); });
 
   // 2b) texto «N estrellas»: sale de la posición de las estrellas cuando llegan arriba, se coloca un poco encima, sube algo creciendo un poco y se desvanece ahí mismo
-  tras(tSube + T.sube, () => {
+  tras(tLlega, () => {
     const r = fila.getBoundingClientRect();
     const tx = document.createElement("div");
     tx.className = "cel-txt";
@@ -395,7 +394,7 @@ function celebrar(tier, i) {
       w.style.visibility = "hidden";
       mapa.parpadear(k);                                                                  // el país hace «pop» (cada vez un poco más fuerte)
       chisporroteo(ov, c.x, c.y, ultima ? 16 : 10, ["#fff6b0", "#ffc61f", "#ffffff"]);
-      if (ultima) tras(Math.round(250 * RITMO), () => mapa.retenerContinuar(false));                        // aparece «Continuar» con un rebote
+      if (ultima) tras(T.continuar, () => mapa.retenerContinuar(false));                        // aparece «Continuar» con un rebote
     };
   }));
   tras(T0 + (cuantas - 1) * T.caeSep + T.caeDur + T.final, quitarCelebracion);
