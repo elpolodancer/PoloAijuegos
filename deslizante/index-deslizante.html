@@ -108,6 +108,16 @@
     @keyframes vic-cae { 0% { opacity: 1; transform: translateY(0) rotate(0) } 100% { opacity: .9; transform: translateY(120cqw) rotate(var(--giro)) } }
     @media (prefers-reduced-motion: reduce) { #victoria, .vic-caja, .vic-premio, .vic-premio.rebote { animation: none !important; } .vic-confeti { display: none; } }
 
+    /* ----- Celebración al pasar un nivel (la crea el JS): estrellas en el centro, velo para cambiar de escena, estrellas que caen en el país ----- */
+    .cel-fondo { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; cursor: pointer; touch-action: none; }
+    .cel-velo { position: absolute; inset: 0; background: rgba(10,10,12,.88); opacity: 0; transition: opacity .4s ease; }
+    .cel-velo.on { opacity: 1; }
+    .cel-fila { position: relative; display: flex; gap: 18px; --e: 52px; }
+    .cel-e { width: var(--e); height: var(--e); }
+    .cel-mueve { animation: cel-mueve 1.3s ease-in-out infinite alternate; animation-delay: calc(var(--k, 0) * .15s + .8s); }
+    @keyframes cel-mueve { from { transform: rotate(-12deg) translateY(-6px) scale(1); } to { transform: rotate(12deg) translateY(5px) scale(1.08); } }
+    @media (prefers-reduced-motion: reduce) { .cel-mueve { animation: none; } }
+
     /* La sesión puede tener un nombre largo: se recorta con «…» para no tapar el botón de monedas ni «Menú principal» */
     #sesion { display: inline-block; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 30px; }
     #sesion:empty { display: none; }

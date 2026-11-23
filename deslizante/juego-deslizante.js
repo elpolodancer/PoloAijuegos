@@ -116,6 +116,7 @@ function aviso(texto) {
 const mapa = montarMapa({
   prefijo: ID,
   etapas: ETAPAS,
+  unPais: true,                                    // sin lista ni mundo: solo el país donde va el jugador
   columnas: 5,
   progreso: () => { const h = hechoMax(); return { hecho: h, max: Math.min(TOTAL, h + 1) }; },
   jugarNivel: (n) => jugarNivel(n - 1),
@@ -266,6 +267,77 @@ function animarVictoria(v, tier) {
   });
 }
 
+// ----- Celebración al pasar un nivel (sustituye al panel de victoria) -----
+// 1) Las estrellas ganadas (doradas o moradas) salen del centro de la pantalla creciendo hasta su tamaño y se mueven un poco.
+// 2) Mientras se mueven, un velo oscuro tapa el juego y debajo se abre el mapa: el contorno del país donde juega (mapa.abrir) y el velo se aparta.
+// 3) Cada estrella cae hacia el centro del país, se hace pequeña y desaparece, y el país parpadea.
+// Al terminar queda el mapa del país con sus botones (Continuar, Niveles…). Tocar la pantalla salta la animación. Con «reducir movimiento» solo abre el mapa.
+let celId = 0, celTimers = [], celEl = null;
+function quitarCelebracion() {
+  celId++;
+  celTimers.forEach(clearTimeout); celTimers = [];
+  if (celEl) { celEl.remove(); celEl = null; }
+}
+function celebrar(tier, i) {
+  quitarCelebracion();
+  const id = celId;
+  const tras = (ms, fn) => celTimers.push(setTimeout(() => { if (id === celId) fn(); }, ms));
+  let abierto = false;
+  const abrir = () => { if (!abierto) { abierto = true; abrirMapa(i + 1, true); } };   // abrirMapa → mostrar("pantalla-niveles") no cancela la celebración
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { abrir(); return; }
+
+  const mor = Math.max(0, tier - 3), cuantas = Math.min(tier, 3);
+  const ov = document.createElement("div");
+  ov.className = "cel-fondo";
+  const velo = document.createElement("div");
+  velo.className = "cel-velo";
+  const fila = document.createElement("div");
+  fila.className = "cel-fila";
+  const ests = [];
+  for (let k = 0; k < cuantas; k++) {
+    const w = document.createElement("div"), e = document.createElement("span");
+    w.className = "cel-e";
+    e.className = "est cel-mueve " + (k < mor ? "mor" : "oro");
+    e.style.setProperty("--k", k);
+    w.appendChild(e); fila.appendChild(w); ests.push(w);
+  }
+  ov.append(velo, fila);
+  document.body.appendChild(ov);
+  celEl = ov;
+  ov.addEventListener("click", () => { abrir(); quitarCelebracion(); });   // tocar = saltar la animación
+
+  // 1) aparecen desde el centro de la pantalla y crecen hasta su sitio en la fila
+  const rf = fila.getBoundingClientRect(), cxFila = rf.left + rf.width / 2;
+  ests.forEach((w, k) => {
+    const r = w.getBoundingClientRect();
+    w.animate([{ transform: "translate(" + (cxFila - (r.left + r.width / 2)) + "px,0) scale(0)", opacity: 0 }, { transform: "none", opacity: 1 }],
+      { duration: 700, delay: k * 150, easing: "cubic-bezier(.2,1.5,.4,1)", fill: "backwards" });
+  });
+
+  // 2) cambio de escena: el velo cubre el juego, se abre el mapa debajo y el velo se aparta
+  tras(1100, () => velo.classList.add("on"));
+  tras(1550, () => { abrir(); velo.classList.remove("on"); });
+
+  // 3) cada estrella cae en el país, se hace pequeña y el país parpadea
+  const T0 = 2500, SEP = 650, DUR = 900;
+  ests.forEach((w, k) => tras(T0 + k * SEP, () => {
+    const c = mapa.centroPais(), r = w.getBoundingClientRect(), sx = r.left + r.width / 2, sy = r.top + r.height / 2;
+    if (!c) { w.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: "forwards" }); return; }
+    const dx = c.x - sx, dy = c.y - sy;
+    w.animate([
+      { transform: "translate(0,0) scale(1)", opacity: 1, offset: 0 },
+      { transform: "translate(" + dx * 0.35 + "px," + (dy * 0.35 - 50) + "px) scale(1.15)", opacity: 1, offset: 0.35 },
+      { transform: "translate(" + dx + "px," + dy + "px) scale(.12)", opacity: 0.9, offset: 1 },
+    ], { duration: DUR, easing: "ease-in", fill: "forwards" }).onfinish = () => {
+      if (id !== celId) return;
+      w.style.visibility = "hidden";
+      mapa.parpadear();
+      chisporroteo(ov, c.x, c.y, 10, ["#fff6b0", "#ffc61f", "#ffffff"]);
+    };
+  }));
+  tras(T0 + (cuantas - 1) * SEP + DUR + 500, quitarCelebracion);
+}
+
 // ----- Pantallas -----
 // «inicio» = el JUEGO cargado en el nivel que toca (el de la cuenta o el primero) visto detrás de un velo difuminado y oscuro (#velo-inicio).
 // No se puede jugar hasta tocar «Continuar» (jugarNivel → mostrar("juego")). Ya en el juego solo queda la barra con Modo libre y Niveles.
@@ -276,6 +348,7 @@ function pintarBotonMenu() {
   $("btn-menu").title = textoMenuPausa(); $("btn-menu").setAttribute("aria-label", textoMenuPausa());
 }
 function mostrar(nombre) {
+  if (nombre !== "pantalla-niveles") quitarCelebracion();
   enInicio = nombre === "inicio";
   const pant = enInicio ? "juego" : nombre;           // «pantalla-niveles» = el mapa, que se dibuja encima de todo y no es una sección
   for (const p of ["pantalla-libre", "juego"]) $(p).hidden = p !== pant;
@@ -493,41 +566,30 @@ async function ganar() {
   pintarMonedas();
   pintarMetaJuego();
 
-  const l = libre ? {} : NIVELES[idx];
-  const ultimo = !libre && idx + 1 >= TOTAL, finEtapa = !libre && (idx + 1) % POR_ETAPA === 0;   // finEtapa: terminó un país
-  const v = document.createElement("div");
-  v.id = "victoria";
-  const cuadro = (d, titulo, valor, extra) => '<div class="vic-caja" style="--d:' + d + 's"><span>' + titulo + "</span><b>" + valor + "</b>" + (extra ? '<span class="rec">' + extra + "</span>" : "") + "</div>";
-  const premio = (d, icono, num, suf) => '<div class="vic-premio" style="--d:' + d + 's">' + icono + ' +<span class="cuenta" data-hasta="' + num + '">' + fmtNum(num) + "</span>" + suf + "</div>";
-  const lineas = [];
-  if (l.optimo) lineas.push("Mínimo posible: " + l.optimo + " movimientos");
-  if (ultimo) lineas.push("🏁 ¡Pasaste todos los niveles!");
-  if (cE && nuevoTier < 6) lineas.push(metaTexto(n, nuevoTier));
-  v.innerHTML =
-    '<div class="vic-arriba"><h2>🎉 ¡Resuelto!</h2>' + (cE ? '<div class="estrellas-vic">' + htmlEstrellas(nuevoTier, true) + "</div>" : "") + "</div>" +
-    '<div class="vic-centro"><div class="vic-grid">' +
-      cuadro(0.5, "⏱️ Tiempo", fmtMs(ms), "") +
-      cuadro(0.6, "🥇 Mejor tiempo", fmtMs(nueva.ms), recordMs ? "🏆 ¡Nuevo récord!" : "") +
-      cuadro(0.7, "👣 Movimientos", movs, "") +
-      cuadro(0.8, "🏆 Récord mov.", nueva.mov, recordMov ? "🏆 ¡Nuevo récord!" : "") +
-    "</div>" +
-    '<div class="vic-premios">' + premio(1.0, "🏅", ptsJuego, " puntos") + (monedas ? premio(1.15, "💰", monedas, " monedas") : "") + "</div>" +
-    lineas.map((x) => '<div class="meta-vic">' + x + "</div>").join("") + "</div>";
-  const caja = document.createElement("div");
-  caja.className = "botones";
-  const boton = (texto, clase, fn) => { const b = document.createElement("button"); b.className = "b3d txt " + clase; b.textContent = texto; b.addEventListener("click", fn); caja.appendChild(b); };
-  if (libre) {
+  if (!libre) {
+    // Al pasar un nivel ya no hay panel: las estrellas ganadas aparecen en el centro, la escena cambia al país actual y las estrellas caen en él (ver celebrar)
+    celebrar(cE ? Math.max(1, nuevoTier) : 1, idx);
+  } else {                                           // modo libre: no hay estrellas ni mapa, así que conserva su ventanita con los botones
+    const v = document.createElement("div");
+    v.id = "victoria";
+    const cuadro = (d, titulo, valor, extra) => '<div class="vic-caja" style="--d:' + d + 's"><span>' + titulo + "</span><b>" + valor + "</b>" + (extra ? '<span class="rec">' + extra + "</span>" : "") + "</div>";
+    v.innerHTML =
+      '<div class="vic-arriba"><h2>🎉 ¡Resuelto!</h2></div>' +
+      '<div class="vic-centro"><div class="vic-grid">' +
+        cuadro(0.5, "⏱️ Tiempo", fmtMs(ms), "") +
+        cuadro(0.6, "🥇 Mejor tiempo", fmtMs(nueva.ms), recordMs ? "🏆 ¡Nuevo récord!" : "") +
+        cuadro(0.7, "👣 Movimientos", movs, "") +
+        cuadro(0.8, "🏆 Récord mov.", nueva.mov, recordMov ? "🏆 ¡Nuevo récord!" : "") +
+      '</div><div class="vic-premios"><div class="vic-premio" style="--d:1s">🏅 +<span class="cuenta" data-hasta="' + ptsJuego + '">' + fmtNum(ptsJuego) + "</span> puntos</div></div></div>";
+    const caja = document.createElement("div");
+    caja.className = "botones";
+    const boton = (texto, clase, fn) => { const b = document.createElement("button"); b.className = "b3d txt " + clase; b.textContent = texto; b.addEventListener("click", fn); caja.appendChild(b); };
     boton("Otro tablero", "b-verde", () => jugarLibre(libreN));
     boton("⚙️ Cambiar tablero", "b-cielo", () => mostrar("pantalla-libre"));
-  } else {
-    if (!ultimo && !finEtapa && NIVELES[idx + 1]) boton("Siguiente nivel", "b-verde", () => jugarNivel(idx + 1));
-    boton("Repetir", "b-oro", () => empezar());
-    boton("💧 Mapa", "b-azul", () => abrirMapa(idx + 1, true));   // con CADA nivel pasado se ve subir el agua de la botella del país (mapa.abrir(n, true))
+    v.appendChild(caja);
+    $("tablero").appendChild(v);
+    animarVictoria(v, 0);
   }
-  v.appendChild(caja);
-  $("tablero").appendChild(v);
-  if (cE) brillantina(v);
-  animarVictoria(v, libre ? 0 : nuevoTier);
 
   if (!primera) {                                   // el punto del portal se da solo la primera vez que se pasa un nivel
     $("msg").textContent = libre ? "Modo libre: no da monedas ni puntos al perfil, pero guarda tu mejor marca." : "";
@@ -544,7 +606,7 @@ async function ganar() {
 // Botón verde de arriba (donde estaban Modo libre y Niveles): el nombre del nivel que se está jugando (sin el tamaño: ese va bajo el tablero)
 function pintarNombre(texto) { $("nombre-nivel").textContent = texto; $("barra-juego").setAttribute("aria-label", texto); }
 function empezar() {
-  clearInterval(reloj); clearInterval(chispas);
+  clearInterval(reloj); clearInterval(chispas); quitarCelebracion();
   const v = $("victoria"); if (v) v.remove();
   if (modo === "libre") {
     n = libreN; t = inicial.slice();
