@@ -1,0 +1,232 @@
+<!doctype html>
+<!-- Ruta: deslizante/index-deslizante.html -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Puzle deslizante</title>
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script> <!-- evita el parpadeo de la madera clara en modo oscuro -->
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>
+    /* El fondo (madera clara u oscura) lo pone compartido/inmersivo.css; los textos sueltos usan --txt-fondo, --txt-fondo-suave y --sombra-txt */
+    main { color: var(--txt-fondo); }
+
+    /* Pantallas (modo libre y juego): solo una visible a la vez. «Niveles» es el mapa estándar (compartido/mapa-niveles.js), que se dibuja encima de todo */
+    .pantalla { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+      padding: calc(104px + env(safe-area-inset-top, 0px)) 12px calc(56px + env(safe-area-inset-bottom, 0px)); } /* 104px arriba: botones de navegación; 56px abajo: el ⛶ */
+
+    /* Navegación arriba a la izquierda: botones cuadrados solo con icono (🎮 azul oscuro, ☰ verde claro) */
+    .nav-juego .b3d { font-size: 20px; }
+    .b-azuloscuro { --c1: #6c8ee0; --c2: #2a4fa8; --c3: #122a66; }
+    .b-verdeclaro { --c1: #e4ffd6; --c2: #9be87a; --c3: #4aa22f; }
+
+    #pantalla-libre { justify-content: flex-start; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+    #pantalla-libre h2 { margin: 0; font-size: 1.4rem; }
+    /* Modo libre (estándar 7.2): Dificultad (5 emojis) y Tablero (tamaños). Usa .modo-grupo y .modo-fila de compartido/inmersivo.css */
+    #pantalla-libre { gap: 10px; }
+    .nota-libre { flex: none; width: min(100%, 520px); margin: 0; text-align: center; color: var(--txt-fondo-suave); font-size: .85rem; }
+    #pantalla-libre .modo-fila { width: min(100%, 520px); }
+    #dif-fila .b3d.txt { --t: 52px; padding: 0 10px; font-size: 28px; }
+    #dif-fila .b3d.txt .b-ico { font-size: 1em; }
+    #dif-nombre { flex: none; margin: 0; font-weight: 800; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    #libre-record { flex: none; margin: 0; font-size: .9rem; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+
+    /* Juego */
+    /* Arriba a la derecha: el nombre del jugador y, DEBAJO de él, las monedas y los puntos del juego (en una columna alineada a la derecha) */
+    .hud-der { flex-direction: column; align-items: flex-end; gap: 6px; }
+
+    /* Nombre del nivel en curso: botón verde arriba al centro (misma posición que tenía la barra de Modo libre · Niveles) */
+    .barra-nombre { --t: 50px; position: fixed; z-index: 6; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 24px); pointer-events: none; font-size: 17px; }
+    .barra-nombre > span { position: relative; overflow: hidden; text-overflow: ellipsis; }
+    .barra-nombre[hidden] { display: none; }
+    @media (max-width: 639px) { .barra-nombre { top: calc(max(8px, env(safe-area-inset-top)) + 52px); } }
+
+    /* Pantalla de juego: el TABLERO va centrado en la ventana (arriba 50 %, centrado en x) y ocupa todo el ancho en celular vertical (tapa la madera de los lados).
+       --T = espacio que se deja arriba y abajo (barra de juego + cuadros de datos); --S = lado del tablero. */
+    #juego { display: block; padding: 0; --T: calc(190px + env(safe-area-inset-top, 0px)); --S: max(200px, min(100vw, calc(100vh - 2 * var(--T)), 700px)); --S: max(200px, min(100vw, calc(100dvh - 2 * var(--T)), 700px)); }
+    .titulo-nivel { font-weight: 800; font-size: 1rem; text-align: center; }
+    .titulo-nivel small { display: block; color: var(--txt-fondo-suave); font-weight: 600; font-size: .75rem; }
+    /* Cuadros de movimientos, tiempo y mejor tiempo: justo debajo de la barra de juego (Modo libre · Niveles) */
+    .datos { position: absolute; left: 50%; transform: translateX(-50%); top: calc(max(8px, env(safe-area-inset-top)) + 127px); display: flex; justify-content: center; gap: 8px; width: min(calc(100% - 24px), 360px); }
+    /* Tres cuadros azules, cada uno un poco más oscuro que el anterior (Movimientos → Tiempo → Mejor tiempo) */
+    .datos div { flex: 1; max-width: 130px; padding: 4px 8px; text-align: center; color: #e3f0ff; font-size: .7rem; border: 2px solid var(--bd); border-radius: 12px;
+      background: linear-gradient(180deg, var(--a), var(--b)); box-shadow: 0 3px 0 var(--bd), inset 0 2px 0 rgba(255,255,255,.25); }
+    .datos div:nth-child(1) { --a: #7cbcf5; --b: #4a93df; --bd: #2c6bb3; }
+    .datos div:nth-child(2) { --a: #4a93df; --b: #2f6fc0; --bd: #1f4f8f; }
+    .datos div:nth-child(3) { --a: #2f6fc0; --b: #1e4f98; --bd: #143a73; }
+    .datos b { display: block; color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.3); font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+    /* Título del nivel, estrellas y mensajes: justo debajo del tablero */
+    .abajo { position: absolute; left: 50%; transform: translateX(-50%); top: calc(50% + var(--S) / 2 + 10px); width: min(calc(100% - 24px), 420px); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    #msg { margin: 0; min-height: 1.3em; text-align: center; font-size: .8rem; }
+
+    #tablero { --n: 3; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: var(--S);
+      aspect-ratio: 1 / 1; container-type: inline-size; background: #1a1b20; border: 2px solid var(--borde); border-radius: 16px; padding: 6px;
+      box-shadow: 0 6px 0 #0c0d0f, 0 12px 20px rgba(0,0,0,.5); touch-action: none; user-select: none; }
+    #fichas { position: relative; width: 100%; height: 100%; }
+    .ficha { position: absolute; top: 0; left: 0; width: calc(100% / var(--n)); height: calc(100% / var(--n)); padding: 3px;
+      transition: transform .16s ease-out; cursor: pointer; }
+    .ficha > span { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; border-radius: 12%;
+      font-weight: 800; color: #fff; font-size: calc(100cqw / var(--n) * .42); text-shadow: 0 2px 3px rgba(0,0,0,.35);
+      box-shadow: inset 0 -4px 0 rgba(0,0,0,.25), 0 2px 4px rgba(0,0,0,.3); }
+    .ficha.bien > span { outline: 3px solid rgba(255,255,255,.55); outline-offset: -3px; }
+    /* ----- Ventana de victoria: cubre el tablero (cuadrado). De arriba abajo: «Resuelto» + estrellas · cuadros de datos y premios · botones.
+       Los tamaños usan cqw (el tablero es un contenedor), así que todo se adapta al tablero chico (3×3 en celular) y al grande. ----- */
+    #victoria { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 8px; overflow-y: auto;
+      background: rgba(10,10,12,.88); border-radius: 14px; text-align: center; color: var(--texto); /* panel oscuro: texto claro en cualquier fondo */
+      padding: clamp(10px, 4cqw, 20px) 12px clamp(14px, 6cqw, 28px); animation: vic-entra .3s ease-out both; }
+    @keyframes vic-entra { from { opacity: 0; } to { opacity: 1; } }
+    #victoria h2 { margin: 0; font-size: clamp(1.1rem, 6cqw, 1.5rem); }
+    .vic-arriba { display: flex; flex-direction: column; align-items: center; gap: clamp(4px, 2cqw, 10px); }
+    .vic-centro { display: flex; flex-direction: column; align-items: center; gap: clamp(5px, 2cqw, 9px); width: 100%; }
+    #victoria .botones { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+    #victoria .botones .b3d.txt { --t: 44px; padding: 0 12px; font-size: clamp(13px, 3.6cqw, 15px); }
+
+    /* Cuadritos de datos: gris claro casi blanco, con el mismo relieve que los botones .b3d */
+    .vic-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(5px, 1.8cqw, 8px); width: min(100%, 340px); }
+    .vic-caja { padding: 4px 8px 6px; border-radius: 12px; border: 2px solid #9aa3b0; color: #3a4350; font-size: clamp(.6rem, 3cqw, .78rem); font-weight: 700; line-height: 1.2;
+      background: linear-gradient(180deg, #ffffff 0%, #eceff3 60%, #cdd3db 140%);
+      box-shadow: 0 3px 0 #8b93a0, 0 5px 6px rgba(0,0,0,.3), inset 0 2px 0 rgba(255,255,255,.9);
+      animation: vic-sube .45s cubic-bezier(.2,1.5,.4,1) both; animation-delay: var(--d, 0s); }
+    .vic-caja b { display: block; color: #1b2430; font-size: clamp(.95rem, 5cqw, 1.2rem); font-variant-numeric: tabular-nums; }
+    .vic-caja .rec { display: block; color: #b25e00; font-weight: 800; font-size: .85em; }
+    /* Premios (puntos y monedas): cuadros amarillos con el relieve de los botones */
+    .vic-premios { display: flex; flex-wrap: wrap; justify-content: center; gap: clamp(6px, 2cqw, 10px); }
+    .vic-premio { padding: clamp(4px, 1.6cqw, 7px) clamp(10px, 4cqw, 16px); border-radius: 14px; border: 2px solid #a85d00; color: #4a2900; font-weight: 800; font-size: clamp(.75rem, 4cqw, 1rem);
+      background: linear-gradient(180deg, #fff3a0 0%, #ffd04a 55%, #e09a10 140%); text-shadow: 0 1px 0 rgba(255,255,255,.5);
+      box-shadow: 0 4px 0 #a85d00, 0 6px 8px rgba(0,0,0,.35), inset 0 2px 0 rgba(255,255,255,.6);
+      animation: vic-sube .5s cubic-bezier(.2,1.5,.4,1) both; animation-delay: var(--d, 0s); }
+    .vic-premio .cuenta { font-variant-numeric: tabular-nums; }
+    .vic-premio.rebote { animation: vic-rebote .45s ease-out; }
+    @keyframes vic-sube { from { opacity: 0; transform: translateY(16px) scale(.8); } to { opacity: 1; transform: none; } }
+    @keyframes vic-rebote { 40% { transform: scale(1.18); filter: brightness(1.15); } to { transform: none; } }
+    /* Confeti que cae al ganar (lo crea el JS) */
+    .vic-confeti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: inherit; }
+    .vic-confeti i { position: absolute; top: -8%; left: var(--x); width: 7px; height: 11px; background: var(--c); border-radius: 2px; opacity: 0;
+      animation: vic-cae var(--dur) ease-in var(--del) both; }
+    @keyframes vic-cae { 0% { opacity: 1; transform: translateY(0) rotate(0) } 100% { opacity: .9; transform: translateY(120cqw) rotate(var(--giro)) } }
+    @media (prefers-reduced-motion: reduce) { #victoria, .vic-caja, .vic-premio, .vic-premio.rebote { animation: none !important; } .vic-confeti { display: none; } }
+
+    /* ----- Celebración al pasar un nivel (la crea el JS): estrellas en el centro, velo para cambiar de escena, estrellas que caen en el país ----- */
+    .cel-fondo { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; cursor: pointer; touch-action: none; }
+    .cel-velo { position: absolute; inset: 0; background: rgba(10,10,12,.88); opacity: 0; transition: opacity .4s ease; }
+    .cel-velo.on { opacity: 1; }
+    .cel-fila { position: relative; display: flex; gap: 18px; --e: 52px; }
+    .cel-e { width: var(--e); height: var(--e); }
+    .cel-mueve { animation: cel-mueve 1.3s ease-in-out infinite alternate; animation-delay: calc(var(--k, 0) * .15s + .8s); }
+    @keyframes cel-mueve { from { transform: rotate(-12deg) translateY(-6px) scale(1); } to { transform: rotate(12deg) translateY(5px) scale(1.08); } }
+    @media (prefers-reduced-motion: reduce) { .cel-mueve { animation: none; } }
+
+    /* La sesión puede tener un nombre largo: se recorta con «…» para no tapar el botón de monedas ni «Menú principal» */
+    #sesion { display: inline-block; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 30px; }
+    #sesion:empty { display: none; }
+
+    /* ----- Estrellas: doradas y moradas (las moradas brillan con reflejo de arcoíris y centellean) ----- */
+    /* El tamaño se cambia con --e en el contenedor (.fila-est o su padre) */
+    .fila-est { display: inline-flex; align-items: center; gap: 3px; position: relative; }
+    .est { position: relative; display: inline-block; flex: none; width: var(--e, 16px); height: var(--e, 16px); }
+    .est::before { content: ""; position: absolute; inset: 0;
+      clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+    .est.vacia::before { background: rgba(255,255,255,.16); }
+    .est.oro { filter: drop-shadow(0 1px 1px rgba(0,0,0,.55)); }
+    .est.oro::before { background: linear-gradient(160deg, #fff6b0 0%, #ffc61f 45%, #c97a00 100%); }
+    .est.mor { filter: drop-shadow(0 0 3px rgba(200,130,255,.95)) drop-shadow(0 0 9px rgba(120,80,255,.6)); }
+    .est.mor::before {
+      background:
+        linear-gradient(115deg, transparent 38%, rgba(255,255,255,.95) 48%, rgba(255,255,255,0) 58%) 150% 0 / 260% 100% no-repeat, /* destello que cruza */
+        linear-gradient(135deg, rgba(255,70,200,.5), rgba(255,225,90,.42), rgba(70,255,170,.42), rgba(70,200,255,.5), rgba(180,70,255,.5), rgba(255,70,200,.5)) 0% 50% / 200% 200%, /* reflejo de arcoíris */
+        radial-gradient(circle at 35% 28%, #f0c8ff, #a52df0 50%, #5a0fa8);                                                                                                   /* base morada */
+      animation: reflejo 2.2s linear infinite; }
+    .est.mor::after { content: ""; position: absolute; inset: -35%; pointer-events: none; /* brillitos alrededor */
+      background:
+        radial-gradient(circle at 12% 22%, #fff 0 1px, transparent 1.7px),
+        radial-gradient(circle at 88% 30%, #ffd1f5 0 1px, transparent 1.7px),
+        radial-gradient(circle at 78% 86%, #c9f3ff 0 1px, transparent 1.7px),
+        radial-gradient(circle at 20% 80%, #fff2a8 0 1px, transparent 1.7px),
+        radial-gradient(circle at 50% 8%, #b8ffd9 0 1px, transparent 1.7px);
+      animation: centelleo 1.3s ease-in-out infinite alternate; }
+    @keyframes reflejo { to { background-position: -60% 0, 100% 50%, 0 0; } }
+    @keyframes centelleo { from { opacity: .2; transform: scale(.85) rotate(0deg); } to { opacity: 1; transform: scale(1.1) rotate(25deg); } }
+    .est.pop { animation: pop .55s cubic-bezier(.2,1.7,.4,1) both; animation-delay: calc(var(--i, 0) * .22s); }
+    @keyframes pop { from { transform: scale(0) rotate(-120deg); opacity: 0; } to { transform: none; opacity: 1; } }
+    /* Estela de brillantina que suelta cada estrella morada al ganar (la crea el JS) */
+    .chispa { position: absolute; width: var(--tam, 3px); height: var(--tam, 3px); border-radius: 50%; pointer-events: none; box-shadow: 0 0 6px 1px rgba(255,255,255,.9); animation: estela .9s ease-out forwards; }
+    @keyframes estela { from { opacity: 1; transform: translate(0,0) scale(1); } to { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(.2); } }
+
+    .meta-estrellas { display: flex; align-items: center; justify-content: center; gap: 8px; --e: 16px; color: var(--txt-fondo-suave); font-size: .75rem; }
+    html:not(.oscura) .meta-estrellas .est.vacia::before { background: rgba(90,50,20,.22); } /* estrella vacía visible sobre madera clara */
+    .estrellas-vic { --e: 40px; }
+    .estrellas-vic .fila-est { gap: 8px; }
+    .meta-vic { color: var(--suave); font-size: .8rem; }
+    @media (prefers-reduced-motion: reduce) { .est::before, .est::after, .est.pop, .chispa { animation: none !important; } }
+    @media (prefers-reduced-motion: reduce) { .ficha { transition: none; } }
+
+    /* ≥ 640 px de ancho: la barra de juego va en la fila superior, así que sobra espacio arriba */
+    @media (min-width: 640px) {
+      #juego { --T: calc(140px + env(safe-area-inset-top, 0px)); }
+      .datos { top: calc(max(8px, env(safe-area-inset-top)) + 75px); }
+    }
+    /* Celular horizontal: barra, cuadros y textos pasan a una columna a la izquierda y el tablero sigue centrado en la ventana */
+    @media (orientation: landscape) and (max-height: 560px) {
+      #juego { --S: max(160px, min(calc(100vh - 16px), calc(100vw - 508px), 700px)); --S: max(160px, min(calc(100dvh - 16px), calc(100vw - 508px), 700px)); }
+      .barra-nombre { top: max(8px, env(safe-area-inset-top)); left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; max-width: 190px; font-size: 14px; --t: 44px; }
+      .datos { left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; top: calc(max(8px, env(safe-area-inset-top)) + 57px); width: 190px; gap: 4px; }
+      .datos div { padding: 3px 4px; font-size: .6rem; }
+      .datos b { font-size: .95rem; }
+      .abajo { left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; top: calc(max(8px, env(safe-area-inset-top)) + 118px); width: 190px; }
+      #pantalla-libre { padding-top: calc(96px + env(safe-area-inset-top, 0px)); }
+    }
+  </style>
+</head>
+<body class="inmersivo" data-pantalla-auto data-madera-boton="oculto"> <!-- oculto: sin el botón 🌙/☀️ flotante (el cambio de madera irá en la zona de pausa) -->
+  <!-- Navegación estándar (compartido/inmersivo.css): «Juegos» siempre; «Menú principal» solo fuera del menú de inicio -->
+  <nav class="nav-juego">
+    <a class="b3d chico b-azuloscuro" href="../" title="Juegos: volver al portal" aria-label="Juegos: volver al portal"><span class="b-ico">🎮</span></a>
+    <button class="b3d chico b-verdeclaro" id="btn-menu" type="button" title="Volver al menú principal" aria-label="Volver al menú principal" hidden><span class="b-ico">☰</span></button>
+  </nav>
+  <div class="hud hud-der"><span class="chip" id="sesion"></span><span class="chip" id="monedas" title="Monedas: de 15 a 80 por cada nivel que pasas por primera vez"></span><span class="chip" id="puntos" title="Puntos del juego: de 80 a 250 por cada partida que ganas"></span></div>
+  <!-- INICIO (estándar, compartido/inmersivo.css): el juego ya cargado se ve detrás, un poco difuminado y oscurecido, y no se puede jugar hasta tocar «Continuar».
+       Arriba del botón grande van Modo libre y Niveles. Todo el grupo va centrado en la pantalla. -->
+  <div class="velo-inicio" id="velo-inicio" hidden>
+    <div class="fila-menu">
+      <button class="b3d b-morado" id="btn-libre" type="button" title="Modo libre" aria-label="Modo libre"><span class="b-ico">♾️</span><span class="b-rot">Modo libre</span></button>
+      <button class="b3d b-azul" id="btn-niveles" type="button" title="Niveles" aria-label="Niveles"><span class="b-ico">🗂️</span><span class="b-rot">Niveles</span></button>
+    </div>
+    <button class="b3d central b-verde" id="btn-jugar" type="button"><span class="b-ico">▶</span><span class="b-rot">Jugar</span></button>
+  </div>
+  <!-- Ya dentro del juego: botón verde con el nombre del nivel (solo informa; no hace nada al tocarlo) -->
+  <button class="b3d txt b-verde barra-nombre" id="barra-juego" type="button" tabindex="-1" hidden><span id="nombre-nivel"></span></button>
+
+  <main>
+    <section class="pantalla" id="pantalla-libre" hidden>
+      <h2>♾️ Modo libre</h2>
+      <p class="modo-grupo">Dificultad</p>
+      <div class="modo-fila" id="dif-fila" role="group" aria-label="Dificultad"></div>
+      <p id="dif-nombre"></p>
+      <p class="modo-grupo">Tablero</p>
+      <div class="modo-fila" id="tam-fila" role="group" aria-label="Tamaño del tablero"></div>
+      <p class="nota-libre" id="nota-libre"></p>
+      <p id="libre-record"></p>
+      <button class="b3d txt grande b-verde" id="btn-libre-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
+    </section>
+
+    <section class="pantalla" id="juego" hidden>
+      <div class="datos">
+        <div>Movimientos<b id="movs">0</b></div>
+        <div>Tiempo<b id="tiempo">0:00</b></div>
+        <div>Mejor tiempo<b id="mejor">–</b></div>
+      </div>
+      <div id="tablero"><div id="fichas"></div></div>
+      <div class="abajo">
+        <div class="titulo-nivel" id="titulo"></div>
+        <div class="meta-estrellas" id="meta-estrellas" hidden></div>
+        <p id="msg"></p>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="juego-deslizante.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+</body>
+</html>
