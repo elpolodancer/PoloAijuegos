@@ -453,7 +453,7 @@ async function ganar() {
   } else {
     if (!ultimo && !finEtapa && NIVELES[idx + 1]) boton("Siguiente nivel", "b-verde", () => jugarNivel(idx + 1));
     boton("Repetir", "b-oro", () => empezar());
-    boton(finEtapa ? "🗺️ Mapa" : "Niveles", "b-azul", () => (finEtapa ? abrirMapa(idx + 1, true) : abrirMapa()));   // al cerrar una etapa se ve subir el agua
+    boton("💧 Mapa", "b-azul", () => abrirMapa(idx + 1, true));   // con CADA nivel pasado se ve subir el agua de la botella del país (mapa.abrir(n, true))
   }
   v.appendChild(caja);
   $("tablero").appendChild(v);
