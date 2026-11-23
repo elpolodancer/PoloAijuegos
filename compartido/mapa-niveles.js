@@ -114,6 +114,8 @@ html.oscura .m-raiz{background:url("${MADERA_OSCURA}") center/cover no-repeat,#1
 .m-pbtn.m-hecho .m-barra i{background:#ffd23f}
 .m-pbtn.m-actual{border-color:#ff9a1f}
 .m-cuerpo>svg.m-botella{cursor:default;touch-action:auto}
+.m-cuerpo.m-uno{position:relative}
+.m-centro.b3d{--t:46px;position:absolute;z-index:2;margin:0;font-size:16px}   /* unPais: el botón «Continuar» va dentro del país, en su centro (se coloca con left/top desde ubicarCentro) */
 .m-pulso{transform-box:fill-box;transform-origin:center;animation:m-pulso 1.7s ease-out infinite}
 @keyframes m-pulso{from{transform:scale(1);opacity:.9}to{transform:scale(2.6);opacity:0}}
 .m-nuevo,.m-nv.activo{animation:m-latido .6s ease-in-out infinite alternate}
@@ -335,8 +337,9 @@ export function montarMapa(o) {
   const leerMundoVisto = () => { try { return localStorage.getItem(CLAVE_MUNDO) === "1"; } catch (e) { return false; } };
   const marcarMundoVisto = () => { try { localStorage.setItem(CLAVE_MUNDO, "1"); } catch (e) {} };
 
-  let pendienteContornos = false;
-  if (SOLO_PAISES) import("./contornos-paises.js").then((m) => { CONTORNOS = m.CONTORNOS; if (pendienteContornos && abierto && vista === "pais") pintar(); }).catch(() => {});
+  let pendienteContornos = false, contornosFallo = false;
+  if (SOLO_PAISES) import("./contornos-paises.js").then((m) => { CONTORNOS = m.CONTORNOS; if (pendienteContornos && abierto && vista === "pais") pintar(); })
+    .catch((e) => { contornosFallo = true; console.warn("mapa-niveles: no se pudo cargar compartido/contornos-paises.js (¿está en la carpeta compartido/?); se dibuja una gota en lugar del país", e); if (pendienteContornos && abierto && vista === "pais") pintar(); });
 
   const estilo = document.createElement("style");
   estilo.textContent = ESTILO;
@@ -395,6 +398,48 @@ export function montarMapa(o) {
     const p = prog(), n = o.nivelContinuar ? o.nivelContinuar() : p.max;
     boton("Continuar · nivel " + n, "▶", "b-verde", () => o.jugarNivel(n));
   }
+  // unPais: punto de la pantalla (px) dentro del país abierto, lo más cerca posible del centro de su caja: { x, y } o null
+  function centroDelPais() {
+    const b = botella;
+    if (!b || !b.svg.isConnected) return null;
+    try {
+      const bb = b.sil.getBBox(), dentro = (x, y) => b.sil.isPointInFill(new DOMPoint(x, y));
+      let cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;
+      if (!dentro(cx, cy)) {   // país con forma rara: el punto de adentro más cercano al centro
+        let mejor = null, md = Infinity;
+        for (let i = 0; i <= 40; i++) for (let j = 0; j <= 40; j++) {
+          const x = bb.x + bb.width * i / 40, y = bb.y + bb.height * j / 40;
+          if (dentro(x, y)) { const dd = (x - cx) ** 2 + (y - cy) ** 2; if (dd < md) { md = dd; mejor = [x, y]; } }
+        }
+        if (mejor) [cx, cy] = mejor;
+      }
+      const pt = new DOMPoint(cx, cy).matrixTransform(b.svg.getScreenCTM());
+      return { x: pt.x, y: pt.y };
+    } catch (e) { return null; }
+  }
+
+  // unPais: «Continuar» dentro del país, en su centro. Se coloca en píxeles sobre el cuerpo del mapa (que es position:relative) y se recoloca al cambiar el tamaño de la ventana.
+  let btnCentro = null;
+  function ubicarCentro() {
+    if (!btnCentro || !btnCentro.isConnected) return;
+    const c = centroDelPais();
+    if (!c) return;
+    const r = cuerpo.getBoundingClientRect();
+    btnCentro.style.left = Math.round(c.x - r.left + cuerpo.scrollLeft - btnCentro.offsetWidth / 2) + "px";
+    btnCentro.style.top = Math.round(c.y - r.top + cuerpo.scrollTop - btnCentro.offsetHeight / 2) + "px";
+  }
+  function botonContinuarCentro() {
+    const p = prog(), n = o.nivelContinuar ? o.nivelContinuar() : p.max;
+    const b = h("button", "b3d txt b-verde m-centro");
+    b.type = "button";
+    b.append(h("span", "b-ico", "▶"), document.createTextNode(" Continuar · nivel " + n));
+    b.addEventListener("click", () => o.jugarNivel(n));
+    b.style.visibility = "hidden";   // hasta tener su sitio (se ve en el siguiente cuadro)
+    cuerpo.appendChild(b);
+    btnCentro = b;
+    requestAnimationFrame(() => { ubicarCentro(); b.style.visibility = ""; });
+  }
+  addEventListener("resize", () => { if (abierto) ubicarCentro(); });
   const ir = (v, i = 0) => { vista = v; indice = i; pintar(); };
 
   // Lista de los niveles de una etapa. base = nivel anterior al primero de la etapa.
@@ -602,7 +647,6 @@ export function montarMapa(o) {
       if (indice > 0) boton("", "◀", "b-cielo", () => ir("pais", indice - 1)).setAttribute("aria-label", "País anterior");
       if (indice + 1 < NUM_PAISES && basePais(indice + 1) + 1 <= p.max) boton("", "▶", "b-cielo", () => ir("pais", indice + 1)).setAttribute("aria-label", "País siguiente");
       boton("Niveles", "🗂️", "b-azul", () => ir("niveles", indice));
-      botonContinuar();
       for (const x of o.botonesExtra || []) boton(x.texto, x.icono || "•", x.clase || "b-azul", x.fn);
       if (o.alInfo) boton("Info", "ℹ️", "b-azul", o.alInfo);
     } else {
@@ -610,6 +654,9 @@ export function montarMapa(o) {
       botonContinuar();
     }
 
+    // unPais: mientras se descarga contornos-paises.js no se dibuja nada (así no se ve la gota de respaldo, que parece un círculo); al llegar se repinta solo
+    if (UN_PAIS && !CONTORNOS && !contornosFallo) { pendienteContornos = true; return; }
+    if (UN_PAIS) cuerpo.classList.add("m-uno");
     const c = (CONTORNOS && CONTORNOS[codigo]) || GOTA, w = c.w, hh = c.h, id = ++idAgua;
     const vb = { x: -15, y: -62, w: w + 30, h: hh + 84 };   // arriba queda espacio para el chorro
     const svg = el("svg", { viewBox: vb.x + " " + vb.y + " " + vb.w + " " + vb.h, class: "m-botella", role: "img", "aria-label": nombrePais(codigo) + ": " + hechos + " de " + NIVELES_POR_ETAPA + " niveles completados" }, cuerpo);
@@ -652,6 +699,7 @@ export function montarMapa(o) {
     el("path", { d: c.d, fill: "none", stroke: UN_PAIS ? TINTA : BORDE, "stroke-width": UN_PAIS ? 3.5 : 2, "stroke-linejoin": "round", "pointer-events": "none" }, svg);   // con unPais, trazo más marcado que rodea al país
     // las siluetas se cargan aparte: al llegar, se vuelve a dibujar la botella (si no hay una animación en curso)
     if (!CONTORNOS) pendienteContornos = true;
+    if (UN_PAIS) botonContinuarCentro();
   }
 
   function pintar() {
@@ -659,7 +707,8 @@ export function montarMapa(o) {
     aguas = [];
     botella = null;
     cuerpo.replaceChildren();
-    cuerpo.classList.remove("m-mundo");
+    cuerpo.classList.remove("m-mundo", "m-uno");
+    btnCentro = null;
     acciones.replaceChildren();
     if (vista === "mexico") vistaMexico();
     else if (vista === "estado") vistaEstado();
@@ -696,24 +745,7 @@ export function montarMapa(o) {
     refrescar() { if (abierto) pintar(); },
     principal,
     // unPais: punto de la pantalla (px) dentro del país abierto, lo más cerca posible del centro de su caja: { x, y } o null
-    centroPais() {
-      const b = botella;
-      if (!b || !b.svg.isConnected) return null;
-      try {
-        const bb = b.sil.getBBox(), dentro = (x, y) => b.sil.isPointInFill(new DOMPoint(x, y));
-        let cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;
-        if (!dentro(cx, cy)) {   // país con forma rara: el punto de adentro más cercano al centro
-          let mejor = null, md = Infinity;
-          for (let i = 0; i <= 40; i++) for (let j = 0; j <= 40; j++) {
-            const x = bb.x + bb.width * i / 40, y = bb.y + bb.height * j / 40;
-            if (dentro(x, y)) { const dd = (x - cx) ** 2 + (y - cy) ** 2; if (dd < md) { md = dd; mejor = [x, y]; } }
-          }
-          if (mejor) [cx, cy] = mejor;
-        }
-        const pt = new DOMPoint(cx, cy).matrixTransform(b.svg.getScreenCTM());
-        return { x: pt.x, y: pt.y };
-      } catch (e) { return null; }
-    },
+    centroPais: centroDelPais,
     // el país abierto parpadea (destello claro + trazo dorado) un instante
     parpadear() {
       const b = botella;
