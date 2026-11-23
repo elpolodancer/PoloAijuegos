@@ -276,6 +276,7 @@ function animarVictoria(v, tier) {
 //    separadas entre sí, y se queda moviéndose un poco.
 // 2) Después suben juntas un poquito hacia la esquina de arriba a la derecha (sin pegarse a los bordes). Ya ahí, un velo oscuro tapa el juego y debajo se abre
 //    el mapa: el contorno del país donde juega (mapa.abrir); el velo se aparta y las estrellas siguen arriba a la derecha.
+// 2b) Mientras esperan arriba, sale de ellas el texto «N estrellas», se coloca justo encima, sube un poco creciendo y se desvanece.
 // 3) Desde ahí las estrellas caen UNA POR UNA hacia el centro del país, se hacen pequeñas hasta desaparecer y, cuando cada una entra, el país hace «pop»
 //    (se hincha, destella y rebota). Al final aparece el botón «Continuar» del centro con un rebote.
 // Tocar la pantalla salta la animación. Con «reducir movimiento» solo abre el mapa. Los tiempos están juntos en TIEMPOS para ajustarlos fácil.
@@ -291,6 +292,7 @@ const TIEMPOS = {
   final: 700,         // tras el pop de la última, antes de quitar todo
   sube: 650,          // lo que tardan las estrellas en subir hacia la esquina de arriba a la derecha
   arriba: 250,        // se quedan ahí un instante antes de que el velo cambie la escena
+  texto: 1800,        // lo que dura el texto «N estrellas» (sale de las estrellas, se pone encima, sube un poco creciendo y se desvanece) mientras esperan arriba al mapa
 };
 const RITMO = 0.375;  // 1 = velocidad original; 0.75 = 25 % menos; 0.375 = la mitad de lo que duraba con 0.75 (~2,9 s con 3 estrellas). Todos los tiempos de arriba se multiplican por este número
 for (const k in TIEMPOS) TIEMPOS[k] = Math.round(TIEMPOS[k] * RITMO);
@@ -311,6 +313,7 @@ function celebrar(tier, i) {
 
   const T = TIEMPOS;
   const mor = Math.max(0, tier - 3), cuantas = Math.min(tier, 3);
+  const textoEst = cuantas + (cuantas === 1 ? " estrella" : " estrellas") + (mor ? " · " + mor + (mor === 1 ? " morada" : " moradas") : "");
   const ov = document.createElement("div");
   ov.className = "cel-fondo";
   const velo = document.createElement("div");
@@ -357,6 +360,24 @@ function celebrar(tier, i) {
   const tVelo = tSube + T.sube + T.arriba, tMapa = tVelo + T.velo;
   tras(tVelo, () => velo.classList.add("on"));
   tras(tMapa, () => { mapa.retenerContinuar(true); abrir(); velo.classList.remove("on"); });
+
+  // 2b) texto «N estrellas»: sale de la posición de las estrellas cuando llegan arriba, se coloca un poco encima, sube algo creciendo un poco y se desvanece ahí mismo
+  tras(tSube + T.sube, () => {
+    const r = fila.getBoundingClientRect();
+    const tx = document.createElement("div");
+    tx.className = "cel-txt";
+    tx.textContent = textoEst;
+    tx.style.left = r.left + r.width / 2 + "px"; tx.style.top = r.top + r.height / 2 + "px";   // centro de las estrellas
+    ov.appendChild(tx);
+    const base = r.height / 2 + 24;                                                             // «ligeramente arriba» de las estrellas
+    const pos = (dy, s) => "translate(-50%,-50%) translateY(" + dy + "px) scale(" + s + ")";
+    tx.animate([
+      { transform: pos(0, 0.3), opacity: 0, offset: 0 },
+      { transform: pos(-base, 1), opacity: 1, offset: 0.28 },
+      { transform: pos(-base - 26, 1.18), opacity: 1, offset: 0.8 },
+      { transform: pos(-base - 34, 1.22), opacity: 0, offset: 1 },
+    ], { duration: T.texto, easing: "ease-out", fill: "forwards" }).onfinish = () => tx.remove();
+  });
 
   // 3) una por una: cada estrella cae al centro del país, se encoge hasta desaparecer y el país hace «pop»
   const T0 = tMapa + T.velo + T.espera;

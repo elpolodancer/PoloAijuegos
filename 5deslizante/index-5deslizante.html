@@ -115,6 +115,7 @@
     .cel-fila { position: relative; display: flex; gap: 30px; --e: 52px; }   /* separadas entre sí: se deslizan una tras otra a su lugar */
     .cel-e { width: var(--e); height: var(--e); }
     .cel-mueve { animation: cel-mueve 1.3s ease-in-out infinite alternate; }   /* el retraso lo pone el JS (celebrar): empieza cuando la estrella llega a su lugar */
+    .cel-txt { position: absolute; z-index: 2; white-space: nowrap; pointer-events: none; font-weight: 900; font-size: clamp(1.05rem, 4.2vw, 1.5rem); letter-spacing: .02em; color: #fff6b0; text-shadow: 0 2px 0 rgba(120,70,0,.85), 0 0 10px rgba(255,198,31,.9), 0 0 2px #000; }   /* «2 estrellas»: lo mueve el JS (celebrar) */
     @keyframes cel-mueve { from { transform: rotate(-12deg) translateY(-6px) scale(1); } to { transform: rotate(12deg) translateY(5px) scale(1.08); } }
 
     /* La sesión puede tener un nombre largo: se recorta con «…» para no tapar el botón de monedas ni «Menú principal» */
