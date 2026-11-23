@@ -36,7 +36,7 @@
 //     alCambiarVista: (esPrincipal) => { ... } // avisa de cada cambio de vista (el juego vuelve a rotular el ☰: «Atrás» mientras el mapa está abierto)
 //     unPais: true,                            // SOLO con crearEtapas({ soloPaises: true }): NO hay lista ni mundo; la vista principal es la botella del país donde va el jugador
 //                                              //   (solo su contorno con trazo), con ◀ ▶ (países abiertos), 🗂️ Niveles (los niveles del país) y Continuar. Sin esta opción el mapa solo de países sigue como siempre.
-//   (con unPais) mapa.centroPais() = punto de la pantalla dentro del país abierto · mapa.parpadear(k) = el país hace «pop» (se hincha, destella y rebota; k = 0, 1, 2… lo hace más fuerte) · mapa.retenerContinuar(true/false) = oculta o muestra el botón «Continuar» del centro (lo usa la celebración de «deslizante»)
+//   (con unPais) mapa.centroPais() = punto de la pantalla dentro del país abierto · mapa.parpadear(k) = el país hace «pop» (se hincha, destella y rebota sin mostrar barras de desplazamiento; k = 0, 1, 2… lo hace más fuerte) · mapa.retenerContinuar(true/false) = oculta o muestra el botón «Continuar» del centro (lo usa la celebración de «deslizante»)
 //   });
 //   mapa.abrir();                // vista principal
 //   mapa.abrir(n);               // abre la lista de niveles de la etapa del nivel n
@@ -115,6 +115,7 @@ html.oscura .m-raiz{background:url("${MADERA_OSCURA}") center/cover no-repeat,#1
 .m-pbtn.m-actual{border-color:#ff9a1f}
 .m-cuerpo>svg.m-botella{cursor:default;touch-action:auto}
 .m-cuerpo.m-uno{position:relative}
+.m-cuerpo.m-pop{overflow:hidden;overflow:clip;overflow-clip-margin:48px} /* durante el «pop» del país: lo que se hincha NO crea barras de desplazamiento ni mueve la vista (clip con margen de 48 px; hidden donde no existe clip) */
 .m-centro.b3d{--t:46px;position:absolute;z-index:2;margin:0;font-size:16px}
 .m-centro.m-dos{height:auto;min-height:54px;flex-direction:column;gap:2px;padding:6px 20px;line-height:1.1}   /* «Continuar» en una línea y el nivel en la de abajo */
 .m-centro.m-dos .m-l2{font-size:13px;font-weight:700;opacity:.95}
@@ -388,6 +389,7 @@ export function montarMapa(o) {
   let indice = 0;         // estado o país abierto
   let abierto = false;
   let aguas = [], raf = 0, tPrev = 0, idAgua = 0;
+  let popsAbiertos = 0, popScroll = [0, 0];   // pops en curso (pueden empalmarse) y posición de desplazamiento a devolver al terminar
   let botella = null;     // solo países: { svg, sil } de la botella dibujada (para centroPais y parpadear)
 
   const prog = () => resumen(o.progreso());
@@ -787,7 +789,18 @@ export function montarMapa(o) {
       if (!b || !b.svg.isConnected) return;
       if (typeof b.svg.animate === "function") {   // el país se hincha y rebota (pop)
         const g = 1.035 + 0.015 * Math.min(k, 3);
-        b.svg.animate([{ transform: "scale(1)" }, { transform: "scale(" + g + ")", offset: 0.3 }, { transform: "scale(.985)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 520, easing: "ease-out" });
+        // Mientras dura el pop, el contenedor del mapa deja de ser desplazable: así lo que se hincha sobresale sin mostrar barras de desplazamiento (ni la de abajo) y la vista no se mueve
+        if (!popsAbiertos++) { popScroll = [cuerpo.scrollLeft, cuerpo.scrollTop]; cuerpo.classList.add("m-pop"); }
+        let fin = false;
+        const terminar = () => {
+          if (fin) return; fin = true;
+          if (--popsAbiertos > 0) return;
+          popsAbiertos = 0; cuerpo.classList.remove("m-pop");
+          try { cuerpo.scrollLeft = popScroll[0]; cuerpo.scrollTop = popScroll[1]; } catch (e) {}
+        };
+        const pop = b.svg.animate([{ transform: "scale(1)" }, { transform: "scale(" + g + ")", offset: 0.3 }, { transform: "scale(.985)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 520, easing: "ease-out" });
+        pop.onfinish = terminar; pop.oncancel = terminar;
+        setTimeout(terminar, 800);   // por si el navegador no avisa que terminó
       }
       const d = b.sil.getAttribute("d");
       const flash = el("path", { d, fill: "#fff6b0", "pointer-events": "none" }, b.svg);
