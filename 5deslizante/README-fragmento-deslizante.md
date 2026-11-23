@@ -6,4 +6,4 @@
 
 ## 2) Nota para la sección «Estado»
 
-- Puzle deslizante (23 nov 2026, `sw.js` `VERSION` = 216): terminado, en la zona «Juegos» (no está en `EN_DESARROLLO`) y como 5.º de la lista; la carpeta pasó de `deslizante/` a `5deslizante/` (el id `deslizante` no cambió). Los 3 900 niveles están verificados con solución; probado en navegador sin pantalla (PC y celular simulado), también en celular real. Pendiente: boost «Eliminar un cuadro» y que `generar-contornos-paises.mjs` deje Australia como rectángulo si se vuelve a correr.
+- Puzle deslizante (23 nov 2026, `sw.js` `VERSION` = 217): terminado, en la zona «Juegos» (no está en `EN_DESARROLLO`) y como 5.º de la lista; la carpeta pasó de `deslizante/` a `5deslizante/` (el id `deslizante` no cambió). Los 3 900 niveles están verificados con solución; probado en navegador sin pantalla (PC y celular simulado), también en celular real. Pendiente: boost «Eliminar un cuadro» y que `generar-contornos-paises.mjs` deje Australia como rectángulo si se vuelve a correr.

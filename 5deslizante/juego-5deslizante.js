@@ -285,7 +285,7 @@ const TIEMPOS = {
   entraDur: 280,      // lo que tarda cada una en volar del centro a su lugar (arriba a la derecha); empieza a moverse en cuanto aparece
   quieta: 370,        // ya todas arriba a la derecha: se quedan ESTÁTICAS este rato para que se vean bien (aquí sale el texto «N estrellas»)
   arriba: 100,        // y un instante más antes de que el velo cambie la escena
-  texto: 480,         // lo que dura el texto «N estrellas» (sale de las estrellas, se pone encima, sube un poco creciendo y se desvanece)
+  texto: 4500,        // lo que dura el texto «N estrellas» (sale de las estrellas, se pone encima y se queda: ~2,7 s completo y ~1,8 s desvaneciéndose poco a poco); NO depende de lo que dura el resto de la celebración. Se quita al instante al empezar otro nivel (Continuar)
   velo: 100,          // lo que tarda el velo en tapar (y en apartarse)
   espera: 120,        // país ya visible, antes de que empiece a caer la primera estrella
   caeSep: 150,        // ms entre una estrella y la siguiente al caer al país
@@ -295,15 +295,18 @@ const TIEMPOS = {
 };
 const RITMO = 1;      // 1 = los tiempos de arriba tal cual (~1,85 s con 3 estrellas); 2 = el doble de lento; 0.5 = el doble de rápido. Multiplica todos los tiempos de arriba
 for (const k in TIEMPOS) TIEMPOS[k] = Math.round(TIEMPOS[k] * RITMO);
-let celId = 0, celTimers = [], celEl = null;
+let celId = 0, celTimers = [], celEl = null, textoCel = null;
+// El texto «N estrellas» vive aparte de la celebración (en <body>) para seguir ahí cuando las estrellas ya cayeron; se quita al empezar cualquier nivel o con otra celebración
+function quitarTextoCel() { if (textoCel) { textoCel.remove(); textoCel = null; } }
 function quitarCelebracion() {
   celId++;
   celTimers.forEach(clearTimeout); celTimers = [];
   if (celEl) { celEl.remove(); celEl = null; }
   mapa.retenerContinuar(false);   // el botón «Continuar» del centro del país vuelve a verse
 }
-function celebrar(tier, i) {
+function celebrar(tier, i, monedas = 0) {
   quitarCelebracion();
+  quitarTextoCel();
   const id = celId;
   const tras = (ms, fn) => celTimers.push(setTimeout(() => { if (id === celId) fn(); }, ms));
   let abierto = false;
@@ -360,22 +363,28 @@ function celebrar(tier, i) {
   tras(tVelo, () => velo.classList.add("on"));
   tras(tMapa, () => { mapa.retenerContinuar(true); abrir(); velo.classList.remove("on"); });
 
-  // 2b) texto «N estrellas»: sale de la posición de las estrellas cuando llegan arriba, se coloca un poco encima, sube algo creciendo un poco y se desvanece ahí mismo
+  // 2b) texto «N estrellas» (y, si las hay, las monedas ganadas): sale de la posición de las estrellas cuando llegan arriba, se coloca un poco encima y se queda
+  //     unos 4,5 s subiendo despacio y desvaneciéndose poco a poco, aunque la celebración ya haya terminado. Al empezar otro nivel desaparece al instante (quitarTextoCel).
   tras(tLlega, () => {
     const r = fila.getBoundingClientRect();
-    const tx = document.createElement("div");
-    tx.className = "cel-txt";
-    tx.textContent = textoEst;
-    tx.style.left = r.left + r.width / 2 + "px"; tx.style.top = r.top + r.height / 2 + "px";   // centro de las estrellas
-    ov.appendChild(tx);
-    const base = r.height / 2 + 24;                                                             // «ligeramente arriba» de las estrellas
+    const txt = document.createElement("div");
+    txt.className = "cel-txt";
+    const l1 = document.createElement("div");
+    l1.textContent = textoEst;
+    txt.appendChild(l1);
+    if (monedas > 0) { const l2 = document.createElement("div"); l2.className = "cel-txt2"; l2.textContent = "💰 +" + fmtNum(monedas) + " monedas"; txt.appendChild(l2); }
+    txt.style.left = r.left + r.width / 2 + "px"; txt.style.top = r.top + r.height / 2 + "px";   // centro de las estrellas
+    document.body.appendChild(txt);
+    textoCel = txt;
+    const base = r.height / 2 + txt.offsetHeight / 2 + 12;                                       // «ligeramente arriba» de las estrellas
     const pos = (dy, s) => "translate(-50%,-50%) translateY(" + dy + "px) scale(" + s + ")";
-    tx.animate([
-      { transform: pos(0, 0.3), opacity: 0, offset: 0 },
-      { transform: pos(-base, 1), opacity: 1, offset: 0.28 },
-      { transform: pos(-base - 26, 1.18), opacity: 1, offset: 0.8 },
-      { transform: pos(-base - 34, 1.22), opacity: 0, offset: 1 },
-    ], { duration: T.texto, easing: "ease-out", fill: "forwards" }).onfinish = () => tx.remove();
+    const colocado = Math.min(0.2, 180 / T.texto);                                               // lo que tarda en salir de las estrellas y colocarse (~0,18 s)
+    txt.animate([
+      { transform: pos(0, 0.3), opacity: 0, offset: 0, easing: "cubic-bezier(.2,.9,.3,1.2)" },
+      { transform: pos(-base, 1), opacity: 1, offset: colocado, easing: "linear" },
+      { transform: pos(-base - 8, 1.08), opacity: 1, offset: 0.6, easing: "linear" },           // se queda completo ~2,7 s subiendo apenas
+      { transform: pos(-base - 16, 1.15), opacity: 0, offset: 1 },                               // y se desvanece poco a poco
+    ], { duration: T.texto, fill: "forwards" }).onfinish = () => { txt.remove(); if (textoCel === txt) textoCel = null; };
   });
 
   // 3) una por una: cada estrella cae al centro del país, se encoge hasta desaparecer y el país hace «pop»
@@ -618,7 +627,7 @@ async function ganar() {
 
   if (!libre) {
     // Al pasar un nivel ya no hay panel: las estrellas ganadas aparecen en el centro, la escena cambia al país actual y las estrellas caen en él (ver celebrar)
-    celebrar(cE ? Math.max(1, nuevoTier) : 1, idx);
+    celebrar(cE ? Math.max(1, nuevoTier) : 1, idx, monedas);
   } else {                                           // modo libre: no hay estrellas ni mapa, así que conserva su ventanita con los botones
     const v = document.createElement("div");
     v.id = "victoria";
@@ -656,7 +665,7 @@ async function ganar() {
 // Botón verde de arriba (donde estaban Modo libre y Niveles): el nombre del nivel que se está jugando (sin el tamaño: ese va bajo el tablero)
 function pintarNombre(texto) { $("nombre-nivel").textContent = texto; $("barra-juego").setAttribute("aria-label", texto); }
 function empezar() {
-  clearInterval(reloj); clearInterval(chispas); quitarCelebracion();
+  clearInterval(reloj); clearInterval(chispas); quitarCelebracion(); quitarTextoCel();   // al empezar un nivel (p. ej. con «Continuar») el texto de estrellas desaparece al instante
   const v = $("victoria"); if (v) v.remove();
   if (modo === "libre") {
     n = libreN; t = inicial.slice();
