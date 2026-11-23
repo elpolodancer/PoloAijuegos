@@ -115,7 +115,12 @@ html.oscura .m-raiz{background:url("${MADERA_OSCURA}") center/cover no-repeat,#1
 .m-pbtn.m-actual{border-color:#ff9a1f}
 .m-cuerpo>svg.m-botella{cursor:default;touch-action:auto}
 .m-cuerpo.m-uno{position:relative}
-.m-centro.b3d{--t:46px;position:absolute;z-index:2;margin:0;font-size:16px}   /* unPais: el botón «Continuar» va dentro del país, en su centro (se coloca con left/top desde ubicarCentro) */
+.m-centro.b3d{--t:46px;position:absolute;z-index:2;margin:0;font-size:16px}
+.m-centro.m-dos{height:auto;min-height:54px;flex-direction:column;gap:2px;padding:6px 20px;line-height:1.1}   /* «Continuar» en una línea y el nivel en la de abajo */
+.m-centro.m-dos .m-l2{font-size:13px;font-weight:700;opacity:.95}
+.m-titulo:empty{display:none}
+.m-pais-nombre{flex:none;margin:0 0 2px;font-size:clamp(1.9rem,6vw,3rem);font-weight:900;line-height:1.1;text-align:center;color:var(--txt-fondo,#2b3a4a);text-shadow:var(--sombra-txt,0 2px 0 rgba(255,240,210,.6))}
+.m-pais-niveles{flex:none;margin:14px 0 0;font-size:1rem;font-weight:700;text-align:center;color:var(--txt-fondo-suave,#5b6b7c)}   /* unPais: el botón «Continuar» va dentro del país, en su centro (se coloca con left/top desde ubicarCentro) */
 .m-pulso{transform-box:fill-box;transform-origin:center;animation:m-pulso 1.7s ease-out infinite}
 @keyframes m-pulso{from{transform:scale(1);opacity:.9}to{transform:scale(2.6);opacity:0}}
 .m-nuevo,.m-nv.activo{animation:m-latido .6s ease-in-out infinite alternate}
@@ -433,7 +438,8 @@ export function montarMapa(o) {
     const p = prog(), n = o.nivelContinuar ? o.nivelContinuar() : p.max;
     const b = h("button", "b3d txt b-verde m-centro");
     b.type = "button";
-    b.append(h("span", "b-ico", "▶"), document.createTextNode(" Continuar · nivel " + n));
+    b.classList.add("m-dos");
+    b.append(h("span", "m-l1", "▶ Continuar"), h("span", "m-l2", "Nivel " + n));
     b.addEventListener("click", () => o.jugarNivel(n));
     b.style.visibility = "hidden";   // hasta tener su sitio (se ve en el siguiente cuadro)
     cuerpo.appendChild(b);
@@ -588,8 +594,11 @@ export function montarMapa(o) {
   let vigia = null;        // carga cada bandera cuando se acerca a la pantalla
   function vistaLista() {
     const p = prog();
-    titulo.textContent = "🌍 Niveles";
-    info.textContent = "💧 " + p.paisesHechos + " de " + NUM_PAISES + " países completados · toca un país para ver su mapa" + (o.avisoPrincipal && o.avisoPrincipal() ? " · " + o.avisoPrincipal() : "");
+    titulo.textContent = UN_PAIS ? "🗺️ Mapa" : "🌍 Niveles";
+    if (UN_PAIS) {
+      boton("País", "◀", "b-cielo", () => ir("pais", indice)).setAttribute("aria-label", "Volver al país");
+      info.textContent = "Toca un país para abrirlo";
+    } else info.textContent = "💧 " + p.paisesHechos + " de " + NUM_PAISES + " países completados · toca un país para ver su mapa" + (o.avisoPrincipal && o.avisoPrincipal() ? " · " + o.avisoPrincipal() : "");
     botonContinuar();
     for (const x of o.botonesExtra || []) boton(x.texto, x.icono || "•", x.clase || "b-azul", x.fn);
     if (o.alInfo) boton("Info", "ℹ️", "b-azul", o.alInfo);
@@ -632,7 +641,7 @@ export function montarMapa(o) {
     const hechos = acotar(p.hecho - base, 0, NIVELES_POR_ETAPA);
     titulo.textContent = nombrePais(codigo);
     info.textContent = hechos + " de " + NIVELES_POR_ETAPA + " niveles completados";
-    boton("Mapa", "◀", "b-cielo", () => ir("pais", indice));
+    boton("País", "◀", "b-cielo", () => ir("pais", indice));
     botonContinuar();
     rejillaNiveles(base);
   }
@@ -641,12 +650,11 @@ export function montarMapa(o) {
   function vistaBotella() {
     const p = prog(), codigo = PAISES_ORDEN[indice], base = basePais(indice);
     const hechos = acotar(p.hecho - base, 0, NIVELES_POR_ETAPA), completo = hechos >= NIVELES_POR_ETAPA;
-    titulo.textContent = nombrePais(codigo);
-    info.textContent = "País " + (indice + 1) + " de " + NUM_PAISES + " · " + hechos + " de " + NIVELES_POR_ETAPA + " niveles completados" + (completo ? " · ¡completo! ⭐" : "");
+    titulo.textContent = UN_PAIS ? "" : nombrePais(codigo);
+    info.textContent = UN_PAIS ? "" : "País " + (indice + 1) + " de " + NUM_PAISES + " · " + hechos + " de " + NIVELES_POR_ETAPA + " niveles completados" + (completo ? " · ¡completo! ⭐" : "");
     if (UN_PAIS) {
-      // Navegación país por país (todos los anteriores al actual están abiertos): ◀ anterior · ▶ siguiente · 🗂️ niveles de este país · Continuar
-      if (indice > 0) boton("", "◀", "b-cielo", () => ir("pais", indice - 1)).setAttribute("aria-label", "País anterior");
-      if (indice + 1 < NUM_PAISES && basePais(indice + 1) + 1 <= p.max) boton("", "▶", "b-cielo", () => ir("pais", indice + 1)).setAttribute("aria-label", "País siguiente");
+      // 🗺️ Mapa = todos los países abiertos con sus niveles en cuadrícula de 5 columnas (desde ahí se abre cualquier país) · 🗂️ niveles de este país
+      boton("Mapa", "🗺️", "b-cielo", () => { enfoque = indice; ir("mundo"); });
       boton("Niveles", "🗂️", "b-azul", () => ir("niveles", indice));
       for (const x of o.botonesExtra || []) boton(x.texto, x.icono || "•", x.clase || "b-azul", x.fn);
       if (o.alInfo) boton("Info", "ℹ️", "b-azul", o.alInfo);
@@ -657,9 +665,9 @@ export function montarMapa(o) {
 
     // unPais: mientras se descarga contornos-paises.js no se dibuja nada (así no se ve la gota de respaldo, que parece un círculo); al llegar se repinta solo
     if (UN_PAIS && !CONTORNOS && !contornosFallo) { pendienteContornos = true; return; }
-    if (UN_PAIS) cuerpo.classList.add("m-uno");
+    if (UN_PAIS) { cuerpo.classList.add("m-uno"); cuerpo.appendChild(h("h2", "m-pais-nombre", nombrePais(codigo))); }   // el nombre, grande, justo arriba del país
     const c = (CONTORNOS && CONTORNOS[codigo]) || GOTA, w = c.w, hh = c.h, id = ++idAgua;
-    const vb = { x: -15, y: -62, w: w + 30, h: hh + 84 };   // arriba queda espacio para el chorro
+    const vb = { x: -15, y: UN_PAIS ? -34 : -62, w: w + 30, h: hh + (UN_PAIS ? 56 : 84) };   // arriba queda espacio para el chorro
     const svg = el("svg", { viewBox: vb.x + " " + vb.y + " " + vb.w + " " + vb.h, class: "m-botella", role: "img", "aria-label": nombrePais(codigo) + ": " + hechos + " de " + NIVELES_POR_ETAPA + " niveles completados" }, cuerpo);
     el("path", { d: c.d, fill: SOMBRA, transform: "translate(0 5)" }, svg);
     const sil = el("path", { d: c.d, fill: "#fff" }, svg);
@@ -700,7 +708,10 @@ export function montarMapa(o) {
     el("path", { d: c.d, fill: "none", stroke: UN_PAIS ? TINTA : BORDE, "stroke-width": UN_PAIS ? 3.5 : 2, "stroke-linejoin": "round", "pointer-events": "none" }, svg);   // con unPais, trazo más marcado que rodea al país
     // las siluetas se cargan aparte: al llegar, se vuelve a dibujar la botella (si no hay una animación en curso)
     if (!CONTORNOS) pendienteContornos = true;
-    if (UN_PAIS) botonContinuarCentro();
+    if (UN_PAIS) {
+      cuerpo.appendChild(h("p", "m-pais-niveles", hechos + " de " + NIVELES_POR_ETAPA + " niveles completados" + (completo ? " · ¡completo! ⭐" : "")));   // debajo del país, un poco separado
+      botonContinuarCentro();
+    }
   }
 
   function pintar() {
