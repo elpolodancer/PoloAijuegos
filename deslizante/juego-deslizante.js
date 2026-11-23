@@ -6,6 +6,7 @@
 import { encolarNivel, leerCola, guardarCola } from "../compartido/cola-puntos.js";
 import { crearEtapas } from "../compartido/etapas-mapa.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
+import { crearMenuPausa } from "../compartido/menu-pausa.js";
 import { NIVELES, POR_ETAPA, TAMANO_MIN, TAMANO_MAX, monedasDe, puntosJuegoDe } from "./niveles-deslizante.js";
 
 const ID = "deslizante";
@@ -273,21 +274,26 @@ function animarVictoria(v, tier) {
 // ----- Celebración al pasar un nivel (sustituye al panel de victoria) -----
 // 1) Las estrellas ganadas (doradas o moradas) salen del centro de la pantalla UNA TRAS OTRA: cada una se desliza hacia su lugar dejando brillos,
 //    separadas entre sí, y se queda moviéndose un poco.
-// 2) Cuando ya llevan un rato, un velo oscuro tapa el juego y debajo se abre el mapa: el contorno del país donde juega (mapa.abrir); el velo se aparta.
-// 3) Las estrellas caen UNA POR UNA hacia el centro del país, se hacen pequeñas hasta desaparecer y, cuando cada una entra, el país hace «pop»
+// 2) Después suben juntas un poquito hacia la esquina de arriba a la derecha (sin pegarse a los bordes). Ya ahí, un velo oscuro tapa el juego y debajo se abre
+//    el mapa: el contorno del país donde juega (mapa.abrir); el velo se aparta y las estrellas siguen arriba a la derecha.
+// 3) Desde ahí las estrellas caen UNA POR UNA hacia el centro del país, se hacen pequeñas hasta desaparecer y, cuando cada una entra, el país hace «pop»
 //    (se hincha, destella y rebota). Al final aparece el botón «Continuar» del centro con un rebote.
 // Tocar la pantalla salta la animación. Con «reducir movimiento» solo abre el mapa. Los tiempos están juntos en TIEMPOS para ajustarlos fácil.
 const RESPETAR_MOVIMIENTO_REDUCIDO = false;   // false = la celebración se ve siempre (en muchos PC y celulares «reducir movimiento» viene activado sin que la persona lo sepa y la animación nunca salía; igual que en el Solitario). true = con «reducir movimiento» solo se abre el mapa
 const TIEMPOS = {
   entraSep: 420,      // ms entre una estrella y la siguiente al aparecer
   entraDur: 750,      // lo que tarda cada una en deslizarse a su lugar
-  quieta: 1300,       // cuánto se mueven las estrellas después de llegar la última, antes del cambio de escena
+  quieta: 400,        // cuánto se mueven las estrellas después de llegar la última, antes de subir a la esquina (quieta + sube + arriba = 1300, lo que antes duraba solo «quieta»)
   velo: 450,          // lo que tarda el velo en tapar (y en apartarse)
   espera: 700,        // país ya visible, antes de que empiece a caer la primera estrella
   caeSep: 800,        // ms entre una estrella y la siguiente al caer al país
   caeDur: 850,        // lo que dura la caída (y el encogerse hasta desaparecer) de cada estrella
   final: 700,         // tras el pop de la última, antes de quitar todo
+  sube: 650,          // lo que tardan las estrellas en subir hacia la esquina de arriba a la derecha
+  arriba: 250,        // se quedan ahí un instante antes de que el velo cambie la escena
 };
+const RITMO = 0.75;   // 1 = velocidad original; 0.75 = la animación dura 25 % menos (todos los tiempos de arriba se multiplican por este número)
+for (const k in TIEMPOS) TIEMPOS[k] = Math.round(TIEMPOS[k] * RITMO);
 let celId = 0, celTimers = [], celEl = null;
 function quitarCelebracion() {
   celId++;
@@ -309,6 +315,7 @@ function celebrar(tier, i) {
   ov.className = "cel-fondo";
   const velo = document.createElement("div");
   velo.className = "cel-velo";
+  velo.style.transition = "opacity " + T.velo + "ms ease";
   const fila = document.createElement("div");
   fila.className = "cel-fila";
   const ests = [];
@@ -341,7 +348,13 @@ function celebrar(tier, i) {
 
   // 2) cambio de escena: el velo cubre el juego, se abre el mapa debajo y el velo se aparta
   const tLlega = (cuantas - 1) * T.entraSep + T.entraDur;
-  const tVelo = tLlega + T.quieta, tMapa = tVelo + T.velo;
+  const tSube = tLlega + T.quieta;                   // las estrellas suben (todas juntas, con su fila) hacia arriba a la derecha
+  tras(tSube, () => {
+    const r = fila.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const tx = Math.min(innerWidth * 0.78, innerWidth - r.width / 2 - 28), ty = Math.max(innerHeight * (innerWidth < 640 ? 0.3 : 0.2), r.height / 2 + 80);   // sin llegar a los bordes ni a los botones de arriba
+    fila.animate([{ transform: "none" }, { transform: "translate(" + (tx - cx) + "px," + (ty - cy) + "px)" }], { duration: T.sube, easing: "ease-in-out", fill: "forwards" });
+  });
+  const tVelo = tSube + T.sube + T.arriba, tMapa = tVelo + T.velo;
   tras(tVelo, () => velo.classList.add("on"));
   tras(tMapa, () => { mapa.retenerContinuar(true); abrir(); velo.classList.remove("on"); });
 
@@ -361,7 +374,7 @@ function celebrar(tier, i) {
       w.style.visibility = "hidden";
       mapa.parpadear(k);                                                                  // el país hace «pop» (cada vez un poco más fuerte)
       chisporroteo(ov, c.x, c.y, ultima ? 16 : 10, ["#fff6b0", "#ffc61f", "#ffffff"]);
-      if (ultima) tras(250, () => mapa.retenerContinuar(false));                        // aparece «Continuar» con un rebote
+      if (ultima) tras(Math.round(250 * RITMO), () => mapa.retenerContinuar(false));                        // aparece «Continuar» con un rebote
     };
   }));
   tras(T0 + (cuantas - 1) * T.caeSep + T.caeDur + T.final, quitarCelebracion);
@@ -490,7 +503,7 @@ function pintar() {
 }
 
 function tocar(pos) {
-  if (pos < 0 || jugando === "fin") return;
+  if (pos < 0 || jugando === "fin" || pausado) return;
   const h = t.indexOf(0);
   const fp = Math.floor(pos / n), cp = pos % n, fh = Math.floor(h / n), ch = h % n;
   if (fp !== fh && cp !== ch) return;               // solo misma fila o columna que el hueco
@@ -655,6 +668,31 @@ function jugarLibre(m) {
   mostrar("juego");
   empezar();
 }
+
+// ----- Botón verde del nombre del nivel: pregunta si quieres salir y, si aceptas, te lleva al mapa (o a elegir tablero en el Modo libre) -----
+// Mientras la ventana está abierta el cronómetro se detiene (y sigue donde iba si eliges «Seguir jugando»).
+let pausado = false, erajugando = false;
+const opcionesSalir = {
+  titulo: "¿Salir?",
+  textoContinuar: "Seguir jugando",
+  textoSalir: "Salir al mapa",
+  ayudaSalir: "Se pierde lo avanzado en este tablero.",
+  puedeAbrir: () => !$("juego").hidden,
+  alAbrir: () => {
+    pausado = true; erajugando = jugando === true;
+    if (erajugando) { previo = Date.now() - inicio; clearInterval(reloj); }
+  },
+  alContinuar: () => {
+    pausado = false;
+    if (erajugando && jugando === true) { inicio = Date.now() - previo; reloj = setInterval(mostrarTiempo, 100); }
+  },
+  alSalir: () => { pausado = false; mostrar(modo === "libre" ? "pantalla-libre" : "inicio"); },
+};
+const pausaSalir = crearMenuPausa(opcionesSalir);   // se pasa el mismo objeto: el texto de «Salir» se cambia antes de abrir
+$("barra-juego").addEventListener("click", () => {
+  Object.assign(opcionesSalir, { textoSalir: modo === "libre" ? "Salir a elegir tablero" : "Salir al mapa" });
+  pausaSalir.abrir();
+});
 
 // ----- Botones y teclado -----
 $("btn-libre-jugar").addEventListener("click", () => jugarLibre(libreN));

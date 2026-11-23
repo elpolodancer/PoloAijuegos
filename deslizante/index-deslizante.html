@@ -38,7 +38,7 @@
     .hud-der { flex-direction: column; align-items: flex-end; gap: 6px; }
 
     /* Nombre del nivel en curso: botón verde arriba al centro (misma posición que tenía la barra de Modo libre · Niveles) */
-    .barra-nombre { --t: 50px; position: fixed; z-index: 6; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 24px); pointer-events: none; font-size: 17px; }
+    .barra-nombre { --t: 50px; position: fixed; z-index: 6; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 24px); font-size: 17px; cursor: pointer; }   /* se puede tocar: pregunta si quieres salir al mapa */
     .barra-nombre > span { position: relative; overflow: hidden; text-overflow: ellipsis; }
     .barra-nombre[hidden] { display: none; }
     @media (max-width: 639px) { .barra-nombre { top: calc(max(8px, env(safe-area-inset-top)) + 52px); } }
@@ -185,8 +185,8 @@
     <button class="b3d chico b-verdeclaro" id="btn-menu" type="button" title="Volver al menú principal" aria-label="Volver al menú principal" hidden><span class="b-ico">☰</span></button>
   </nav>
   <div class="hud hud-der"><span class="chip" id="sesion"></span><span class="chip" id="monedas" title="Monedas: de 15 a 80 por cada nivel que pasas por primera vez"></span><span class="chip" id="puntos" title="Puntos del juego: de 80 a 250 por cada partida que ganas"></span></div>
-  <!-- Ya dentro del juego: botón verde con el nombre del nivel (solo informa; no hace nada al tocarlo) -->
-  <button class="b3d txt b-verde barra-nombre" id="barra-juego" type="button" tabindex="-1" hidden><span id="nombre-nivel"></span></button>
+  <!-- Ya dentro del juego: botón verde con el nombre del nivel; al tocarlo pregunta si quieres salir (ventana con botón rojo) y te lleva al mapa -->
+  <button class="b3d txt b-verde barra-nombre" id="barra-juego" type="button" title="Salir al mapa" hidden><span id="nombre-nivel"></span></button>
 
   <main>
     <section class="pantalla" id="pantalla-libre" hidden>
