@@ -113,11 +113,14 @@ function aviso(texto) {
 }
 
 // ----- Mapa de niveles (estándar 7.3 + mapa solo de países): se ve solo el país donde vas, con su contorno que se llena de agua; México es el primer país y se van abriendo de uno en uno -----
+let mapaEnPrincipal = true;                        // ¿el mapa está en su vista principal (la del país)? Ahí el ☰ no se ve: el mapa ES el menú principal
 const mapa = montarMapa({
   prefijo: ID,
   etapas: ETAPAS,
   unPais: true,                                    // sin lista ni mundo: solo el país donde va el jugador
   columnas: 5,
+  botonesExtra: [{ icono: "♾️", texto: "Modo libre", clase: "b-morado", fn: () => mostrar("pantalla-libre") }],   // el Modo libre se abre desde el mapa
+  alCambiarVista: (esPrincipal) => { mapaEnPrincipal = esPrincipal; pintarBotonMenu(); },   // el ☰ se rotula según la vista
   progreso: () => { const h = hechoMax(); return { hecho: h, max: Math.min(TOTAL, h + 1) }; },
   jugarNivel: (n) => jugarNivel(n - 1),
   infoNivel: (n) => {
@@ -365,37 +368,26 @@ function celebrar(tier, i) {
 }
 
 // ----- Pantallas -----
-// «inicio» = el JUEGO cargado en el nivel que toca (el de la cuenta o el primero) visto detrás de un velo difuminado y oscuro (#velo-inicio).
-// No se puede jugar hasta tocar «Continuar» (jugarNivel → mostrar("juego")). Ya en el juego solo queda la barra con Modo libre y Niveles.
-function textoMenuPausa() { return enInicio ? "" : "Volver al menú principal"; }   // ☰: siempre vuelve al menú principal (el juego cargado con el velo)
+// El MENÚ PRINCIPAL es el MAPA (compartido/mapa-niveles.js, vista del país donde va el jugador): al abrir el juego o recargar con F5 se ve directo el mapa,
+// con Mapa · Niveles · Modo libre · Info y «Continuar» en el centro del país. Ya no hay un nivel cargado detrás de un velo.
+// «pantalla-niveles» = el mapa, que se dibuja encima de todo y no es una sección; «inicio» = abrir el mapa.
 function pintarBotonMenu() {
-  $("btn-menu").hidden = enInicio;                  // el ☰ no se ve mientras está el velo de inicio
+  const enMapa = mapa.abierto();
+  $("btn-menu").hidden = enMapa && mapaEnPrincipal;   // en el mapa principal no se muestra; en sus vistas internas (Mapa, Niveles) vuelve «Atrás»
+  const texto = enMapa ? "Atrás" : "Volver al menú principal";
   $("btn-menu").innerHTML = '<span class="b-ico">☰</span>'; // cuadrado, solo icono: el texto va en title y aria-label
-  $("btn-menu").title = textoMenuPausa(); $("btn-menu").setAttribute("aria-label", textoMenuPausa());
+  $("btn-menu").title = texto; $("btn-menu").setAttribute("aria-label", texto);
 }
 function mostrar(nombre) {
+  if (nombre === "inicio") { abrirMapa(); return; }
   if (nombre !== "pantalla-niveles") quitarCelebracion();
-  enInicio = nombre === "inicio";
-  const pant = enInicio ? "juego" : nombre;           // «pantalla-niveles» = el mapa, que se dibuja encima de todo y no es una sección
-  for (const p of ["pantalla-libre", "juego"]) $(p).hidden = p !== pant;
+  for (const p of ["pantalla-libre", "juego"]) $(p).hidden = p !== nombre;
   if (nombre !== "pantalla-niveles") mapa.cerrar();
-  $("velo-inicio").hidden = !enInicio;
-  $("barra-juego").hidden = !(pant === "juego" && !enInicio);
+  $("barra-juego").hidden = nombre !== "juego";
   pintarBotonMenu();
-  if (pant !== "juego") { clearInterval(reloj); clearInterval(chispas); }
-  if (enInicio) {
-    modo = "nivel"; idx = siguientePendiente();
-    if (NIVELES[idx]) empezar();                      // carga el nivel que toca
-    else { modo = "libre"; libreNum++; inicial = mezclarAzar(libreN, libreDif); empezar(); }   // aún no hay niveles: se ve el modo libre
-    pintarInicio();
-  }
+  if (nombre !== "juego") { clearInterval(reloj); clearInterval(chispas); }
   pintarMonedas();
   if (nombre === "pantalla-libre") pintarLibre();
-}
-function pintarInicio() {
-  const i = siguientePendiente(), existe = !!NIVELES[i];
-  $("btn-jugar").innerHTML = '<span class="b-ico">▶</span><span class="b-rot">' + (hechoMax() ? "Continuar" : "Jugar") + "</span>";
-  $("btn-jugar").title = existe ? nombreNivel(i) : "Todavía no hay niveles: se juega el modo libre";
 }
 
 // Modo libre (estándar 7.2): grupo «Dificultad» (5 emojis) y grupo «Tablero» (tamaños). Aquí NO se muestra ningún nivel.
@@ -448,7 +440,6 @@ function pintarLibre() {
 }
 
 // ----- Juego -----
-let enInicio = false;                              // ¿se ve la barra de inicio sobre el juego cargado?
 let modo = "nivel";                                // "nivel" (niveles fijos) o "libre" (tableros al azar sin fin)
 let libreNum = 0, inicial = [];                    // modo libre: número de tablero de esta sesión y tablero de partida (libreN y libreDif están arriba)
 let idx = 0, n = 3, t = [];                        // t[pos] = número de la ficha (0 = hueco)
@@ -499,7 +490,7 @@ function pintar() {
 }
 
 function tocar(pos) {
-  if (pos < 0 || jugando === "fin" || enInicio) return;
+  if (pos < 0 || jugando === "fin") return;
   const h = t.indexOf(0);
   const fp = Math.floor(pos / n), cp = pos % n, fh = Math.floor(h / n), ch = h % n;
   if (fp !== fh && cp !== ch) return;               // solo misma fila o columna que el hueco
@@ -666,15 +657,12 @@ function jugarLibre(m) {
 }
 
 // ----- Botones y teclado -----
-$("btn-jugar").addEventListener("click", () => { const i = siguientePendiente(); if (NIVELES[i]) jugarNivel(i); else jugarLibre(libreN); });   // sin niveles: modo libre
-$("btn-niveles").addEventListener("click", () => abrirMapa());
 $("btn-libre-jugar").addEventListener("click", () => jugarLibre(libreN));
-$("btn-libre").addEventListener("click", () => mostrar("pantalla-libre"));
-// ☰: en cualquier pantalla (también dentro de una partida) vuelve al menú principal: el juego cargado con el velo. No hay menú de pausa;
-// lo que se avanzó en la partida en curso no se guarda (una partida guardada antes no se toca).
-$("btn-menu").addEventListener("click", () => mostrar("inicio"));
+// ☰: dentro de una partida o del Modo libre vuelve al menú principal (el mapa); dentro de una vista del mapa (Mapa, Niveles) vuelve «Atrás» a su vista principal.
+// No hay menú de pausa; lo que se avanzó en la partida en curso no se guarda (una partida guardada antes no se toca).
+$("btn-menu").addEventListener("click", () => { if (mapa.abierto() && !mapa.esPrincipal()) mapa.principal(); else mostrar("inicio"); });
 addEventListener("keydown", (e) => {
-  if ($("juego").hidden || enInicio) return;
+  if ($("juego").hidden) return;
   const d = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [1, 0], ArrowRight: [-1, 0] }[e.key];
   if (d) { e.preventDefault(); mover(d[0], d[1]); }
 });
@@ -710,11 +698,10 @@ import("../compartido/progreso.js").then((m) => {
     },
     alCambiar: (v) => {
       prog = limpiar(v) || prog;
-      if (enInicio) mostrar("inicio");   // aún no ha tocado Continuar: se carga el nivel que lleva su cuenta
       mapa.refrescar();                 // si el mapa está abierto, se redibuja con el progreso de la cuenta
       if (!$("pantalla-libre").hidden) pintarLibre();
       pintarMonedas();
-      if (!$("juego").hidden && !enInicio) { pintarMejor(); pintarMetaJuego(); }
+      if (!$("juego").hidden) { pintarMejor(); pintarMetaJuego(); }
     },
   });
   nube.guardado(); // sube lo que ya hubiera en el dispositivo

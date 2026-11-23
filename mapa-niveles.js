@@ -328,7 +328,7 @@ function crearAgua(svg, id, dSilueta, caja, objetivo, desde, op = {}) {
       }
       if (ch) {
         // primero entra la jarra (jv), 0,45 s después se inclina y sale el chorro (chor), y el agua empieza a subir a 1 s
-        const quiere = objetivo - f > 0.004 || espera > 0;
+        const quiere = objetivo - f > 0.004;   // solo hay jarra si falta agua por subir
         reloj = quiere ? reloj + dt : 0;
         jv += ((quiere || chor > 0.05 ? 1 : 0) - jv) * (1 - Math.exp(-dt * 8));
         chor += ((quiere && reloj > 0.45 && objetivo - f > 0.004 ? 1 : 0) - chor) * (1 - Math.exp(-dt * 6));   // el chorro aparece al verter y se apaga al llegar
