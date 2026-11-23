@@ -10,12 +10,11 @@
 //   MAPA SOLO DE PAÍSES (etapas = crearEtapas({ porEtapa, soloPaises: true }); estándar nuevo, 21 nov 2026): no hay México de cerca ni estados.
 //                                La vista principal es «mundo» (con Continuar, los botones extra e Info) y desde ahí se abre cada país (México es el primero).
 //
-// MAPA SOLO DE PAÍSES (diseño actual): NO hay lista ni mundo. La vista principal es la «botella» del país donde va el jugador: solo su contorno
-//   (compartido/contornos-paises.js, con trazo), que se llena de agua UN POCO con cada nivel pasado, con un chorro que cae mientras sube.
-//   Botones: ◀ ▶ (país anterior / siguiente, solo los ya abiertos), 🗂️ Niveles (los 20 niveles del país, vista «niveles») y Continuar.
-//   Al llegar a los 20 niveles el país queda lleno y se cambia por su bandera (gancho «alPaisCompleto» para el destello dorado, todavía sin hacer).
+// MAPA SOLO DE PAÍSES (nuevo diseño, 23 nov 2026): la vista principal es una LISTA que baja de país en país: un botón alargado con la bandera de fondo y el
+//   nombre del país, y debajo sus 20 niveles; luego el botón del siguiente país con sus 20 niveles, y así. Al tocar el botón de un país se abre su «botella»
+//   (vista «pais»): la silueta del país (compartido/contornos-paises.js) que se llena de agua, UN POCO con cada nivel pasado, con un chorro que cae mientras sube.
+//   Al llegar a los 20 niveles el país queda lleno y se cambia por su bandera (ahí está el gancho «alPaisCompleto» para el destello dorado, todavía sin hacer).
 //   Banderas: imagenes/banderas/xx.svg (xx = código ISO en minúsculas). mapa.abrir(n, true) abre la botella del país del nivel n para verla subir.
-//   (Las vistas «mexico», «estado» y «mundo» son solo del mapa clásico con estados, que usan otros juegos.)
 //
 // Uso:
 //   import { crearEtapas } from "../compartido/etapas-mapa.js";
@@ -35,6 +34,9 @@
 //     alInfo: () => { ... },                   // botón «Info» de la vista principal
 //     avisoPrincipal: () => "texto",           // línea de información bajo el título de la vista principal
 //     alCambiarVista: (esPrincipal) => { ... } // avisa de cada cambio de vista (el juego vuelve a rotular el ☰: «Atrás» mientras el mapa está abierto)
+//     unPais: true,                            // SOLO con crearEtapas({ soloPaises: true }): NO hay lista ni mundo; la vista principal es la botella del país donde va el jugador
+//                                              //   (solo su contorno con trazo), con ◀ ▶ (países abiertos), 🗂️ Niveles (los niveles del país) y Continuar. Sin esta opción el mapa solo de países sigue como siempre.
+//   (con unPais) mapa.centroPais() = punto de la pantalla dentro del país abierto · mapa.parpadear() = el país destella un instante (lo usa la celebración de «deslizante»)
 //   });
 //   mapa.abrir();                // vista principal
 //   mapa.abrir(n);               // abre la lista de niveles de la etapa del nivel n
@@ -95,6 +97,22 @@ html.oscura .m-raiz{background:url("${MADERA_OSCURA}") center/cover no-repeat,#1
 .m-pais small{font-size:.72rem;color:#5b6b7c}
 .m-punto{cursor:pointer;outline:none}
 .m-punto:focus-visible circle.m-zona{stroke:#2b3a4a;stroke-width:2}
+/* Lista de países: botón con la bandera de fondo + sus niveles debajo */
+.m-col{display:flex;flex-direction:column;align-items:center;width:100%;padding:4px 2px 24px}
+.m-sec{width:100%;max-width:440px;display:flex;flex-direction:column;align-items:center;margin-bottom:10px}
+.m-sec>.m-rej{padding-top:2px}
+.m-pbtn{position:relative;display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:70px;margin:4px 0 8px;padding:8px 14px 14px;font:inherit;color:#fff;text-align:left;
+  border:3px solid #fff;border-radius:16px;cursor:pointer;overflow:hidden;touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+  background:linear-gradient(90deg,rgba(10,20,35,.66),rgba(10,20,35,.3)),var(--bandera,none) center/cover no-repeat,#5b6b7c;
+  box-shadow:0 4px 0 rgba(0,0,0,.35),0 6px 10px rgba(0,0,0,.3)}
+.m-pbtn:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(0,0,0,.35)}
+.m-pbtn:focus-visible{outline:3px solid #2b3a4a;outline-offset:2px}
+.m-pbtn b{font-size:1.15rem;line-height:1.15;text-shadow:0 2px 4px rgba(0,0,0,.85)}
+.m-pbtn small{flex:none;font-size:.82rem;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,.95);white-space:nowrap}
+.m-pbtn .m-barra{position:absolute;left:0;right:0;bottom:0;height:7px;background:rgba(0,0,0,.5)}
+.m-pbtn .m-barra i{display:block;height:100%;background:#4fc3ff}
+.m-pbtn.m-hecho .m-barra i{background:#ffd23f}
+.m-pbtn.m-actual{border-color:#ff9a1f}
 .m-cuerpo>svg.m-botella{cursor:default;touch-action:auto}
 .m-pulso{transform-box:fill-box;transform-origin:center;animation:m-pulso 1.7s ease-out infinite}
 @keyframes m-pulso{from{transform:scale(1);opacity:.9}to{transform:scale(2.6);opacity:0}}
@@ -300,7 +318,8 @@ export function montarMapa(o) {
   if (!o || !o.etapas || typeof o.progreso !== "function" || typeof o.jugarNivel !== "function") throw new Error("montarMapa: faltan etapas, progreso o jugarNivel");
   const { soloPaises: SOLO_PAISES, estados: ESTADOS_ORDEN, paises: PAISES_ORDEN, numEstados: NUM_ESTADOS, numPaises: NUM_PAISES, porEtapa: NIVELES_POR_ETAPA, nivelesMexico: NIVELES_MEXICO, resumen, etapaDe, baseEstado, basePais } = o.etapas;
   const pre = o.prefijo || "juego";
-  const VISTA_PRINCIPAL = SOLO_PAISES ? "pais" : "mexico";   // la vista a la que se vuelve con «principal» y que cuenta como «el mapa» para el ☰
+  const UN_PAIS = SOLO_PAISES && !!o.unPais;   // mapa de un solo país (sin lista ni mundo)
+  const VISTA_PRINCIPAL = SOLO_PAISES ? (UN_PAIS ? "pais" : "mundo") : "mexico";   // la vista a la que se vuelve con «principal» y que cuenta como «el mapa» para el ☰
   const CLAVE_AGUA = pre + "-agua";          // dónde estaba el agua la última vez (para verla SUBIR al volver al mapa)
   const CLAVE_MUNDO = pre + "-mundo-visto";  // «1» cuando ya entraste al mundo (apaga el aviso de novedad)
 
@@ -336,7 +355,7 @@ export function montarMapa(o) {
   raiz.append(cab, cuerpo);
   (document.body || document.documentElement).appendChild(raiz);
 
-  let vista = VISTA_PRINCIPAL;   // clásico: mexico | estado | mundo | pais · solo países: pais | niveles
+  let vista = VISTA_PRINCIPAL;   // mexico | estado | mundo | pais
   let indice = 0;         // estado o país abierto
   let abierto = false;
   let aguas = [], raf = 0, tPrev = 0, idAgua = 0;
@@ -468,9 +487,16 @@ export function montarMapa(o) {
     const p = prog();
     titulo.textContent = "🌍 Mundo";
     const resumenMundo = "💧 " + p.paisesHechos + " de " + NUM_PAISES + " países completados · toca un país para ver sus niveles";
-    info.textContent = resumenMundo;
-    boton("México", "◀", "b-cielo", () => ir("mexico"));
-    if (p.max > NIVELES_MEXICO) botonContinuar();
+    if (SOLO_PAISES) {   // vista principal: Continuar, botones extra (p. ej. ♾️ Modo libre) e Info, como la de México en el mapa clásico
+      info.textContent = resumenMundo + (o.avisoPrincipal && o.avisoPrincipal() ? " · " + o.avisoPrincipal() : "");
+      botonContinuar();
+      for (const x of o.botonesExtra || []) boton(x.texto, x.icono || "•", x.clase || "b-azul", x.fn);
+      if (o.alInfo) boton("Info", "ℹ️", "b-azul", o.alInfo);
+    } else {
+      info.textContent = resumenMundo;
+      boton("México", "◀", "b-cielo", () => ir("mexico"));
+      if (p.max > NIVELES_MEXICO) botonContinuar();
+    }
     cuerpo.classList.add("m-mundo");
 
     const P = proyector(-170, 180, 84, -57, 2, 1);
@@ -511,7 +537,50 @@ export function montarMapa(o) {
     rejillaNiveles(base);
   }
 
-  // --- SOLO PAÍSES · los 20 niveles del país abierto (se llega con el botón «Niveles» de la botella) ---
+  // --- SOLO PAÍSES · vista principal: la lista (bandera + nombre del país y debajo sus 20 niveles, país tras país) ---
+  let enfoque = null;      // país al que se baja al abrir la lista (null = el actual)
+  let vigia = null;        // carga cada bandera cuando se acerca a la pantalla
+  function vistaLista() {
+    const p = prog();
+    titulo.textContent = "🌍 Niveles";
+    info.textContent = "💧 " + p.paisesHechos + " de " + NUM_PAISES + " países completados · toca un país para ver su mapa" + (o.avisoPrincipal && o.avisoPrincipal() ? " · " + o.avisoPrincipal() : "");
+    botonContinuar();
+    for (const x of o.botonesExtra || []) boton(x.texto, x.icono || "•", x.clase || "b-azul", x.fn);
+    if (o.alInfo) boton("Info", "ℹ️", "b-azul", o.alInfo);
+    if (o.leyenda) cuerpo.appendChild(h("p", "m-leyenda", o.leyenda));
+    const col = h("div", "m-col");
+    cuerpo.appendChild(col);
+    if (vigia) vigia.disconnect();
+    vigia = typeof IntersectionObserver === "function" ? new IntersectionObserver((es) => {
+      for (const e of es) if (e.isIntersecting) { e.target.style.setProperty("--bandera", 'url("' + e.target.dataset.bandera + '")'); vigia.unobserve(e.target); }
+    }, { root: cuerpo, rootMargin: "500px 0px" }) : null;
+    const meta = enfoque != null ? enfoque : p.paisActual;
+    let ir_a = null;
+    PAISES_ORDEN.forEach((codigo, i) => {
+      const base = basePais(i);
+      if (base + 1 > p.max) return; // los países sin desbloquear no aparecen
+      const hechos = acotar(p.hecho - base, 0, NIVELES_POR_ETAPA), completo = hechos >= NIVELES_POR_ETAPA;
+      const sec = h("section", "m-sec");
+      const pb = h("button", "m-pbtn" + (completo ? " m-hecho" : "") + (!completo && i === p.paisActual ? " m-actual" : ""));
+      pb.type = "button";
+      pb.setAttribute("aria-label", nombrePais(codigo) + ": " + hechos + " de " + NIVELES_POR_ETAPA + " niveles. Ver el mapa");
+      pb.append(h("b", "", nombrePais(codigo)), h("small", "", completo ? "⭐ " + hechos + " / " + NIVELES_POR_ETAPA : "💧 " + hechos + " / " + NIVELES_POR_ETAPA));
+      const barra = h("span", "m-barra"), rel = h("i");
+      rel.style.width = (hechos / NIVELES_POR_ETAPA * 100) + "%";
+      barra.appendChild(rel); pb.appendChild(barra);
+      pb.dataset.bandera = urlBandera(codigo);
+      if (vigia) vigia.observe(pb); else pb.style.setProperty("--bandera", 'url("' + pb.dataset.bandera + '")');
+      pb.addEventListener("click", () => ir("pais", i));
+      sec.appendChild(pb);
+      const actual = rejillaNiveles(base, sec, true);
+      col.appendChild(sec);
+      if (i === meta) ir_a = actual || sec;
+    });
+    enfoque = null;
+    if (ir_a && ir_a.scrollIntoView) ir_a.scrollIntoView({ block: ir_a.tagName === "BUTTON" && ir_a.classList.contains("m-nv") ? "center" : "start" });
+  }
+
+  // --- SOLO PAÍSES con unPais · los niveles del país abierto (se llega con el botón «Niveles» de la botella) ---
   function vistaNivelesPais() {
     const p = prog(), codigo = PAISES_ORDEN[indice], base = basePais(indice);
     const hechos = acotar(p.hecho - base, 0, NIVELES_POR_ETAPA);
@@ -528,11 +597,18 @@ export function montarMapa(o) {
     const hechos = acotar(p.hecho - base, 0, NIVELES_POR_ETAPA), completo = hechos >= NIVELES_POR_ETAPA;
     titulo.textContent = nombrePais(codigo);
     info.textContent = "País " + (indice + 1) + " de " + NUM_PAISES + " · " + hechos + " de " + NIVELES_POR_ETAPA + " niveles completados" + (completo ? " · ¡completo! ⭐" : "");
-    // Navegación país por país (todos los anteriores al actual están abiertos): ◀ anterior · ▶ siguiente · 🗂️ niveles de este país · Continuar
-    if (indice > 0) boton("", "◀", "b-cielo", () => ir("pais", indice - 1)).setAttribute("aria-label", "País anterior");
-    if (indice + 1 < NUM_PAISES && basePais(indice + 1) + 1 <= p.max) boton("", "▶", "b-cielo", () => ir("pais", indice + 1)).setAttribute("aria-label", "País siguiente");
-    boton("Niveles", "🗂️", "b-azul", () => ir("niveles", indice));
-    botonContinuar();
+    if (UN_PAIS) {
+      // Navegación país por país (todos los anteriores al actual están abiertos): ◀ anterior · ▶ siguiente · 🗂️ niveles de este país · Continuar
+      if (indice > 0) boton("", "◀", "b-cielo", () => ir("pais", indice - 1)).setAttribute("aria-label", "País anterior");
+      if (indice + 1 < NUM_PAISES && basePais(indice + 1) + 1 <= p.max) boton("", "▶", "b-cielo", () => ir("pais", indice + 1)).setAttribute("aria-label", "País siguiente");
+      boton("Niveles", "🗂️", "b-azul", () => ir("niveles", indice));
+      botonContinuar();
+      for (const x of o.botonesExtra || []) boton(x.texto, x.icono || "•", x.clase || "b-azul", x.fn);
+      if (o.alInfo) boton("Info", "ℹ️", "b-azul", o.alInfo);
+    } else {
+      boton("Niveles", "◀", "b-cielo", () => { enfoque = indice; ir("mundo"); });
+      botonContinuar();
+    }
 
     const c = (CONTORNOS && CONTORNOS[codigo]) || GOTA, w = c.w, hh = c.h, id = ++idAgua;
     const vb = { x: -15, y: -62, w: w + 30, h: hh + 84 };   // arriba queda espacio para el chorro
@@ -573,7 +649,7 @@ export function montarMapa(o) {
       });
       aguas.push(agua);
     }
-    el("path", { d: c.d, fill: "none", stroke: TINTA, "stroke-width": 3.5, "stroke-linejoin": "round", "pointer-events": "none" }, svg);   // trazo que rodea al país
+    el("path", { d: c.d, fill: "none", stroke: UN_PAIS ? TINTA : BORDE, "stroke-width": UN_PAIS ? 3.5 : 2, "stroke-linejoin": "round", "pointer-events": "none" }, svg);   // con unPais, trazo más marcado que rodea al país
     // las siluetas se cargan aparte: al llegar, se vuelve a dibujar la botella (si no hay una animación en curso)
     if (!CONTORNOS) pendienteContornos = true;
   }
@@ -587,14 +663,14 @@ export function montarMapa(o) {
     acciones.replaceChildren();
     if (vista === "mexico") vistaMexico();
     else if (vista === "estado") vistaEstado();
-    else if (vista === "mundo") vistaMundo();
-    else if (SOLO_PAISES && vista === "niveles") vistaNivelesPais();
+    else if (vista === "mundo") (SOLO_PAISES ? vistaLista() : vistaMundo());
+    else if (UN_PAIS && vista === "niveles") vistaNivelesPais();
     else (SOLO_PAISES ? vistaBotella() : vistaPais());
     if (aguas.length) arrancar();
     if (o.alCambiarVista) o.alCambiarVista(vista === VISTA_PRINCIPAL);
   }
 
-  function principal() { vista = VISTA_PRINCIPAL; indice = SOLO_PAISES ? prog().paisActual : 0; if (abierto) pintar(); }
+  function principal() { vista = VISTA_PRINCIPAL; indice = UN_PAIS ? prog().paisActual : 0; enfoque = null; if (abierto) pintar(); }
 
   addEventListener("keydown", (ev) => {
     if (ev.key === "Escape" && abierto && vista !== VISTA_PRINCIPAL) { ev.preventDefault(); principal(); }
@@ -604,11 +680,14 @@ export function montarMapa(o) {
     abrir(n, alcanzado) {
       abierto = true;
       raiz.hidden = false;
-      vista = VISTA_PRINCIPAL; indice = SOLO_PAISES ? prog().paisActual : 0;   // solo países: se abre directo el país donde va el jugador
+      vista = VISTA_PRINCIPAL; indice = UN_PAIS ? prog().paisActual : 0;   // con unPais se abre directo el país donde va el jugador
       if (n) {
         const e = etapaDe(n);
         if (e.zona === "mexico") { if (!alcanzado) { vista = "estado"; indice = e.indice; } }
-        else if (SOLO_PAISES) indice = e.indice;   // la botella del país del nivel n (con alcanzado = true se ve subir el agua)
+        else if (UN_PAIS) indice = e.indice;   // la botella del país del nivel n (con alcanzado = true se ve subir el agua)
+        else if (SOLO_PAISES) {   // alcanzado = true: la botella del país del nivel n (se ve subir el agua); si no, la lista bajando hasta ese país
+          if (alcanzado) { vista = "pais"; indice = e.indice; } else enfoque = e.indice;
+        }
         else { vista = alcanzado ? "mundo" : "pais"; indice = e.indice; if (vista === "mundo") marcarMundoVisto(); }
       }
       pintar();
@@ -616,7 +695,7 @@ export function montarMapa(o) {
     cerrar() { abierto = false; raiz.hidden = true; detener(); aguas = []; },
     refrescar() { if (abierto) pintar(); },
     principal,
-    // Solo países: punto de la pantalla (px) que está dentro del país abierto y lo más cerca posible del centro de su caja: { x, y } o null
+    // unPais: punto de la pantalla (px) dentro del país abierto, lo más cerca posible del centro de su caja: { x, y } o null
     centroPais() {
       const b = botella;
       if (!b || !b.svg.isConnected) return null;
@@ -635,7 +714,7 @@ export function montarMapa(o) {
         return { x: pt.x, y: pt.y };
       } catch (e) { return null; }
     },
-    // Solo países: el país abierto parpadea (destello claro + trazo dorado) un instante
+    // el país abierto parpadea (destello claro + trazo dorado) un instante
     parpadear() {
       const b = botella;
       if (!b || !b.svg.isConnected) return;
