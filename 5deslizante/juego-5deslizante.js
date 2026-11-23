@@ -292,7 +292,7 @@ const TIEMPOS = {
   sube: 650,          // lo que tardan las estrellas en subir hacia la esquina de arriba a la derecha
   arriba: 250,        // se quedan ahí un instante antes de que el velo cambie la escena
 };
-const RITMO = 0.75;   // 1 = velocidad original; 0.75 = la animación dura 25 % menos (todos los tiempos de arriba se multiplican por este número)
+const RITMO = 0.375;  // 1 = velocidad original; 0.75 = 25 % menos; 0.375 = la mitad de lo que duraba con 0.75 (~2,9 s con 3 estrellas). Todos los tiempos de arriba se multiplican por este número
 for (const k in TIEMPOS) TIEMPOS[k] = Math.round(TIEMPOS[k] * RITMO);
 let celId = 0, celTimers = [], celEl = null;
 function quitarCelebracion() {

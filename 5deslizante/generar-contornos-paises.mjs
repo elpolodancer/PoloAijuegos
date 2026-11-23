@@ -61,6 +61,15 @@ for (const c of codigos) {
   salida[c] = { w, h, d };
 }
 
+// «VA» (Vaticano): Natural Earth 10m no lo trae. Contorno aproximado dibujado a mano [longitud, latitud] (la plaza de San Pedro es el saliente del este).
+const VATICANO = [[12.4586,41.9022],[12.4583,41.9028],[12.4576,41.9032],[12.4566,41.9033],[12.4556,41.9031],[12.4551,41.9040],[12.4549,41.9053],[12.4542,41.9062],[12.4527,41.9069],[12.4508,41.9074],[12.4488,41.9072],[12.4470,41.9063],[12.4461,41.9051],[12.4458,41.9040],[12.4464,41.9030],[12.4478,41.9025],[12.4492,41.9019],[12.4503,41.9011],[12.4517,41.9005],[12.4534,41.9004],[12.4548,41.9009],[12.4558,41.9012],[12.4568,41.9011],[12.4577,41.9014],[12.4584,41.9018]];
+{
+  const k = Math.cos(((Math.min(...VATICANO.map((p) => p[1])) + Math.max(...VATICANO.map((p) => p[1]))) / 2) * Math.PI / 180);
+  const P = VATICANO.map(([x, y]) => [x * k, -y]), x0 = Math.min(...P.map((p) => p[0])), y0 = Math.min(...P.map((p) => p[1]));
+  const W = Math.max(...P.map((p) => p[0])) - x0, H = Math.max(...P.map((p) => p[1])) - y0, esc = LADO / Math.max(W, H);
+  salida.VA = { w: Math.max(1, Math.round(W * esc)), h: Math.max(1, Math.round(H * esc)), d: "M" + P.map(([x, y]) => Math.round((x - x0) * esc) + " " + Math.round((y - y0) * esc)).join(" ") + "Z" };
+}
+
 fs.mkdirSync("compartido", { recursive: true });
 fs.writeFileSync("compartido/contornos-paises.js",
 `// Ruta: compartido/contornos-paises.js   (GENERADO por generar-contornos-paises.mjs: no se edita a mano)
@@ -68,7 +77,7 @@ fs.writeFileSync("compartido/contornos-paises.js",
 // (compartido/mapa-niveles.js): el país es la «botella» que se llena de agua. Cada una cabe en una caja de ${LADO} unidades:
 //   CONTORNOS.MX = { w, h, d }   w, h = ancho y alto de la silueta · d = trazo SVG (viewBox "0 0 w h")
 // En los países que tienen territorios lejanos (EE. UU., Francia, España…) solo se dibuja la parte principal.
-// Los países diminutos que no tienen silueta útil traen una gota (gota: 1).
+// Los países diminutos que no tienen silueta útil traen una gota (gota: 1), salvo el Vaticano (dibujado a mano).
 export const CONTORNOS = ${JSON.stringify(salida)};
 `);
 fs.mkdirSync("imagenes/banderas", { recursive: true });
