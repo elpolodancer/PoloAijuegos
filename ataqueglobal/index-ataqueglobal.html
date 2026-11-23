@@ -15,11 +15,12 @@
     /* El mundo: lienzo a pantalla completa con su propio fondo de espacio (excepción justificada al fondo de madera: es el cielo del planeta) */
     #mundo { position: fixed; inset: 0; z-index: 1; width: 100%; height: 100%; display: block; touch-action: none; background: #030918; }
     .nav-juego { z-index: 9; }
-    .hud-der { z-index: 7; }
+    .hud-der { z-index: 7; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100vw - 210px); } /* en celular angosto el 👤 baja a una segunda fila sin tapar 🎮 / ☰ */
+    .hud-der .b3d.txt { --t: 40px; border-radius: 12px; font-size: 14px; margin-bottom: 5px; }
 
-    /* Menú principal sobre la madera */
+    /* Modo libre sobre la madera (pantalla propia, se abre desde ☰ Pausa) */
     #menu { position: fixed; inset: 0; z-index: 5; max-width: none; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-      padding: 76px 20px 76px; overflow-y: auto; text-align: center; color: var(--txt-fondo, #4a2a10); touch-action: pan-y; }
+      padding: 104px 20px 76px; overflow-y: auto; text-align: center; color: var(--txt-fondo, #4a2a10); touch-action: pan-y; }
     #menu > :first-child { margin-top: auto; }
     #menu > :last-child { margin-bottom: auto; }
     #menu h1 { margin: 0; font-size: clamp(32px, 7vw, 52px); line-height: 1.05; text-shadow: var(--sombra-txt, 0 2px 0 rgba(255,240,210,.6)); }
@@ -36,8 +37,7 @@
     .bots-puntos i { width: 17px; height: 17px; border-radius: 50%; background: var(--c); border: 2px solid rgba(0,0,0,.5); box-shadow: 0 1px 0 rgba(255,255,255,.35); transition: opacity .15s; }
     .bots-puntos i.yo { box-shadow: 0 0 0 2px #fff, 0 0 9px 3px var(--c); margin-right: 5px; }
     .bots-puntos i.off { opacity: .18; }
-    #btn-niveles { --t: 60px; min-width: 260px; font-size: 19px; margin-top: 8px; }
-    @media (max-height: 520px) { .bots-puntos { display: none; } #menu { padding: 56px 16px 20px; gap: 8px; } #menu h1 { font-size: 30px; } #menu .lema { display: none; } .fila .b3d.txt { --t: 46px; } #btn-niveles { --t: 48px; } }
+    @media (max-height: 520px) { .bots-puntos { display: none; } #menu { padding: 56px 16px 20px; gap: 8px; } #menu h1 { font-size: 30px; } #menu .lema { display: none; } .fila .b3d.txt { --t: 46px; } }
 
     /* Controles de zoom (derecha, a media altura: las esquinas son de los botones fijos) */
     #zoom { position: fixed; z-index: 5; top: 50%; right: max(10px, env(safe-area-inset-right)); transform: translateY(-50%); display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
@@ -72,18 +72,20 @@
   <canvas id="mundo" hidden></canvas>
 
   <nav class="nav-juego" aria-label="Navegación">
-    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
-    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> <span id="txt-menu">Pausa</span></button>
+    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Portal de Juegos</a>
+    <button class="b3d txt b-cielo" id="btn-menu" type="button" title="Pausa"><span class="b-ico">☰</span> <span id="txt-menu">Pausa</span></button>
   </nav>
 
-  <div class="hud hud-der" id="hud" hidden>
-    <span class="chip" id="chip-modo"></span>
+  <!-- Arriba a la derecha: el chip del modo (solo en partida) y, SIEMPRE el último, 👤 Iniciar sesión -->
+  <div class="hud hud-der" id="hud">
+    <span class="chip" id="chip-modo" hidden></span>
+    <button class="b3d txt b-azul" id="btn-sesion" type="button"><span class="b-ico">👤</span> <span id="txt-sesion">Iniciar sesión</span></button>
   </div>
 
   <div id="zoom" hidden>
     <button class="b3d txt b-oro" id="z-centrar" type="button" title="Ir a mi país (C)"><span class="b-ico">🎯</span>&nbsp;Centrar</button>
-    <button class="b3d chico b-gris" id="z-mas" type="button" aria-label="Acercar" title="Acercar (+)"><span class="b-ico">+</span></button>
-    <button class="b3d chico b-gris" id="z-menos" type="button" aria-label="Alejar" title="Alejar (−)"><span class="b-ico">−</span></button>
+    <button class="b3d chico b-cielo" id="z-mas" type="button" aria-label="Acercar" title="Acercar (+)"><span class="b-ico">+</span></button>
+    <button class="b3d chico b-cielo" id="z-menos" type="button" aria-label="Alejar" title="Alejar (−)"><span class="b-ico">−</span></button>
     <button class="b3d chico b-azul" id="z-todo" type="button" aria-label="Ver todo el mundo" title="Ver todo el mundo (0)"><span class="b-ico">🌍</span></button>
   </div>
 
@@ -92,15 +94,15 @@
     <span><b id="ficha-nombre"></b><small id="ficha-sub">Toca otra vez para soltarlo</small></span>
   </div>
 
-  <main id="menu">
-    <h1>🌍 Ataque Global</h1>
-    <p class="lema">Expande tu territorio, investiga y lanza tus misiles antes de que lo hagan contigo.</p>
-    <h2>Partida libre</h2>
+  <!-- ♾️ Modo libre (pantalla propia: se abre desde ☰ Pausa; elegir una dificultad empieza la partida) -->
+  <main id="menu" hidden>
+    <h1>♾️ Modo libre</h1>
+    <p class="lema">Elige cuántos enemigos y la dificultad: la partida empieza al tocar una dificultad.</p>
     <div class="bots-sel" role="group" aria-label="Enemigos">
       <span class="bots-tit">Enemigos</span>
-      <button class="b3d chico b-gris" id="bots-menos" type="button" aria-label="Menos enemigos" title="Menos enemigos"><span class="b-ico">−</span></button>
+      <button class="b3d chico b-cielo" id="bots-menos" type="button" aria-label="Menos enemigos" title="Menos enemigos"><span class="b-ico">−</span></button>
       <b class="bots-num" id="bots-num" aria-live="polite">3</b>
-      <button class="b3d chico b-gris" id="bots-mas" type="button" aria-label="Más enemigos" title="Más enemigos (hasta 15)"><span class="b-ico">+</span></button>
+      <button class="b3d chico b-cielo" id="bots-mas" type="button" aria-label="Más enemigos" title="Más enemigos (hasta 15)"><span class="b-ico">+</span></button>
     </div>
     <div class="bots-puntos" id="bots-puntos" aria-hidden="true"></div>
     <div class="fila">
@@ -108,8 +110,12 @@
       <button class="b3d txt b-azul" id="btn-normal" type="button"><span class="b-ico">😐</span>&nbsp;Normal</button>
       <button class="b3d txt b-rojo" id="btn-dificil" type="button"><span class="b-ico">😠</span>&nbsp;Difícil</button>
     </div>
-    <button class="b3d txt b-oro" id="btn-niveles" type="button"><span class="b-ico">🗺️</span>&nbsp;Niveles</button>
   </main>
+
+  <!-- Inicio estándar (ESTANDARES-juegos.md, 7.0): el mundo ya cargado y, encima, un solo botón «▶ Comenzar» -->
+  <div class="capa-comenzar" id="comenzar" hidden>
+    <button class="b3d txt grande b-verde" id="btn-comenzar" type="button"><span class="b-ico">▶</span> Comenzar</button>
+  </div>
 
   <div id="girar" role="alert"><div class="tel">📱</div><p><b>Gira tu celular</b><br>El mundo se juega en horizontal.</p></div>
 

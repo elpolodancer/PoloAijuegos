@@ -570,14 +570,14 @@ export function crearMundo({ lienzo, alSeleccionar, alCuadro, congelado, celdasD
       if (q[2] < 0.15 || q[0] < -80 || q[0] > W + 80 || q[1] < -40 || q[1] > H + 40) continue;
       const d = celdasDe(p.iso), n = d && d.cap | 0;
       if (!(n > 0)) continue;
-      const ancho = (p.micro ? p.radio * 2 : p.ww) * RAD * R * q[2], alto = (p.micro ? p.radio * 2 : p.hh) * RAD * R * q[2];
+      const ancho = (p.micro ? p.radio * 2 : p.ww) * RAD * cam.R * q[2], alto = (p.micro ? p.radio * 2 : p.hh) * RAD * cam.R * q[2];
       const gap = 3, l = Math.min(24, Math.floor((Math.max(ancho, 54) * 0.9 - gap * (n - 1)) / n), Math.floor(Math.max(alto, 30) * 0.45));
       if (l < 10 && p.iso !== sel) continue; // el país se ve muy chico: no caben casillas legibles
       const lado = Math.max(l, 10), total = n * lado + (n - 1) * gap, x0 = q[0] - total / 2;
       const r = rotulos.get(p.iso);
       let cy = q[1];
       if (r) cy = p.micro ? r.ty - r.tam * 0.5 - lado / 2 - 4 : r.ty + r.tam * 0.5 + lado / 2 + 4; // con nombre: debajo (marcadores chicos: encima)
-      else if (p.micro) cy = q[1] - (Math.max(p.radio * RAD * R, 4) + 10);
+      else if (p.micro) cy = q[1] - (Math.max(p.radio * RAD * cam.R, 4) + 10);
       const niv = d.niveles || [];
       for (let i = 0; i < n; i++) casilla(x0 + i * (lado + gap), cy - lado / 2, lado, niv[i] || 0);
     }

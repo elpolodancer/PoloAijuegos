@@ -6,13 +6,13 @@ Juego de guerra de misiles sobre el mapa del mundo, inspirado en *First Strike*.
 
 ## 1. Estado actual (fase 1)
 
-Hecho: menú principal, el mundo con zoom y países seleccionables, y el mapa de niveles estándar.
-**Todavía no hay bots que jueguen.** Fácil / Normal / Difícil abren el mundo (la dificultad se guarda en la variable `dificultad`, sin efecto), donde ya funciona el menú circular de tus países (expandir, misil nivel 1, investigar; sección 3.2) y los botones para apuntar y disparar con alcance y destrucción de países (sección 3.3). Los niveles muestran un aviso «se están preparando».
+Hecho: **inicio estándar** (el mundo cargado, quieto y bajo la niebla, con la capa «▶ Comenzar»), ♾️ Modo libre con las **5 dificultades**, el mundo con zoom y países seleccionables, y el mapa de niveles estándar **solo de países (195 × 20 = 3 900)**.
+**Todavía no hay bots que ataquen** (solo expanden; la dificultad cambia su ritmo, `BOT_EXPANSION`). El mundo ya tiene ya funciona el menú circular de tus países (expandir, misil nivel 1, investigar; sección 3.2) y los botones para apuntar y disparar con alcance y destrucción de países (sección 3.3). Los niveles muestran un aviso «se están preparando».
 
 | Archivo | Qué es |
 |---|---|
-| `index-ataqueglobal.html` | Página: menú principal, lienzo del mundo, controles de zoom, ficha del país, aviso de niveles |
-| `juego-ataqueglobal.js` | Pantallas (menú → mundo / niveles), menú de pausa, mapa de niveles (`montarMapa`) |
+| `index-ataqueglobal.html` | Página: capa «Comenzar», pantalla de Modo libre, lienzo del mundo, controles de zoom, ficha del país, aviso de niveles |
+| `juego-ataqueglobal.js` | Pantallas (inicio → mundo / libre / niveles), menú de pausa (`menu-pausa.js`), mapa de niveles (`montarMapa`), 👤 sesión |
 | `mapa-ataqueglobal.js` | El mundo: dibujo, zoom, gestos, selección, capas de conquista y destrucción |
 | `paises-ataqueglobal.js` | **Generado.** Contornos de los 194 territorios (ver sección 2) |
 | `menu-pais-ataqueglobal.js` | Menú circular de un país propio (botones con etiqueta curva que siguen al país), panel de lista y aviso corto (sección 3.2) |
@@ -43,9 +43,12 @@ No usa Firebase todavía (no hay puntos ni progreso en la nube).
 
 ## 3. Pantallas
 
-1. **Menú principal** (madera): título, «Partida libre» con el selector **Enemigos − N +** (de **1 a 15 bots**, se recuerda en el aparato; debajo, un punto del color de cada bot) y **Fácil · Normal · Difícil**, y **🗺️ Niveles**. Sin ☰ (estándar).
-2. **Partida libre**: el mundo a pantalla completa. ☰ = «Pausa» (Continuar / Ver todo el mundo / Salir). Arriba a la derecha, un chip con el modo.
-3. **Niveles**: mapa estándar (32 estados de México → al terminarlos, 194 países). ☰ = «Menú principal».
+1. **Inicio** (estándar, `ESTANDARES-juegos.md` 7.0): al abrir se ve el mundo ya cargado, quieto y bajo la niebla (10 % alrededor de México), con la capa **▶ Comenzar**. Tocarla empieza una partida con la **última dificultad y número de enemigos** del Modo libre. No hay menú propio: las opciones están en **☰ Pausa**.
+2. **Partida**: el mundo a pantalla completa. ☰ = «Pausa» (▶ Continuar · ♾️ Modo libre · 📋 Niveles · ⚙️ Ajustes · 🌍 Ver todo el mundo · 🚪 Menú principal, que vuelve al inicio). Arriba a la derecha, un chip con el modo y 👤 Iniciar sesión.
+3. **♾️ Modo libre** (madera): grupo **Dificultad** (5 botones solo con emoji: 😁 😬 😐 😡 😈), grupo **Enemigos − N +** (1 a 15; un punto con el color de cada bot) y ▶ Jugar. Se recuerda en `ataqueglobal_libre_v1` (termina en `_v1`: entra en la copia de seguridad de `almacen.js`). ☰ = «Atrás».
+4. **Niveles**: mapa estándar **solo de países** (`crearEtapas({ porEtapa: 20, soloPaises: true })`, 5 columnas). ☰ = «Atrás»; Esc sube un paso en el mapa y, en su vista principal, vuelve al inicio.
+
+**Pantalla completa:** NO se pide sola (el `<body>` ya no lleva `data-pantalla-auto`). Se activa con el botón ⛶ de la esquina o en ☰ Pausa → ⚙️ Ajustes.
 
 El mundo pinta su **propio fondo de espacio** (excepción al fondo de madera: es el cielo del planeta); los botones fijos de las esquinas se respetan. El zoom va a media altura del borde derecho para no ocupar las esquinas.
 
@@ -155,19 +158,21 @@ Botón **Apuntar**: marca todos los misiles y permite **recorrer el mundo** para
 
 ## 6. Dificultades
 
-El menú muestra por ahora 3; el plan es de **5**.
+Hoy el Modo libre ofrece las **5 dificultades estándar** (😁 😬 😐 😡 😈). Por ahora solo cambian el **ritmo de expansión de los bots** (`BOT_EXPANSION` en `juego-ataqueglobal.js`); los países iniciales siguen siendo `["MX"]` en todas (`PAISES_INICIALES`) hasta que existan los niveles y el grafo de vecindad.
 
-| Dificultad | Países al inicio | Rivales |
+| Dificultad | Bots hoy (arranque · factor de tiempo · países a la vez) | Plan |
 |---|---|---|
-| Fácil | **3** propios | 2–3 bots, lentos y torpes |
-| Normal | por definir | por definir |
-| Difícil | **1** propio | Rivales con **3–4** países, bots más hábiles, a veces lanzan un misil suelto |
-| Muy difícil | por definir | Rivales con 4–5 países ya aliados desde el inicio |
-| Extremo | por definir | Hasta **8 bots** (el selector del menú ya permite hasta 15); algunos con varios enemigos, otros con treguas entre sí |
+| 😁 Muy fácil | 4,5 s · ×1,5 · 1 | **3** propios; 2–3 bots, lentos y torpes |
+| 😬 Fácil | 3 s · ×1,2 · 1 | por definir |
+| 😐 Normal | 2 s · ×1 · 2 | por definir |
+| 😡 Difícil | 1 s · ×0,8 · todos | **1** propio; rivales con **3–4** países, bots más hábiles, a veces lanzan un misil suelto |
+| 😈 Demoníaco | 0,5 s · ×0,6 · todos | Rivales con 4–5 países ya aliados desde el inicio; hasta **8 bots** (el selector ya permite 15), con treguas entre sí |
+
+> Antes había 3 (Fácil / Normal / Difícil). Las claves `facil`, `normal` y `dificil` se conservan, así que la selección guardada sigue valiendo.
 
 ## 7. Niveles
 
-- **22 600 niveles** (el «más de 22 000» del diseño): **100 por cada estado de México (32)** y **100 por cada país (194)**.
+- **3 900 niveles fijos: 195 países × 20 niveles** (decisión del 22 nov 2026; se descarta el esquema anterior de 22 600 con 32 estados de México + 194 países). México es el primer país. «Palestina/Israel» cuenta como un solo territorio en el juego (id `IL`).
 - Los niveles son **fijos**: siempre el mismo país inicial, los mismos rivales y las mismas regiones, pero se **generan con aleatoriedad determinista** (una semilla por número de nivel), de modo que son idénticos para todos los jugadores y no hace falta guardarlos a mano.
 - Cada nivel define: país con el que inicias, regiones rivales y sus países, dificultad, y si trae el bot oculto de la sección 8.
 - La estructura de progreso es la del mapa estándar: `{ max, hecho }` en `localStorage` (`ataqueglobal_progreso_v1`), por ahora sin sincronizar con la cuenta.
@@ -178,7 +183,7 @@ El menú muestra por ahora 3; el plan es de **5**.
 - Nadie sabe cuál es: **solo su país inicial** (su «capital») resiste **4 veces** lo normal (2 misiles → 8). **Sus extensiones son normales.**
 - Prefiere **países muy pequeños** para esconderse y tiende a nacer en **Palestina/Israel** (y países parecidos de tamaño).
 - Se **expande** como un bot de alto nivel.
-- No es tan raro: aparece en unos **5 000 de los 22 600 niveles** (≈ 22 %). Se decide al generar el nivel (es fijo).
+- No es tan raro: aparece en unos **850 de los 3 900 niveles** (≈ 22 %). Se decide al generar el nivel (es fijo).
 - Trampa buscada: tras destruir lo que parece su capital con 2 misiles, la mancha negra hace creer que todo explotó, pero el bot sigue vivo en otras zonas.
 
 ## 9. Por aclarar (dudas que encontré al escribir esto)
@@ -206,15 +211,23 @@ Para no construirlo «de pies a cabeza», cada fase se puede probar sola:
 6. **Investigación:** las 4 mejoras iniciales, luego las superiores; ocupar el país 1 min.
 7. **Diplomacia, rendición y varios bots**, y los **5 niveles de dificultad** (propios/rivales/velocidad/puntería).
 8. **Superarmas:** pantalla de elección de 2 (4 disponibles al inicio) y su investigación de 3 min. Empezar por 2 o 3 y sumar el resto.
-9. **Niveles fijos:** generador con semilla (22 600), el bot oculto ×4, progreso `{ max, hecho }`, y después **monedas/puntos** (`encolarPuntos`) y sincronización con la cuenta (`progreso.js`).
+9. **Niveles fijos:** generador con semilla (3 900), el bot oculto ×4, progreso `{ max, hecho }`, y después **monedas/puntos** (`encolarPuntos`) y sincronización con la cuenta (`progreso.js`).
 10. **Pulido:** igualar el aspecto de destrucción con tus capturas, sonido, tutorial, balance de números y rendimiento en celulares.
 
 ## 11. Para pegar en el README principal
 
 **Fila para «Mapa de archivos»:**
 
-| `ataqueglobal/index-ataqueglobal.html`, `juego-ataqueglobal.js`, `mapa-ataqueglobal.js`, `paises-ataqueglobal.js`, `herramientas/*.mjs`, `README-ataqueglobal.md` | Juego «Ataque Global» (id `ataqueglobal`), estilo First Strike. Fase 1: menú principal (Partida libre Fácil/Normal/Difícil + Niveles), mundo en `<canvas>` con zoom, gestos y países seleccionables (194 territorios; Israel y Palestina unidos como «Palestina/Israel»), capas de conquista y destrucción ya dibujadas, y el mapa de niveles estándar (`compartido/mapa-niveles.js`). `paises-ataqueglobal.js` es GENERADO (contornos aproximados) por `herramientas/generar-paises.mjs`; `geojson-a-paises.mjs` lo cambia por fronteras reales. Plan completo en `README-ataqueglobal.md` |
+| `ataqueglobal/index-ataqueglobal.html`, `juego-ataqueglobal.js`, `mapa-ataqueglobal.js`, `paises-ataqueglobal.js`, `herramientas/*.mjs`, `README-ataqueglobal.md` | Juego «Ataque Global» (id `ataqueglobal`), estilo First Strike. Fase 1: inicio estándar (capa «▶ Comenzar»), ♾️ Modo libre con 5 dificultades y enemigos, mundo en `<canvas>` con zoom, gestos y países seleccionables (194 territorios; Israel y Palestina unidos como «Palestina/Israel»), capas de conquista y destrucción ya dibujadas, y el mapa de niveles estándar solo de países (195 × 20 = 3 900; `compartido/mapa-niveles.js`). `paises-ataqueglobal.js` es GENERADO (contornos aproximados) por `herramientas/generar-paises.mjs`; `geojson-a-paises.mjs` lo cambia por fronteras reales. Plan completo en `README-ataqueglobal.md` |
 
 **Nota para «Estado»:**
 
-- Ataque Global (11 nov 2026, `sw.js` `VERSION` = 151): fase 1 hecha y probada en Chromium (menú, partida libre, zoom con rueda, selección de países, pausa, mapa de niveles, celular vertical). NO hay partida todavía. Pendiente: imagen de tarjeta (`imagenes/ataqueglobal.webp`), fronteras reales, grafo de vecindad y todo lo del plan (sección 10). La pantalla no se ha probado en un celular real (gestos de pellizco, rendimiento).
+- Ataque Global (22 nov 2026, `sw.js` `VERSION` = 200): inicio estándar con «▶ Comenzar», ☰ Pausa/Atrás (`menu-pausa.js`), ♾️ Modo libre con 5 dificultades, 👤 Iniciar sesión, pantalla completa solo desde ⚙️ Ajustes y mapa de 195 países × 20 niveles; los 5 módulos que faltaban ya están en la lista sin internet. Revisado solo por sintaxis y lectura (no probado en navegador ni en celular). Antes (11 nov, `VERSION` = 151): fase 1 probada en Chromium (zoom con rueda, selección de países, pausa, mapa de niveles, celular vertical). NO hay partida todavía. Pendiente: imagen de tarjeta (`imagenes/ataqueglobal.webp`), fronteras reales, grafo de vecindad y todo lo del plan (sección 10). La pantalla no se ha probado en un celular real (gestos de pellizco, rendimiento).
+
+## Revisión del 22 nov 2026 (lectura de código y pruebas en Node; en navegador solo una prueba de humo en Chromium sin cabeza)
+- Datos probados: 212 territorios sin anillos inválidos, tabla de compactación completa (4 186 valores) y sin saltos, 308 ciudades válidas, reglas de investigación correctas.
+- **`sw.js`** no tenía en la lista sin internet cinco archivos que el juego importa (`ajustes-`, `barras-`, `ciudades-`, `compactar-` y `compactacion-ataqueglobal.js`); agregados en la VERSION 200, que también lleva el cambio de `compartido/almacen.js` (la copia de seguridad incluye el progreso del Ajedrez).
+- Inicio y navegación pasados al estándar actual (ver sección 3). Prueba de humo en Chromium: la capa «Comenzar», ☰ «Pausa»/«Atrás», la pausa, el Modo libre, el mapa y la partida abren sin errores. **Sin probar en celular real:** el 👤 junto al chip en horizontal con poco alto y los gestos de la partida.
+- Se corrigió en `mapa-ataqueglobal.js` un `R` sin definir en `pintarCeldas` (ahora `cam.R`) que lanzaba un error en cada cuadro al empezar una partida.
+- **Dos sesiones, una sola versión:** otra sesión había dejado una variante con 3 dificultades, `data-pantalla-auto` en el `<body>` y el mapa de 22 600 niveles. Se unificó con esta: 5 dificultades, pantalla completa solo desde ⚙️ Ajustes y mapa de 195 × 20. De la otra se conservó la lectura de su clave `ataqueglobal_dificultad_v1` (migración de una sola vez), la nota del `almacen.js` en `sw.js` y esta sección.
+- Siguen pendientes: ventanas con estilo propio (Ajustes, armas, `.velo`) frente a `.pausa-*`, Firebase (sesión, puntos y progreso en la nube), imagen de tarjeta y los niveles mismos (generador de los 3 900).

@@ -1,7 +1,11 @@
 // Ruta: ataqueglobal/juego-ataqueglobal.js
 // Ataque Global (id de puntos «ataqueglobal»): guerra de misiles sobre el mapa del mundo. Plan completo en README-ataqueglobal.md.
-// ESTADO ACTUAL (fase 1): menú principal, el mundo como GLOBO 3D con giro, zoom y países seleccionables, y el mapa de niveles estándar.
-// Bots: ya EXPANDEN (BOT_EXPANSION, según la dificultad); todavía no fabrican misiles ni atacan. Fácil/Normal/Difícil abren el mundo; los niveles muestran un aviso.
+// ESTADO ACTUAL (fase 1): inicio estándar, el mundo como GLOBO 3D con giro, zoom y países seleccionables, y el mapa de niveles estándar.
+// INICIO ESTÁNDAR (ESTANDARES-juegos.md, 7.0): al abrir se ve el mundo ya cargado, quieto y bajo la niebla, con la capa «▶ Comenzar». Al tocarla empieza una partida con la última
+// dificultad y número de enemigos usados. ♾️ Modo libre (5 dificultades + enemigos), 📋 Niveles y ⚙️ Ajustes están en ☰ Pausa. ☰ dice «Atrás» en Modo libre y en Niveles.
+// Pantallas (variable «pantalla»): inicio | mundo | libre | niveles. La pantalla completa NO se pide sola: solo con ⛶ o en ⚙️ Ajustes.
+// NIVELES: mapa estándar solo de países (195 países × 20 niveles = 3 900; compartido/etapas-mapa.js, opción soloPaises). Todavía no hay niveles creados.
+// Bots: ya EXPANDEN (BOT_EXPANSION, según la dificultad); todavía no fabrican misiles ni atacan.
 // BOTONES DE ATAQUE (armas-ataqueglobal.js): 💀 apunta todos los misiles (niveles 1, 2 y 3) y ✈ solo los de nivel 1; se elige el objetivo, se confirma y salen únicamente los que alcanzan.
 // MENÚ CIRCULAR: al tocar un país TUYO salen Expandir (si hay vecinos libres), Misil nivel 1 e Investigar (menu-pais-ataqueglobal.js); las 8 mejoras están en investigacion-ataqueglobal.js.
 // NIEBLA DE GUERRA: TODA partida empieza con el planeta tapado por una niebla negra y solo se ve el 10 % alrededor del país propio (ver VISION).
@@ -18,8 +22,18 @@ import { MEJORAS, SUPERARMAS, estadoMejora, faltan, basicasCompletas, porNumero 
 
 const ID = "ataqueglobal";
 const CLAVE_PROGRESO = "ataqueglobal_progreso_v1"; // { max: nivel más alto abierto, hecho: nivel más alto terminado }
-const POR_ETAPA = 100;                             // niveles por estado de México y por país
-const DIFICULTADES = { facil: "Fácil", normal: "Normal", dificil: "Difícil" };
+const POR_ETAPA = 20;                              // niveles por país (mapa solo de países: 195 países × 20 = 3 900 niveles)
+const CLAVE_DIF_VIEJA = "ataqueglobal_dificultad_v1"; // clave de una versión anterior: solo se LEE una vez, para no perder la última dificultad elegida
+const CLAVE_LIBRE = "ataqueglobal_libre_v1";       // { dif, bots }: última selección del Modo libre (termina en _v1 para que entre en la copia de seguridad de almacen.js)
+// Las 5 dificultades estándar del Modo libre (ESTANDARES-juegos.md, 7.2), de la más fácil a la más difícil. Hoy solo cambian el ritmo de los bots (BOT_EXPANSION).
+const DIFICULTADES = {
+  muyfacil:  { emoji: "😁", nombre: "Muy fácil", nota: "Los enemigos tardan en arrancar y se expanden muy despacio, de uno en uno." },
+  facil:     { emoji: "😬", nombre: "Fácil",     nota: "Los enemigos se expanden despacio, de uno en uno." },
+  normal:    { emoji: "😐", nombre: "Normal",    nota: "Ritmo medio: cada enemigo expande dos países a la vez." },
+  dificil:   { emoji: "😡", nombre: "Difícil",   nota: "Los enemigos arrancan rápido y expanden todos sus países a la vez." },
+  demoniaco: { emoji: "😈", nombre: "Demoníaco", nota: "Los enemigos arrancan casi de inmediato y se expanden más rápido que en Difícil." },
+};
+const ORDEN_DIF = ["muyfacil", "facil", "normal", "dificil", "demoniaco"];
 
 // Niebla de guerra: fracción de la superficie del planeta que se ve alrededor de cada país propio.
 // Posición 0 = inicio de TODA partida (10 %); 1 = «Inteligencia mejorada» (50 %); 2 = «Inteligencia superior» (100 %, sin niebla).
@@ -28,13 +42,13 @@ const VISION = [0.10, 0.50, 1];
 // Colores. TU país: amarillo brillante (con resplandor y filo blanco en el mapa): ningún bot lo usa.
 const COLOR_JUGADOR = "#fff23a";
 // Hasta 15 bots, cada uno con su color propio (revisados para que se distingan entre sí, de tu amarillo y del verde de la tierra).
-const BOTS_MIN = 1, BOTS_MAX = 15, BOTS_INICIAL = 3, CLAVE_BOTS = "ataqueglobal_bots";
+const BOTS_MIN = 1, BOTS_MAX = 15, BOTS_INICIAL = 3, CLAVE_BOTS = "ataqueglobal_bots"; // CLAVE_BOTS es la clave VIEJA: solo se lee una vez para no perder la selección (ahora todo vive en CLAVE_LIBRE)
 const COLORES_BOTS = ["#ff3b30", "#ff8a1f", "#a24dff", "#ff5fb0", "#2f7bff", "#f4f4f4", "#19e0c0", "#b3173f", "#8fd8ff", "#e11bd6", "#b5702f", "#9aa7b4", "#1d84c9", "#ff9a9a", "#d9a0ff"];
 // PROVISIONAL: país inicial de cada bot (de los más cercanos a México a los más lejanos) mientras no existan los niveles y el grafo de vecindad.
 // Sobran 3 por si el jugador empieza en uno de ellos. EE. UU., Canadá y Rusia entran con UNA de sus divisiones (un bot nace en una sola parte del país).
 const PAISES_BOTS = ["US2", "CU", "CO", "CA5", "BR", "AR", "ES", "EG", "NG", "ZA", "RU1", "IN", "CN", "JP", "AU", "FR", "DE", "PE"];
 // PROVISIONAL: país con el que se empieza mientras no existan los niveles ni el grafo de vecindad (fácil = 3 países propios, difícil = 1; ver README).
-const PAISES_INICIALES = { facil: ["MX"], normal: ["MX"], dificil: ["MX"] };
+const PAISES_INICIALES = { muyfacil: ["MX"], facil: ["MX"], normal: ["MX"], dificil: ["MX"], demoniaco: ["MX"] };
 
 // Tiempos (README 5.1 y 5.2). Con «?rapido» en la dirección duran la décima parte, para probar sin esperar un minuto por mejora.
 const TIEMPO = new URLSearchParams(location.search).has("rapido") ? 0.1 : 1;
@@ -47,9 +61,11 @@ const MISILES_INICIALES = 0;
 //   inicio    ms que espera el primer bot para empezar (casi «luego luego»);  escalon  ms extra por cada bot siguiente (no arrancan todos al mismo tiempo)
 //   factor    multiplica los 25 s de expandir (> 1 = más lento);  paralelo  cuántos países de un mismo bot pueden expandirse a la vez (1 = de uno en uno)
 const BOT_EXPANSION = {
-  facil:   { inicio: 3000, escalon: 1200, factor: 1.2, paralelo: 1 },
-  normal:  { inicio: 2000, escalon: 900,  factor: 1,   paralelo: 2 },
-  dificil: { inicio: 1000, escalon: 600,  factor: 0.8, paralelo: 99 },
+  muyfacil:  { inicio: 4500, escalon: 1800, factor: 1.5,  paralelo: 1 },
+  facil:     { inicio: 3000, escalon: 1200, factor: 1.2,  paralelo: 1 },
+  normal:    { inicio: 2000, escalon: 900,  factor: 1,    paralelo: 2 },
+  dificil:   { inicio: 1000, escalon: 600,  factor: 0.8,  paralelo: 99 },
+  demoniaco: { inicio: 500,  escalon: 300,  factor: 0.6,  paralelo: 99 },
 };
 const CAPACIDAD_BASE = 2, CAPACIDAD_RESILIENCIA = 4; // casillas de misiles por país: 2 al inicio; con «Resiliencia suprema» (8) sube a 4 (README 5.3; el 5 y el tope definitivo siguen en duda, 9.2)
 // Alcance de cada nivel de misil, como fracción de la superficie del planeta (igual que la niebla: 50 % = un hemisferio, 90° desde el país que lo lanza).
@@ -60,11 +76,11 @@ const MS_VUELO = 5000, ESCALONADO_MS = 160;  // un misil tarda 5 s en caer (READ
 const PV_PAIS = 2, DANO_CENTRO = 1, DANO_BORDE = 2 / 3, BORDE = 0.6; // un país cae con 2 misiles en el centro o 3 en el borde (README 5.2); «borde» = más allá del 60 % de su radio (provisional)
 
 const $ = (id) => document.getElementById(id);
-const menu = $("menu"), lienzo = $("mundo"), btnMenu = $("btn-menu"), txtMenu = $("txt-menu");
-const hud = $("hud"), chipModo = $("chip-modo"), zoom = $("zoom"), ficha = $("ficha"), velo = $("velo");
+const libre = $("libre"), comenzar = $("comenzar"), lienzo = $("mundo"), btnMenu = $("btn-menu"), txtMenu = $("txt-menu");
+const chipModo = $("chip-modo"), zoom = $("zoom"), ficha = $("ficha"), velo = $("velo");
 
-let pantalla = "menu";      // menu | mundo | niveles
-let dificultad = "normal";  // facil | normal | dificil: hoy define el ritmo de expansión de los bots (BOT_EXPANSION)
+let pantalla = "inicio";    // inicio (mundo quieto + capa «Comenzar») | mundo (partida) | libre (pantalla de Modo libre) | niveles (mapa)
+let dificultad = "normal";  // muyfacil | facil | normal | dificil | demoniaco: hoy define el ritmo de expansión de los bots (BOT_EXPANSION)
 let nivelVision = 0;        // índice en VISION: sube con las mejoras de Inteligencia
 let propios = [];           // países del jugador (de aquí sale lo que se ve bajo la niebla)
 let pausado = false;        // el reloj de las acciones se detiene mientras está abierto el menú de pausa
@@ -85,8 +101,21 @@ const hechas = new Set();   // números de las mejoras ya investigadas
 const enCurso = new Map();  // número de la mejora → país que la está investigando
 let bots = [];              // enemigos de la partida: { n, color, paises: [iso], trabajos: Map(origen → { destino, resta }), espera }
 const duenos = new Map();   // iso → { tipo: "jugador" | "bot", n, color }: de quién es cada país (para la ficha)
-function leerBots() { try { const n = Math.floor(Number(localStorage.getItem(CLAVE_BOTS))); return n >= BOTS_MIN && n <= BOTS_MAX ? n : BOTS_INICIAL; } catch (e) { return BOTS_INICIAL; } }
-let nBots = leerBots();     // enemigos de la partida (1 a 15), se recuerda en el aparato
+// Última selección del Modo libre: { dif, bots }. Si no existe, se toma la clave vieja de enemigos (ataqueglobal_bots) para no perderla.
+function leerLibre() {
+  let dif = "normal", bots = BOTS_INICIAL;
+  try {
+    const o = JSON.parse(localStorage.getItem(CLAVE_LIBRE));
+    if (o) { if (DIFICULTADES[o.dif]) dif = o.dif; const n = Math.floor(Number(o.bots)); if (n >= BOTS_MIN && n <= BOTS_MAX) bots = n; return { dif, bots }; }
+  } catch (e) {}
+  try { const n = Math.floor(Number(localStorage.getItem(CLAVE_BOTS))); if (n >= BOTS_MIN && n <= BOTS_MAX) bots = n; } catch (e) {}
+  try { const d = localStorage.getItem(CLAVE_DIF_VIEJA); if (DIFICULTADES[d]) dif = d; } catch (e) {} // la versión anterior guardaba la última dificultad aparte
+  return { dif, bots };
+}
+function guardarLibre() { try { localStorage.setItem(CLAVE_LIBRE, JSON.stringify({ dif: dificultad, bots: nBots })); } catch (e) {} }
+const guardado = leerLibre();
+dificultad = guardado.dif;
+let nBots = guardado.bots;  // enemigos de la partida (1 a 15), se recuerda en el aparato
 
 // ---------- Progreso de niveles (local; todavía sin sincronizar con la cuenta) ----------
 function leerProgreso() {
@@ -121,13 +150,13 @@ function pintarFicha(iso) {
   ficha.style.borderColor = d ? d.color : ""; // el borde de la ficha lleva el color del dueño
 }
 const btnVel = document.createElement("button");
-btnVel.type = "button"; btnVel.id = "z-vel"; btnVel.className = "b3d txt b-gris";
+btnVel.type = "button"; btnVel.id = "z-vel"; btnVel.className = "b3d txt b-cielo";
 btnVel.innerHTML = '<span class="b-ico">⏩</span>&nbsp;<span id="z-vel-n">x1</span>';
 zoom.appendChild(btnVel);
 function fijarVelocidad(k) {
   velocidad = k; mundo.setVelocidad(k);
   btnVel.querySelector("#z-vel-n").textContent = "x" + k;
-  btnVel.classList.toggle("b-gris", k === 1); btnVel.classList.toggle("b-rojo", k > 1);
+  btnVel.classList.toggle("b-cielo", k === 1); btnVel.classList.toggle("b-rojo", k > 1);
   btnVel.title = "Velocidad del juego: x" + k + " (V). Toca para cambiarla";
 }
 function siguienteVelocidad() { fijarVelocidad(VELOCIDADES[(VELOCIDADES.indexOf(velocidad) + 1) % VELOCIDADES.length]); }
@@ -138,24 +167,34 @@ $("z-mas").addEventListener("click", () => mundo.zoom(1.6));
 $("z-menos").addEventListener("click", () => mundo.zoom(1 / 1.6));
 $("z-todo").addEventListener("click", () => mundo.reiniciarVista());
 
-// ---------- Pausa (dentro del mundo) ----------
-// Ajustes (música, efectos, pantalla completa): se abren desde la pausa; al cerrarlos la partida sigue
-const ajustes = crearAjustes({ alCerrar: () => { if (pantalla === "mundo") pausado = false; } });
+// ---------- Menú de pausa estándar (compartido/menu-pausa.js) ----------
+// Se abre con ☰ «Pausa» en la partida y también bajo la capa «Comenzar». Orden: Continuar · ♾️ Modo libre · 📋 Niveles · ⚙️ Ajustes · 🌍 Ver todo el mundo · 🚪 Menú principal.
+// Ajustes (música, efectos, pantalla completa): al cerrarlos, la partida sigue.
+const ajustes = crearAjustes({ alCerrar: () => { pausado = false; } });
+const enPartida = () => pantalla === "mundo";
+const AVISO_PIERDE = "Se pierde la partida en curso.";
 const pausa = crearMenuPausa({
   boton: btnMenu,
-  puedeAbrir: () => { if (pantalla !== "mundo") return false; if (menuPais) menuPais.cerrarPanel(); return true; },
+  puedeAbrir: () => { if (pantalla !== "mundo" && pantalla !== "inicio") return false; if (menuPais) menuPais.cerrarPanel(); return true; }, // en Modo libre y en Niveles el ☰ dice «Atrás» y NO abre la pausa
   alAbrir: () => { pausado = true; },
   alContinuar: () => { pausado = false; },
-  extras: () => [{ icono: "⚙️", texto: "Ajustes", clase: "b-gris", alElegir: () => { pausado = true; ajustes.abrir(); setTimeout(() => { if (ajustes.abierto()) pausado = true; }, 0); } }, { icono: "🌍", texto: "Ver todo el mundo", clase: "b-azul", alElegir: () => { pausado = false; mundo.reiniciarVista(); } }],
-  alSalir: () => mostrarMenu(),
+  extras: () => [
+    { icono: "♾️", texto: "Modo libre", clase: "b-morado", ayuda: "Eliges dificultad y enemigos." + (enPartida() ? " " + AVISO_PIERDE : ""), alElegir: abrirLibre },
+    { icono: "📋", texto: "Niveles", clase: "b-azul", ayuda: "Mapa de niveles." + (enPartida() ? " " + AVISO_PIERDE : ""), alElegir: abrirNiveles },
+    { icono: "⚙️", texto: "Ajustes", clase: "b-cielo", alElegir: () => { pausado = true; ajustes.abrir(); setTimeout(() => { if (ajustes.abierto()) pausado = true; }, 0); } },
+    enPartida() ? { icono: "🌍", texto: "Ver todo el mundo", clase: "b-cielo", alElegir: () => { pausado = false; mundo.reiniciarVista(); } } : null,
+  ],
+  ayudaSalir: () => (enPartida() ? AVISO_PIERDE : ""),
+  alSalir: () => volverAlInicio(),
 });
 
-// ---------- Mapa de niveles estándar (compartido/mapa-niveles.js) ----------
-const etapas = crearEtapas({ porEtapa: POR_ETAPA });
+// ---------- Mapa de niveles estándar solo de países (compartido/mapa-niveles.js): 195 países × 20 niveles = 3 900 ----------
+const etapas = crearEtapas({ porEtapa: POR_ETAPA, soloPaises: true });
 const mapa = montarMapa({
   prefijo: ID,
   etapas,
   progreso: leerProgreso,
+  columnas: 5,
   jugarNivel(n) {
     const e = etapas.etapaDe(n);
     avisar("Nivel " + n, etapas.nombreEtapa(n) + " · nivel " + e.k + " de " + POR_ETAPA + ". Los niveles se están preparando: pronto podrás jugarlos.");
@@ -175,26 +214,44 @@ $("velo-cerrar").addEventListener("click", () => velo.classList.remove("activo")
 // ---------- Cambio de pantallas ----------
 function ver(p) {
   pantalla = p;
-  document.body.dataset.pantalla = p; // el CSS usa esto para pedir el celular en horizontal
-  menu.hidden = p !== "menu";
-  lienzo.hidden = p !== "mundo";
-  hud.hidden = p !== "mundo";
+  document.body.dataset.pantalla = p; // el CSS usa esto para pedir el celular en horizontal (solo en «mundo»)
+  const conMundo = p === "inicio" || p === "mundo";   // en Modo libre y en Niveles el mundo se oculta para que se vea la madera
+  lienzo.hidden = !conMundo;
+  libre.hidden = p !== "libre";
+  comenzar.hidden = p !== "inicio";
   zoom.hidden = p !== "mundo";
-  if (p !== "mundo") { ficha.hidden = true; mundo.detener(); }
+  if (p !== "mundo") { ficha.hidden = true; chipModo.textContent = ""; }
+  if (conMundo) mundo.iniciar(); else mundo.detener();
   if (armas) armas.mostrar(p === "mundo");
   if (barras) barras.mostrar(p === "mundo");
-  btnMenu.hidden = p === "menu";
-  txtMenu.textContent = p === "mundo" ? "Pausa" : "Menú principal";
-  btnMenu.title = p === "mundo" ? "Pausa" : "Volver al menú principal";
+  txtMenu.textContent = btnMenu.title = conMundo ? "Pausa" : "Atrás"; // ☰ SIEMPRE visible: «Pausa» en el mundo (también bajo «Comenzar») y «Atrás» en Modo libre y Niveles
 }
-function mostrarMenu() {
+// Deja la partida en curso (si la hay): reloj, bots, apuntado, menús y misiles. La pausa se suelta aquí.
+function salirDePartida() {
   soltarHorizontal();
-  mapa.cerrar();
   velo.classList.remove("activo");
   mundo.seleccionar(null);
   limpiarPartida();
-  propios = []; nivelVision = 0; mundo.limpiarEstados(); duenos.clear(); aplicarVision(); // fuera de una partida el mundo vuelve a quedar tapado y limpio
-  ver("menu");
+}
+function limpiarMundo() { propios = []; nivelVision = 0; mundo.limpiarEstados(); duenos.clear(); }
+// INICIO ESTÁNDAR: el mundo cargado, quieto y bajo la niebla (se ve solo el 10 % alrededor de México), con la capa «▶ Comenzar». Sin jugador ni enemigos hasta tocarla.
+function volverAlInicio() {
+  salirDePartida();
+  mapa.cerrar();
+  limpiarMundo();
+  mundo.setVision(["MX"], VISION[0]);
+  ver("inicio");
+  mundo.vistaInicial("MX");
+}
+function abrirLibre() {
+  salirDePartida(); mapa.cerrar(); limpiarMundo();
+  pintarLibre();
+  ver("libre");
+}
+function abrirNiveles() {
+  salirDePartida(); limpiarMundo();
+  ver("niveles");
+  mapa.abrir(leerProgreso().max); // directo en la lista de niveles del país donde va el jugador
 }
 // El mundo se juega con el celular en horizontal. YA NO se pide pantalla completa sola: se activa a mano en Pausa → Ajustes.
 // Si el jugador ya está en pantalla completa, se bloquea la orientación horizontal (Android lo permite; iPhone no, ahí solo sale el aviso «gira tu celular»).
@@ -202,7 +259,28 @@ async function pedirHorizontal() {
   try { if (document.fullscreenElement && screen.orientation && screen.orientation.lock) await screen.orientation.lock("landscape"); } catch (e) {}
 }
 function soltarHorizontal() { try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) {} }
-// ---------- Selector de enemigos (menú) ----------
+// ---------- Pantalla de Modo libre: dificultad (5 botones solo con emoji) y enemigos ----------
+function pintarLibre() {
+  const fila = $("dif-fila");
+  if (!fila.children.length) {
+    for (const k of ORDEN_DIF) {
+      const b = document.createElement("button");
+      b.type = "button"; b.dataset.dif = k; b.title = DIFICULTADES[k].nombre; b.setAttribute("aria-label", DIFICULTADES[k].nombre);
+      const ico = document.createElement("span"); ico.className = "b-ico"; ico.textContent = DIFICULTADES[k].emoji; b.appendChild(ico);
+      b.addEventListener("click", () => { dificultad = k; guardarLibre(); pintarLibre(); });
+      fila.appendChild(b);
+    }
+  }
+  for (const b of fila.children) {
+    const on = b.dataset.dif === dificultad;
+    b.className = "b3d txt dif-b " + (on ? "b-oro on" : "b-cielo");
+    b.setAttribute("aria-pressed", String(on));
+  }
+  const d = DIFICULTADES[dificultad];
+  $("dif-nota").textContent = d.emoji + " " + d.nombre + ": " + d.nota;
+  pintarBots();
+}
+// ---------- Selector de enemigos ----------
 function pintarBots() {
   $("bots-num").textContent = nBots;
   $("bots-menos").disabled = nBots <= BOTS_MIN;
@@ -216,12 +294,12 @@ function pintarBots() {
 }
 function cambiarBots(d) {
   nBots = Math.max(BOTS_MIN, Math.min(BOTS_MAX, nBots + d));
-  try { localStorage.setItem(CLAVE_BOTS, String(nBots)); } catch (e) {}
+  guardarLibre();
   pintarBots();
 }
 $("bots-menos").addEventListener("click", () => cambiarBots(-1));
 $("bots-mas").addEventListener("click", () => cambiarBots(1));
-pintarBots();
+pintarLibre();
 
 // Dueños del mapa: tu país (trazo brillante) y el de cada bot (su color).
 function repartirPaises(n) {
@@ -537,20 +615,45 @@ setInterval(() => {
 function abrirPartidaLibre(d) {
   pedirHorizontal();
   dificultad = d;
-  chipModo.textContent = "Partida libre · " + DIFICULTADES[d] + " · " + nBots + (nBots === 1 ? " enemigo" : " enemigos");
+  const e = DIFICULTADES[d];
+  chipModo.textContent = "♾️ " + e.emoji + " · " + nBots + (nBots === 1 ? " enemigo" : " enemigos");
+  chipModo.title = "Modo libre · " + e.nombre;
   empezarPartida(PAISES_INICIALES[d], nBots);
 }
-function abrirNiveles() {
-  ver("niveles");
-  mapa.abrir();
+
+$("btn-comenzar").addEventListener("click", () => abrirPartidaLibre(dificultad)); // capa «Comenzar»: empieza con la última selección del Modo libre
+$("btn-jugar").addEventListener("click", () => abrirPartidaLibre(dificultad));
+// ☰: en la partida y bajo «Comenzar» abre la pausa (menu-pausa.js); en Modo libre y en Niveles dice «Atrás» y vuelve al inicio
+btnMenu.addEventListener("click", () => { if (pantalla === "libre" || pantalla === "niveles") volverAlInicio(); });
+addEventListener("keydown", (ev) => {
+  if (ev.key !== "Escape" || ev.repeat) return;
+  if (velo.classList.contains("activo")) { ev.preventDefault(); velo.classList.remove("activo"); }
+  else if (pantalla === "libre") { ev.preventDefault(); volverAlInicio(); }
+  else if (pantalla === "niveles" && !ev.defaultPrevented && mapa.esPrincipal()) { ev.preventDefault(); volverAlInicio(); } // el mapa ya usó este Esc si estaba en una lista de niveles (vuelve a su vista principal); en la vista principal, Esc = «Atrás»
+});
+document.addEventListener("visibilitychange", () => { if (pantalla === "mundo" || pantalla === "inicio") { if (document.hidden) mundo.detener(); else mundo.iniciar(); } });
+
+// ---------- 👤 Iniciar sesión (arriba a la derecha, siempre el último de la fila) ----------
+// jugador.js se carga con import() dinámico y try/catch: el juego abre y funciona aunque Firebase no esté disponible (sin internet la primera vez).
+const btnSesion = $("btn-sesion"), txtSesion = $("txt-sesion");
+let usuario = null, modJugador = null, tConfirma = 0;
+function pintarSesion() {
+  clearTimeout(tConfirma);
+  btnSesion.dataset.confirma = "";
+  txtSesion.textContent = usuario ? (usuario.displayName || "Jugador").split(" ")[0] : "Iniciar sesión";
+  btnSesion.title = usuario ? "Sesión iniciada: toca dos veces para cerrarla" : "Iniciar sesión con Google";
 }
+btnSesion.addEventListener("click", async () => {
+  if (!modJugador) { avisar("Sesión no disponible", "Para iniciar sesión necesitas conexión a internet."); return; }
+  if (!usuario) { try { await modJugador.entrar(); } catch (e) { avisar("No se pudo iniciar sesión", (e && e.message) || "Inténtalo de nuevo."); } return; }
+  if (btnSesion.dataset.confirma !== "1") { // el primer toque pide confirmar (sin confirm(): todo ocurre dentro de la página)
+    btnSesion.dataset.confirma = "1"; txtSesion.textContent = "¿Cerrar sesión?";
+    tConfirma = setTimeout(pintarSesion, 3500);
+    return;
+  }
+  pintarSesion();
+  try { await modJugador.salir(); } catch (e) {}
+});
+import("../compartido/jugador.js").then((m) => { modJugador = m; m.alCambiarSesion((u) => { usuario = u; pintarSesion(); }); }).catch(() => {});
 
-$("btn-facil").addEventListener("click", () => abrirPartidaLibre("facil"));
-$("btn-normal").addEventListener("click", () => abrirPartidaLibre("normal"));
-$("btn-dificil").addEventListener("click", () => abrirPartidaLibre("dificil"));
-$("btn-niveles").addEventListener("click", abrirNiveles);
-btnMenu.addEventListener("click", () => { if (pantalla === "niveles") mostrarMenu(); }); // en el mundo, menu-pausa.js abre la pausa
-addEventListener("keydown", (ev) => { if (ev.key === "Escape" && velo.classList.contains("activo")) { ev.preventDefault(); velo.classList.remove("activo"); } });
-document.addEventListener("visibilitychange", () => { if (pantalla === "mundo") { if (document.hidden) mundo.detener(); else mundo.iniciar(); } });
-
-ver("menu");
+volverAlInicio();
