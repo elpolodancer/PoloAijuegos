@@ -14,7 +14,7 @@
 //   nombre del país, y debajo sus 20 niveles; luego el botón del siguiente país con sus 20 niveles, y así. Al tocar el botón de un país se abre su «botella»
 //   (vista «pais»): la silueta del país (compartido/contornos-paises.js) que se llena de agua, UN POCO con cada nivel pasado, con un chorro que cae mientras sube.
 //   Al llegar a los 20 niveles el país queda lleno y se cambia por su bandera (ahí está el gancho «alPaisCompleto» para el destello dorado, todavía sin hacer).
-//   Banderas: imagenes/banderas/xx.svg (xx = código ISO en minúsculas). mapa.abrir(n, true) abre la botella del país del nivel n para verla subir.
+//   Banderas: imagenes-banderas/xx.svg (xx = código ISO en minúsculas). mapa.abrir(n, true) abre la botella del país del nivel n para verla subir.
 //   PAÍS BONITO (con unPais, 23 nov 2026): la silueta es tierra verde con franja de playa, manchas de pasto, flores, montañas con nieve, árboles (redondos y pinos, siempre los mismos en cada país) y una banderita en un poste;
 //   nada de eso queda debajo del botón «Continuar». El agua es un poco translúcida (AGUA_TRANSPARENTE) y la banderita queda encima de ella; al completar el país se desvanece y la bandera grande lo cubre.
 //
@@ -54,9 +54,9 @@ import { nombrePais, banderaPais } from "./etapas-mapa.js";
 
 // Siluetas de los países (solo las usa el mapa solo de países; se cargan aparte porque pesan ~230 KB). Mientras llegan, la botella usa una gota.
 let CONTORNOS = null;
-let POSICIONES = null;   // solo con unPais: dónde va cada silueta sobre el mapa del mundo (compartido/posiciones-paises.js, lo genera generar-posiciones-paises.mjs)
+let POSICIONES = null;   // solo con unPais: dónde va cada silueta sobre el mapa del mundo (compartido/posiciones-paises.js, lo genera herramientas/generar-posiciones-paises-herramientas.mjs)
 const GOTA = { w: 300, h: 300, d: "M150 20C215 20 255 75 255 130C255 195 200 280 150 280C100 280 45 195 45 130C45 75 85 20 150 20Z" };
-const urlBandera = (codigo) => new URL("../imagenes/banderas/" + codigo.toLowerCase() + ".svg", import.meta.url).href;
+const urlBandera = (codigo) => new URL("../imagenes-banderas/" + codigo.toLowerCase() + ".svg", import.meta.url).href;
 
 // ----- Ajustes -----
 // false = el agua sube por escalones (un estado o un país terminado = un escalón), como se diseñó.
