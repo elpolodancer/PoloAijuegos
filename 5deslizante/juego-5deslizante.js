@@ -315,7 +315,9 @@ function celebrar(tier, i, monedas = 0) {
 
   const T = TIEMPOS;
   const mor = Math.max(0, tier - 3), cuantas = Math.min(tier, 3);
-  const textoEst = cuantas + (cuantas === 1 ? " estrella" : " estrellas") + (mor ? " · " + mor + (mor === 1 ? " morada" : " moradas") : "");
+  // Solo doradas → «N estrellas doradas»; las 3 moradas → «3 estrellas moradas»; mezcladas (doradas y moradas) → solo la cantidad, sin color
+  const una = cuantas === 1, color = mor === 0 ? (una ? " dorada" : " doradas") : mor === 3 ? " moradas" : "";
+  const textoEst = cuantas + (una ? " estrella" : " estrellas") + color;
   const ov = document.createElement("div");
   ov.className = "cel-fondo";
   const velo = document.createElement("div");
