@@ -208,6 +208,64 @@ function brillantina(caja) {
   chispas = setInterval(soltar, 220);
 }
 
+// Animación de la victoria: estrellas que estallan en chispas al caer, confeti, y puntos/monedas que suben contando desde 0.
+// Todo se detiene solo si la ventana se quita (v.isConnected) y no se hace nada con «reducir movimiento» activado.
+function chisporroteo(v, x, y, cuantas, colores) {
+  for (let k = 0; k < cuantas; k++) {
+    const ang = (k / cuantas) * Math.PI * 2 + Math.random() * 0.5, dist = 26 + Math.random() * 34;
+    const p = document.createElement("i");
+    p.className = "chispa";
+    p.style.left = x + "px"; p.style.top = y + "px";
+    p.style.setProperty("--dx", Math.cos(ang) * dist + "px");
+    p.style.setProperty("--dy", Math.sin(ang) * dist + "px");
+    p.style.setProperty("--tam", 3 + Math.random() * 4 + "px");
+    p.style.background = colores[Math.floor(Math.random() * colores.length)];
+    p.addEventListener("animationend", () => p.remove());
+    v.appendChild(p);
+  }
+}
+function animarVictoria(v, tier) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const t0 = performance.now();
+  // 1) cada estrella ganada estalla en chispas cuando termina de caer (doradas: amarillas; moradas: de colores)
+  v.querySelectorAll(".est:not(.vacia)").forEach((s, k) => setTimeout(() => {
+    if (!v.isConnected) return;
+    const c = v.getBoundingClientRect(), r = s.getBoundingClientRect();
+    chisporroteo(v, r.left - c.left + r.width / 2, r.top - c.top + r.height / 2, 12,
+      s.classList.contains("mor") ? ["#ffffff", "#ffd1f5", "#d9c2ff", "#c9f3ff"] : ["#fff6b0", "#ffc61f", "#ffffff"]);
+  }, 420 + k * 220));
+  // 2) confeti: más cuantas más estrellas
+  const cf = document.createElement("div");
+  cf.className = "vic-confeti";
+  const cols = ["#ffc61f", "#ff6b6b", "#4db8f0", "#3fcf4a", "#a14df0", "#ffffff"];
+  for (let k = 0; k < 14 + tier * 6; k++) {
+    const i = document.createElement("i");
+    i.style.setProperty("--x", Math.random() * 100 + "%");
+    i.style.setProperty("--c", cols[k % cols.length]);
+    i.style.setProperty("--dur", 1.6 + Math.random() * 1.4 + "s");
+    i.style.setProperty("--del", Math.random() * 1.2 + "s");
+    i.style.setProperty("--giro", (360 + Math.random() * 360) * (Math.random() < 0.5 ? -1 : 1) + "deg");
+    cf.appendChild(i);
+  }
+  v.appendChild(cf);
+  setTimeout(() => cf.remove(), 4500);
+  // 3) puntos y monedas suben contando desde 0 y al terminar el cuadro «rebota» con un estallido de chispas
+  v.querySelectorAll(".cuenta").forEach((s, k) => {
+    const hasta = Number(s.dataset.hasta) || 0, inicio = 1100 + k * 150, dur = 900, cuadroPremio = s.parentElement;
+    s.textContent = "0";
+    const paso = (ahora) => {
+      if (!v.isConnected) return;
+      const p = Math.min(1, Math.max(0, (ahora - t0 - inicio) / dur));
+      s.textContent = fmtNum(Math.round(hasta * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) { requestAnimationFrame(paso); return; }
+      cuadroPremio.classList.add("rebote");
+      const c = v.getBoundingClientRect(), r = cuadroPremio.getBoundingClientRect();
+      chisporroteo(v, r.left - c.left + r.width / 2, r.top - c.top + r.height / 2, 10, ["#fff6b0", "#ffc61f", "#ffffff", "#ffe08a"]);
+    };
+    requestAnimationFrame(paso);
+  });
+}
+
 // ----- Pantallas -----
 // «inicio» = el JUEGO cargado en el nivel que toca (el de la cuenta o el primero) visto detrás de un velo difuminado y oscuro (#velo-inicio).
 // No se puede jugar hasta tocar «Continuar» (jugarNivel → mostrar("juego")). Ya en el juego solo queda la barra con Modo libre y Niveles.
@@ -439,11 +497,22 @@ async function ganar() {
   const ultimo = !libre && idx + 1 >= TOTAL, finEtapa = !libre && (idx + 1) % POR_ETAPA === 0;   // finEtapa: terminó un país
   const v = document.createElement("div");
   v.id = "victoria";
-  v.innerHTML = "<h2>🎉 ¡Resuelto!</h2>" + (cE ? '<div class="estrellas-vic">' + htmlEstrellas(nuevoTier, true) + "</div>" : "") +
-    "<div>⏱️ " + fmtMs(ms) + (recordMs ? " 🏆 ¡mejor tiempo!" : "") +
-    "<br>" + movs + " movimientos" + (recordMov ? " 🏆 ¡récord!" : "") + (l.optimo ? "<br>Mínimo posible: " + l.optimo : "") + (ultimo ? "<br>🏁 ¡Pasaste todos los niveles!" : "") + "</div>" +
-    '<div class="monedas-vic">🏅 +' + ptsJuego + " puntos" + (monedas ? " · 💰 +" + monedas + " monedas" : "") + "</div>" +
-    (cE && nuevoTier < 6 ? '<div class="meta-vic">' + metaTexto(n, nuevoTier) + "</div>" : "");
+  const cuadro = (d, titulo, valor, extra) => '<div class="vic-caja" style="--d:' + d + 's"><span>' + titulo + "</span><b>" + valor + "</b>" + (extra ? '<span class="rec">' + extra + "</span>" : "") + "</div>";
+  const premio = (d, icono, num, suf) => '<div class="vic-premio" style="--d:' + d + 's">' + icono + ' +<span class="cuenta" data-hasta="' + num + '">' + fmtNum(num) + "</span>" + suf + "</div>";
+  const lineas = [];
+  if (l.optimo) lineas.push("Mínimo posible: " + l.optimo + " movimientos");
+  if (ultimo) lineas.push("🏁 ¡Pasaste todos los niveles!");
+  if (cE && nuevoTier < 6) lineas.push(metaTexto(n, nuevoTier));
+  v.innerHTML =
+    '<div class="vic-arriba"><h2>🎉 ¡Resuelto!</h2>' + (cE ? '<div class="estrellas-vic">' + htmlEstrellas(nuevoTier, true) + "</div>" : "") + "</div>" +
+    '<div class="vic-centro"><div class="vic-grid">' +
+      cuadro(0.5, "⏱️ Tiempo", fmtMs(ms), "") +
+      cuadro(0.6, "🥇 Mejor tiempo", fmtMs(nueva.ms), recordMs ? "🏆 ¡Nuevo récord!" : "") +
+      cuadro(0.7, "👣 Movimientos", movs, "") +
+      cuadro(0.8, "🏆 Récord mov.", nueva.mov, recordMov ? "🏆 ¡Nuevo récord!" : "") +
+    "</div>" +
+    '<div class="vic-premios">' + premio(1.0, "🏅", ptsJuego, " puntos") + (monedas ? premio(1.15, "💰", monedas, " monedas") : "") + "</div>" +
+    lineas.map((x) => '<div class="meta-vic">' + x + "</div>").join("") + "</div>";
   const caja = document.createElement("div");
   caja.className = "botones";
   const boton = (texto, clase, fn) => { const b = document.createElement("button"); b.className = "b3d txt " + clase; b.textContent = texto; b.addEventListener("click", fn); caja.appendChild(b); };
@@ -458,6 +527,7 @@ async function ganar() {
   v.appendChild(caja);
   $("tablero").appendChild(v);
   if (cE) brillantina(v);
+  animarVictoria(v, libre ? 0 : nuevoTier);
 
   if (!primera) {                                   // el punto del portal se da solo la primera vez que se pasa un nivel
     $("msg").textContent = libre ? "Modo libre: no da monedas ni puntos al perfil, pero guarda tu mejor marca." : "";

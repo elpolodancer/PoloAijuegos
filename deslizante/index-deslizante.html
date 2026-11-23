@@ -71,12 +71,42 @@
       font-weight: 800; color: #fff; font-size: calc(100cqw / var(--n) * .42); text-shadow: 0 2px 3px rgba(0,0,0,.35);
       box-shadow: inset 0 -4px 0 rgba(0,0,0,.25), 0 2px 4px rgba(0,0,0,.3); }
     .ficha.bien > span { outline: 3px solid rgba(255,255,255,.55); outline-offset: -3px; }
-    #victoria { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-      background: rgba(10,10,12,.88); border-radius: 14px; text-align: center; padding: 12px; color: var(--texto); } /* panel oscuro: texto claro en cualquier fondo */
-    #victoria h2 { margin: 0; font-size: 1.6rem; }
+    /* ----- Ventana de victoria: cubre el tablero (cuadrado). De arriba abajo: «Resuelto» + estrellas · cuadros de datos y premios · botones.
+       Los tamaños usan cqw (el tablero es un contenedor), así que todo se adapta al tablero chico (3×3 en celular) y al grande. ----- */
+    #victoria { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 8px; overflow-y: auto;
+      background: rgba(10,10,12,.88); border-radius: 14px; text-align: center; color: var(--texto); /* panel oscuro: texto claro en cualquier fondo */
+      padding: clamp(10px, 4cqw, 20px) 12px clamp(14px, 6cqw, 28px); animation: vic-entra .3s ease-out both; }
+    @keyframes vic-entra { from { opacity: 0; } to { opacity: 1; } }
+    #victoria h2 { margin: 0; font-size: clamp(1.1rem, 6cqw, 1.5rem); }
+    .vic-arriba { display: flex; flex-direction: column; align-items: center; gap: clamp(4px, 2cqw, 10px); }
+    .vic-centro { display: flex; flex-direction: column; align-items: center; gap: clamp(5px, 2cqw, 9px); width: 100%; }
     #victoria .botones { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-    #victoria { overflow-y: auto; justify-content: safe center; gap: 6px; }
-    #victoria h2 { font-size: 1.4rem; }
+    #victoria .botones .b3d.txt { --t: 44px; padding: 0 12px; font-size: clamp(13px, 3.6cqw, 15px); }
+
+    /* Cuadritos de datos: gris claro casi blanco, con el mismo relieve que los botones .b3d */
+    .vic-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(5px, 1.8cqw, 8px); width: min(100%, 340px); }
+    .vic-caja { padding: 4px 8px 6px; border-radius: 12px; border: 2px solid #9aa3b0; color: #3a4350; font-size: clamp(.6rem, 3cqw, .78rem); font-weight: 700; line-height: 1.2;
+      background: linear-gradient(180deg, #ffffff 0%, #eceff3 60%, #cdd3db 140%);
+      box-shadow: 0 3px 0 #8b93a0, 0 5px 6px rgba(0,0,0,.3), inset 0 2px 0 rgba(255,255,255,.9);
+      animation: vic-sube .45s cubic-bezier(.2,1.5,.4,1) both; animation-delay: var(--d, 0s); }
+    .vic-caja b { display: block; color: #1b2430; font-size: clamp(.95rem, 5cqw, 1.2rem); font-variant-numeric: tabular-nums; }
+    .vic-caja .rec { display: block; color: #b25e00; font-weight: 800; font-size: .85em; }
+    /* Premios (puntos y monedas): cuadros amarillos con el relieve de los botones */
+    .vic-premios { display: flex; flex-wrap: wrap; justify-content: center; gap: clamp(6px, 2cqw, 10px); }
+    .vic-premio { padding: clamp(4px, 1.6cqw, 7px) clamp(10px, 4cqw, 16px); border-radius: 14px; border: 2px solid #a85d00; color: #4a2900; font-weight: 800; font-size: clamp(.75rem, 4cqw, 1rem);
+      background: linear-gradient(180deg, #fff3a0 0%, #ffd04a 55%, #e09a10 140%); text-shadow: 0 1px 0 rgba(255,255,255,.5);
+      box-shadow: 0 4px 0 #a85d00, 0 6px 8px rgba(0,0,0,.35), inset 0 2px 0 rgba(255,255,255,.6);
+      animation: vic-sube .5s cubic-bezier(.2,1.5,.4,1) both; animation-delay: var(--d, 0s); }
+    .vic-premio .cuenta { font-variant-numeric: tabular-nums; }
+    .vic-premio.rebote { animation: vic-rebote .45s ease-out; }
+    @keyframes vic-sube { from { opacity: 0; transform: translateY(16px) scale(.8); } to { opacity: 1; transform: none; } }
+    @keyframes vic-rebote { 40% { transform: scale(1.18); filter: brightness(1.15); } to { transform: none; } }
+    /* Confeti que cae al ganar (lo crea el JS) */
+    .vic-confeti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: inherit; }
+    .vic-confeti i { position: absolute; top: -8%; left: var(--x); width: 7px; height: 11px; background: var(--c); border-radius: 2px; opacity: 0;
+      animation: vic-cae var(--dur) ease-in var(--del) both; }
+    @keyframes vic-cae { 0% { opacity: 1; transform: translateY(0) rotate(0) } 100% { opacity: .9; transform: translateY(120cqw) rotate(var(--giro)) } }
+    @media (prefers-reduced-motion: reduce) { #victoria, .vic-caja, .vic-premio, .vic-premio.rebote { animation: none !important; } .vic-confeti { display: none; } }
 
     /* La sesión puede tener un nombre largo: se recorta con «…» para no tapar el botón de monedas ni «Menú principal» */
     #sesion { display: inline-block; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 30px; }
@@ -118,7 +148,6 @@
     html:not(.oscura) .meta-estrellas .est.vacia::before { background: rgba(90,50,20,.22); } /* estrella vacía visible sobre madera clara */
     .estrellas-vic { --e: 40px; }
     .estrellas-vic .fila-est { gap: 8px; }
-    .monedas-vic { font-weight: 800; color: #ffe08a; }
     .meta-vic { color: var(--suave); font-size: .8rem; }
     @media (prefers-reduced-motion: reduce) { .est::before, .est::after, .est.pop, .chispa { animation: none !important; } }
     @media (prefers-reduced-motion: reduce) { .ficha { transition: none; } }
