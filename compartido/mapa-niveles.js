@@ -7,6 +7,14 @@
 //   Vista «estado»               Los niveles de un estado (el juego decide qué muestra cada botón con infoNivel).
 //   Vista «mundo»                SOLO existe al terminar todos los niveles de México. Mundo con agua que sube un escalón por país.
 //   Vista «pais»                 Los niveles de un país.
+//   MAPA SOLO DE PAÍSES (etapas = crearEtapas({ porEtapa, soloPaises: true }); estándar nuevo, 21 nov 2026): no hay México de cerca ni estados.
+//                                La vista principal es «mundo» (con Continuar, los botones extra e Info) y desde ahí se abre cada país (México es el primero).
+//
+// MAPA SOLO DE PAÍSES (nuevo diseño, 23 nov 2026): la vista principal es una LISTA que baja de país en país: un botón alargado con la bandera de fondo y el
+//   nombre del país, y debajo sus 20 niveles; luego el botón del siguiente país con sus 20 niveles, y así. Al tocar el botón de un país se abre su «botella»
+//   (vista «pais»): la silueta del país (compartido/contornos-paises.js) que se llena de agua, UN POCO con cada nivel pasado, con un chorro que cae mientras sube.
+//   Al llegar a los 20 niveles el país queda lleno y se cambia por su bandera (ahí está el gancho «alPaisCompleto» para el destello dorado, todavía sin hacer).
+//   Banderas: imagenes/banderas/xx.svg (xx = código ISO en minúsculas). mapa.abrir(n, true) abre la botella del país del nivel n para verla subir.
 //
 // Uso:
 //   import { crearEtapas } from "../compartido/etapas-mapa.js";
@@ -26,6 +34,9 @@
 //     alInfo: () => { ... },                   // botón «Info» de la vista principal
 //     avisoPrincipal: () => "texto",           // línea de información bajo el título de la vista principal
 //     alCambiarVista: (esPrincipal) => { ... } // avisa de cada cambio de vista (el juego vuelve a rotular el ☰: «Atrás» mientras el mapa está abierto)
+//     unPais: true,                            // SOLO con crearEtapas({ soloPaises: true }): NO hay lista ni mundo; la vista principal es la botella del país donde va el jugador
+//                                              //   (solo su contorno con trazo), con ◀ ▶ (países abiertos), 🗂️ Niveles (los niveles del país) y Continuar. Sin esta opción el mapa solo de países sigue como siempre.
+//   (con unPais) mapa.centroPais() = punto de la pantalla dentro del país abierto · mapa.parpadear() = el país destella un instante (lo usa la celebración de «deslizante»)
 //   });
 //   mapa.abrir();                // vista principal
 //   mapa.abrir(n);               // abre la lista de niveles de la etapa del nivel n
@@ -37,6 +48,11 @@
 
 import { MEXICO, CONTINENTES, LAGOS } from "./geografia-mapa.js";
 import { nombrePais, banderaPais } from "./etapas-mapa.js";
+
+// Siluetas de los países (solo las usa el mapa solo de países; se cargan aparte porque pesan ~230 KB). Mientras llegan, la botella usa una gota.
+let CONTORNOS = null;
+const GOTA = { w: 300, h: 300, d: "M150 20C215 20 255 75 255 130C255 195 200 280 150 280C100 280 45 195 45 130C45 75 85 20 150 20Z" };
+const urlBandera = (codigo) => new URL("../imagenes/banderas/" + codigo.toLowerCase() + ".svg", import.meta.url).href;
 
 // ----- Ajustes -----
 // false = el agua sube por escalones (un estado o un país terminado = un escalón), como se diseñó.
@@ -81,6 +97,23 @@ html.oscura .m-raiz{background:url("${MADERA_OSCURA}") center/cover no-repeat,#1
 .m-pais small{font-size:.72rem;color:#5b6b7c}
 .m-punto{cursor:pointer;outline:none}
 .m-punto:focus-visible circle.m-zona{stroke:#2b3a4a;stroke-width:2}
+/* Lista de países: botón con la bandera de fondo + sus niveles debajo */
+.m-col{display:flex;flex-direction:column;align-items:center;width:100%;padding:4px 2px 24px}
+.m-sec{width:100%;max-width:440px;display:flex;flex-direction:column;align-items:center;margin-bottom:10px}
+.m-sec>.m-rej{padding-top:2px}
+.m-pbtn{position:relative;display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:70px;margin:4px 0 8px;padding:8px 14px 14px;font:inherit;color:#fff;text-align:left;
+  border:3px solid #fff;border-radius:16px;cursor:pointer;overflow:hidden;touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+  background:linear-gradient(90deg,rgba(10,20,35,.66),rgba(10,20,35,.3)),var(--bandera,none) center/cover no-repeat,#5b6b7c;
+  box-shadow:0 4px 0 rgba(0,0,0,.35),0 6px 10px rgba(0,0,0,.3)}
+.m-pbtn:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(0,0,0,.35)}
+.m-pbtn:focus-visible{outline:3px solid #2b3a4a;outline-offset:2px}
+.m-pbtn b{font-size:1.15rem;line-height:1.15;text-shadow:0 2px 4px rgba(0,0,0,.85)}
+.m-pbtn small{flex:none;font-size:.82rem;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,.95);white-space:nowrap}
+.m-pbtn .m-barra{position:absolute;left:0;right:0;bottom:0;height:7px;background:rgba(0,0,0,.5)}
+.m-pbtn .m-barra i{display:block;height:100%;background:#4fc3ff}
+.m-pbtn.m-hecho .m-barra i{background:#ffd23f}
+.m-pbtn.m-actual{border-color:#ff9a1f}
+.m-cuerpo>svg.m-botella{cursor:default;touch-action:auto}
 .m-pulso{transform-box:fill-box;transform-origin:center;animation:m-pulso 1.7s ease-out infinite}
 @keyframes m-pulso{from{transform:scale(1);opacity:.9}to{transform:scale(2.6);opacity:0}}
 .m-nuevo,.m-nv.activo{animation:m-latido .6s ease-in-out infinite alternate}
@@ -205,51 +238,88 @@ function hacerZoomable(svg, base, alZoom) {
 
 // ---------- Agua: dos capas de olas que se mueven, recortadas con la silueta ----------
 // caja = { x0, x1, yBase, yTope, fondo, amp }: yBase = parte más baja de la silueta, yTope = la más alta, fondo = hasta dónde se pinta
-function crearAgua(svg, id, dSilueta, caja, objetivo, desde) {
-  const A = caja.amp;
+// op (opcional, para la «botella» de un país):
+//   vel      qué tan rápido sube (por defecto 1.8)         frec   multiplica la frecuencia de las olas (siluetas chicas: 2.2)     paso   separación de los puntos de la ola
+//   chorro   { x, yTop, yEntrada, ancho }  un chorro de agua que cae desde yTop hasta la superficie MIENTRAS el agua sube (yEntrada = donde toca la silueta)
+//   alLlegar () => {}  se llama una vez cuando el agua termina de subir hasta «objetivo» (si es que tuvo que subir)
+function crearAgua(svg, id, dSilueta, caja, objetivo, desde, op = {}) {
+  const A = caja.amp, VEL = op.vel || 1.8, FR = op.frec || 1, ch = op.chorro;
   const cp = el("clipPath", { id }, el("defs", {}, svg));
   el("path", { d: dSilueta }, cp);
   const g = el("g", { "clip-path": "url(#" + id + ")", "pointer-events": "none" }, svg);
   const atras = el("path", { fill: AZUL_ATRAS }, g);
   const frente = el("path", { fill: AZUL_FRENTE, opacity: 0.8 }, g);
+  let cAlto, cBajo, bAlto, bBajo, salpico;   // chorro: la parte de fuera de la silueta (cAlto) y la de dentro, recortada (cBajo); brillos en movimiento y salpicadura
+  if (ch) {
+    cAlto = el("path", { fill: AZUL_FRENTE, "pointer-events": "none" }, svg);
+    bAlto = el("path", { fill: "none", stroke: "#fff", "stroke-opacity": 0.65, "stroke-linecap": "round", "pointer-events": "none" }, svg);
+    cBajo = el("path", { fill: AZUL_FRENTE }, g);
+    bBajo = el("path", { fill: "none", stroke: "#fff", "stroke-opacity": 0.65, "stroke-linecap": "round" }, g);
+    salpico = el("ellipse", { fill: "none", stroke: "#fff", "stroke-opacity": 0.8 }, g);
+  }
   // con f = 0 las olas quedan por debajo de la silueta (no se ve agua); con f = 1 la cubren por completo
   const y0 = caja.yBase + 2.5 * A, y1 = caja.yTope - 2.5 * A;
-  const paso = Math.max(6, (caja.x1 - caja.x0) / 90);
-  let f = desde, espera = 0.4;
+  const paso = op.paso || Math.max(6, (caja.x1 - caja.x0) / 90);
+  let f = desde, espera = 0.4, chor = 0, llegado = Math.abs(objetivo - desde) < 0.0008;
+  const superficie = (x, yN, turb, t) => yN + A * turb * (0.6 * Math.sin(x * 0.021 * FR + t * 1.3) + 0.4 * Math.sin(x * 0.047 * FR - t * 0.9));
 
   function pintar(t) {
     const yN = y0 + (y1 - y0) * f;
     const turb = 1 + 0.3 * Math.sin(t * 0.5); // el oleaje «respira»: a ratos más agitado, a ratos más calmo
     let da = "M" + caja.x0 + " " + caja.fondo, df = da;
     for (let x = caja.x0; x <= caja.x1 + paso; x += paso) {
-      const ya = yN + A * turb * (0.6 * Math.sin(x * 0.021 + t * 1.3) + 0.4 * Math.sin(x * 0.047 - t * 0.9));
-      const yf = yN + A * 0.6 + A * 0.9 * turb * (0.55 * Math.sin(x * 0.018 - t * 1.1 + 1.7) + 0.45 * Math.sin(x * 0.052 + t * 0.8 + 0.6));
+      const ya = superficie(x, yN, turb, t);
+      const yf = yN + A * 0.6 + A * 0.9 * turb * (0.55 * Math.sin(x * 0.018 * FR - t * 1.1 + 1.7) + 0.45 * Math.sin(x * 0.052 * FR + t * 0.8 + 0.6));
       da += "L" + x.toFixed(1) + " " + ya.toFixed(1);
       df += "L" + x.toFixed(1) + " " + yf.toFixed(1);
     }
     const cierre = "L" + (caja.x1 + paso).toFixed(1) + " " + caja.fondo + "Z";
     atras.setAttribute("d", da + cierre);
     frente.setAttribute("d", df + cierre);
+    if (ch) pintarChorro(t, yN, turb);
   }
+  function pintarChorro(t, yN, turb) {
+    if (chor < 0.01) { for (const n of [cAlto, cBajo, bAlto, bBajo]) n.setAttribute("d", ""); salpico.setAttribute("rx", 0); return; }
+    const w = ch.ancho * (0.5 + 0.5 * chor), x = ch.x + Math.sin(t * 3.1) * ch.ancho * 0.12;
+    const yFin = ch.yTop + (Math.max(ch.yTop, superficie(ch.x, yN, turb, t)) - ch.yTop) * chor;   // el chorro baja hasta tocar el agua
+    const col = (a, b, ancho) => (b > a ? "M" + (x - ancho / 2).toFixed(1) + " " + a.toFixed(1) + "L" + (x + ancho / 2).toFixed(1) + " " + a.toFixed(1) + "L" + (x + ancho / 2).toFixed(1) + " " + b.toFixed(1) + "L" + (x - ancho / 2).toFixed(1) + " " + b.toFixed(1) + "Z" : "");
+    const linea = (a, b) => (b > a ? "M" + (x - w * 0.18).toFixed(1) + " " + a.toFixed(1) + "L" + (x - w * 0.18).toFixed(1) + " " + b.toFixed(1) : "");
+    const yE = Math.min(yFin, ch.yEntrada);
+    cAlto.setAttribute("d", col(ch.yTop, yE, w));
+    cBajo.setAttribute("d", col(Math.max(ch.yTop, ch.yEntrada), yFin, w));
+    for (const b of [bAlto, bBajo]) { b.setAttribute("stroke-width", (w * 0.22).toFixed(1)); b.setAttribute("stroke-dasharray", (w * 1.6).toFixed(1) + " " + (w * 2.4).toFixed(1)); b.setAttribute("stroke-dashoffset", (-t * w * 14).toFixed(1)); }
+    bAlto.setAttribute("d", linea(ch.yTop, yE));
+    bBajo.setAttribute("d", linea(Math.max(ch.yTop, ch.yEntrada), yFin));
+    const r = ch.ancho * (1.3 + 0.6 * Math.sin(t * 9));   // salpicadura donde cae el chorro
+    salpico.setAttribute("cx", x.toFixed(1)); salpico.setAttribute("cy", yFin.toFixed(1));
+    salpico.setAttribute("rx", r.toFixed(1)); salpico.setAttribute("ry", (r * 0.3).toFixed(1));
+    salpico.setAttribute("stroke-width", (ch.ancho * 0.25).toFixed(1)); salpico.setAttribute("opacity", chor.toFixed(2));
+  }
+  const avisarLlegada = () => { if (!llegado) { llegado = true; if (op.alLlegar) op.alLlegar(); } };
   return {
     pintar,
-    quieto() { f = objetivo; pintar(0); },
+    quieto() { f = objetivo; chor = 0; pintar(0); avisarLlegada(); },
     tick(dt, t) {
       if (espera > 0) espera -= dt;
       else {
-        f += (objetivo - f) * (1 - Math.exp(-dt * 1.8)); // sube suave y frena al llegar
+        f += (objetivo - f) * (1 - Math.exp(-dt * VEL)); // sube suave y frena al llegar
         if (Math.abs(objetivo - f) < 0.0008) f = objetivo;
       }
+      if (ch) chor += ((objetivo - f > 0.004 ? 1 : 0) - chor) * (1 - Math.exp(-dt * 6));   // el chorro aparece al empezar y se apaga al llegar
       pintar(t);
+      if (f === objetivo && chor < 0.05) avisarLlegada();
     },
+    quitar() { g.remove(); if (ch) { cAlto.remove(); bAlto.remove(); } },
   };
 }
 
 // ---------- El mapa ----------
 export function montarMapa(o) {
   if (!o || !o.etapas || typeof o.progreso !== "function" || typeof o.jugarNivel !== "function") throw new Error("montarMapa: faltan etapas, progreso o jugarNivel");
-  const { estados: ESTADOS_ORDEN, paises: PAISES_ORDEN, numEstados: NUM_ESTADOS, numPaises: NUM_PAISES, porEtapa: NIVELES_POR_ETAPA, nivelesMexico: NIVELES_MEXICO, resumen, etapaDe, baseEstado, basePais } = o.etapas;
+  const { soloPaises: SOLO_PAISES, estados: ESTADOS_ORDEN, paises: PAISES_ORDEN, numEstados: NUM_ESTADOS, numPaises: NUM_PAISES, porEtapa: NIVELES_POR_ETAPA, nivelesMexico: NIVELES_MEXICO, resumen, etapaDe, baseEstado, basePais } = o.etapas;
   const pre = o.prefijo || "juego";
+  const UN_PAIS = SOLO_PAISES && !!o.unPais;   // mapa de un solo país (sin lista ni mundo)
+  const VISTA_PRINCIPAL = SOLO_PAISES ? (UN_PAIS ? "pais" : "mundo") : "mexico";   // la vista a la que se vuelve con «principal» y que cuenta como «el mapa» para el ☰
   const CLAVE_AGUA = pre + "-agua";          // dónde estaba el agua la última vez (para verla SUBIR al volver al mapa)
   const CLAVE_MUNDO = pre + "-mundo-visto";  // «1» cuando ya entraste al mundo (apaga el aviso de novedad)
 
@@ -264,6 +334,9 @@ export function montarMapa(o) {
   }
   const leerMundoVisto = () => { try { return localStorage.getItem(CLAVE_MUNDO) === "1"; } catch (e) { return false; } };
   const marcarMundoVisto = () => { try { localStorage.setItem(CLAVE_MUNDO, "1"); } catch (e) {} };
+
+  let pendienteContornos = false;
+  if (SOLO_PAISES) import("./contornos-paises.js").then((m) => { CONTORNOS = m.CONTORNOS; if (pendienteContornos && abierto && vista === "pais") pintar(); }).catch(() => {});
 
   const estilo = document.createElement("style");
   estilo.textContent = ESTILO;
@@ -282,13 +355,14 @@ export function montarMapa(o) {
   raiz.append(cab, cuerpo);
   (document.body || document.documentElement).appendChild(raiz);
 
-  let vista = "mexico";   // mexico | estado | mundo | pais
+  let vista = VISTA_PRINCIPAL;   // mexico | estado | mundo | pais
   let indice = 0;         // estado o país abierto
   let abierto = false;
   let aguas = [], raf = 0, tPrev = 0, idAgua = 0;
+  let botella = null;     // solo países: { svg, sil } de la botella dibujada (para centroPais y parpadear)
 
   const prog = () => resumen(o.progreso());
-  const nuevoMundo = () => prog().mexicoCompleto && !leerMundoVisto();
+  const nuevoMundo = () => !SOLO_PAISES && prog().mexicoCompleto && !leerMundoVisto();
 
   // --- animación del agua ---
   function detener() { if (raf) cancelAnimationFrame(raf); raf = 0; }
@@ -324,9 +398,10 @@ export function montarMapa(o) {
   const ir = (v, i = 0) => { vista = v; indice = i; pintar(); };
 
   // Lista de los niveles de una etapa. base = nivel anterior al primero de la etapa.
-  function rejillaNiveles(base) {
+  // destino = dónde se pone (por defecto, el cuerpo del mapa); en la lista de países va dentro de la sección de cada país. Devuelve el botón del nivel actual.
+  function rejillaNiveles(base, destino = cuerpo, enLista = false) {
     const p = prog();
-    if (o.leyenda) cuerpo.appendChild(h("p", "m-leyenda", o.leyenda));
+    if (o.leyenda && !enLista) destino.appendChild(h("p", "m-leyenda", o.leyenda));
     const rej = h("div", "m-rej");
     if (o.columnas > 0) { rej.style.gridTemplateColumns = "repeat(" + o.columnas + ",minmax(0,1fr))"; rej.style.maxWidth = Math.min(880, o.columnas * 84) + "px"; }   // filas de «columnas» en «columnas»
     let actual = null;
@@ -343,9 +418,10 @@ export function montarMapa(o) {
       rej.appendChild(b);
       if (esActual) actual = b;
     }
-    cuerpo.appendChild(rej);
+    destino.appendChild(rej);
     // la lista se abre mostrando el nivel en el que vas
-    if (actual && actual.scrollIntoView) actual.scrollIntoView({ block: "center" });
+    if (!enLista && actual && actual.scrollIntoView) actual.scrollIntoView({ block: "center" });
+    return actual;
   }
 
   // --- vista: México ---
@@ -410,9 +486,17 @@ export function montarMapa(o) {
   function vistaMundo() {
     const p = prog();
     titulo.textContent = "🌍 Mundo";
-    info.textContent = "💧 " + p.paisesHechos + " de " + NUM_PAISES + " países completados · toca un país para ver sus niveles";
-    boton("México", "◀", "b-cielo", () => ir("mexico"));
-    if (p.max > NIVELES_MEXICO) botonContinuar();
+    const resumenMundo = "💧 " + p.paisesHechos + " de " + NUM_PAISES + " países completados · toca un país para ver sus niveles";
+    if (SOLO_PAISES) {   // vista principal: Continuar, botones extra (p. ej. ♾️ Modo libre) e Info, como la de México en el mapa clásico
+      info.textContent = resumenMundo + (o.avisoPrincipal && o.avisoPrincipal() ? " · " + o.avisoPrincipal() : "");
+      botonContinuar();
+      for (const x of o.botonesExtra || []) boton(x.texto, x.icono || "•", x.clase || "b-azul", x.fn);
+      if (o.alInfo) boton("Info", "ℹ️", "b-azul", o.alInfo);
+    } else {
+      info.textContent = resumenMundo;
+      boton("México", "◀", "b-cielo", () => ir("mexico"));
+      if (p.max > NIVELES_MEXICO) botonContinuar();
+    }
     cuerpo.classList.add("m-mundo");
 
     const P = proyector(-170, 180, 84, -57, 2, 1);
@@ -453,34 +537,157 @@ export function montarMapa(o) {
     rejillaNiveles(base);
   }
 
+  // --- SOLO PAÍSES · vista principal: la lista (bandera + nombre del país y debajo sus 20 niveles, país tras país) ---
+  let enfoque = null;      // país al que se baja al abrir la lista (null = el actual)
+  let vigia = null;        // carga cada bandera cuando se acerca a la pantalla
+  function vistaLista() {
+    const p = prog();
+    titulo.textContent = "🌍 Niveles";
+    info.textContent = "💧 " + p.paisesHechos + " de " + NUM_PAISES + " países completados · toca un país para ver su mapa" + (o.avisoPrincipal && o.avisoPrincipal() ? " · " + o.avisoPrincipal() : "");
+    botonContinuar();
+    for (const x of o.botonesExtra || []) boton(x.texto, x.icono || "•", x.clase || "b-azul", x.fn);
+    if (o.alInfo) boton("Info", "ℹ️", "b-azul", o.alInfo);
+    if (o.leyenda) cuerpo.appendChild(h("p", "m-leyenda", o.leyenda));
+    const col = h("div", "m-col");
+    cuerpo.appendChild(col);
+    if (vigia) vigia.disconnect();
+    vigia = typeof IntersectionObserver === "function" ? new IntersectionObserver((es) => {
+      for (const e of es) if (e.isIntersecting) { e.target.style.setProperty("--bandera", 'url("' + e.target.dataset.bandera + '")'); vigia.unobserve(e.target); }
+    }, { root: cuerpo, rootMargin: "500px 0px" }) : null;
+    const meta = enfoque != null ? enfoque : p.paisActual;
+    let ir_a = null;
+    PAISES_ORDEN.forEach((codigo, i) => {
+      const base = basePais(i);
+      if (base + 1 > p.max) return; // los países sin desbloquear no aparecen
+      const hechos = acotar(p.hecho - base, 0, NIVELES_POR_ETAPA), completo = hechos >= NIVELES_POR_ETAPA;
+      const sec = h("section", "m-sec");
+      const pb = h("button", "m-pbtn" + (completo ? " m-hecho" : "") + (!completo && i === p.paisActual ? " m-actual" : ""));
+      pb.type = "button";
+      pb.setAttribute("aria-label", nombrePais(codigo) + ": " + hechos + " de " + NIVELES_POR_ETAPA + " niveles. Ver el mapa");
+      pb.append(h("b", "", nombrePais(codigo)), h("small", "", completo ? "⭐ " + hechos + " / " + NIVELES_POR_ETAPA : "💧 " + hechos + " / " + NIVELES_POR_ETAPA));
+      const barra = h("span", "m-barra"), rel = h("i");
+      rel.style.width = (hechos / NIVELES_POR_ETAPA * 100) + "%";
+      barra.appendChild(rel); pb.appendChild(barra);
+      pb.dataset.bandera = urlBandera(codigo);
+      if (vigia) vigia.observe(pb); else pb.style.setProperty("--bandera", 'url("' + pb.dataset.bandera + '")');
+      pb.addEventListener("click", () => ir("pais", i));
+      sec.appendChild(pb);
+      const actual = rejillaNiveles(base, sec, true);
+      col.appendChild(sec);
+      if (i === meta) ir_a = actual || sec;
+    });
+    enfoque = null;
+    if (ir_a && ir_a.scrollIntoView) ir_a.scrollIntoView({ block: ir_a.tagName === "BUTTON" && ir_a.classList.contains("m-nv") ? "center" : "start" });
+  }
+
+  // --- SOLO PAÍSES con unPais · los niveles del país abierto (se llega con el botón «Niveles» de la botella) ---
+  function vistaNivelesPais() {
+    const p = prog(), codigo = PAISES_ORDEN[indice], base = basePais(indice);
+    const hechos = acotar(p.hecho - base, 0, NIVELES_POR_ETAPA);
+    titulo.textContent = nombrePais(codigo);
+    info.textContent = hechos + " de " + NIVELES_POR_ETAPA + " niveles completados";
+    boton("Mapa", "◀", "b-cielo", () => ir("pais", indice));
+    botonContinuar();
+    rejillaNiveles(base);
+  }
+
+  // --- SOLO PAÍSES · vista de un país: la silueta es una botella que se llena de agua, un poco con cada nivel ---
+  function vistaBotella() {
+    const p = prog(), codigo = PAISES_ORDEN[indice], base = basePais(indice);
+    const hechos = acotar(p.hecho - base, 0, NIVELES_POR_ETAPA), completo = hechos >= NIVELES_POR_ETAPA;
+    titulo.textContent = nombrePais(codigo);
+    info.textContent = "País " + (indice + 1) + " de " + NUM_PAISES + " · " + hechos + " de " + NIVELES_POR_ETAPA + " niveles completados" + (completo ? " · ¡completo! ⭐" : "");
+    if (UN_PAIS) {
+      // Navegación país por país (todos los anteriores al actual están abiertos): ◀ anterior · ▶ siguiente · 🗂️ niveles de este país · Continuar
+      if (indice > 0) boton("", "◀", "b-cielo", () => ir("pais", indice - 1)).setAttribute("aria-label", "País anterior");
+      if (indice + 1 < NUM_PAISES && basePais(indice + 1) + 1 <= p.max) boton("", "▶", "b-cielo", () => ir("pais", indice + 1)).setAttribute("aria-label", "País siguiente");
+      boton("Niveles", "🗂️", "b-azul", () => ir("niveles", indice));
+      botonContinuar();
+      for (const x of o.botonesExtra || []) boton(x.texto, x.icono || "•", x.clase || "b-azul", x.fn);
+      if (o.alInfo) boton("Info", "ℹ️", "b-azul", o.alInfo);
+    } else {
+      boton("Niveles", "◀", "b-cielo", () => { enfoque = indice; ir("mundo"); });
+      botonContinuar();
+    }
+
+    const c = (CONTORNOS && CONTORNOS[codigo]) || GOTA, w = c.w, hh = c.h, id = ++idAgua;
+    const vb = { x: -15, y: -62, w: w + 30, h: hh + 84 };   // arriba queda espacio para el chorro
+    const svg = el("svg", { viewBox: vb.x + " " + vb.y + " " + vb.w + " " + vb.h, class: "m-botella", role: "img", "aria-label": nombrePais(codigo) + ": " + hechos + " de " + NIVELES_POR_ETAPA + " niveles completados" }, cuerpo);
+    el("path", { d: c.d, fill: SOMBRA, transform: "translate(0 5)" }, svg);
+    const sil = el("path", { d: c.d, fill: "#fff" }, svg);
+    botella = { svg, sil };
+    const objetivo = acotar(hechos / NIVELES_POR_ETAPA, 0, 1);
+    const desde = memoriaAgua("pais" + indice, objetivo);   // dónde estaba el agua la última vez: de ahí sube
+
+    // La bandera cubre la silueta cuando el país está completo (entra con un desvanecido si se acaba de llenar)
+    let bandera = null;
+    if (objetivo >= 1) {
+      const cb = el("clipPath", { id: "cb" + id }, el("defs", {}, svg));
+      el("path", { d: c.d }, cb);
+      bandera = el("image", { href: urlBandera(codigo), x: 0, y: 0, width: w, height: hh, preserveAspectRatio: "xMidYMid slice", "clip-path": "url(#cb" + id + ")", "pointer-events": "none" }, svg);
+      bandera.style.opacity = desde >= 1 ? 1 : 0;
+    }
+    if (objetivo < 1 || desde < 1) {
+      // punto por donde cae el chorro: el primer lugar de la silueta, cerca del centro, que está debajo de la entrada
+      let ent = { x: w / 2, y: 0 };
+      try {
+        buscar: for (const dx of [0, -0.08, 0.08, -0.16, 0.16, -0.25, 0.25]) {
+          const x = w / 2 + dx * w;
+          for (let y = 0; y <= hh; y += hh / 70) if (sil.isPointInFill(new DOMPoint(x, y))) { ent = { x, y }; break buscar; }
+        }
+      } catch (e) {}
+      const lado = Math.max(w, hh);
+      const agua = crearAgua(svg, "agua" + id, c.d, { x0: -15, x1: w + 15, yBase: hh, yTope: 0, fondo: hh + 40, amp: acotar(lado * 0.016, 2.5, 5) }, objetivo, desde, {
+        vel: 1.1, frec: 2.4, paso: 3.5,
+        chorro: { x: ent.x, yTop: vb.y + 4, yEntrada: ent.y, ancho: acotar(lado * 0.024, 5, 9) },
+        alLlegar: objetivo >= 1 ? () => {
+          // ¡País lleno! AQUÍ va la animación del destello dorado (pendiente). Por ahora solo se cambia el agua por la bandera.
+          if (o.alPaisCompleto) o.alPaisCompleto({ codigo, indice, svg, d: c.d, w, h: hh });
+          if (bandera) { bandera.style.transition = "opacity 1.2s ease"; bandera.style.opacity = 1; }
+          setTimeout(() => { agua.quitar(); aguas = aguas.filter((a) => a !== agua); }, 1400);   // ya no hace falta la botella de este país
+        } : null,
+      });
+      aguas.push(agua);
+    }
+    el("path", { d: c.d, fill: "none", stroke: UN_PAIS ? TINTA : BORDE, "stroke-width": UN_PAIS ? 3.5 : 2, "stroke-linejoin": "round", "pointer-events": "none" }, svg);   // con unPais, trazo más marcado que rodea al país
+    // las siluetas se cargan aparte: al llegar, se vuelve a dibujar la botella (si no hay una animación en curso)
+    if (!CONTORNOS) pendienteContornos = true;
+  }
+
   function pintar() {
     detener();
     aguas = [];
+    botella = null;
     cuerpo.replaceChildren();
     cuerpo.classList.remove("m-mundo");
     acciones.replaceChildren();
     if (vista === "mexico") vistaMexico();
     else if (vista === "estado") vistaEstado();
-    else if (vista === "mundo") vistaMundo();
-    else vistaPais();
+    else if (vista === "mundo") (SOLO_PAISES ? vistaLista() : vistaMundo());
+    else if (UN_PAIS && vista === "niveles") vistaNivelesPais();
+    else (SOLO_PAISES ? vistaBotella() : vistaPais());
     if (aguas.length) arrancar();
-    if (o.alCambiarVista) o.alCambiarVista(vista === "mexico");
+    if (o.alCambiarVista) o.alCambiarVista(vista === VISTA_PRINCIPAL);
   }
 
-  function principal() { vista = "mexico"; indice = 0; if (abierto) pintar(); }
+  function principal() { vista = VISTA_PRINCIPAL; indice = UN_PAIS ? prog().paisActual : 0; enfoque = null; if (abierto) pintar(); }
 
   addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape" && abierto && vista !== "mexico") { ev.preventDefault(); principal(); }
+    if (ev.key === "Escape" && abierto && vista !== VISTA_PRINCIPAL) { ev.preventDefault(); principal(); }
   });
 
   return {
     abrir(n, alcanzado) {
       abierto = true;
       raiz.hidden = false;
-      vista = "mexico"; indice = 0;
+      vista = VISTA_PRINCIPAL; indice = UN_PAIS ? prog().paisActual : 0;   // con unPais se abre directo el país donde va el jugador
       if (n) {
         const e = etapaDe(n);
         if (e.zona === "mexico") { if (!alcanzado) { vista = "estado"; indice = e.indice; } }
+        else if (UN_PAIS) indice = e.indice;   // la botella del país del nivel n (con alcanzado = true se ve subir el agua)
+        else if (SOLO_PAISES) {   // alcanzado = true: la botella del país del nivel n (se ve subir el agua); si no, la lista bajando hasta ese país
+          if (alcanzado) { vista = "pais"; indice = e.indice; } else enfoque = e.indice;
+        }
         else { vista = alcanzado ? "mundo" : "pais"; indice = e.indice; if (vista === "mundo") marcarMundoVisto(); }
       }
       pintar();
@@ -488,7 +695,37 @@ export function montarMapa(o) {
     cerrar() { abierto = false; raiz.hidden = true; detener(); aguas = []; },
     refrescar() { if (abierto) pintar(); },
     principal,
-    esPrincipal: () => vista === "mexico",
+    // unPais: punto de la pantalla (px) dentro del país abierto, lo más cerca posible del centro de su caja: { x, y } o null
+    centroPais() {
+      const b = botella;
+      if (!b || !b.svg.isConnected) return null;
+      try {
+        const bb = b.sil.getBBox(), dentro = (x, y) => b.sil.isPointInFill(new DOMPoint(x, y));
+        let cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;
+        if (!dentro(cx, cy)) {   // país con forma rara: el punto de adentro más cercano al centro
+          let mejor = null, md = Infinity;
+          for (let i = 0; i <= 40; i++) for (let j = 0; j <= 40; j++) {
+            const x = bb.x + bb.width * i / 40, y = bb.y + bb.height * j / 40;
+            if (dentro(x, y)) { const dd = (x - cx) ** 2 + (y - cy) ** 2; if (dd < md) { md = dd; mejor = [x, y]; } }
+          }
+          if (mejor) [cx, cy] = mejor;
+        }
+        const pt = new DOMPoint(cx, cy).matrixTransform(b.svg.getScreenCTM());
+        return { x: pt.x, y: pt.y };
+      } catch (e) { return null; }
+    },
+    // el país abierto parpadea (destello claro + trazo dorado) un instante
+    parpadear() {
+      const b = botella;
+      if (!b || !b.svg.isConnected) return;
+      const d = b.sil.getAttribute("d");
+      const flash = el("path", { d, fill: "#fff6b0", "pointer-events": "none" }, b.svg);
+      const aro = el("path", { d, fill: "none", stroke: "#ffc61f", "stroke-width": 9, "stroke-linejoin": "round", "pointer-events": "none" }, b.svg);
+      if (typeof flash.animate !== "function") { setTimeout(() => { flash.remove(); aro.remove(); }, 300); return; }
+      aro.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], { duration: 450 });
+      flash.animate([{ opacity: 0 }, { opacity: 0.85 }, { opacity: 0 }], { duration: 450, easing: "ease-out" }).onfinish = () => { flash.remove(); aro.remove(); };
+    },
+    esPrincipal: () => vista === VISTA_PRINCIPAL,
     abierto: () => abierto,
   };
 }
