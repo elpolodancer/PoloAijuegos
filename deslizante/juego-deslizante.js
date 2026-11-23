@@ -268,15 +268,28 @@ function animarVictoria(v, tier) {
 }
 
 // ----- Celebración al pasar un nivel (sustituye al panel de victoria) -----
-// 1) Las estrellas ganadas (doradas o moradas) salen del centro de la pantalla creciendo hasta su tamaño y se mueven un poco.
-// 2) Mientras se mueven, un velo oscuro tapa el juego y debajo se abre el mapa: el contorno del país donde juega (mapa.abrir) y el velo se aparta.
-// 3) Cada estrella cae hacia el centro del país, se hace pequeña y desaparece, y el país parpadea.
-// Al terminar queda el mapa del país con sus botones (Continuar, Niveles…). Tocar la pantalla salta la animación. Con «reducir movimiento» solo abre el mapa.
+// 1) Las estrellas ganadas (doradas o moradas) salen del centro de la pantalla UNA TRAS OTRA: cada una se desliza hacia su lugar dejando brillos,
+//    separadas entre sí, y se queda moviéndose un poco.
+// 2) Cuando ya llevan un rato, un velo oscuro tapa el juego y debajo se abre el mapa: el contorno del país donde juega (mapa.abrir); el velo se aparta.
+// 3) Las estrellas caen UNA POR UNA hacia el centro del país, se hacen pequeñas hasta desaparecer y, cuando cada una entra, el país hace «pop»
+//    (se hincha, destella y rebota). Al final aparece el botón «Continuar» del centro con un rebote.
+// Tocar la pantalla salta la animación. Con «reducir movimiento» solo abre el mapa. Los tiempos están juntos en TIEMPOS para ajustarlos fácil.
+const TIEMPOS = {
+  entraSep: 420,      // ms entre una estrella y la siguiente al aparecer
+  entraDur: 750,      // lo que tarda cada una en deslizarse a su lugar
+  quieta: 1300,       // cuánto se mueven las estrellas después de llegar la última, antes del cambio de escena
+  velo: 450,          // lo que tarda el velo en tapar (y en apartarse)
+  espera: 700,        // país ya visible, antes de que empiece a caer la primera estrella
+  caeSep: 800,        // ms entre una estrella y la siguiente al caer al país
+  caeDur: 850,        // lo que dura la caída (y el encogerse hasta desaparecer) de cada estrella
+  final: 700,         // tras el pop de la última, antes de quitar todo
+};
 let celId = 0, celTimers = [], celEl = null;
 function quitarCelebracion() {
   celId++;
   celTimers.forEach(clearTimeout); celTimers = [];
   if (celEl) { celEl.remove(); celEl = null; }
+  mapa.retenerContinuar(false);   // el botón «Continuar» del centro del país vuelve a verse
 }
 function celebrar(tier, i) {
   quitarCelebracion();
@@ -286,6 +299,7 @@ function celebrar(tier, i) {
   const abrir = () => { if (!abierto) { abierto = true; abrirMapa(i + 1, true); } };   // abrirMapa → mostrar("pantalla-niveles") no cancela la celebración
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) { abrir(); return; }
 
+  const T = TIEMPOS;
   const mor = Math.max(0, tier - 3), cuantas = Math.min(tier, 3);
   const ov = document.createElement("div");
   ov.className = "cel-fondo";
@@ -298,44 +312,55 @@ function celebrar(tier, i) {
     const w = document.createElement("div"), e = document.createElement("span");
     w.className = "cel-e";
     e.className = "est cel-mueve " + (k < mor ? "mor" : "oro");
-    e.style.setProperty("--k", k);
+    e.style.animationDelay = (k * T.entraSep + T.entraDur) + "ms";   // empieza a moverse cuando ella llega a su lugar
     w.appendChild(e); fila.appendChild(w); ests.push(w);
   }
   ov.append(velo, fila);
   document.body.appendChild(ov);
   celEl = ov;
   ov.addEventListener("click", () => { abrir(); quitarCelebracion(); });   // tocar = saltar la animación
+  const colores = (w) => w.firstChild.classList.contains("mor") ? ["#ffffff", "#ffd1f5", "#d9c2ff", "#c9f3ff"] : ["#fff6b0", "#ffc61f", "#ffffff"];
+  const centro = (w) => { const r = w.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
 
-  // 1) aparecen desde el centro de la pantalla y crecen hasta su sitio en la fila
-  const rf = fila.getBoundingClientRect(), cxFila = rf.left + rf.width / 2;
+  // 1) una tras otra: salen del centro de la pantalla, giran y se deslizan a su lugar soltando brillos por el camino
+  const rf = fila.getBoundingClientRect(), cxFila = rf.left + rf.width / 2, cyFila = rf.top + rf.height / 2;
   ests.forEach((w, k) => {
-    const r = w.getBoundingClientRect();
-    w.animate([{ transform: "translate(" + (cxFila - (r.left + r.width / 2)) + "px,0) scale(0)", opacity: 0 }, { transform: "none", opacity: 1 }],
-      { duration: 700, delay: k * 150, easing: "cubic-bezier(.2,1.5,.4,1)", fill: "backwards" });
+    const r = w.getBoundingClientRect(), dx = cxFila - (r.left + r.width / 2), dy = cyFila - (r.top + r.height / 2);
+    w.animate([
+      { transform: "translate(" + dx + "px," + dy + "px) scale(0) rotate(-200deg)", opacity: 0, offset: 0 },
+      { transform: "translate(" + dx * 0.4 + "px," + dy * 0.4 + "px) scale(1.25) rotate(-60deg)", opacity: 1, offset: 0.35 },
+      { transform: "none", opacity: 1, offset: 1 },
+    ], { duration: T.entraDur, delay: k * T.entraSep, easing: "cubic-bezier(.25,.9,.35,1.15)", fill: "backwards" });
+    for (const f of [0.25, 0.5, 0.75]) tras(k * T.entraSep + T.entraDur * f, () => { const c = centro(w); chisporroteo(ov, c.x, c.y, 4, colores(w)); });   // brillos en el camino
+    tras(k * T.entraSep + T.entraDur, () => { const c = centro(w); chisporroteo(ov, c.x, c.y, 8, colores(w)); });                                         // y un destello al llegar
   });
 
   // 2) cambio de escena: el velo cubre el juego, se abre el mapa debajo y el velo se aparta
-  tras(1100, () => velo.classList.add("on"));
-  tras(1550, () => { abrir(); velo.classList.remove("on"); });
+  const tLlega = (cuantas - 1) * T.entraSep + T.entraDur;
+  const tVelo = tLlega + T.quieta, tMapa = tVelo + T.velo;
+  tras(tVelo, () => velo.classList.add("on"));
+  tras(tMapa, () => { mapa.retenerContinuar(true); abrir(); velo.classList.remove("on"); });
 
-  // 3) cada estrella cae en el país, se hace pequeña y el país parpadea
-  const T0 = 2500, SEP = 650, DUR = 900;
-  ests.forEach((w, k) => tras(T0 + k * SEP, () => {
+  // 3) una por una: cada estrella cae al centro del país, se encoge hasta desaparecer y el país hace «pop»
+  const T0 = tMapa + T.velo + T.espera;
+  ests.forEach((w, k) => tras(T0 + k * T.caeSep, () => {
     const c = mapa.centroPais(), r = w.getBoundingClientRect(), sx = r.left + r.width / 2, sy = r.top + r.height / 2;
     if (!c) { w.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: "forwards" }); return; }
-    const dx = c.x - sx, dy = c.y - sy;
+    const dx = c.x - sx, dy = c.y - sy, ultima = k === cuantas - 1;
     w.animate([
-      { transform: "translate(0,0) scale(1)", opacity: 1, offset: 0 },
-      { transform: "translate(" + dx * 0.35 + "px," + (dy * 0.35 - 50) + "px) scale(1.15)", opacity: 1, offset: 0.35 },
-      { transform: "translate(" + dx + "px," + dy + "px) scale(.12)", opacity: 0.9, offset: 1 },
-    ], { duration: DUR, easing: "ease-in", fill: "forwards" }).onfinish = () => {
+      { transform: "translate(0,0) scale(1) rotate(0)", opacity: 1, offset: 0 },
+      { transform: "translate(" + dx * 0.3 + "px," + (dy * 0.3 - 60) + "px) scale(1.2) rotate(120deg)", opacity: 1, offset: 0.3 },
+      { transform: "translate(" + dx * 0.85 + "px," + dy * 0.85 + "px) scale(.55) rotate(300deg)", opacity: 1, offset: 0.75 },
+      { transform: "translate(" + dx + "px," + dy + "px) scale(0) rotate(420deg)", opacity: 0.8, offset: 1 },   // entra en el país y desaparece de tan pequeña
+    ], { duration: T.caeDur, easing: "ease-in", fill: "forwards" }).onfinish = () => {
       if (id !== celId) return;
       w.style.visibility = "hidden";
-      mapa.parpadear();
-      chisporroteo(ov, c.x, c.y, 10, ["#fff6b0", "#ffc61f", "#ffffff"]);
+      mapa.parpadear(k);                                                                  // el país hace «pop» (cada vez un poco más fuerte)
+      chisporroteo(ov, c.x, c.y, ultima ? 16 : 10, ["#fff6b0", "#ffc61f", "#ffffff"]);
+      if (ultima) tras(250, () => mapa.retenerContinuar(false));                        // aparece «Continuar» con un rebote
     };
   }));
-  tras(T0 + (cuantas - 1) * SEP + DUR + 500, quitarCelebracion);
+  tras(T0 + (cuantas - 1) * T.caeSep + T.caeDur + T.final, quitarCelebracion);
 }
 
 // ----- Pantallas -----
