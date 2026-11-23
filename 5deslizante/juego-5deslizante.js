@@ -118,8 +118,8 @@ let mapaEnPrincipal = true;                        // ¿el mapa está en su vist
 const mapa = montarMapa({
   prefijo: ID,
   etapas: ETAPAS,
-  unPais: true,                                    // sin lista ni mundo: solo el país donde va el jugador
-  columnas: 5,
+  unPais: true,                                    // se abre el país donde va el jugador; 🗺️ Mapa = el mundo con los países abiertos y, al tocar uno, sus 20 niveles
+  columnas: 4,                                     // los 20 niveles de un país: 4 columnas × 5 filas
   botonesExtra: [{ icono: "♾️", texto: "Modo libre", clase: "b-morado", fn: () => mostrar("pantalla-libre") }],   // el Modo libre se abre desde el mapa
   alCambiarVista: (esPrincipal) => { mapaEnPrincipal = esPrincipal; pintarBotonMenu(); },   // el ☰ se rotula según la vista
   progreso: () => { const h = hechoMax(); return { hecho: h, max: Math.min(TOTAL, h + 1) }; },

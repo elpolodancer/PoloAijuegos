@@ -38,6 +38,7 @@
 //     alCambiarVista: (esPrincipal) => { ... } // avisa de cada cambio de vista (el juego vuelve a rotular el ☰: «Atrás» mientras el mapa está abierto)
 //     unPais: true,                            // SOLO con crearEtapas({ soloPaises: true }): NO hay lista ni mundo; la vista principal es la botella del país donde va el jugador
 //                                              //   (solo su contorno con trazo), con ◀ ▶ (países abiertos), 🗂️ Niveles (los niveles del país) y Continuar. Sin esta opción el mapa solo de países sigue como siempre.
+//   (con unPais, 23 nov 2026) el botón «🗺️ Mapa» de la botella abre el MUNDO en blanco: solo se dibujan, con su trazo, los países ya desbloqueados (sus siluetas de compartido/contornos-paises.js puestas en su lugar con compartido/posiciones-paises.js); al tocar uno se abren sus 20 niveles (opción columnas) y desde ahí «Mapa» regresa al mundo.
 //   (con unPais) mapa.centroPais() = punto de la pantalla dentro del país abierto · mapa.parpadear(k) = el país hace «pop» (se hincha, destella y rebota sin mostrar barras de desplazamiento; k = 0, 1, 2… lo hace más fuerte) · mapa.retenerContinuar(true/false) = oculta o muestra el botón «Continuar» del centro (lo usa la celebración de «deslizante»)
 //   });
 //   mapa.abrir();                // vista principal
@@ -53,6 +54,7 @@ import { nombrePais, banderaPais } from "./etapas-mapa.js";
 
 // Siluetas de los países (solo las usa el mapa solo de países; se cargan aparte porque pesan ~230 KB). Mientras llegan, la botella usa una gota.
 let CONTORNOS = null;
+let POSICIONES = null;   // solo con unPais: dónde va cada silueta sobre el mapa del mundo (compartido/posiciones-paises.js, lo genera generar-posiciones-paises.mjs)
 const GOTA = { w: 300, h: 300, d: "M150 20C215 20 255 75 255 130C255 195 200 280 150 280C100 280 45 195 45 130C45 75 85 20 150 20Z" };
 const urlBandera = (codigo) => new URL("../imagenes/banderas/" + codigo.toLowerCase() + ".svg", import.meta.url).href;
 
@@ -102,6 +104,7 @@ html.oscura .m-raiz{background:url("${MADERA_OSCURA}") center/cover no-repeat,#1
 .m-pais small{font-size:.72rem;color:#5b6b7c}
 .m-punto{cursor:pointer;outline:none}
 .m-punto:focus-visible circle.m-zona{stroke:#2b3a4a;stroke-width:2}
+.m-punto:focus-visible path{stroke:#2b3a4a}
 /* Lista de países: botón con la bandera de fondo + sus niveles debajo */
 .m-col{display:flex;flex-direction:column;align-items:center;width:100%;padding:4px 2px 24px}
 .m-sec{width:100%;max-width:440px;display:flex;flex-direction:column;align-items:center;margin-bottom:10px}
@@ -491,7 +494,9 @@ export function montarMapa(o) {
   const marcarMundoVisto = () => { try { localStorage.setItem(CLAVE_MUNDO, "1"); } catch (e) {} };
 
   let pendienteContornos = false, contornosFallo = false;
-  if (SOLO_PAISES) import("./contornos-paises.js").then((m) => { CONTORNOS = m.CONTORNOS; if (pendienteContornos && abierto && vista === "pais") pintar(); })
+  const repintarMundo = () => { if (UN_PAIS && abierto && vista === "mundo" && CONTORNOS && POSICIONES) pintar(); };   // el mundo se dibuja en blanco mientras llegan las siluetas; al llegar ambas se repinta
+  if (UN_PAIS) import("./posiciones-paises.js").then((m) => { POSICIONES = m.POSICIONES; repintarMundo(); }).catch((e) => console.warn("mapa-niveles: no se pudo cargar compartido/posiciones-paises.js (¿está en la carpeta compartido/?); el mapa del mundo se ve sin países", e));
+  if (SOLO_PAISES) import("./contornos-paises.js").then((m) => { CONTORNOS = m.CONTORNOS; repintarMundo(); if (pendienteContornos && abierto && vista === "pais") pintar(); })
     .catch((e) => { contornosFallo = true; console.warn("mapa-niveles: no se pudo cargar compartido/contornos-paises.js (¿está en la carpeta compartido/?); se dibuja una gota en lugar del país", e); if (pendienteContornos && abierto && vista === "pais") pintar(); });
 
   const estilo = document.createElement("style");
@@ -784,13 +789,90 @@ export function montarMapa(o) {
     if (ir_a && ir_a.scrollIntoView) ir_a.scrollIntoView({ block: ir_a.tagName === "BUTTON" && ir_a.classList.contains("m-nv") ? "center" : "start" });
   }
 
-  // --- SOLO PAÍSES con unPais · los niveles del país abierto (se llega con el botón «Niveles» de la botella) ---
+  // --- SOLO PAÍSES con unPais · botón «Mapa»: el mundo en blanco; solo se dibuja (con su trazo) cada país ya desbloqueado y al tocarlo se abren sus 20 niveles ---
+  // Las siluetas salen de compartido/contornos-paises.js y su lugar en el mundo de compartido/posiciones-paises.js (se cargan aparte; mientras llegan se ve el mundo en blanco).
+  // Con zoom (rueda, pellizco, arrastrar) se acerca: los países chicos se marcan con un punto y, al acercar, se ven sus nombres.
+  function vistaMundoPaises() {
+    const p = prog();
+    const meta = enfoque != null ? enfoque : p.paisActual;   // el país desde el que se abrió el Mapa: ahí se acerca la vista y a él vuelve «País»
+    enfoque = null;
+    titulo.textContent = "🗺️ Mapa";
+    info.textContent = "💧 " + p.paisesHechos + " de " + NUM_PAISES + " países completados · toca un país para ver sus niveles";
+    boton("País", "◀", "b-cielo", () => ir("pais", meta)).setAttribute("aria-label", "Volver al país");
+    botonContinuar();
+    for (const x of o.botonesExtra || []) boton(x.texto, x.icono || "•", x.clase || "b-azul", x.fn);
+    if (o.alInfo) boton("Info", "ℹ️", "b-azul", o.alInfo);
+
+    const P = proyector(-170, 180, 84, -57, 2, 1);
+    const base = { x: 0, y: 0, w: P.w, h: P.h };
+    const svg = el("svg", { viewBox: "0 0 " + P.w + " " + P.h, role: "group", "aria-label": "Mapa del mundo: " + p.paisesHechos + " de " + NUM_PAISES + " países completados" }, cuerpo);
+    const d = CONTINENTES.map((c) => trazo(c, P)).join("");
+    el("path", { d, fill: SOMBRA, transform: "translate(0 2.5)" }, svg);
+    el("path", { d, fill: "#fff" }, svg);
+    for (const l of LAGOS) el("path", { d: trazo(l, P), fill: "#fff", "pointer-events": "none" }, svg);
+    el("path", { d, fill: "none", stroke: BORDE, "stroke-width": 0.9, "stroke-linejoin": "round", "pointer-events": "none" }, svg);
+
+    const puntos = [], nombres = [];
+    let foco = null;
+    if (CONTORNOS && POSICIONES) PAISES_ORDEN.forEach((codigo, i) => {
+      const bs = basePais(i);
+      if (bs + 1 > p.max) return;   // los países sin desbloquear no se dibujan
+      const pos = POSICIONES[codigo], c = CONTORNOS[codigo];
+      if (!pos || !c) return;
+      const hechos = acotar(p.hecho - bs, 0, NIVELES_POR_ETAPA), completo = hechos >= NIVELES_POR_ETAPA, actual = !completo && i === p.paisActual;
+      const relleno = completo ? "#ffd23f" : actual ? "#ffb257" : VERDE_ARRIBA, linea = completo ? "#a8780b" : actual ? COLOR_ACTUAL : LINEA_TIERRA;
+      const nombre = nombrePais(codigo);
+      const g = el("g", { class: "m-punto" }, svg);
+      el("title", {}, g).textContent = nombre;
+      let cx, cy, tam;
+      if (pos.length === 2) { [cx, cy] = P.p(pos[0], pos[1]); tam = 0; }   // país diminuto sin silueta: solo un punto
+      else {
+        const [x0, y0] = P.p(pos[0], pos[1]), a = 2 * pos[2], dd = 2 * pos[3];   // 2 = unidades del mapa por grado
+        el("path", { d: c.d, transform: "matrix(" + a + " 0 0 " + dd + " " + x0.toFixed(2) + " " + y0.toFixed(2) + ")", fill: relleno, stroke: linea, "stroke-width": 1.6, "stroke-linejoin": "round", "vector-effect": "non-scaling-stroke" }, g);
+        cx = x0 + c.w * a / 2; cy = y0 + c.h * dd / 2; tam = Math.max(c.w * a, c.h * dd);
+      }
+      if (tam < 40) {   // chico para el dedo: un punto visible y una zona de toque más grande (su tamaño en pantalla lo ajusta «actualizar»)
+        const hit = el("circle", { cx, cy, r: 5, fill: "transparent" }, g);
+        const dot = el("circle", { class: "m-zona", cx, cy, r: 3, fill: relleno, stroke: linea, "stroke-width": 1.4, "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, g);
+        puntos.push({ dot, hit, tam });
+      }
+      const t = el("text", { x: cx, y: cy, "text-anchor": "middle", "font-weight": 700, fill: TINTA, "paint-order": "stroke", stroke: "#fff", "stroke-linejoin": "round", "pointer-events": "none" }, svg);
+      t.textContent = nombre;
+      nombres.push({ t, cy, tam });
+      accesible(g, nombre + ": " + hechos + " de " + NIVELES_POR_ETAPA + " niveles" + (completo ? " (completo)" : ""), () => ir("niveles", i));
+      if (i === meta) foco = { cx, cy, tam };
+    });
+
+    const r0 = svg.getBoundingClientRect(), esc0 = Math.min(r0.width / base.w, r0.height / base.h) || 1;   // píxeles de pantalla por unidad del mapa sin zoom
+    const actualizar = (k) => {
+      const u = 1 / (esc0 * k);   // unidades del mapa que equivalen a 1 píxel de pantalla
+      for (const q of puntos) {
+        const ver = q.tam * k * esc0 < 16;   // cuando el país ya se ve grande, su punto sobra
+        q.dot.style.display = ver ? "" : "none";
+        q.dot.setAttribute("r", 4.5 * u);
+        q.hit.setAttribute("r", ver ? 13 * u : 0);
+      }
+      for (const n of nombres) {
+        n.t.style.display = k >= 2 ? "" : "none";   // los nombres aparecen al acercar
+        n.t.setAttribute("font-size", 12 * u);
+        n.t.setAttribute("stroke-width", 3.5 * u);
+        n.t.setAttribute("y", n.cy + 4 * u);
+      }
+    };
+    const zoom = hacerZoomable(svg, base, actualizar);
+    actualizar(1);
+    if (foco) zoom.irA(foco.cx, foco.cy, acotar(250 / Math.max(foco.tam, 10), 2, 8), true);   // se acerca solo al país desde el que se abrió
+  }
+
+  // --- SOLO PAÍSES con unPais · los niveles de un país (se llega con el botón «Niveles» de la botella o tocando un país en el Mapa) ---
   function vistaNivelesPais() {
     const p = prog(), codigo = PAISES_ORDEN[indice], base = basePais(indice);
     const hechos = acotar(p.hecho - base, 0, NIVELES_POR_ETAPA);
     titulo.textContent = nombrePais(codigo);
     info.textContent = hechos + " de " + NIVELES_POR_ETAPA + " niveles completados";
-    boton("País", "◀", "b-cielo", () => ir("pais", indice));
+    const mio = indice;
+    boton("País", "◀", "b-cielo", () => ir("pais", mio));
+    boton("Mapa", "🗺️", "b-cielo", () => { enfoque = mio; ir("mundo"); });   // de vuelta al mundo, acercado a este país
     botonContinuar();
     rejillaNiveles(base);
   }
@@ -802,7 +884,7 @@ export function montarMapa(o) {
     titulo.textContent = UN_PAIS ? "" : nombrePais(codigo);
     info.textContent = UN_PAIS ? "" : "País " + (indice + 1) + " de " + NUM_PAISES + " · " + hechos + " de " + NIVELES_POR_ETAPA + " niveles completados" + (completo ? " · ¡completo! ⭐" : "");
     if (UN_PAIS) {
-      // 🗺️ Mapa = todos los países abiertos con sus niveles en cuadrícula de 5 columnas (desde ahí se abre cualquier país) · 🗂️ niveles de este país
+      // 🗺️ Mapa = el mundo con los países abiertos dibujados (al tocar uno se ven sus 20 niveles) · 🗂️ niveles de este país
       boton("Mapa", "🗺️", "b-cielo", () => { enfoque = indice; ir("mundo"); });
       boton("Niveles", "🗂️", "b-azul", () => ir("niveles", indice));
       for (const x of o.botonesExtra || []) boton(x.texto, x.icono || "•", x.clase || "b-azul", x.fn);
@@ -905,7 +987,7 @@ export function montarMapa(o) {
     acciones.replaceChildren();
     if (vista === "mexico") vistaMexico();
     else if (vista === "estado") vistaEstado();
-    else if (vista === "mundo") (SOLO_PAISES ? vistaLista() : vistaMundo());
+    else if (vista === "mundo") (UN_PAIS ? vistaMundoPaises() : SOLO_PAISES ? vistaLista() : vistaMundo());
     else if (UN_PAIS && vista === "niveles") vistaNivelesPais();
     else (SOLO_PAISES ? vistaBotella() : vistaPais());
     if (aguas.length) arrancar();
