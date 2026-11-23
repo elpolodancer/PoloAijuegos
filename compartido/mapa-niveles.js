@@ -15,6 +15,8 @@
 //   (vista «pais»): la silueta del país (compartido/contornos-paises.js) que se llena de agua, UN POCO con cada nivel pasado, con un chorro que cae mientras sube.
 //   Al llegar a los 20 niveles el país queda lleno y se cambia por su bandera (ahí está el gancho «alPaisCompleto» para el destello dorado, todavía sin hacer).
 //   Banderas: imagenes/banderas/xx.svg (xx = código ISO en minúsculas). mapa.abrir(n, true) abre la botella del país del nivel n para verla subir.
+//   PAÍS BONITO (con unPais, 23 nov 2026): la silueta es tierra verde con franja de playa, manchas de pasto, flores, montañas con nieve, árboles (redondos y pinos, siempre los mismos en cada país) y una banderita en un poste;
+//   nada de eso queda debajo del botón «Continuar». El agua es un poco translúcida (AGUA_TRANSPARENTE) y la banderita queda encima de ella; al completar el país se desvanece y la bandera grande lo cubre.
 //
 // Uso:
 //   import { crearEtapas } from "../compartido/etapas-mapa.js";
@@ -62,6 +64,9 @@ const ASCENSO_SUAVE = false;
 const NS = "http://www.w3.org/2000/svg";
 const AZUL_ATRAS = "#bfe4fb", AZUL_FRENTE = "#8ccdf5", BORDE = "#8fa9c0", SOMBRA = "#e3e9ef", TINTA = "#2b3a4a";
 const COLOR_HECHO = "#1f78c8", COLOR_ACTUAL = "#ff9a1f";
+// País «bonito» (solo con unPais): tierra verde con playa, árboles, montañas y una banderita; el agua la cubre poco a poco y deja ver la tierra a través
+const VERDE_ARRIBA = "#a6e27a", VERDE_ABAJO = "#56b24e", PLAYA = "#f3e2a6", LINEA_TIERRA = "#2f6f3a";
+const AGUA_TRANSPARENTE = { atras: 0.84, frente: 0.7 };   // opacidad del agua dentro del país (1 y 0.8 = como antes, sin dejar ver la tierra)
 
 // Fondo: la misma madera que el resto de los juegos (clara u oscura según el modo; la clase «oscura» la pone compartido/fondo-madera.js en <html>)
 const MADERA_CLARA = new URL("../imagenes/fondomaderaclara.webp", import.meta.url).href;
@@ -244,6 +249,127 @@ function hacerZoomable(svg, base, alZoom) {
   return { irA };
 }
 
+// ---------- País «bonito» (solo con unPais) ----------
+// Números al azar con semilla (el mismo país se ve siempre igual): devuelve una función que da números de 0 a 1.
+function azarDe(texto) {
+  let s = 2166136261;
+  for (let i = 0; i < texto.length; i++) { s ^= texto.charCodeAt(i); s = Math.imul(s, 16777619); }
+  return () => { s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+// Pinta sobre la silueta (ya verde): manchas de pasto, flores, montañas y árboles. «libre(x, y, m)» dice si un punto cae donde va el botón «Continuar» (ahí no se pone nada).
+function pintarTierra(svg, dSil, codigo, w, hh, id, dentro, boton, banderita) {
+  const rnd = azarDe(codigo), lado = Math.max(w, hh);
+  // «tapado»: ahí va el botón «Continuar» o la banderita, así que no se pone nada (m = margen extra)
+  const tapado = (x, y, m = 0) => (Math.abs(x - boton.x) < boton.kx + m && Math.abs(y - boton.y) < boton.ky + m) ||
+    (!!banderita && x > banderita.x - 6 - m && x < banderita.x + banderita.fw + 8 + m && y > banderita.y - banderita.poste - 7 - m && y < banderita.y + 6 + m);
+  const cp = el("clipPath", { id: "ct" + id }, el("defs", {}, svg));
+  el("path", { d: dSil }, cp);
+  const g = el("g", { "pointer-events": "none" }, svg);
+  const suelo = el("g", { "clip-path": "url(#ct" + id + ")" }, g);
+  // manchas de pasto claro y oscuro
+  for (let i = 0; i < 10; i++) {
+    const x = rnd() * w, y = rnd() * hh, rx = lado * (0.07 + rnd() * 0.14), ry = rx * (0.45 + rnd() * 0.5), oscura = i % 3 === 0;
+    el("ellipse", { cx: x.toFixed(1), cy: y.toFixed(1), rx: rx.toFixed(1), ry: ry.toFixed(1), fill: oscura ? "#3e9a45" : "#c9f29a", opacity: oscura ? 0.22 : 0.4, transform: "rotate(" + Math.floor(rnd() * 180) + " " + x.toFixed(1) + " " + y.toFixed(1) + ")" }, suelo);
+  }
+  // flores chiquitas
+  const FLORES = ["#ffffff", "#ffe066", "#ff9ecb", "#ffb347"];
+  for (let i = 0, n = 0; i < 160 && n < 22; i++) {
+    const x = rnd() * w, y = rnd() * hh;
+    if (!dentro(x, y) || tapado(x, y, 6)) continue;
+    el("circle", { cx: x.toFixed(1), cy: y.toFixed(1), r: (0.9 + rnd() * 0.7).toFixed(1), fill: FLORES[Math.floor(rnd() * FLORES.length)] }, suelo);
+    n++;
+  }
+  // montañas (pocas, con nieve arriba)
+  const sM = acotar(lado * 0.055, 9, 17), montes = [];
+  for (let i = 0, n = 0, meta = rnd() < 0.5 ? 3 : 2; i < 220 && n < meta; i++) {
+    const x = rnd() * w, y = rnd() * hh;
+    if (!dentro(x, y) || !dentro(x - sM, y) || !dentro(x + sM, y) || !dentro(x, y - 1.3 * sM) || tapado(x, y - sM * 0.6, sM)) continue;
+    if (montes.some((m) => Math.hypot(m.x - x, m.y - y) < sM * 3.2)) continue;
+    montes.push({ x, y }); n++;
+  }
+  montes.sort((a, b) => a.y - b.y);
+  for (const { x, y } of montes) {
+    const P = (dx, dy) => (x + dx * sM).toFixed(1) + " " + (y + dy * sM).toFixed(1);
+    el("ellipse", { cx: x.toFixed(1), cy: (y + 1).toFixed(1), rx: (sM * 1.1).toFixed(1), ry: (sM * 0.18).toFixed(1), fill: "rgba(0,40,0,.25)" }, g);
+    el("path", { d: "M" + P(-1, 0) + "L" + P(0, -1.3) + "L" + P(1, 0) + "Z", fill: "#8d9180" }, g);
+    el("path", { d: "M" + P(0, -1.3) + "L" + P(1, 0) + "L" + P(0.1, 0) + "Z", fill: "rgba(0,0,0,.2)" }, g);
+    el("path", { d: "M" + P(-0.3, -0.97) + "L" + P(0, -1.3) + "L" + P(0.3, -0.97) + "L" + P(0.13, -0.86) + "L" + P(0, -0.97) + "L" + P(-0.14, -0.85) + "Z", fill: "#fff" }, g);
+  }
+  // árboles: redondos y pinos, sin salirse de la costa, sin amontonarse y sin quedar debajo del botón «Continuar»
+  const r = acotar(lado * 0.022, 4.5, 8), arboles = [];
+  for (let i = 0; i < 1100 && arboles.length < 52; i++) {
+    const x = rnd() * w, y = rnd() * hh, pino = rnd() < 0.4;
+    const alto = pino ? 3.3 : 2.3;
+    if (!dentro(x, y) || !dentro(x - r, y - r) || !dentro(x + r, y - r) || !dentro(x, y - alto * r)) continue;
+    if (tapado(x, y - r, r) || montes.some((m) => Math.hypot(m.x - x, m.y - y) < sM * 1.1)) continue;
+    if (arboles.some((a) => Math.hypot(a.x - x, (a.y - y) * 1.3) < r * 2.4)) continue;
+    arboles.push({ x, y, pino });
+  }
+  arboles.sort((a, b) => a.y - b.y);   // los de más abajo tapan a los de más arriba
+  for (const { x, y, pino } of arboles) {
+    const X = (dx) => (x + dx * r).toFixed(1), Y = (dy) => (y + dy * r).toFixed(1);
+    el("ellipse", { cx: X(0.1), cy: Y(0.15), rx: (r * 0.9).toFixed(1), ry: (r * 0.3).toFixed(1), fill: "rgba(0,50,0,.28)" }, g);
+    el("rect", { x: X(-0.17), y: Y(-0.95), width: (r * 0.34).toFixed(1), height: (r * 1.05).toFixed(1), fill: "#7a4a24" }, g);
+    if (pino) {
+      el("path", { d: "M" + X(-0.9) + " " + Y(-0.6) + "L" + X(0) + " " + Y(-2) + "L" + X(0.9) + " " + Y(-0.6) + "Z", fill: "#25754a" }, g);
+      el("path", { d: "M" + X(-0.72) + " " + Y(-1.3) + "L" + X(0) + " " + Y(-2.7) + "L" + X(0.72) + " " + Y(-1.3) + "Z", fill: "#2c8a55" }, g);
+      el("path", { d: "M" + X(-0.52) + " " + Y(-2.05) + "L" + X(0) + " " + Y(-3.3) + "L" + X(0.52) + " " + Y(-2.05) + "Z", fill: "#35a264" }, g);
+    } else {
+      el("circle", { cx: X(-0.55), cy: Y(-1.15), r: (r * 0.72).toFixed(1), fill: "#2f8f3c" }, g);
+      el("circle", { cx: X(0.55), cy: Y(-1.15), r: (r * 0.72).toFixed(1), fill: "#2f8f3c" }, g);
+      el("circle", { cx: X(0), cy: Y(-1.5), r: (r * 0.95).toFixed(1), fill: "#3aa347" }, g);
+      el("circle", { cx: X(-0.3), cy: Y(-1.85), r: (r * 0.38).toFixed(1), fill: "#74d663", opacity: 0.85 }, g);
+    }
+  }
+}
+// Busca dónde plantar la banderita: dentro del país, lejos del botón «Continuar», lo más cerca posible del centro (y mejor arriba que abajo). Devuelve { x, y, fw, fh, poste } o null.
+function ubicarBanderita(w, hh, dentro, boton) {
+  const lado = Math.max(w, hh);
+  for (const f of [1, 0.78, 0.6]) {
+    const fw = acotar(lado * 0.16, 30, 52) * f, fh = fw * 0.66, poste = fh * 1.55;
+    let mejor = null, ms = Infinity;
+    for (let i = 1; i < 30; i++) for (let j = 1; j < 30; j++) {
+      const x = w * i / 30, y = hh * j / 30;                  // pie del poste
+      const x0 = x - 3, x1 = x + fw + 3, y0 = y - poste - 3, y1 = y + 4;   // caja que ocupan poste y bandera
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      if (Math.abs(cx - boton.x) < boton.kx + (x1 - x0) / 2 && Math.abs(cy - boton.y) < boton.ky + (y1 - y0) / 2) continue;
+      if (![[x0, y0], [x1, y0], [x0, y1], [x1, y1], [cx, y0], [cx, y1], [x0, cy], [x1, cy]].every(([a, b]) => dentro(a, b))) continue;
+      const sc = Math.hypot(cx - boton.x, cy - boton.y) + (cy > boton.y ? 0.35 * (cy - boton.y) : 0);
+      if (sc < ms) { ms = sc; mejor = { x, y, fw, fh, poste }; }
+    }
+    if (mejor) return mejor;
+  }
+  // país muy angosto (Chile, Japón…): basta con que el poste quede en tierra; la bandera puede asomar sobre el mar
+  const fw = acotar(lado * 0.16, 30, 52) * 0.75, fh = fw * 0.66, poste = fh * 1.55;
+  let mejor = null, ms = Infinity;
+  for (let i = 1; i < 40; i++) for (let j = 1; j < 40; j++) {
+    const x = w * i / 40, y = hh * j / 40;
+    const x0 = x - 3, x1 = x + fw + 3, y0 = y - poste - 3, y1 = y + 4, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    if (Math.abs(cx - boton.x) < boton.kx + (x1 - x0) / 2 && Math.abs(cy - boton.y) < boton.ky + (y1 - y0) / 2) continue;
+    if (![[x, y], [x, y - poste * 0.5], [x - 3, y]].every(([a, b]) => dentro(a, b))) continue;
+    const sc = Math.hypot(cx - boton.x, cy - boton.y) + (cy > boton.y ? 0.35 * (cy - boton.y) : 0);
+    if (sc < ms) { ms = sc; mejor = { x, y, fw, fh, poste }; }
+  }
+  return mejor;
+}
+// Poste de madera con la bandera del país (se mece un poquito; quieta con «reducir movimiento»)
+function dibujarBanderita(svg, codigo, p, id, url) {
+  const g = el("g", { transform: "translate(" + p.x.toFixed(1) + " " + p.y.toFixed(1) + ")", "pointer-events": "none" }, svg);
+  el("ellipse", { cx: 0, cy: 1, rx: 6, ry: 2.2, fill: "rgba(0,50,0,.35)" }, g);
+  el("path", { d: "M0 0L0 " + (-p.poste).toFixed(1), fill: "none", stroke: "#6b4423", "stroke-width": 2.4, "stroke-linecap": "round" }, g);
+  const alto = el("g", { transform: "translate(0 " + (-p.poste).toFixed(1) + ")" }, g);
+  const onda = el("g", {}, alto);
+  const cp = el("clipPath", { id: "cf" + id }, el("defs", {}, onda));
+  const R = { x: 1.5, y: 1, width: p.fw.toFixed(1), height: p.fh.toFixed(1), rx: 2.5 };
+  el("rect", R, cp);
+  el("rect", { ...R, fill: "#e8e8e8" }, onda);
+  el("image", { href: url, x: 1.5, y: 1, width: p.fw.toFixed(1), height: p.fh.toFixed(1), preserveAspectRatio: "xMidYMid slice", "clip-path": "url(#cf" + id + ")" }, onda);
+  el("rect", { ...R, fill: "none", stroke: "#fff", "stroke-width": 1.6 }, onda);
+  el("circle", { cx: 0, cy: -1, r: 2.5, fill: "#ffc61f", stroke: "#b8860b", "stroke-width": 0.8 }, alto);   // bolita dorada en la punta del poste
+  if (!quieto() && typeof onda.animate === "function") onda.animate([{ transform: "skewY(-3deg)" }, { transform: "skewY(3deg)" }], { duration: 1700, direction: "alternate", iterations: Infinity, easing: "ease-in-out" });
+  return g;
+}
+
 // ---------- Agua: dos capas de olas que se mueven, recortadas con la silueta ----------
 // caja = { x0, x1, yBase, yTope, fondo, amp }: yBase = parte más baja de la silueta, yTope = la más alta, fondo = hasta dónde se pinta
 // op (opcional, para la «botella» de un país):
@@ -256,8 +382,8 @@ function crearAgua(svg, id, dSilueta, caja, objetivo, desde, op = {}) {
   const cp = el("clipPath", { id }, el("defs", {}, svg));
   el("path", { d: dSilueta }, cp);
   const g = el("g", { "clip-path": "url(#" + id + ")", "pointer-events": "none" }, svg);
-  const atras = el("path", { fill: AZUL_ATRAS }, g);
-  const frente = el("path", { fill: AZUL_FRENTE, opacity: 0.8 }, g);
+  const atras = el("path", { fill: AZUL_ATRAS, opacity: op.opAtras == null ? 1 : op.opAtras }, g);
+  const frente = el("path", { fill: AZUL_FRENTE, opacity: op.opFrente == null ? 0.8 : op.opFrente }, g);
   let cAlto, cBajo, bAlto, bBajo, salpico, jarra;   // chorro: la parte de fuera de la silueta (cAlto) y la de dentro, recortada (cBajo); brillos en movimiento y salpicadura
   if (ch) {
     cAlto = el("path", { fill: AZUL_FRENTE, "pointer-events": "none" }, svg);
@@ -694,9 +820,37 @@ export function montarMapa(o) {
     const vb = { x: -15, y: Math.floor(yBoca - 26 * escJarra - 4), w: w + 30, h: 0 };   // arriba queda espacio para la jarra inclinada y el chorro
     vb.h = hh + 22 - vb.y;
     const svg = el("svg", { viewBox: vb.x + " " + vb.y + " " + vb.w + " " + vb.h, class: "m-botella", role: "img", "aria-label": nombrePais(codigo) + ": " + hechos + " de " + NIVELES_POR_ETAPA + " niveles completados" }, cuerpo);
-    el("path", { d: c.d, fill: SOMBRA, transform: "translate(0 5)" }, svg);
-    const sil = el("path", { d: c.d, fill: "#fff" }, svg);
+    if (UN_PAIS) {   // tierra verde con degradado, rodeada de una franja de playa
+      const gr = el("linearGradient", { id: "tierra" + id, x1: 0, y1: 0, x2: 0, y2: 1 }, el("defs", {}, svg));
+      el("stop", { offset: 0, "stop-color": VERDE_ARRIBA }, gr);
+      el("stop", { offset: 1, "stop-color": VERDE_ABAJO }, gr);
+      el("path", { d: c.d, fill: "rgba(0,40,0,.22)", transform: "translate(0 5)" }, svg);
+      el("path", { d: c.d, fill: PLAYA, stroke: PLAYA, "stroke-width": 9, "stroke-linejoin": "round", "pointer-events": "none" }, svg);
+    } else el("path", { d: c.d, fill: SOMBRA, transform: "translate(0 5)" }, svg);
+    const sil = el("path", { d: c.d, fill: UN_PAIS ? "url(#tierra" + id + ")" : "#fff" }, svg);
     botella = { svg, sil };
+    // UN_PAIS: dónde quedará el botón «Continuar» (en unidades del dibujo) para no poner árboles ni la banderita debajo
+    let spotBandera = null, miniBandera = null;
+    if (UN_PAIS) {
+      const dentro = (x, y) => { try { return sil.isPointInFill(new DOMPoint(x, y)); } catch (e) { return false; } };
+      let cx = w / 2, cy = hh / 2;
+      try {
+        const bb = sil.getBBox();
+        cx = bb.x + bb.width / 2; cy = bb.y + bb.height / 2;
+        if (!dentro(cx, cy)) {   // la misma búsqueda que centroDelPais: el punto de adentro más cercano al centro
+          let md = Infinity, mejor = null;
+          for (let i = 0; i <= 40; i++) for (let j = 0; j <= 40; j++) {
+            const x = bb.x + bb.width * i / 40, y = bb.y + bb.height * j / 40;
+            if (dentro(x, y)) { const dd = (x - cx) ** 2 + (y - cy) ** 2; if (dd < md) { md = dd; mejor = [x, y]; } }
+          }
+          if (mejor) [cx, cy] = mejor;
+        }
+      } catch (e) {}
+      const m = svg.getScreenCTM && svg.getScreenCTM(), esc = m && m.a > 0.05 ? m.a : 1;   // píxeles por unidad del dibujo
+      const boton = { x: cx, y: cy, kx: 112 / esc, ky: 46 / esc };   // media caja del botón con holgura (≈ 90 × 36 px por 1,25)
+      spotBandera = ubicarBanderita(w, hh, dentro, boton);
+      pintarTierra(svg, c.d, codigo, w, hh, id, dentro, boton, spotBandera);
+    }
     const objetivo = acotar(hechos / NIVELES_POR_ETAPA, 0, 1);
     const desde = memoriaAgua("pais" + indice, objetivo);   // dónde estaba el agua la última vez: de ahí sube
 
@@ -718,18 +872,21 @@ export function montarMapa(o) {
         }
       } catch (e) {}
       const agua = crearAgua(svg, "agua" + id, c.d, { x0: -15, x1: w + 15, yBase: hh, yTope: 0, fondo: hh + 40, amp: acotar(lado * 0.016, 2.5, 5) }, objetivo, desde, {
-        vel: 1.1, frec: 2.4, paso: 3.5,
+        vel: 1.1, frec: 2.4, paso: 3.5, opAtras: UN_PAIS ? AGUA_TRANSPARENTE.atras : 1, opFrente: UN_PAIS ? AGUA_TRANSPARENTE.frente : 0.8,
         chorro: { x: ent.x, yTop: yBoca, yEntrada: ent.y, ancho: anchoCh, escala: escJarra },
         alLlegar: objetivo >= 1 ? () => {
           // ¡País lleno! AQUÍ va la animación del destello dorado (pendiente). Por ahora solo se cambia el agua por la bandera.
           if (o.alPaisCompleto) o.alPaisCompleto({ codigo, indice, svg, d: c.d, w, h: hh });
           if (bandera) { bandera.style.transition = "opacity 1.2s ease"; bandera.style.opacity = 1; }
+          if (miniBandera) { miniBandera.style.transition = "opacity .8s ease"; miniBandera.style.opacity = 0; }
           setTimeout(() => { agua.quitar(); aguas = aguas.filter((a) => a !== agua); }, 1400);   // ya no hace falta la botella de este país
         } : null,
       });
       aguas.push(agua);
     }
-    el("path", { d: c.d, fill: "none", stroke: UN_PAIS ? TINTA : BORDE, "stroke-width": UN_PAIS ? 3.5 : 2, "stroke-linejoin": "round", "pointer-events": "none" }, svg);   // con unPais, trazo más marcado que rodea al país
+    // la banderita va encima del agua (siempre se ve); si el país ya estaba completo, no hace falta: la bandera grande lo cubre
+    if (spotBandera && !(objetivo >= 1 && desde >= 1)) miniBandera = dibujarBanderita(svg, codigo, spotBandera, id, urlBandera(codigo));
+    el("path", { d: c.d, fill: "none", stroke: UN_PAIS ? LINEA_TIERRA : BORDE, "stroke-width": UN_PAIS ? 2.6 : 2, "stroke-linejoin": "round", "pointer-events": "none" }, svg);   // con unPais, línea verde oscura fina en la orilla de la tierra
     // las siluetas se cargan aparte: al llegar, se vuelve a dibujar la botella (si no hay una animación en curso)
     if (!CONTORNOS) pendienteContornos = true;
     if (UN_PAIS) {
