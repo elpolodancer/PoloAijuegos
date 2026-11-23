@@ -36,7 +36,7 @@
 //     alCambiarVista: (esPrincipal) => { ... } // avisa de cada cambio de vista (el juego vuelve a rotular el ☰: «Atrás» mientras el mapa está abierto)
 //     unPais: true,                            // SOLO con crearEtapas({ soloPaises: true }): NO hay lista ni mundo; la vista principal es la botella del país donde va el jugador
 //                                              //   (solo su contorno con trazo), con ◀ ▶ (países abiertos), 🗂️ Niveles (los niveles del país) y Continuar. Sin esta opción el mapa solo de países sigue como siempre.
-//   (con unPais) mapa.centroPais() = punto de la pantalla dentro del país abierto · mapa.parpadear() = el país destella un instante (lo usa la celebración de «deslizante»)
+//   (con unPais) mapa.centroPais() = punto de la pantalla dentro del país abierto · mapa.parpadear(k) = el país hace «pop» (se hincha, destella y rebota; k = 0, 1, 2… lo hace más fuerte) · mapa.retenerContinuar(true/false) = oculta o muestra el botón «Continuar» del centro (lo usa la celebración de «deslizante»)
 //   });
 //   mapa.abrir();                // vista principal
 //   mapa.abrir(n);               // abre la lista de niveles de la etapa del nivel n
@@ -114,6 +114,13 @@ html.oscura .m-raiz{background:url("${MADERA_OSCURA}") center/cover no-repeat,#1
 .m-pbtn.m-hecho .m-barra i{background:#ffd23f}
 .m-pbtn.m-actual{border-color:#ff9a1f}
 .m-cuerpo>svg.m-botella{cursor:default;touch-action:auto}
+.m-cuerpo.m-uno{position:relative}
+.m-centro.b3d{--t:46px;position:absolute;z-index:2;margin:0;font-size:16px}
+.m-centro.m-dos{height:auto;min-height:54px;flex-direction:column;gap:2px;padding:6px 20px;line-height:1.1}   /* «Continuar» en una línea y el nivel en la de abajo */
+.m-centro.m-dos .m-l2{font-size:13px;font-weight:700;opacity:.95}
+.m-titulo:empty{display:none}
+.m-pais-nombre{flex:none;margin:0 0 2px;font-size:clamp(1.9rem,6vw,3rem);font-weight:900;line-height:1.1;text-align:center;color:var(--txt-fondo,#2b3a4a);text-shadow:var(--sombra-txt,0 2px 0 rgba(255,240,210,.6))}
+.m-pais-niveles{flex:none;margin:14px 0 0;font-size:1rem;font-weight:700;text-align:center;color:var(--txt-fondo-suave,#5b6b7c)}   /* unPais: el botón «Continuar» va dentro del país, en su centro (se coloca con left/top desde ubicarCentro) */
 .m-pulso{transform-box:fill-box;transform-origin:center;animation:m-pulso 1.7s ease-out infinite}
 @keyframes m-pulso{from{transform:scale(1);opacity:.9}to{transform:scale(2.6);opacity:0}}
 .m-nuevo,.m-nv.activo{animation:m-latido .6s ease-in-out infinite alternate}
@@ -240,7 +247,8 @@ function hacerZoomable(svg, base, alZoom) {
 // caja = { x0, x1, yBase, yTope, fondo, amp }: yBase = parte más baja de la silueta, yTope = la más alta, fondo = hasta dónde se pinta
 // op (opcional, para la «botella» de un país):
 //   vel      qué tan rápido sube (por defecto 1.8)         frec   multiplica la frecuencia de las olas (siluetas chicas: 2.2)     paso   separación de los puntos de la ola
-//   chorro   { x, yTop, yEntrada, ancho }  un chorro de agua que cae desde yTop hasta la superficie MIENTRAS el agua sube (yEntrada = donde toca la silueta)
+//   chorro   { x, yTop, yEntrada, ancho, escala }  una jarra se inclina arriba y su chorro cae desde yTop (la boca de la jarra) hasta la superficie MIENTRAS el agua sube (yEntrada = donde toca la silueta).
+//            Mientras cae, las olas se agitan mucho (hasta ~4,5 veces su tamaño normal) y se calman solas al terminar de llenar.
 //   alLlegar () => {}  se llama una vez cuando el agua termina de subir hasta «objetivo» (si es que tuvo que subir)
 function crearAgua(svg, id, dSilueta, caja, objetivo, desde, op = {}) {
   const A = caja.amp, VEL = op.vel || 1.8, FR = op.frec || 1, ch = op.chorro;
@@ -249,23 +257,29 @@ function crearAgua(svg, id, dSilueta, caja, objetivo, desde, op = {}) {
   const g = el("g", { "clip-path": "url(#" + id + ")", "pointer-events": "none" }, svg);
   const atras = el("path", { fill: AZUL_ATRAS }, g);
   const frente = el("path", { fill: AZUL_FRENTE, opacity: 0.8 }, g);
-  let cAlto, cBajo, bAlto, bBajo, salpico;   // chorro: la parte de fuera de la silueta (cAlto) y la de dentro, recortada (cBajo); brillos en movimiento y salpicadura
+  let cAlto, cBajo, bAlto, bBajo, salpico, jarra;   // chorro: la parte de fuera de la silueta (cAlto) y la de dentro, recortada (cBajo); brillos en movimiento y salpicadura
   if (ch) {
     cAlto = el("path", { fill: AZUL_FRENTE, "pointer-events": "none" }, svg);
     bAlto = el("path", { fill: "none", stroke: "#fff", "stroke-opacity": 0.65, "stroke-linecap": "round", "pointer-events": "none" }, svg);
     cBajo = el("path", { fill: AZUL_FRENTE }, g);
     bBajo = el("path", { fill: "none", stroke: "#fff", "stroke-opacity": 0.65, "stroke-linecap": "round" }, g);
     salpico = el("ellipse", { fill: "none", stroke: "#fff", "stroke-opacity": 0.8 }, g);
+    // La jarra (dibujada en vectores, con la punta de su pico en el origen para poder girarla sobre ese punto)
+    jarra = el("g", { "pointer-events": "none", opacity: 0 }, svg);
+    el("path", { d: "M0 0L7 2L26 2Q28 2 28 5L28 22Q28 27 23 27L9 27Q4 27 4 22L4 8Z", fill: "#cfe9ff", stroke: TINTA, "stroke-width": 1.6, "stroke-linejoin": "round" }, jarra);
+    el("path", { d: "M28 8Q38 8 38 16Q38 23 28 22", fill: "none", stroke: TINTA, "stroke-width": 2.2, "stroke-linecap": "round" }, jarra);
+    el("path", { d: "M8 12L8 21", fill: "none", stroke: "#fff", "stroke-width": 1.8, "stroke-linecap": "round", "stroke-opacity": 0.9 }, jarra);
   }
   // con f = 0 las olas quedan por debajo de la silueta (no se ve agua); con f = 1 la cubren por completo
   const y0 = caja.yBase + 2.5 * A, y1 = caja.yTope - 2.5 * A;
   const paso = op.paso || Math.max(6, (caja.x1 - caja.x0) / 90);
-  let f = desde, espera = 0.4, chor = 0, llegado = Math.abs(objetivo - desde) < 0.0008;
-  const superficie = (x, yN, turb, t) => yN + A * turb * (0.6 * Math.sin(x * 0.021 * FR + t * 1.3) + 0.4 * Math.sin(x * 0.047 * FR - t * 0.9));
+  let f = desde, espera = ch ? 1 : 0.4, chor = 0, jv = 0, ag = 0, reloj = 0, llegado = Math.abs(objetivo - desde) < 0.0008;
+  // ag = agitación (0 a 1) mientras cae el agua: las olas crecen hasta ~4,5 veces y se les suma un oleaje rápido y corto
+  const superficie = (x, yN, turb, t) => yN + A * turb * (0.6 * Math.sin(x * 0.021 * FR + t * 1.3) + 0.4 * Math.sin(x * 0.047 * FR - t * 0.9)) + A * ag * 0.9 * Math.sin(x * 0.11 * FR + t * 6.5);
 
   function pintar(t) {
     const yN = y0 + (y1 - y0) * f;
-    const turb = 1 + 0.3 * Math.sin(t * 0.5); // el oleaje «respira»: a ratos más agitado, a ratos más calmo
+    const turb = (1 + 0.3 * Math.sin(t * 0.5)) * (1 + 3.5 * ag); // el oleaje «respira»; y se agita muy fuerte mientras cae el agua
     let da = "M" + caja.x0 + " " + caja.fondo, df = da;
     for (let x = caja.x0; x <= caja.x1 + paso; x += paso) {
       const ya = superficie(x, yN, turb, t);
@@ -276,7 +290,14 @@ function crearAgua(svg, id, dSilueta, caja, objetivo, desde, op = {}) {
     const cierre = "L" + (caja.x1 + paso).toFixed(1) + " " + caja.fondo + "Z";
     atras.setAttribute("d", da + cierre);
     frente.setAttribute("d", df + cierre);
-    if (ch) pintarChorro(t, yN, turb);
+    if (ch) { pintarJarra(t); pintarChorro(t, yN, turb); }
+  }
+  function pintarJarra(t) {
+    if (jv < 0.01) { jarra.setAttribute("opacity", 0); return; }
+    const s = ch.escala || 1, x = ch.x + Math.sin(t * 3.1) * ch.ancho * 0.12;
+    const ang = -(8 + 42 * chor) + Math.sin(t * 13) * 1.6 * chor;   // se inclina al verter y tiembla un poco
+    jarra.setAttribute("opacity", Math.min(1, jv * 1.5).toFixed(2));
+    jarra.setAttribute("transform", "translate(" + x.toFixed(1) + " " + (ch.yTop - (1 - jv) * 16 * s).toFixed(1) + ") rotate(" + ang.toFixed(1) + ") scale(" + s.toFixed(2) + ")");
   }
   function pintarChorro(t, yN, turb) {
     if (chor < 0.01) { for (const n of [cAlto, cBajo, bAlto, bBajo]) n.setAttribute("d", ""); salpico.setAttribute("rx", 0); return; }
@@ -292,24 +313,31 @@ function crearAgua(svg, id, dSilueta, caja, objetivo, desde, op = {}) {
     bBajo.setAttribute("d", linea(Math.max(ch.yTop, ch.yEntrada), yFin));
     const r = ch.ancho * (1.3 + 0.6 * Math.sin(t * 9));   // salpicadura donde cae el chorro
     salpico.setAttribute("cx", x.toFixed(1)); salpico.setAttribute("cy", yFin.toFixed(1));
-    salpico.setAttribute("rx", r.toFixed(1)); salpico.setAttribute("ry", (r * 0.3).toFixed(1));
+    salpico.setAttribute("rx", (r * (1 + 1.2 * ag)).toFixed(1)); salpico.setAttribute("ry", (r * 0.3 * (1 + 1.2 * ag)).toFixed(1));
     salpico.setAttribute("stroke-width", (ch.ancho * 0.25).toFixed(1)); salpico.setAttribute("opacity", chor.toFixed(2));
   }
   const avisarLlegada = () => { if (!llegado) { llegado = true; if (op.alLlegar) op.alLlegar(); } };
   return {
     pintar,
-    quieto() { f = objetivo; chor = 0; pintar(0); avisarLlegada(); },
+    quieto() { f = objetivo; chor = 0; jv = 0; ag = 0; pintar(0); avisarLlegada(); },
     tick(dt, t) {
       if (espera > 0) espera -= dt;
       else {
         f += (objetivo - f) * (1 - Math.exp(-dt * VEL)); // sube suave y frena al llegar
         if (Math.abs(objetivo - f) < 0.0008) f = objetivo;
       }
-      if (ch) chor += ((objetivo - f > 0.004 ? 1 : 0) - chor) * (1 - Math.exp(-dt * 6));   // el chorro aparece al empezar y se apaga al llegar
+      if (ch) {
+        // primero entra la jarra (jv), 0,45 s después se inclina y sale el chorro (chor), y el agua empieza a subir a 1 s
+        const quiere = objetivo - f > 0.004 || espera > 0;
+        reloj = quiere ? reloj + dt : 0;
+        jv += ((quiere || chor > 0.05 ? 1 : 0) - jv) * (1 - Math.exp(-dt * 8));
+        chor += ((quiere && reloj > 0.45 && objetivo - f > 0.004 ? 1 : 0) - chor) * (1 - Math.exp(-dt * 6));   // el chorro aparece al verter y se apaga al llegar
+        ag += (chor - ag) * (1 - Math.exp(-dt * 5));   // la agitación sigue al chorro: sube rápido y se calma sola
+      }
       pintar(t);
-      if (f === objetivo && chor < 0.05) avisarLlegada();
+      if (f === objetivo && chor < 0.05 && jv < 0.05) avisarLlegada();
     },
-    quitar() { g.remove(); if (ch) { cAlto.remove(); bAlto.remove(); } },
+    quitar() { g.remove(); if (ch) { cAlto.remove(); bAlto.remove(); jarra.remove(); } },
   };
 }
 
@@ -335,8 +363,9 @@ export function montarMapa(o) {
   const leerMundoVisto = () => { try { return localStorage.getItem(CLAVE_MUNDO) === "1"; } catch (e) { return false; } };
   const marcarMundoVisto = () => { try { localStorage.setItem(CLAVE_MUNDO, "1"); } catch (e) {} };
 
-  let pendienteContornos = false;
-  if (SOLO_PAISES) import("./contornos-paises.js").then((m) => { CONTORNOS = m.CONTORNOS; if (pendienteContornos && abierto && vista === "pais") pintar(); }).catch(() => {});
+  let pendienteContornos = false, contornosFallo = false;
+  if (SOLO_PAISES) import("./contornos-paises.js").then((m) => { CONTORNOS = m.CONTORNOS; if (pendienteContornos && abierto && vista === "pais") pintar(); })
+    .catch((e) => { contornosFallo = true; console.warn("mapa-niveles: no se pudo cargar compartido/contornos-paises.js (¿está en la carpeta compartido/?); se dibuja una gota en lugar del país", e); if (pendienteContornos && abierto && vista === "pais") pintar(); });
 
   const estilo = document.createElement("style");
   estilo.textContent = ESTILO;
@@ -395,6 +424,50 @@ export function montarMapa(o) {
     const p = prog(), n = o.nivelContinuar ? o.nivelContinuar() : p.max;
     boton("Continuar · nivel " + n, "▶", "b-verde", () => o.jugarNivel(n));
   }
+  // unPais: punto de la pantalla (px) dentro del país abierto, lo más cerca posible del centro de su caja: { x, y } o null
+  function centroDelPais() {
+    const b = botella;
+    if (!b || !b.svg.isConnected) return null;
+    try {
+      const bb = b.sil.getBBox(), dentro = (x, y) => b.sil.isPointInFill(new DOMPoint(x, y));
+      let cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;
+      if (!dentro(cx, cy)) {   // país con forma rara: el punto de adentro más cercano al centro
+        let mejor = null, md = Infinity;
+        for (let i = 0; i <= 40; i++) for (let j = 0; j <= 40; j++) {
+          const x = bb.x + bb.width * i / 40, y = bb.y + bb.height * j / 40;
+          if (dentro(x, y)) { const dd = (x - cx) ** 2 + (y - cy) ** 2; if (dd < md) { md = dd; mejor = [x, y]; } }
+        }
+        if (mejor) [cx, cy] = mejor;
+      }
+      const pt = new DOMPoint(cx, cy).matrixTransform(b.svg.getScreenCTM());
+      return { x: pt.x, y: pt.y };
+    } catch (e) { return null; }
+  }
+
+  // unPais: «Continuar» dentro del país, en su centro. Se coloca en píxeles sobre el cuerpo del mapa (que es position:relative) y se recoloca al cambiar el tamaño de la ventana.
+  let btnCentro = null;
+  let retener = false;   // true = el botón «Continuar» del centro se queda oculto (mientras dura la celebración de «deslizante»)
+  function ubicarCentro() {
+    if (!btnCentro || !btnCentro.isConnected) return;
+    const c = centroDelPais();
+    if (!c) return;
+    const r = cuerpo.getBoundingClientRect();
+    btnCentro.style.left = Math.round(c.x - r.left + cuerpo.scrollLeft - btnCentro.offsetWidth / 2) + "px";
+    btnCentro.style.top = Math.round(c.y - r.top + cuerpo.scrollTop - btnCentro.offsetHeight / 2) + "px";
+  }
+  function botonContinuarCentro() {
+    const p = prog(), n = o.nivelContinuar ? o.nivelContinuar() : p.max;
+    const b = h("button", "b3d txt b-verde m-centro");
+    b.type = "button";
+    b.classList.add("m-dos");
+    b.append(h("span", "m-l1", "▶ Continuar"), h("span", "m-l2", "Nivel " + n));
+    b.addEventListener("click", () => o.jugarNivel(n));
+    b.style.visibility = "hidden";   // hasta tener su sitio (se ve en el siguiente cuadro)
+    cuerpo.appendChild(b);
+    btnCentro = b;
+    requestAnimationFrame(() => { ubicarCentro(); if (!retener) b.style.visibility = ""; });
+  }
+  addEventListener("resize", () => { if (abierto) ubicarCentro(); });
   const ir = (v, i = 0) => { vista = v; indice = i; pintar(); };
 
   // Lista de los niveles de una etapa. base = nivel anterior al primero de la etapa.
@@ -542,8 +615,11 @@ export function montarMapa(o) {
   let vigia = null;        // carga cada bandera cuando se acerca a la pantalla
   function vistaLista() {
     const p = prog();
-    titulo.textContent = "🌍 Niveles";
-    info.textContent = "💧 " + p.paisesHechos + " de " + NUM_PAISES + " países completados · toca un país para ver su mapa" + (o.avisoPrincipal && o.avisoPrincipal() ? " · " + o.avisoPrincipal() : "");
+    titulo.textContent = UN_PAIS ? "🗺️ Mapa" : "🌍 Niveles";
+    if (UN_PAIS) {
+      boton("País", "◀", "b-cielo", () => ir("pais", indice)).setAttribute("aria-label", "Volver al país");
+      info.textContent = "Toca un país para abrirlo";
+    } else info.textContent = "💧 " + p.paisesHechos + " de " + NUM_PAISES + " países completados · toca un país para ver su mapa" + (o.avisoPrincipal && o.avisoPrincipal() ? " · " + o.avisoPrincipal() : "");
     botonContinuar();
     for (const x of o.botonesExtra || []) boton(x.texto, x.icono || "•", x.clase || "b-azul", x.fn);
     if (o.alInfo) boton("Info", "ℹ️", "b-azul", o.alInfo);
@@ -586,7 +662,7 @@ export function montarMapa(o) {
     const hechos = acotar(p.hecho - base, 0, NIVELES_POR_ETAPA);
     titulo.textContent = nombrePais(codigo);
     info.textContent = hechos + " de " + NIVELES_POR_ETAPA + " niveles completados";
-    boton("Mapa", "◀", "b-cielo", () => ir("pais", indice));
+    boton("País", "◀", "b-cielo", () => ir("pais", indice));
     botonContinuar();
     rejillaNiveles(base);
   }
@@ -595,14 +671,12 @@ export function montarMapa(o) {
   function vistaBotella() {
     const p = prog(), codigo = PAISES_ORDEN[indice], base = basePais(indice);
     const hechos = acotar(p.hecho - base, 0, NIVELES_POR_ETAPA), completo = hechos >= NIVELES_POR_ETAPA;
-    titulo.textContent = nombrePais(codigo);
-    info.textContent = "País " + (indice + 1) + " de " + NUM_PAISES + " · " + hechos + " de " + NIVELES_POR_ETAPA + " niveles completados" + (completo ? " · ¡completo! ⭐" : "");
+    titulo.textContent = UN_PAIS ? "" : nombrePais(codigo);
+    info.textContent = UN_PAIS ? "" : "País " + (indice + 1) + " de " + NUM_PAISES + " · " + hechos + " de " + NIVELES_POR_ETAPA + " niveles completados" + (completo ? " · ¡completo! ⭐" : "");
     if (UN_PAIS) {
-      // Navegación país por país (todos los anteriores al actual están abiertos): ◀ anterior · ▶ siguiente · 🗂️ niveles de este país · Continuar
-      if (indice > 0) boton("", "◀", "b-cielo", () => ir("pais", indice - 1)).setAttribute("aria-label", "País anterior");
-      if (indice + 1 < NUM_PAISES && basePais(indice + 1) + 1 <= p.max) boton("", "▶", "b-cielo", () => ir("pais", indice + 1)).setAttribute("aria-label", "País siguiente");
+      // 🗺️ Mapa = todos los países abiertos con sus niveles en cuadrícula de 5 columnas (desde ahí se abre cualquier país) · 🗂️ niveles de este país
+      boton("Mapa", "🗺️", "b-cielo", () => { enfoque = indice; ir("mundo"); });
       boton("Niveles", "🗂️", "b-azul", () => ir("niveles", indice));
-      botonContinuar();
       for (const x of o.botonesExtra || []) boton(x.texto, x.icono || "•", x.clase || "b-azul", x.fn);
       if (o.alInfo) boton("Info", "ℹ️", "b-azul", o.alInfo);
     } else {
@@ -610,8 +684,13 @@ export function montarMapa(o) {
       botonContinuar();
     }
 
+    // unPais: mientras se descarga contornos-paises.js no se dibuja nada (así no se ve la gota de respaldo, que parece un círculo); al llegar se repinta solo
+    if (UN_PAIS && !CONTORNOS && !contornosFallo) { pendienteContornos = true; return; }
+    if (UN_PAIS) { cuerpo.classList.add("m-uno"); cuerpo.appendChild(h("h2", "m-pais-nombre", nombrePais(codigo))); }   // el nombre, grande, justo arriba del país
     const c = (CONTORNOS && CONTORNOS[codigo]) || GOTA, w = c.w, hh = c.h, id = ++idAgua;
-    const vb = { x: -15, y: -62, w: w + 30, h: hh + 84 };   // arriba queda espacio para el chorro
+    const lado = Math.max(w, hh), anchoCh = acotar(lado * 0.024, 5, 9), escJarra = anchoCh / 6, yBoca = UN_PAIS ? -30 : -40;   // yBoca = donde queda la boca de la jarra (y de ahí cae el chorro)
+    const vb = { x: -15, y: Math.floor(yBoca - 26 * escJarra - 4), w: w + 30, h: 0 };   // arriba queda espacio para la jarra inclinada y el chorro
+    vb.h = hh + 22 - vb.y;
     const svg = el("svg", { viewBox: vb.x + " " + vb.y + " " + vb.w + " " + vb.h, class: "m-botella", role: "img", "aria-label": nombrePais(codigo) + ": " + hechos + " de " + NIVELES_POR_ETAPA + " niveles completados" }, cuerpo);
     el("path", { d: c.d, fill: SOMBRA, transform: "translate(0 5)" }, svg);
     const sil = el("path", { d: c.d, fill: "#fff" }, svg);
@@ -636,10 +715,9 @@ export function montarMapa(o) {
           for (let y = 0; y <= hh; y += hh / 70) if (sil.isPointInFill(new DOMPoint(x, y))) { ent = { x, y }; break buscar; }
         }
       } catch (e) {}
-      const lado = Math.max(w, hh);
       const agua = crearAgua(svg, "agua" + id, c.d, { x0: -15, x1: w + 15, yBase: hh, yTope: 0, fondo: hh + 40, amp: acotar(lado * 0.016, 2.5, 5) }, objetivo, desde, {
         vel: 1.1, frec: 2.4, paso: 3.5,
-        chorro: { x: ent.x, yTop: vb.y + 4, yEntrada: ent.y, ancho: acotar(lado * 0.024, 5, 9) },
+        chorro: { x: ent.x, yTop: yBoca, yEntrada: ent.y, ancho: anchoCh, escala: escJarra },
         alLlegar: objetivo >= 1 ? () => {
           // ¡País lleno! AQUÍ va la animación del destello dorado (pendiente). Por ahora solo se cambia el agua por la bandera.
           if (o.alPaisCompleto) o.alPaisCompleto({ codigo, indice, svg, d: c.d, w, h: hh });
@@ -652,6 +730,10 @@ export function montarMapa(o) {
     el("path", { d: c.d, fill: "none", stroke: UN_PAIS ? TINTA : BORDE, "stroke-width": UN_PAIS ? 3.5 : 2, "stroke-linejoin": "round", "pointer-events": "none" }, svg);   // con unPais, trazo más marcado que rodea al país
     // las siluetas se cargan aparte: al llegar, se vuelve a dibujar la botella (si no hay una animación en curso)
     if (!CONTORNOS) pendienteContornos = true;
+    if (UN_PAIS) {
+      cuerpo.appendChild(h("p", "m-pais-niveles", hechos + " de " + NIVELES_POR_ETAPA + " niveles completados" + (completo ? " · ¡completo! ⭐" : "")));   // debajo del país, un poco separado
+      botonContinuarCentro();
+    }
   }
 
   function pintar() {
@@ -659,7 +741,8 @@ export function montarMapa(o) {
     aguas = [];
     botella = null;
     cuerpo.replaceChildren();
-    cuerpo.classList.remove("m-mundo");
+    cuerpo.classList.remove("m-mundo", "m-uno");
+    btnCentro = null;
     acciones.replaceChildren();
     if (vista === "mexico") vistaMexico();
     else if (vista === "estado") vistaEstado();
@@ -696,34 +779,34 @@ export function montarMapa(o) {
     refrescar() { if (abierto) pintar(); },
     principal,
     // unPais: punto de la pantalla (px) dentro del país abierto, lo más cerca posible del centro de su caja: { x, y } o null
-    centroPais() {
-      const b = botella;
-      if (!b || !b.svg.isConnected) return null;
-      try {
-        const bb = b.sil.getBBox(), dentro = (x, y) => b.sil.isPointInFill(new DOMPoint(x, y));
-        let cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;
-        if (!dentro(cx, cy)) {   // país con forma rara: el punto de adentro más cercano al centro
-          let mejor = null, md = Infinity;
-          for (let i = 0; i <= 40; i++) for (let j = 0; j <= 40; j++) {
-            const x = bb.x + bb.width * i / 40, y = bb.y + bb.height * j / 40;
-            if (dentro(x, y)) { const dd = (x - cx) ** 2 + (y - cy) ** 2; if (dd < md) { md = dd; mejor = [x, y]; } }
-          }
-          if (mejor) [cx, cy] = mejor;
-        }
-        const pt = new DOMPoint(cx, cy).matrixTransform(b.svg.getScreenCTM());
-        return { x: pt.x, y: pt.y };
-      } catch (e) { return null; }
-    },
+    centroPais: centroDelPais,
     // el país abierto parpadea (destello claro + trazo dorado) un instante
-    parpadear() {
+    // k = 0, 1, 2…: número de estrella que entró; cada «pop» es un poco más fuerte que el anterior
+    parpadear(k = 0) {
       const b = botella;
       if (!b || !b.svg.isConnected) return;
+      if (typeof b.svg.animate === "function") {   // el país se hincha y rebota (pop)
+        const g = 1.035 + 0.015 * Math.min(k, 3);
+        b.svg.animate([{ transform: "scale(1)" }, { transform: "scale(" + g + ")", offset: 0.3 }, { transform: "scale(.985)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 520, easing: "ease-out" });
+      }
       const d = b.sil.getAttribute("d");
       const flash = el("path", { d, fill: "#fff6b0", "pointer-events": "none" }, b.svg);
       const aro = el("path", { d, fill: "none", stroke: "#ffc61f", "stroke-width": 9, "stroke-linejoin": "round", "pointer-events": "none" }, b.svg);
       if (typeof flash.animate !== "function") { setTimeout(() => { flash.remove(); aro.remove(); }, 300); return; }
       aro.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], { duration: 450 });
       flash.animate([{ opacity: 0 }, { opacity: 0.85 }, { opacity: 0 }], { duration: 450, easing: "ease-out" }).onfinish = () => { flash.remove(); aro.remove(); };
+    },
+    // unPais: true = oculta el botón «Continuar» del centro; false = lo muestra (con un rebote si estaba oculto). Es seguro llamarla en cualquier momento.
+    retenerContinuar(on) {
+      const estaba = retener;
+      retener = !!on;
+      const b = btnCentro;
+      if (!b || !b.isConnected) return;
+      if (retener) { b.style.visibility = "hidden"; return; }
+      if (!estaba) return;
+      ubicarCentro();
+      b.style.visibility = "";
+      if (typeof b.animate === "function") b.animate([{ transform: "scale(.4)", opacity: 0 }, { transform: "scale(1.18)", opacity: 1, offset: 0.6 }, { transform: "scale(1)", opacity: 1 }], { duration: 420, easing: "ease-out" });
     },
     esPrincipal: () => vista === VISTA_PRINCIPAL,
     abierto: () => abierto,
