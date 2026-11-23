@@ -5,7 +5,11 @@
 
 export const CLAVE_COLA = "puntos_pendientes_v1";
 export const TOPE = 1000;      // igual que MAX_PUNTOS_POR_ENVIO de jugador.js y el 1000 de firestore-unificado.rules
-const MAX_EVENTOS = 300;       // si hay más, se juntan eventos del mismo juego (sin pasar de TOPE)
+const MAX_EVENTOS = 300;
+
+// ESTÁNDAR (ESTANDARES-juegos.md, sección 12): pasar un nivel por PRIMERA vez da exactamente 1 punto al perfil, en cualquier juego.
+// Las monedas y los puntos de dentro de cada juego son otra cosa y los decide cada juego.
+export const PUNTOS_PORTAL_POR_NIVEL = 1;       // si hay más, se juntan eventos del mismo juego (sin pasar de TOPE)
 
 export function leerCola() {
   try {
@@ -38,3 +42,6 @@ export function encolarPuntos(juego, puntos) {
   guardarCola(r);
   return r.length;
 }
+
+// Un nivel pasado por primera vez: anota el punto estándar del portal. Uso:  encolarNivel("mi-juego");
+export const encolarNivel = (juego) => encolarPuntos(juego, PUNTOS_PORTAL_POR_NIVEL);

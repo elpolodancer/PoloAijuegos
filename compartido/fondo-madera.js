@@ -3,11 +3,17 @@
 // Este módulo trae sus PROPIOS estilos (los inyecta en <head>), así que no hace falta tocar compartido/inmersivo.css.
 // Las imágenes se buscan junto a este archivo: ../imagenes/fondomaderaclara.webp y ../imagenes/fondomaderaoscura.webp
 // Uso: al final del <body> de cada juego:   <script type="module" src="../compartido/fondo-madera.js"></script>
+// Opcional en <body>:  data-madera-boton="oculto"  → NO crea el botón flotante 🌙/☀️ (el fondo y la preferencia guardada siguen funcionando).
+//   Entonces el cambio se hace desde otro lugar (p. ej. el menú de pausa del juego) con:
+//     import("../compartido/fondo-madera.js").then((m) => m.alternarMadera());      m.maderaOscura() dice cuál está puesta.
 // Para evitar el parpadeo de la madera clara al abrir en modo oscuro, pon esto en el <head> (opcional):
 //   <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
 
 const CLAVE = "fondo_madera";           // "clara" | "oscura"
 const raiz = document.documentElement;
+let alternar = () => {};                                   // lo define el bloque de abajo (solo en páginas «inmersivo»)
+export const alternarMadera = () => alternar();            // cambia entre madera clara y oscura (y guarda la elección)
+export const maderaOscura = () => raiz.classList.contains("oscura");
 
 if (raiz.classList.contains("inmersivo")) {
   const clara = new URL("../imagenes/fondomaderaclara.webp", import.meta.url).href;
@@ -43,13 +49,14 @@ if (raiz.classList.contains("inmersivo")) {
     if (meta) meta.setAttribute("content", esOscura ? "#1d2024" : "#d9a866");
   }
 
-  b.addEventListener("click", () => {
+  alternar = () => {
     const esOscura = !raiz.classList.contains("oscura");
     try { localStorage.setItem(CLAVE, esOscura ? "oscura" : "clara"); } catch (e) {}
     aplicar(esOscura);
-  });
+  };
+  b.addEventListener("click", () => alternar());
   addEventListener("storage", (e) => { if (e.key === CLAVE) aplicar(leer()); }); // otra pestaña lo cambió
 
   aplicar(leer());
-  document.body.appendChild(b);
+  if (document.body.dataset.maderaBoton !== "oculto") document.body.appendChild(b);
 }

@@ -15,12 +15,16 @@
 //   { icono: "💾", texto: "Copia de seguridad", alElegir: () => import("../compartido/almacen.js").then((m) => m.abrirPanelCopias()) }
 //
 // Qué se copia: SOLO las claves de progreso de los juegos, que por convención terminan en _v1, _v2…
-// (por ejemplo «rubik_progreso_v1», «puntos_pendientes_v1») más «fondo_madera». Si un juego guarda con otro nombre de clave,
+// (por ejemplo «rubik_progreso_v1», «puntos_pendientes_v1») más «fondo_madera» y las del Ajedrez. Si un juego guarda con otro nombre de clave,
 // agrégalo a CLAVES_EXTRA. Para ver qué claves hay: consola del navegador → Object.keys(localStorage).
 // OJO: si el portal vive en elpologr.github.io/..., TODOS tus sitios de ese dominio comparten localStorage; por eso se filtra por nombre.
 
 const PATRON_CLAVES = /_v\d+$/;
-const CLAVES_EXTRA = ["fondo_madera"];
+const CLAVES_EXTRA = [
+  "fondo_madera",
+  // Ajedrez guarda con «ajedrez:nombre» (no termina en _v1), así que se anota aquí para que entre en la copia
+  "ajedrez:ganados", "ajedrez:mapa", "ajedrez:nivel", "ajedrez:color",
+];
 const EXCLUIR = ["almacen_estado_v1"];          // lo que guarda este mismo módulo (fechas de última copia y de la invitación)
 const APP = "poloaijuegos";
 const MAX_BYTES = 5 * 1024 * 1024;              // tamaño máximo del archivo de copia

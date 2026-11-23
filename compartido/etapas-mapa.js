@@ -4,6 +4,8 @@
 //   const ETAPAS = crearEtapas({ porEtapa: 10, primeros: ["ags"] });
 // Niveles 1..nivelesMexico = estados (en el orden de ETAPAS.estados); los siguientes = países (en el orden de ETAPAS.paises).
 // Cambiar el orden cambia qué estado/país corresponde a cada nivel: si ya hay jugadores con progreso, no lo cambies después de publicar.
+// MAPA SOLO DE PAÍSES (estándar nuevo, 21 nov 2026):  crearEtapas({ porEtapa: 20, soloPaises: true })  → sin estados: 195 países (México primero) × 20 niveles = 3 900.
+//   Sin esa opción todo funciona como antes (32 estados + 194 países), para los juegos que todavía no se pasan al estándar nuevo.
 
 // ----- Estados: orden por defecto = del sureste hacia el norte (por la latitud de su capital), para que el agua que sube por México
 // coincida más o menos con los estados ya terminados. lon/lat = capital (puntos del mapa). -----
@@ -59,6 +61,29 @@ export const PAISES_BASE = (
   "AU NZ PG FJ SB VU WS TO TV KI NR MH FM PW"
 ).split(" ");
 
+// ----- MAPA SOLO DE PAÍSES (estándar nuevo, 21 nov 2026): 195 países = los 194 de arriba + México, en un orden FIJO.
+//   Posiciones 1 a 20   México y el resto de Latinoamérica (los 20 países de habla española, portuguesa y francesa de América, vecinos primero).
+//   Posiciones 21 a 24  Belice, Jamaica, Guyana y Surinam (los vecinos de América que no son de habla romance).
+//   Posición 25         Estados Unidos.     Posiciones 26 a 194   al azar con semilla fija (20261121).     Posición 195   China (la última).
+// Con 20 niveles por país son 3 900 niveles. Se usa con crearEtapas({ porEtapa: 20, soloPaises: true }).
+// NO cambiar el orden después de publicar un juego: cambiaría qué país corresponde a cada nivel.
+export const PAISES_MUNDO = (
+  "MX GT HN SV NI CR PA CU DO HT CO VE EC PE BR BO PY CL AR UY " +   // 1 a 20: México y Latinoamérica
+  "BZ JM GY SR " +                                                    // 21 a 24
+  "US " +                                                             // 25
+  "UZ LI GM ES UG TJ LY IL MM NO AD BI IT EE TN RW BS NZ " +
+  "DM BN NA FJ KR UA SM MH CA AF PG CF FR MR RS LK HR MC " +
+  "OM SS BA TH VN FI AM BD VA MV LT RO GD MG PL SN BJ TZ " +
+  "CY SE BH MA KN PT ME CV AZ SC AO SB BG CG ZM LC AG GE " +
+  "PK KH TR TV GH DK WS SZ ER SG VU DE AU AT BW AL LV YE " +
+  "BF ST CZ NP SO BB MK CH GA AE KI IQ PH NE SL PS IN MZ " +
+  "KZ DZ IR IE TM SA LA MT VC BY ZA KM KE NR GB ML SY CI " +
+  "KW LU DJ NL MN ET TD CD GN LB MY ZW TL BE GQ SD TT GR " +
+  "PW BT RU ID LR CM SI TG MU KP SK LS QA IS MD NG JO FM " +
+  "JP HU MW TO GW EG KG " +
+  "CN"                                                                // 195: la última
+).split(" ");
+
 let nombres = null;
 export function nombrePais(codigo) {
   try { nombres ||= new Intl.DisplayNames(["es"], { type: "region" }); return nombres.of(codigo) || codigo; }
@@ -69,11 +94,12 @@ export const banderaPais = (codigo) => String.fromCodePoint(...[...codigo].map((
 
 const acotar = (v, a, b) => Math.max(a, Math.min(b, v));
 
-// opciones: { porEtapa (obligatorio), primeros: ids de estados que van al principio (el resto sigue en el orden por defecto) }
-export function crearEtapas({ porEtapa, primeros = [] }) {
+// opciones: { porEtapa (obligatorio), primeros: ids de estados que van al principio (el resto sigue en el orden por defecto),
+//             soloPaises: true = sin estados de México: los 195 países de PAISES_MUNDO (México es el primero) }
+export function crearEtapas({ porEtapa, primeros = [], soloPaises = false }) {
   if (!(porEtapa > 0)) throw new RangeError("crearEtapas: falta porEtapa");
-  const estados = [...primeros.map((id) => ESTADOS_SUR_NORTE.find((x) => x.id === id)).filter(Boolean), ...ESTADOS_SUR_NORTE.filter((x) => !primeros.includes(x.id))];
-  const paises = PAISES_BASE;
+  const estados = soloPaises ? [] : [...primeros.map((id) => ESTADOS_SUR_NORTE.find((x) => x.id === id)).filter(Boolean), ...ESTADOS_SUR_NORTE.filter((x) => !primeros.includes(x.id))];
+  const paises = soloPaises ? PAISES_MUNDO : PAISES_BASE;
   const numEstados = estados.length, numPaises = paises.length;
   const nivelesMexico = numEstados * porEtapa, total = nivelesMexico + numPaises * porEtapa;
 
@@ -96,11 +122,11 @@ export function crearEtapas({ porEtapa, primeros = [] }) {
     return {
       hecho, max,
       estadosHechos: Math.min(numEstados, Math.floor(Math.min(hecho, nivelesMexico) / porEtapa)),
-      mexicoCompleto: hecho >= nivelesMexico,   // al terminar todos los de México se desbloquea el mundo
+      mexicoCompleto: soloPaises || hecho >= nivelesMexico,   // al terminar todos los de México se desbloquea el mundo (solo países: el mundo siempre está)
       paisesHechos: acotar(Math.floor((hecho - nivelesMexico) / porEtapa), 0, numPaises),
-      estadoActual: acotar(Math.floor((Math.min(max, nivelesMexico) - 1) / porEtapa), 0, numEstados - 1),
+      estadoActual: acotar(Math.floor((Math.min(max, nivelesMexico) - 1) / porEtapa), 0, Math.max(0, numEstados - 1)),
       paisActual: max > nivelesMexico ? acotar(Math.floor((max - nivelesMexico - 1) / porEtapa), 0, numPaises - 1) : 0,
     };
   }
-  return { porEtapa, estados, paises, numEstados, numPaises, nivelesMexico, total, etapaDe, nombreEtapa, baseEstado, basePais, resumen };
+  return { porEtapa, soloPaises, estados, paises, numEstados, numPaises, nivelesMexico, total, etapaDe, nombreEtapa, baseEstado, basePais, resumen };
 }
