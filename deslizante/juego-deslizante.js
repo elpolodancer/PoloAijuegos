@@ -274,6 +274,7 @@ function animarVictoria(v, tier) {
 // 3) Las estrellas caen UNA POR UNA hacia el centro del país, se hacen pequeñas hasta desaparecer y, cuando cada una entra, el país hace «pop»
 //    (se hincha, destella y rebota). Al final aparece el botón «Continuar» del centro con un rebote.
 // Tocar la pantalla salta la animación. Con «reducir movimiento» solo abre el mapa. Los tiempos están juntos en TIEMPOS para ajustarlos fácil.
+const RESPETAR_MOVIMIENTO_REDUCIDO = false;   // false = la celebración se ve siempre (en muchos PC y celulares «reducir movimiento» viene activado sin que la persona lo sepa y la animación nunca salía; igual que en el Solitario). true = con «reducir movimiento» solo se abre el mapa
 const TIEMPOS = {
   entraSep: 420,      // ms entre una estrella y la siguiente al aparecer
   entraDur: 750,      // lo que tarda cada una en deslizarse a su lugar
@@ -297,7 +298,7 @@ function celebrar(tier, i) {
   const tras = (ms, fn) => celTimers.push(setTimeout(() => { if (id === celId) fn(); }, ms));
   let abierto = false;
   const abrir = () => { if (!abierto) { abierto = true; abrirMapa(i + 1, true); } };   // abrirMapa → mostrar("pantalla-niveles") no cancela la celebración
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { abrir(); return; }
+  if (RESPETAR_MOVIMIENTO_REDUCIDO && matchMedia("(prefers-reduced-motion: reduce)").matches) { abrir(); return; }
 
   const T = TIEMPOS;
   const mor = Math.max(0, tier - 3), cuantas = Math.min(tier, 3);

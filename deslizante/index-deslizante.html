@@ -116,7 +116,6 @@
     .cel-e { width: var(--e); height: var(--e); }
     .cel-mueve { animation: cel-mueve 1.3s ease-in-out infinite alternate; }   /* el retraso lo pone el JS (celebrar): empieza cuando la estrella llega a su lugar */
     @keyframes cel-mueve { from { transform: rotate(-12deg) translateY(-6px) scale(1); } to { transform: rotate(12deg) translateY(5px) scale(1.08); } }
-    @media (prefers-reduced-motion: reduce) { .cel-mueve { animation: none; } }
 
     /* La sesión puede tener un nombre largo: se recorta con «…» para no tapar el botón de monedas ni «Menú principal» */
     #sesion { display: inline-block; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 30px; }
@@ -159,7 +158,7 @@
     .estrellas-vic { --e: 40px; }
     .estrellas-vic .fila-est { gap: 8px; }
     .meta-vic { color: var(--suave); font-size: .8rem; }
-    @media (prefers-reduced-motion: reduce) { .est::before, .est::after, .est.pop, .chispa { animation: none !important; } }
+    @media (prefers-reduced-motion: reduce) { .est.pop { animation: none !important; } }   /* el brillo de las estrellas y las chispas de la celebración se ven siempre (ver RESPETAR_MOVIMIENTO_REDUCIDO en juego-deslizante.js) */
     @media (prefers-reduced-motion: reduce) { .ficha { transition: none; } }
 
     /* ≥ 640 px de ancho: la barra de juego va en la fila superior, así que sobra espacio arriba */
