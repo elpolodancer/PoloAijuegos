@@ -1,22 +1,37 @@
 // Ruta: deslizante/juego-deslizante.js
 // Puzle deslizante (estilo «15 puzzle»): ordena las fichas numeradas de 1 en adelante, con el hueco al final.
-// Al abrir se ve el nivel donde va el jugador ya cargado y listo para jugar, con la barra de inicio arriba (Modo libre · Continuar · Niveles).
-// Niveles fijos que se desbloquean en orden (ver niveles-deslizante.js).
-import { encolarPuntos } from "../compartido/cola-puntos.js";
-import { NIVELES, POR_TAMANO, TAMANO_MAX, puntosDe } from "./niveles-deslizante.js";
+// Al abrir se ve el juego cargado detrás de un velo (Modo libre · Niveles · Continuar). «Niveles» abre el mapa estándar de países
+// (compartido/mapa-niveles.js, modo soloPaises): 3 900 niveles, 20 por país, con México primero y China al final (orden en compartido/etapas-mapa.js).
+// Los niveles se van creando por tandas en niveles-deslizante.js: el que todavía no existe muestra 🚧 en el mapa, y si no hay ninguno «Continuar» juega el modo libre.
+import { encolarNivel, leerCola, guardarCola } from "../compartido/cola-puntos.js";
+import { crearEtapas } from "../compartido/etapas-mapa.js";
+import { montarMapa } from "../compartido/mapa-niveles.js";
+import { NIVELES, POR_ETAPA, TAMANO_MIN, TAMANO_MAX, monedasDe, puntosJuegoDe } from "./niveles-deslizante.js";
 
 const ID = "deslizante";
+const ETAPAS = crearEtapas({ porEtapa: POR_ETAPA, soloPaises: true });   // 195 países (México primero) × 20 niveles = 3 900
+const TOTAL = ETAPAS.total;
 let libreN = 3;                                    // modo libre: tamaño elegido
 const $ = (id) => document.getElementById(id);
 
+// ----- Reinicio (21 nov 2026): se borraron los 280 niveles viejos y los puntos -----
+// Una sola vez por dispositivo se quitan de la cola los puntos que el juego tenía pendientes de enviar al perfil.
+try {
+  if (!localStorage.getItem("deslizante_reinicio_v1")) {
+    guardarCola(leerCola().filter((e) => e.j !== ID));
+    localStorage.setItem("deslizante_reinicio_v1", "1");
+  }
+} catch (e) {}
+
 // ----- Progreso (local primero; se sincroniza con la cuenta de Google si hay internet y sesión) -----
-// { hechos: [true|null por nivel], mejores: { "<número de nivel>": { mov, ms } },
-//   libre: { "<tamaño>": { mov, ms, ganados } },
-//   estrellas: { "<número de nivel>": mejor escalón 1 a 6 (ver «Estrellas y monedas» más abajo) },
-//   parciales: { "<número de nivel>": { t: [tablero], movs, ms, ts } }  partida a medias guardada desde «☰ Pausa → Guardar progreso de
-//     este nivel y salir». Al terminar o reiniciar el nivel queda solo { ts } (marca de borrado, para que la nube no la devuelva) }
+// { v: 2, hechos: NÚMERO = nivel más alto pasado (0 = ninguno; los niveles se abren en orden, así que todos los de antes están pasados), mejores: { "<número de nivel>": { mov, ms } },
+//   libre: { "<tamaño>" o "<tamaño>-<0 a 3>": { mov, ms, ganados } },
+//   estrellas: { "<número de nivel>": mejor escalón 1 a 6 (solo adorno: ver «Estrellas») },
+//   puntos: puntos del JUEGO acumulados (80 a 250 por partida ganada, según el tablero) }
 //   mov = menos movimientos y ms = menor tiempo en milisegundos: son dos récords independientes (pueden venir de partidas distintas).
-//   libre = modo libre: mejores marcas y tableros resueltos por tamaño.
+// (Antes «hechos» era una lista con un true por nivel; ahora es un solo número para que el progreso siga cabiendo en la nube con miles de niveles. La lista vieja se convierte sola.)
+// Lo guardado ANTES del reinicio no trae «v: 2»: de eso solo se conservan los récords del modo libre; niveles, estrellas y partidas se descartan.
+const VERSION_PROG = 2;
 const CLAVE = ID + "_progreso";
 const obj = (x) => (x && typeof x === "object" ? x : {});
 // Una marca válida { mov, ms }. Las de antes traían «seg» (segundos enteros): se pasan a milisegundos.
@@ -40,22 +55,24 @@ function escalones(o) {
   for (const k in obj(o)) { const v = Math.floor(Number(o[k])); if (v >= 1) r[k] = Math.min(6, v); }
   return r;
 }
-// Partidas a medias: se revisa que el tablero sea válido y tenga solución. Un registro solo con { ts } es una marca de borrado.
-function parcialesLimpios(o) {
-  const r = {};
-  for (const k in obj(o)) {
-    const x = obj(o[k]), ts = Number(x.ts) || 0, lv = NIVELES[Number(k) - 1];
-    if (!lv || ts <= 0) continue;
-    const m2 = lv.n * lv.n, t = x.t;
-    const ok = Array.isArray(t) && t.length === m2 && new Set(t).size === m2 && t.every((v) => Number.isInteger(v) && v >= 0 && v < m2)
-      && esResoluble(lv.n, t) && !t.every((v, i) => (i === m2 - 1 ? v === 0 : v === i + 1));
-    r[k] = ok ? { t: t.slice(), movs: Math.max(1, Math.floor(Number(x.movs) || 0)), ms: Math.max(0, Math.floor(Number(x.ms) || 0)), ts } : { ts };
-  }
-  return r;
+// «hechos» válido: el número nuevo, o la lista vieja de trues (el nivel más alto con true)
+function nivelesHechos(x) {
+  const n = Array.isArray(x) ? x.lastIndexOf(true) + 1 : Math.floor(Number(x)) || 0;
+  return Math.max(0, Math.min(TOTAL, n));
 }
-const limpiar = (p) => (p && typeof p === "object" && (Array.isArray(p.hechos) || p.mejores || p.libre || p.estrellas || p.parciales))
-  ? { hechos: Array.isArray(p.hechos) ? p.hechos : [], mejores: marcas(p.mejores), libre: marcas(p.libre, true), estrellas: escalones(p.estrellas), parciales: parcialesLimpios(p.parciales) }
-  : null; // formato viejo (récords sueltos por tamaño): se ignora
+function limpiar(p) {
+  if (!p || typeof p !== "object") return null;
+  const nuevo = p.v === VERSION_PROG;
+  if (!nuevo && !p.libre) return null;             // formato viejo sin récords del modo libre: no hay nada que conservar
+  return {
+    v: VERSION_PROG,
+    hechos: nuevo ? nivelesHechos(p.hechos) : 0,
+    mejores: nuevo ? marcas(p.mejores) : {},
+    libre: marcas(p.libre, true),
+    estrellas: nuevo ? escalones(p.estrellas) : {},
+    puntos: nuevo ? Math.max(0, Math.floor(Number(p.puntos)) || 0) : 0,
+  };
+}
 
 // Tiempo como m:ss.d (con horas si hace falta); ms = milisegundos
 function fmtMs(ms) {
@@ -63,48 +80,60 @@ function fmtMs(ms) {
   const sec = String(s % 60).padStart(2, "0"), min = Math.floor(s / 60) % 60, h = Math.floor(s / 3600);
   return (h ? h + ":" + String(min).padStart(2, "0") : min) + ":" + sec + "." + dec;
 }
-let prog = { hechos: [], mejores: {}, libre: {}, estrellas: {}, parciales: {} }, nube = null;
+let prog = { v: VERSION_PROG, hechos: 0, mejores: {}, libre: {}, estrellas: {}, puntos: 0 }, nube = null;
 try { prog = limpiar(JSON.parse(localStorage.getItem(CLAVE))) || prog; } catch (e) {}
 function guardarProg() {
   try { localStorage.setItem(CLAVE, JSON.stringify(prog)); } catch (e) {}
   if (nube) nube.guardado();
 }
-const hecho = (i) => !!prog.hechos[i];
-const desbloqueado = (i) => i === 0 || hecho(i - 1);
-// Partida a medias guardada del nivel i (o null)
-const parcialDe = (i) => { const x = prog.parciales[i + 1]; return x && x.t ? x : null; };
-// Borra la partida guardada de un nivel (deja una marca con la hora para que al sincronizar no vuelva de la nube)
-function descartarParcial(k) {
-  if (!prog.parciales[k]) return;
-  prog.parciales[k] = { ts: Date.now() };
-  guardarProg();
+const hecho = (i) => i < prog.hechos;              // i = posición (0 = nivel 1): pasado si está dentro de los niveles ya pasados
+const hechoMax = () => prog.hechos;                // nivel más alto terminado (0 = ninguno)
+const desbloqueado = (i) => i <= hechoMax();       // se abre en orden: el siguiente al último terminado
+// Primer nivel sin pasar (el que toca jugar); si ya pasó todos, el último
+const siguientePendiente = () => Math.min(TOTAL - 1, hechoMax());
+// Texto «Nivel 3 · Quintana Roo» de la posición i
+function nombreNivel(i) { const e = ETAPAS.etapaDe(i + 1); return "Nivel " + e.k + " · " + ETAPAS.nombreEtapa(i + 1); }
+
+// Modo libre: todos los tamaños están abiertos mientras no existan los niveles (antes se abrían al pasar cada etapa por tamaño).
+const tamanoAbierto = (m) => m >= TAMANO_MIN && m <= TAMANO_MAX;
+
+// Aviso corto flotante (el juego no usa alert ni confirm)
+let avisoT = 0;
+function aviso(texto) {
+  let a = $("aviso-flotante");
+  if (!a) {
+    a = document.createElement("div");
+    a.id = "aviso-flotante";
+    a.setAttribute("role", "status");
+    a.style.cssText = "position:fixed;left:50%;bottom:calc(70px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:2147481000;max-width:calc(100% - 32px);padding:10px 16px;border-radius:14px;background:#1e2025;color:#f1f2f4;border:1px solid #7c5cff;font:700 .9rem system-ui,sans-serif;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.45)";
+    document.body.appendChild(a);
+  }
+  a.textContent = texto; a.hidden = false;
+  clearTimeout(avisoT); avisoT = setTimeout(() => { a.hidden = true; }, 2600);
 }
 
-// Datos de un nivel: tamaño y número dentro de su tamaño (1 a 10)
-function info(i) {
-  const n = NIVELES[i].n;
-  return { n, num: NIVELES.slice(0, i).filter((x) => x.n === n).length + 1 };
-}
-// Primer nivel sin pasar (el que toca jugar); si ya pasó todos los que hay, el último
-function siguientePendiente() {
-  const i = NIVELES.findIndex((_, k) => !hecho(k));
-  return i < 0 ? NIVELES.length - 1 : i;
-}
+// ----- Mapa de niveles (estándar 7.3 + mapa solo de países): el mundo con agua; México es el primer país y se van abriendo de uno en uno -----
+const mapa = montarMapa({
+  prefijo: ID,
+  etapas: ETAPAS,
+  columnas: 5,
+  progreso: () => { const h = hechoMax(); return { hecho: h, max: Math.min(TOTAL, h + 1) }; },
+  jugarNivel: (n) => jugarNivel(n - 1),
+  infoNivel: (n) => {
+    if (!NIVELES[n - 1]) return { sub: "🚧", aria: "todavía no está creado" };
+    const mk = prog.mejores[n];
+    return { sub: mk ? fmtMs(mk.ms) : "", aria: mk ? "mejor tiempo " + fmtMs(mk.ms) : "" };
+  },
+});
+// n = nivel cuya etapa se abre (por defecto, el que toca); alcanzado = true abre la vista principal de su zona (se ve subir el agua)
+function abrirMapa(n, alcanzado) { mostrar("pantalla-niveles"); mapa.abrir(n || Math.min(TOTAL, hechoMax() + 1), alcanzado); }
 
-// Modo libre: un tamaño está abierto cuando su etapa está desbloqueada (su primer nivel se puede jugar). El 3×3 siempre.
-function tamanoAbierto(m) {
-  const i = NIVELES.findIndex((l) => l.n === m);
-  return i >= 0 && desbloqueado(i);
-}
-
-// ----- Estrellas y monedas -----
+// ----- Estrellas (solo adorno) y monedas -----
 // 6 escalones por nivel según el tiempo (el cronómetro cuenta desde el primer movimiento; se pide «menos de»):
 //   1 a 3 = estrellas doradas   (1: pasarlo · 2: menos de 2 min · 3: menos de 1 min)
 //   4 a 6 = estrellas moradas, que reemplazan a las doradas una por una (4: menos de 40 s · 5: menos de 30 s · 6: menos de 20 s)
-// MONEDAS[escalón] = total de monedas que el nivel ya pagó al llegar a ese escalón. Cada nivel paga una sola vez por escalón:
-// al mejorar solo se cobra la diferencia (de 15 a 25 = +10; de 25 a 40 = +15).
-const MONEDAS = [0, 8, 15, 25, 40, 50, 80];
-// Tiempos límite en milisegundos por tamaño: LIMITES[tamaño][escalón - 1]. Un tamaño que no esté aquí todavía no da estrellas ni monedas.
+// Las estrellas YA NO dan monedas. Las monedas son fijas por tamaño (niveles-deslizante.js, monedasDe): de 15 a 80 por nivel, una sola vez.
+// Tiempos límite en milisegundos por tamaño: LIMITES[tamaño][escalón - 1]. Un tamaño que no esté aquí no da estrellas.
 const LIMITES = { 3: [Infinity, 120000, 60000, 40000, 30000, 20000] };
 const conEstrellas = (m) => !!LIMITES[m];
 // Escalón (0 a 6) que corresponde a un tiempo en ese tamaño
@@ -114,20 +143,24 @@ function tierPorTiempo(m, ms) {
   for (let k = 6; k >= 1; k--) if (ms < L[k - 1]) return k;
   return 1;
 }
-// Mejor escalón del nivel i. Los niveles pasados antes de que existieran las estrellas lo reciben según su mejor tiempo.
+// Mejor escalón del nivel i (posición)
 function tierNivel(i) {
-  const m = NIVELES[i].n;
-  if (!conEstrellas(m) || !hecho(i)) return 0;
+  const lv = NIVELES[i];
+  if (!lv || !conEstrellas(lv.n) || !hecho(i)) return 0;
   const mk = prog.mejores[i + 1];
-  return Math.max(1, Number(prog.estrellas[i + 1]) || 0, mk ? tierPorTiempo(m, mk.ms) : 0);
+  return Math.max(1, Number(prog.estrellas[i + 1]) || 0, mk ? tierPorTiempo(lv.n, mk.ms) : 0);
 }
-// Monedas = lo que ya pagó cada nivel (todavía no se gastan en nada)
+// Monedas = lo que pagó cada nivel pasado (se calcula con los niveles pasados, así se sincroniza solo). Todavía no se gastan en nada.
 function totalMonedas() {
   let s = 0;
-  for (let i = 0; i < NIVELES.length; i++) s += MONEDAS[tierNivel(i)];
+  for (let i = 0; i < NIVELES.length; i++) if (hecho(i)) s += monedasDe(NIVELES[i].n);
   return s;
 }
-const pintarMonedas = () => { $("monedas").textContent = "💰 " + totalMonedas(); };
+const fmtNum = (x) => Number(x).toLocaleString("es-MX");
+const pintarMonedas = () => {
+  $("monedas").textContent = "💰 " + fmtNum(totalMonedas());
+  $("puntos").textContent = "🏅 " + fmtNum(prog.puntos);
+};
 const fmtLimite = (ms) => (ms >= 60000 ? ms / 60000 + " min" : ms / 1000 + " s");
 function metaTexto(m, tier) {
   if (tier >= 6) return "¡Tienes todas las estrellas!";
@@ -186,63 +219,26 @@ function pintarBotonMenu() {
 }
 function mostrar(nombre) {
   enInicio = nombre === "inicio";
-  const pant = enInicio ? "juego" : nombre;
-  for (const p of ["pantalla-niveles", "pantalla-libre", "juego"]) $(p).hidden = p !== pant;
+  const pant = enInicio ? "juego" : nombre;           // «pantalla-niveles» = el mapa, que se dibuja encima de todo y no es una sección
+  for (const p of ["pantalla-libre", "juego"]) $(p).hidden = p !== pant;
+  if (nombre !== "pantalla-niveles") mapa.cerrar();
   $("velo-inicio").hidden = !enInicio;
   $("barra-juego").hidden = !(pant === "juego" && !enInicio);
   pintarBotonMenu();
   if (pant !== "juego") { clearInterval(reloj); clearInterval(chispas); }
-  if (enInicio) { modo = "nivel"; idx = siguientePendiente(); empezar(true); pintarInicio(); } // carga el nivel que toca (con su partida guardada si la tiene)
+  if (enInicio) {
+    modo = "nivel"; idx = siguientePendiente();
+    if (NIVELES[idx]) empezar();                      // carga el nivel que toca
+    else { modo = "libre"; libreNum++; inicial = mezclarAzar(libreN, libreDif); empezar(); }   // aún no hay niveles: se ve el modo libre
+    pintarInicio();
+  }
   pintarMonedas();
-  if (nombre === "pantalla-niveles") pintarNiveles(); else $("lista-niveles").replaceChildren();   // los niveles solo se ven en su pantalla
   if (nombre === "pantalla-libre") pintarLibre();
 }
 function pintarInicio() {
-  const pasados = prog.hechos.filter(Boolean).length;
-  const i = siguientePendiente(), d = info(i);
-  $("btn-jugar").innerHTML = '<span class="b-ico">▶</span><span class="b-rot">' + (pasados ? "Continuar" : "Jugar") + "</span>";
-  $("btn-jugar").title = "Nivel " + d.num + " de " + d.n + "×" + d.n + (parcialDe(i) ? " · partida guardada" : "");
-}
-function pintarNiveles() {
-  const cont = $("lista-niveles");
-  cont.innerHTML = "";
-  const tamanos = [...new Set(NIVELES.map((l) => l.n))];
-  for (const n of tamanos) {
-    const g = document.createElement("div");
-    g.className = "grupo";
-    const idx = NIVELES.map((l, i) => (l.n === n ? i : -1)).filter((i) => i >= 0);
-    const h = document.createElement("h3");
-    h.textContent = n + "×" + n + " · " + idx.filter(hecho).length + "/" + POR_TAMANO;
-    const r = document.createElement("div");
-    r.className = "rejilla-niveles";
-    idx.forEach((i, k) => {
-      const b = document.createElement("button");
-      const libre = desbloqueado(i);
-      b.className = "b3d txt " + (hecho(i) ? "b-verde" : libre ? "b-azul" : "b-gris");
-      const mk = prog.mejores[i + 1];
-      if (libre) {
-        const a = document.createElement("span"), c = document.createElement("span");
-        a.className = "nivel-num"; a.textContent = String(k + 1);
-        c.className = "nivel-t"; c.textContent = mk ? fmtMs(mk.ms) : "–";
-        b.append(a);
-        if (conEstrellas(n)) { const t = document.createElement("span"); t.innerHTML = htmlEstrellas(tierNivel(i)); b.append(t.firstElementChild); }
-        b.append(c);
-        if (parcialDe(i)) { const g = document.createElement("span"); g.className = "b-info"; g.textContent = "💾"; b.append(g); }
-      } else b.textContent = "🔒";
-      b.disabled = !libre;
-      b.setAttribute("aria-label", "Nivel " + (k + 1) + " de " + n + "×" + n + (libre ? (mk ? ", mejor tiempo " + fmtMs(mk.ms) : "") + (conEstrellas(n) ? ", " + textoEstrellas(tierNivel(i)) : "") + (parcialDe(i) ? ", partida guardada" : "") : " (bloqueado)"));
-      b.addEventListener("click", () => jugarNivel(i));
-      r.appendChild(b);
-    });
-    g.append(h, r);
-    cont.appendChild(g);
-  }
-  if (Math.max(...tamanos) < TAMANO_MAX) {
-    const p = document.createElement("p");
-    p.className = "proximamente";
-    p.textContent = "🚧 Más niveles pronto: " + (Math.max(...tamanos) + 1) + "×" + (Math.max(...tamanos) + 1) + " hasta " + TAMANO_MAX + "×" + TAMANO_MAX + ".";
-    cont.appendChild(p);
-  }
+  const i = siguientePendiente(), existe = !!NIVELES[i];
+  $("btn-jugar").innerHTML = '<span class="b-ico">▶</span><span class="b-rot">' + (hechoMax() ? "Continuar" : "Jugar") + "</span>";
+  $("btn-jugar").title = existe ? nombreNivel(i) : "Todavía no hay niveles: se juega el modo libre";
 }
 
 // Modo libre (estándar 7.2): grupo «Dificultad» (5 emojis) y grupo «Tablero» (tamaños). Aquí NO se muestra ningún nivel.
@@ -257,13 +253,13 @@ const DIFICULTADES = [
   { emoji: "😈", nombre: "Demoníaco",  pasos: null, nota: "Totalmente al azar (el más difícil)." },
 ];
 let libreDif = 2;                                  // dificultad elegida (índice de DIFICULTADES)
-try { const g = JSON.parse(localStorage.getItem(CLAVE_LIBRE)); if (g) { if (DIFICULTADES[g.d]) libreDif = g.d; if (g.n >= 3 && g.n <= TAMANO_MAX) libreN = g.n; } } catch (e) {}
+try { const g = JSON.parse(localStorage.getItem(CLAVE_LIBRE)); if (g) { if (DIFICULTADES[g.d]) libreDif = g.d; if (g.n >= TAMANO_MIN && g.n <= TAMANO_MAX) libreN = g.n; } } catch (e) {}
 const guardarLibre = () => { try { localStorage.setItem(CLAVE_LIBRE, JSON.stringify({ d: libreDif, n: libreN })); } catch (e) {} };
 // Clave del récord: «Demoníaco» conserva las claves viejas (solo el tamaño) porque antes todo era totalmente al azar
 const claveLibre = (m, d = libreDif) => (DIFICULTADES[d].pasos === null ? String(m) : m + "-" + d);
 
 function pintarLibre() {
-  if (!tamanoAbierto(libreN)) libreN = 3;          // el tamaño recordado ya no está abierto (p. ej. otra cuenta)
+  if (!tamanoAbierto(libreN)) libreN = TAMANO_MIN;  // el tamaño recordado ya no está abierto
   const df = $("dif-fila"), tf = $("tam-fila");
   df.replaceChildren(); tf.replaceChildren();
   DIFICULTADES.forEach((d, i) => {
@@ -276,19 +272,20 @@ function pintarLibre() {
     df.appendChild(b);
   });
   $("dif-nombre").textContent = DIFICULTADES[libreDif].emoji + " " + DIFICULTADES[libreDif].nombre + " · " + DIFICULTADES[libreDif].nota;
-  for (let m = 3; m <= TAMANO_MAX; m++) {
+  for (let m = TAMANO_MIN; m <= TAMANO_MAX; m++) {
     const abierto = tamanoAbierto(m);
     const b = document.createElement("button");
     b.type = "button";
     b.className = "b3d txt " + (m === libreN ? "b-oro on" : "b-cielo");
     b.textContent = abierto ? m + "×" + m : "🔒 " + m;
     b.disabled = !abierto;
-    b.title = abierto ? m + "×" + m : "Se abre al desbloquear la etapa " + m + "×" + m + " en Niveles";
+    b.title = abierto ? m + "×" + m : "Bloqueado";
     b.setAttribute("aria-label", abierto ? "Tablero " + m + "×" + m : m + "×" + m + " bloqueado");
     b.setAttribute("aria-pressed", String(m === libreN));
     b.addEventListener("click", () => { libreN = m; guardarLibre(); pintarLibre(); });
     tf.appendChild(b);
   }
+  $("nota-libre").textContent = "Ganar aquí da " + puntosJuegoDe(libreN) + " puntos del juego. No da monedas ni puntos al perfil.";
   const r = prog.libre[claveLibre(libreN)];
   $("libre-record").textContent = r ? "🏆 Récord " + libreN + "×" + libreN + " " + DIFICULTADES[libreDif].emoji + ": " + fmtMs(r.ms) + " · " + r.mov + " mov. · " + r.ganados + " resueltos" : "🏆 Aún sin resolver en esta combinación";
 }
@@ -299,7 +296,7 @@ let modo = "nivel";                                // "nivel" (niveles fijos) o 
 let libreNum = 0, inicial = [];                    // modo libre: número de tablero de esta sesión y tablero de partida (libreN y libreDif están arriba)
 let idx = 0, n = 3, t = [];                        // t[pos] = número de la ficha (0 = hueco)
 let movs = 0, inicio = 0, reloj = null, jugando = false;
-let previo = 0;                                    // ms ya jugados antes de empezar/retomar una partida guardada
+let previo = 0;                                    // ms ya jugados (siempre 0: ya no hay partidas guardadas)
 let chispas = null;                                // intervalo de la brillantina de la victoria
 const fichas = new Map();                          // número → elemento
 
@@ -423,29 +420,30 @@ async function ganar() {
   const recordMs = !m || ms < m.ms, recordMov = !m || movs < m.mov;
   const nueva = { mov: m ? Math.min(m.mov, movs) : movs, ms: m ? Math.min(m.ms, ms) : ms };
   const primera = !libre && !hecho(idx);
-  // Estrellas y monedas (antes de actualizar los récords): el nivel solo cobra la diferencia entre su mejor escalón anterior y el nuevo
+  // Recompensas: puntos del JUEGO en toda partida ganada; monedas y punto del portal solo la primera vez que se pasa un nivel
+  const ptsJuego = puntosJuegoDe(n);
+  const monedas = primera ? monedasDe(n) : 0;
+  // Estrellas (adorno, antes de actualizar los récords)
   const cE = !libre && conEstrellas(n);
   const antes = cE ? tierNivel(idx) : 0;
   const nuevoTier = Math.max(antes, cE ? tierPorTiempo(n, ms) : 0);
-  const ganadas = MONEDAS[nuevoTier] - MONEDAS[antes];
+  prog.puntos += ptsJuego;
   if (libre) { const k = claveLibre(libreN); prog.libre[k] = { ...nueva, ganados: ((prog.libre[k] && prog.libre[k].ganados) || 0) + 1 }; }
-  else {
-    prog.mejores[idx + 1] = nueva; prog.hechos[idx] = true; if (cE) prog.estrellas[idx + 1] = nuevoTier;
-    if (prog.parciales[idx + 1]) prog.parciales[idx + 1] = { ts: Date.now() };   // el nivel ya se resolvió: su partida guardada deja de existir
-  }
+  else { prog.mejores[idx + 1] = nueva; prog.hechos = Math.max(prog.hechos, idx + 1); if (cE) prog.estrellas[idx + 1] = nuevoTier; }
   guardarProg();
   pintarMejor();
   pintarMonedas();
   pintarMetaJuego();
 
-  const l = libre ? {} : NIVELES[idx], hay = !libre && idx + 1 < NIVELES.length;
+  const l = libre ? {} : NIVELES[idx];
+  const ultimo = !libre && idx + 1 >= TOTAL, finEtapa = !libre && (idx + 1) % POR_ETAPA === 0;   // finEtapa: terminó un país
   const v = document.createElement("div");
   v.id = "victoria";
   v.innerHTML = "<h2>🎉 ¡Resuelto!</h2>" + (cE ? '<div class="estrellas-vic">' + htmlEstrellas(nuevoTier, true) + "</div>" : "") +
     "<div>⏱️ " + fmtMs(ms) + (recordMs ? " 🏆 ¡mejor tiempo!" : "") +
-    "<br>" + movs + " movimientos" + (recordMov ? " 🏆 ¡récord!" : "") + (l.optimo ? "<br>Mínimo posible: " + l.optimo : "") + (!libre && !hay ? "<br>🏁 ¡Pasaste todos los niveles!" : "") + "</div>" +
-    (cE ? '<div class="monedas-vic">' + (ganadas > 0 ? "💰 +" + ganadas + " monedas" : "💰 Sin monedas nuevas en este intento") + "</div>" +
-      (nuevoTier < 6 ? '<div class="meta-vic">' + metaTexto(n, nuevoTier) + "</div>" : "") : "");
+    "<br>" + movs + " movimientos" + (recordMov ? " 🏆 ¡récord!" : "") + (l.optimo ? "<br>Mínimo posible: " + l.optimo : "") + (ultimo ? "<br>🏁 ¡Pasaste todos los niveles!" : "") + "</div>" +
+    '<div class="monedas-vic">🏅 +' + ptsJuego + " puntos" + (monedas ? " · 💰 +" + monedas + " monedas" : "") + "</div>" +
+    (cE && nuevoTier < 6 ? '<div class="meta-vic">' + metaTexto(n, nuevoTier) + "</div>" : "");
   const caja = document.createElement("div");
   caja.className = "botones";
   const boton = (texto, clase, fn) => { const b = document.createElement("button"); b.className = "b3d txt " + clase; b.textContent = texto; b.addEventListener("click", fn); caja.appendChild(b); };
@@ -453,54 +451,54 @@ async function ganar() {
     boton("Otro tablero", "b-verde", () => jugarLibre(libreN));
     boton("⚙️ Cambiar tablero", "b-cielo", () => mostrar("pantalla-libre"));
   } else {
-    if (hay) boton("Siguiente nivel", "b-verde", () => jugarNivel(idx + 1));
+    if (!ultimo && !finEtapa && NIVELES[idx + 1]) boton("Siguiente nivel", "b-verde", () => jugarNivel(idx + 1));
     boton("Repetir", "b-oro", () => empezar());
-    boton("Niveles", "b-azul", () => mostrar("pantalla-niveles"));
+    boton(finEtapa ? "🗺️ Mapa" : "Niveles", "b-azul", () => (finEtapa ? abrirMapa(idx + 1, true) : abrirMapa()));   // al cerrar una etapa se ve subir el agua
   }
   v.appendChild(caja);
   $("tablero").appendChild(v);
   if (cE) brillantina(v);
 
-  if (!primera) { if (libre) $("msg").textContent = "Modo libre: no da puntos al perfil, pero guarda tu mejor marca."; return; } // los puntos se dan solo la primera vez que se pasa un nivel
-  const pts = puntosDe(NIVELES[idx].n);
-  encolarPuntos(ID, pts);                           // se anotan en el dispositivo y se envían al perfil cuando haya internet y sesión
+  if (!primera) {                                   // el punto del portal se da solo la primera vez que se pasa un nivel
+    $("msg").textContent = libre ? "Modo libre: no da monedas ni puntos al perfil, pero guarda tu mejor marca." : "";
+    return;
+  }
+  encolarNivel(ID);                                 // 1 punto estándar del portal: se anota en el dispositivo y se envía al perfil cuando haya internet y sesión
   let pendientes = 1;
   try { pendientes = await (await import("../compartido/progreso.js")).vaciarPuntos(); } catch (e) {}
   $("msg").textContent = pendientes === 0
-    ? "+" + pts + " puntos a tu perfil"
-    : "+" + pts + " puntos anotados: se enviarán a tu perfil cuando tengas internet y hayas entrado con Google.";
+    ? "+1 punto a tu perfil"
+    : "+1 punto anotado: se enviará a tu perfil cuando tengas internet y hayas entrado con Google.";
 }
 
-// Botón verde de arriba (donde estaban Modo libre y Niveles): el nombre del nivel que se está jugando
+// Botón verde de arriba (donde estaban Modo libre y Niveles): el nombre del nivel que se está jugando (sin el tamaño: ese va bajo el tablero)
 function pintarNombre(texto) { $("nombre-nivel").textContent = texto; $("barra-juego").setAttribute("aria-label", texto); }
-function empezar(retomar) {
+function empezar() {
   clearInterval(reloj); clearInterval(chispas);
   const v = $("victoria"); if (v) v.remove();
-  let pp = null;                                    // partida guardada que se retoma (solo en niveles)
   if (modo === "libre") {
     n = libreN; t = inicial.slice();
-    pintarNombre("♾️ Modo libre · " + n + "×" + n + " " + DIFICULTADES[libreDif].emoji);
-    $("titulo").innerHTML = "♾️ Modo libre · " + n + "×" + n + " " + DIFICULTADES[libreDif].emoji + "<small>" + DIFICULTADES[libreDif].nombre + " · tablero " + libreNum + " de esta sesión</small>";
+    pintarNombre("♾️ Modo libre " + DIFICULTADES[libreDif].emoji);
+    $("titulo").innerHTML = n + "×" + n + "<small>" + DIFICULTADES[libreDif].emoji + " " + DIFICULTADES[libreDif].nombre + " · tablero " + libreNum + " de esta sesión</small>";
   } else {
-    const l = NIVELES[idx], d = info(idx);
+    const l = NIVELES[idx];
     n = l.n; t = l.fichas.slice();
-    pintarNombre("Nivel " + d.num + " · " + n + "×" + n);
-    pp = retomar === true ? parcialDe(idx) : null;
-    if (pp) t = pp.t.slice();
-    $("titulo").innerHTML = "Nivel " + d.num + " · " + n + "×" + n + (() => { const mk = prog.mejores[idx + 1], p = []; if (l.optimo) p.push("Mínimo posible: " + l.optimo); if (mk) p.push("Tu mejor: " + mk.mov + " mov."); return p.length ? "<small>" + p.join(" · ") + "</small>" : ""; })();
+    pintarNombre(nombreNivel(idx));
+    $("titulo").innerHTML = n + "×" + n + (() => { const mk = prog.mejores[idx + 1], p = []; if (l.optimo) p.push("Mínimo posible: " + l.optimo); if (mk) p.push("Tu mejor: " + mk.mov + " mov."); return p.length ? "<small>" + p.join(" · ") + "</small>" : ""; })();
   }
-  movs = pp ? pp.movs : 0; previo = pp ? pp.ms : 0; jugando = false;
+  movs = 0; previo = 0; jugando = false;
   if (!esResoluble(n, t)) console.warn("deslizante: este tablero no tiene solución");
   $("tiempo").textContent = fmtMs(previo);
-  $("msg").textContent = pp ? "💾 Retomaste tu partida guardada. El tiempo sigue desde donde lo dejaste; usa 🔄 para empezar de cero." : "";
+  $("msg").textContent = "";
   construir(); pintar(); pintarMejor();
   pintarMetaJuego();
 }
 function jugarNivel(i) {
-  if (!NIVELES[i] || !desbloqueado(i)) return;
+  if (!(i >= 0 && i < TOTAL) || !desbloqueado(i)) return;
+  if (!NIVELES[i]) { aviso("🚧 Los niveles todavía no están creados"); return; }
   modo = "nivel"; idx = i;
   mostrar("juego");
-  empezar(true);                                    // si el nivel tiene partida guardada, la retoma
+  empezar();
 }
 function jugarLibre(m) {
   if (!tamanoAbierto(m)) return;
@@ -510,14 +508,13 @@ function jugarLibre(m) {
 }
 
 // ----- Botones y teclado -----
-$("btn-jugar").addEventListener("click", () => jugarNivel(siguientePendiente()));
-$("btn-niveles").addEventListener("click", () => mostrar("pantalla-niveles"));
+$("btn-jugar").addEventListener("click", () => { const i = siguientePendiente(); if (NIVELES[i]) jugarNivel(i); else jugarLibre(libreN); });   // sin niveles: modo libre
+$("btn-niveles").addEventListener("click", () => abrirMapa());
 $("btn-libre-jugar").addEventListener("click", () => jugarLibre(libreN));
 $("btn-libre").addEventListener("click", () => mostrar("pantalla-libre"));
 // ☰: en cualquier pantalla (también dentro de una partida) vuelve al menú principal: el juego cargado con el velo. No hay menú de pausa;
 // lo que se avanzó en la partida en curso no se guarda (una partida guardada antes no se toca).
 $("btn-menu").addEventListener("click", () => mostrar("inicio"));
-$("reiniciar").addEventListener("click", () => { if (modo === "nivel") descartarParcial(idx + 1); empezar(); });   // reiniciar también borra la partida guardada de ese nivel
 addEventListener("keydown", (e) => {
   if ($("juego").hidden || enInicio) return;
   const d = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [1, 0], ArrowRight: [-1, 0] }[e.key];
@@ -531,8 +528,9 @@ import("../compartido/jugador.js").then(({ alCambiarSesion }) =>
   alCambiarSesion((u) => ($("sesion").textContent = u ? (u.displayName || "Jugador") : "Sin sesión"))
 ).catch(() => {});
 
-// Niveles pasados: se unen (pasado en cualquier sitio = pasado). Récords: por nivel (o por tamaño en el modo libre),
+// Niveles pasados: gana el nivel más alto (pasado en cualquier sitio = pasado). Récords: por nivel (o por tamaño en el modo libre),
 // el menor número de movimientos y el menor tiempo (cada uno por separado); de los tableros resueltos en modo libre gana el mayor.
+// Los puntos del juego se unen con el mayor de los dos (un marcador acumulado no se puede sumar entre dispositivos sin duplicar).
 const mejorMarca = (x, y) => (!x ? y : !y ? x : { mov: Math.min(x.mov, y.mov), ms: Math.min(x.ms, y.ms) });
 import("../compartido/progreso.js").then((m) => {
   nube = m.conectar(ID, {
@@ -550,14 +548,12 @@ import("../compartido/progreso.js").then((m) => {
       }
       const est = { ...(b ? b.estrellas : {}) };                       // estrellas: gana el mayor escalón de cada nivel
       for (const k in (a ? a.estrellas : {})) est[k] = Math.max(a.estrellas[k], est[k] || 0);
-      const par = { ...(b ? b.parciales : {}) };                       // partidas guardadas: gana la más reciente (la marca de borrado también cuenta)
-      for (const k in (a ? a.parciales : {})) if (!par[k] || (Number(a.parciales[k].ts) || 0) > (Number(par[k].ts) || 0)) par[k] = a.parciales[k];
-      return { hechos: m.unirHechos(a && a.hechos, b && b.hechos) || [], mejores: mej, libre: lib, estrellas: est, parciales: par };
+      return { v: VERSION_PROG, hechos: Math.max(a ? a.hechos : 0, b ? b.hechos : 0), mejores: mej, libre: lib, estrellas: est, puntos: Math.max(a ? a.puntos : 0, b ? b.puntos : 0) };
     },
     alCambiar: (v) => {
       prog = limpiar(v) || prog;
       if (enInicio) mostrar("inicio");   // aún no ha tocado Continuar: se carga el nivel que lleva su cuenta
-      if (!$("pantalla-niveles").hidden) pintarNiveles();
+      mapa.refrescar();                 // si el mapa está abierto, se redibuja con el progreso de la cuenta
       if (!$("pantalla-libre").hidden) pintarLibre();
       pintarMonedas();
       if (!$("juego").hidden && !enInicio) { pintarMejor(); pintarMetaJuego(); }
