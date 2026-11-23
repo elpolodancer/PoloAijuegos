@@ -75,6 +75,16 @@ Código reutilizable (ya está en `compartido/`, anotado en `ARCHIVOS` de `sw.js
 
 El juego solo indica cuántos niveles tiene cada etapa (`porEtapa`), el progreso `{ max, hecho }` y qué hace `jugarNivel(n)`. Según `sw.js`, Estacionamiento todavía lista sus propias copias en `estacionamiento/` (`mapa-estacionamiento.js`, etc.).
 
+### A-bis) Mapa solo de países (estándar nuevo, 21 nov 2026)
+
+Es el estándar para los juegos por niveles que se creen o se rehagan desde ahora. **Sustituye** al mapa de México con estados de la sección A **en cada juego que lo adopte**; los juegos que ya están terminados con el mapa de 32 estados + 194 países siguen como están hasta que se pasen al estándar nuevo (no se cambia la numeración de niveles de un juego ya publicado).
+
+1. **Solo países, sin estados de México:** **195 países** (los 194 de `PAISES_BASE` + México) × **20 niveles por país = 3 900 niveles**.
+2. **Orden fijo** (`PAISES_MUNDO` en `compartido/etapas-mapa.js`): el **1.º es México** (niveles 1 a 20, donde empieza el juego); del 2.º al 20.º el resto de Latinoamérica; del 21.º al 24.º Belice, Jamaica, Guyana y Surinam; el **25.º es Estados Unidos** (niveles 481 a 500); del 26.º al 194.º, al azar con semilla fija (20261121); el **último (195.º) es China**. No se cambia después de publicar un juego.
+3. **Cómo se pide:** `crearEtapas({ porEtapa: 20, soloPaises: true })` y `montarMapa({ etapas, … })` como siempre. Con `soloPaises` el mapa **abre directo en el mundo** (con agua que sube un escalón por país terminado), que lleva «▶ Continuar», los botones extra (♾️ Modo libre) e «ℹ️ Info»; no hay México de cerca ni «◀ México». Los países se abren **de uno en uno** (el siguiente al terminar los 20 niveles del anterior); los bloqueados no se listan. El botón de atrás desde un país es «◀ Mundo». Sin la opción `soloPaises` todo funciona como antes.
+4. **Progreso:** «nivel más alto terminado» como **un solo número** (los niveles se abren en orden, así que todos los anteriores están pasados), no una lista con un valor por nivel. Así el progreso cabe en la nube: con 3 900 niveles y un récord por nivel son ≈ 120 000 caracteres de los 300 000 que permite `firestore-unificado.rules` (un documento privado por jugador y por juego en `progreso/{uid}/juegos/{juego}`).
+5. **Dificultad:** sigue la sección 8 (el tramo es de 100 niveles; con 3 900 son 39 tramos, de 50/40/10 % a 25/40/35 %). Los primeros niveles de cada juego pueden ser todos fáciles si el juego lo decide (Deslizante: los 20 de México).
+
 ### B) Juegos sin niveles (Rubik)
 
 **No llevan mapa ni niveles.** Su inicio sigue la sección 7 (capa «Comenzar» sobre el juego cargado) pero el menú de ☰ Pausa lleva solo «♾️ Modo libre» (y «ℹ️ Info» si la necesitan): no tienen Niveles. Lo mínimo es: el selector de lo que se juega (en Rubik, el modelo de cubo) y, dentro de la partida, el botón de revolver. Todo sobre el fondo de madera clara u oscura y con los botones fijos de la sección 1. Detalle en `rubik/README-rubik.md`.
@@ -243,7 +253,7 @@ Al migrar un juego que ya tenía menú propio, **se conserva su lógica y su pro
 1. **Estándares del juego completos**: la revisión de la sección 9 (madera, 🎮 Portal de Juegos, ☰ Pausa/Atrás, inicio con «Comenzar» y opciones en ☰ Pausa de la sección 7, 👤 Iniciar sesión, pantalla de Modo libre, mapa de México y mundo armado con los países ocultos, ⛶ y pausa conectada), más monedas/estrellas si el juego las usa (sección 3), y su registro (sección 5).
 2. **Mecánicas, metas y temas definidos como constantes** al inicio del archivo de lógica del juego, antes de cualquier generación: qué variantes existen, a partir de qué avance del mapa (`p`) aparecen y cómo se combinan por etapa. Se anotan en el README del juego.
 3. **El bot de comprobación soporta todo lo anterior** (cada mecánica y cada meta) y pasa una muestra de niveles de todo el mapa.
-4. **Solo entonces** se generan los 22 600 niveles (100 por estado y por país) con la dificultad de la sección 8.
+4. **Solo entonces** se generan los niveles del mapa (con el estándar nuevo de la sección 4A-bis: 3 900 = 20 por país × 195 países; con el mapa anterior: 22 600 = 100 por estado y por país) con la dificultad de la sección 8.
 
 Mientras un juego está en `EN_DESARROLLO` y sin publicar, sus niveles se pueden borrar y regenerar. Después de publicar **no se cambian** (cambiaría niveles que ya se pasaron).
 
@@ -252,7 +262,7 @@ Mientras un juego está en `EN_DESARROLLO` y sin publicar, sus niveles se pueden
 Mientras un juego está en `EN_DESARROLLO` (`juegos.js`) sus puntos **nunca suman al total** (`jugador.js`: solo guardan la mejor marca y, si juega el administrador, van a `totalPrueba`). Al pasarlo a «Juegos» **empiezan a contar para todos**, así que antes de pasarlo se revisa esta lista, en este orden:
 
 1. **Estándares completos** (secciones 1, 2, 7 y 9): 🎮 Portal de Juegos, ☰ Pausa/Atrás en `b-cielo`, madera, ⛶, juego cargado al abrir con la capa **▶ Comenzar** (♾️ Modo libre y 📋 Niveles dentro de ☰ Pausa), 👤 Iniciar sesión, pantalla de Modo libre, mapa armado con el mundo oculto, pausa estándar y fin de nivel sobre el tablero (6). Ningún `b-gris` en menús ni `velo` oscuro propio: las pantallas de menú usan `.pant-menu` y la ayuda («Cómo se juega») la ventana `.pausa-*` con «Entendido».
-2. **Puntos revisados.** El Modo libre no da puntos de perfil (7.2). Los niveles dan puntos **solo la primera vez** que se pasan y con tope por envío (`MAX_PUNTOS_POR_ENVIO` = 1000 en `jugador.js` y `cola-puntos.js`, igual que las reglas de Firestore). Se comprueba que no hay forma de repetir algo sin límite y que sume.
+2. **Puntos revisados.** El Modo libre no da puntos de perfil (7.2). Cada nivel da **1 punto al perfil, solo la primera vez** que se pasa (sección 12; `encolarNivel()` de `compartido/cola-puntos.js`), con tope por envío (`MAX_PUNTOS_POR_ENVIO` = 1000 en `jugador.js` y `cola-puntos.js`, igual que las reglas de Firestore). Se comprueba que no hay forma de repetir algo sin límite y que sume.
 3. **Niveles completos y comprobados:** los 22 600 (o los que el juego declare) generados **después** de los estándares (sección 10), con su verificador en consola (`verificar-<juego>.mjs`, «Todo cumple»). Si el reparto de dificultad se aparta de la sección 8, el README del juego lo explica (Slither: 50/40/10 → 25/35/40).
 4. **Progreso local primero** con `conectar()` y puntos pendientes con `encolarPuntos()`; `jugador.js` y `progreso.js` se cargan con `import()` y `try/catch` para que el juego abra sin internet.
 5. **Probado:** flujo completo (menú → Modo libre → partida → pausa → salir; Niveles → mapa → nivel → ganar/perder → Mapa/Siguiente; recargar con progreso), en escritorio **y en celular real** (las pruebas con navegador sin pantalla no sustituyen tocar con el dedo).
@@ -261,3 +271,19 @@ Mientras un juego está en `EN_DESARROLLO` (`juegos.js`) sus puntos **nunca suma
 
 Pasar un juego a terminado **no cambia sus niveles** (sección 10): después de publicar ya no se tocan.
 
+## 12. Recompensas: el punto del portal es 1 por nivel; lo demás es de cada juego (regla del 21 nov 2026)
+
+Hay **tres** cosas distintas y no se mezclan:
+
+| Qué | Dónde se ve | Cuánto | Quién lo decide |
+|---|---|---|---|
+| **Puntos del portal** (`perfiles/{uid}.total`, los que se ven fuera, en la pantalla con todos los juegos) | Portal | **Exactamente 1** por cada nivel pasado **por primera vez**, **en cualquier juego** | Estándar (aquí) |
+| **Monedas** | Chip dorado del juego | Las fija cada juego (Deslizante: de 15 a 80 por nivel, según el tablero; el resto de los juegos, de 15 a 45) | El juego, en su README |
+| **Puntos del juego** (marcador de dentro del juego) | Dentro del juego | Los fija cada juego (Deslizante: de 80 a 250 por partida ganada, según el tablero) | El juego, en su README |
+
+- **Cómo se aplica:** al pasar un nivel por primera vez el juego llama `encolarNivel("<id>")` (`compartido/cola-puntos.js`; vale `PUNTOS_PORTAL_POR_NIVEL` = 1). **No** se llama a `encolarPuntos(id, N)` con otros valores para premiar niveles.
+- **Una sola vez por nivel.** Repetir un nivel no da punto de portal. El Modo libre **nunca** da puntos al portal (7.2).
+- Las monedas y los puntos del juego **no** suben el total del portal.
+- Juegos que premian por **partida** y no por nivel (Slither, Agario…) siguen con su propia regla hasta que se revisen; si tienen niveles, sus niveles dan 1 punto como todos.
+- **Juegos ya hechos:** pasan a esta regla cuando se vuelvan a tocar. Hasta entonces pueden dar otros valores por nivel (revisarlo en la lista de la sección 11 antes de publicar).
+- Al cambiar de regla en un juego que ya tenía puntos, el total de los jugadores no baja solo (las reglas de Firestore impiden bajarlo desde el navegador); el reinicio se hace con `herramientas/reiniciar-puntos.mjs`.
