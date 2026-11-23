@@ -36,7 +36,7 @@
 //     alCambiarVista: (esPrincipal) => { ... } // avisa de cada cambio de vista (el juego vuelve a rotular el ☰: «Atrás» mientras el mapa está abierto)
 //     unPais: true,                            // SOLO con crearEtapas({ soloPaises: true }): NO hay lista ni mundo; la vista principal es la botella del país donde va el jugador
 //                                              //   (solo su contorno con trazo), con ◀ ▶ (países abiertos), 🗂️ Niveles (los niveles del país) y Continuar. Sin esta opción el mapa solo de países sigue como siempre.
-//   (con unPais) mapa.centroPais() = punto de la pantalla dentro del país abierto · mapa.parpadear() = el país destella un instante (lo usa la celebración de «deslizante»)
+//   (con unPais) mapa.centroPais() = punto de la pantalla dentro del país abierto · mapa.parpadear(k) = el país hace «pop» (se hincha, destella y rebota; k = 0, 1, 2… lo hace más fuerte) · mapa.retenerContinuar(true/false) = oculta o muestra el botón «Continuar» del centro (lo usa la celebración de «deslizante»)
 //   });
 //   mapa.abrir();                // vista principal
 //   mapa.abrir(n);               // abre la lista de niveles de la etapa del nivel n
@@ -420,6 +420,7 @@ export function montarMapa(o) {
 
   // unPais: «Continuar» dentro del país, en su centro. Se coloca en píxeles sobre el cuerpo del mapa (que es position:relative) y se recoloca al cambiar el tamaño de la ventana.
   let btnCentro = null;
+  let retener = false;   // true = el botón «Continuar» del centro se queda oculto (mientras dura la celebración de «deslizante»)
   function ubicarCentro() {
     if (!btnCentro || !btnCentro.isConnected) return;
     const c = centroDelPais();
@@ -437,7 +438,7 @@ export function montarMapa(o) {
     b.style.visibility = "hidden";   // hasta tener su sitio (se ve en el siguiente cuadro)
     cuerpo.appendChild(b);
     btnCentro = b;
-    requestAnimationFrame(() => { ubicarCentro(); b.style.visibility = ""; });
+    requestAnimationFrame(() => { ubicarCentro(); if (!retener) b.style.visibility = ""; });
   }
   addEventListener("resize", () => { if (abierto) ubicarCentro(); });
   const ir = (v, i = 0) => { vista = v; indice = i; pintar(); };
@@ -747,15 +748,32 @@ export function montarMapa(o) {
     // unPais: punto de la pantalla (px) dentro del país abierto, lo más cerca posible del centro de su caja: { x, y } o null
     centroPais: centroDelPais,
     // el país abierto parpadea (destello claro + trazo dorado) un instante
-    parpadear() {
+    // k = 0, 1, 2…: número de estrella que entró; cada «pop» es un poco más fuerte que el anterior
+    parpadear(k = 0) {
       const b = botella;
       if (!b || !b.svg.isConnected) return;
+      if (typeof b.svg.animate === "function") {   // el país se hincha y rebota (pop)
+        const g = 1.035 + 0.015 * Math.min(k, 3);
+        b.svg.animate([{ transform: "scale(1)" }, { transform: "scale(" + g + ")", offset: 0.3 }, { transform: "scale(.985)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 520, easing: "ease-out" });
+      }
       const d = b.sil.getAttribute("d");
       const flash = el("path", { d, fill: "#fff6b0", "pointer-events": "none" }, b.svg);
       const aro = el("path", { d, fill: "none", stroke: "#ffc61f", "stroke-width": 9, "stroke-linejoin": "round", "pointer-events": "none" }, b.svg);
       if (typeof flash.animate !== "function") { setTimeout(() => { flash.remove(); aro.remove(); }, 300); return; }
       aro.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], { duration: 450 });
       flash.animate([{ opacity: 0 }, { opacity: 0.85 }, { opacity: 0 }], { duration: 450, easing: "ease-out" }).onfinish = () => { flash.remove(); aro.remove(); };
+    },
+    // unPais: true = oculta el botón «Continuar» del centro; false = lo muestra (con un rebote si estaba oculto). Es seguro llamarla en cualquier momento.
+    retenerContinuar(on) {
+      const estaba = retener;
+      retener = !!on;
+      const b = btnCentro;
+      if (!b || !b.isConnected) return;
+      if (retener) { b.style.visibility = "hidden"; return; }
+      if (!estaba) return;
+      ubicarCentro();
+      b.style.visibility = "";
+      if (typeof b.animate === "function") b.animate([{ transform: "scale(.4)", opacity: 0 }, { transform: "scale(1.18)", opacity: 1, offset: 0.6 }, { transform: "scale(1)", opacity: 1 }], { duration: 420, easing: "ease-out" });
     },
     esPrincipal: () => vista === VISTA_PRINCIPAL,
     abierto: () => abierto,
