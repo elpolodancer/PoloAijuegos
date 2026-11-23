@@ -274,7 +274,7 @@ function animarVictoria(v, tier) {
 // ----- Celebración al pasar un nivel (sustituye al panel de victoria) -----
 // 1) Las estrellas ganadas (hasta 3: doradas, moradas o mezcladas; las moradas van primero) salen UNA TRAS OTRA del centro de la pantalla y, sin detenerse,
 //    vuelan dejando brillos hasta su lugar: arriba a la derecha (sin pegarse a los bordes).
-// 2) Ya ahí, sale de ellas el texto «N estrellas» (sube un poco creciendo y se desvanece) mientras un velo oscuro tapa el juego y debajo se abre el mapa:
+// 2) Ya ahí se quedan quietas un momento (TIEMPOS.quieta) y sale de ellas el texto «N estrellas» (sube un poco creciendo y se desvanece) mientras un velo oscuro tapa el juego y debajo se abre el mapa:
 //    el contorno del país donde juega (mapa.abrir); el velo se aparta y las estrellas siguen arriba a la derecha.
 // 3) Desde ahí las estrellas caen UNA POR UNA hacia el centro del país, se hacen pequeñas hasta desaparecer y, cuando cada una entra, el país hace «pop»
 //    (se hincha, destella y rebota). Al final aparece el botón «Continuar» del centro con un rebote.
@@ -283,7 +283,8 @@ const RESPETAR_MOVIMIENTO_REDUCIDO = false;   // false = la celebración se ve s
 const TIEMPOS = {
   entraSep: 90,       // ms entre una estrella y la siguiente al salir del centro
   entraDur: 280,      // lo que tarda cada una en volar del centro a su lugar (arriba a la derecha); empieza a moverse en cuanto aparece
-  arriba: 100,        // ya todas arriba: instante antes de que el velo cambie la escena (aquí sale el texto «N estrellas»)
+  quieta: 370,        // ya todas arriba a la derecha: se quedan ESTÁTICAS este rato para que se vean bien (aquí sale el texto «N estrellas»)
+  arriba: 100,        // y un instante más antes de que el velo cambie la escena
   texto: 480,         // lo que dura el texto «N estrellas» (sale de las estrellas, se pone encima, sube un poco creciendo y se desvanece)
   velo: 100,          // lo que tarda el velo en tapar (y en apartarse)
   espera: 120,        // país ya visible, antes de que empiece a caer la primera estrella
@@ -292,7 +293,7 @@ const TIEMPOS = {
   final: 100,         // tras el pop de la última, antes de quitar todo
   continuar: 90,      // tras entrar la última estrella, cuando aparece «Continuar» con su rebote
 };
-const RITMO = 1;      // 1 = los tiempos de arriba tal cual (~1,5 s con 3 estrellas); 2 = el doble de lento; 0.5 = el doble de rápido. Multiplica todos los tiempos de arriba
+const RITMO = 1;      // 1 = los tiempos de arriba tal cual (~1,85 s con 3 estrellas); 2 = el doble de lento; 0.5 = el doble de rápido. Multiplica todos los tiempos de arriba
 for (const k in TIEMPOS) TIEMPOS[k] = Math.round(TIEMPOS[k] * RITMO);
 let celId = 0, celTimers = [], celEl = null;
 function quitarCelebracion() {
@@ -323,8 +324,7 @@ function celebrar(tier, i) {
   for (let k = 0; k < cuantas; k++) {
     const w = document.createElement("div"), e = document.createElement("span");
     w.className = "cel-e";
-    e.className = "est cel-mueve " + (k < mor ? "mor" : "oro");
-    e.style.animationDelay = (k * T.entraSep + T.entraDur) + "ms";   // empieza a moverse cuando ella llega a su lugar
+    e.className = "est " + (k < mor ? "mor" : "oro");   // sin vaivén: al llegar arriba se quedan quietas
     w.appendChild(e); fila.appendChild(w); ests.push(w);
   }
   ov.append(velo, fila);
@@ -356,7 +356,7 @@ function celebrar(tier, i) {
 
   // 2) cambio de escena: con todas ya arriba, el velo cubre el juego, se abre el mapa debajo y el velo se aparta
   const tLlega = (cuantas - 1) * T.entraSep + T.entraDur;
-  const tVelo = tLlega + T.arriba, tMapa = tVelo + T.velo;
+  const tVelo = tLlega + T.quieta + T.arriba, tMapa = tVelo + T.velo;
   tras(tVelo, () => velo.classList.add("on"));
   tras(tMapa, () => { mapa.retenerContinuar(true); abrir(); velo.classList.remove("on"); });
 
