@@ -112,7 +112,7 @@ function aviso(texto) {
   clearTimeout(avisoT); avisoT = setTimeout(() => { a.hidden = true; }, 2600);
 }
 
-// ----- Mapa de niveles (estándar 7.3 + mapa solo de países): el mundo con agua; México es el primer país y se van abriendo de uno en uno -----
+// ----- Mapa de niveles (estándar 7.3 + mapa solo de países): se ve solo el país donde vas, con su contorno que se llena de agua; México es el primer país y se van abriendo de uno en uno -----
 const mapa = montarMapa({
   prefijo: ID,
   etapas: ETAPAS,
