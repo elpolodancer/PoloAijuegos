@@ -86,7 +86,9 @@ html.oscura .m-raiz{background:url("${MADERA_OSCURA}") center/cover no-repeat,#1
 .m-info{margin:2px 0 0;font-size:.82rem;color:var(--txt-fondo-suave,#5b6b7c);line-height:1.3}
 .m-acciones{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
 .m-acciones .b3d{--t:42px;font-size:15px;height:63px}   /* alto +50 % (42 → 63 px) en País · Mapa · Continuar; el ancho sigue siendo automático (igual que antes) */
-/* «Mapa»: botón normal (misma forma que Niveles y Modo libre) con la bandera del país donde va el jugador de fondo; el velo oscuro deja leer el texto */
+/* Botón «País»: la bandera del país de fondo; el velo oscuro deja leer el texto */
+/* «Mapa»: botón redondo (63 px, solo el emoji 🌍) sobre un mar azul: se entra al mundo tocando el globo */
+.m-acciones .b3d.b-mundo{width:63px;min-width:63px;padding:0;border-radius:50%;font-size:36px;background:radial-gradient(circle at 35% 30%,#d4f1ff,#3aa0e6 55%,#17548f)}
 .b3d.b-bandera{background:linear-gradient(180deg,rgba(10,20,35,.15),rgba(10,20,35,.55)),var(--bandera,none) center/cover no-repeat,var(--c2);text-shadow:0 1px 3px rgba(0,0,0,.95),0 2px 0 rgba(0,0,0,.4)}
 .m-cuerpo{flex:1 1 0;min-height:0;display:flex;flex-direction:column;align-items:center;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 2px 12px}
 .m-cuerpo>svg{display:block;width:100%;flex:1 1 auto;min-height:0;max-height:100%;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
@@ -556,10 +558,16 @@ export function montarMapa(o) {
     acciones.appendChild(b);
     return b;
   }
-  // «Mapa»: botón normal (como Niveles y Modo libre) con la bandera de fondo del país donde va el jugador ahora (cambia solo al avanzar de país)
+  // «Mapa»: botón redondo con el emoji del mundo (abre el mapa del mundo)
   function botonMapa(fn) {
-    const b = boton("Mapa", "🗺️", "b-cielo b-bandera", fn);
-    const codigo = PAISES_ORDEN[prog().paisActual];
+    const b = boton("", "🌍", "b-cielo b-mundo", fn);
+    b.replaceChildren(h("span", "b-ico", "🌍"));
+    b.title = "Mapa del mundo"; b.setAttribute("aria-label", "Mapa del mundo");
+    return b;
+  }
+  // «País»: la bandera del país al que lleva el botón va de fondo
+  function botonPais(fn, codigo) {
+    const b = boton("País", "◀", "b-montana b-bandera", fn);
     if (codigo) b.style.setProperty("--bandera", 'url("' + urlBandera(codigo) + '")');
     return b;
   }
@@ -881,7 +889,7 @@ export function montarMapa(o) {
     titulo.textContent = nombrePais(codigo);
     info.textContent = hechos + " de " + NIVELES_POR_ETAPA + " niveles completados";
     const mio = indice;
-    boton("País", "◀", "b-montana", () => ir("pais", mio));
+    botonPais(() => ir("pais", mio), codigo);
     botonMapa(() => { enfoque = mio; ir("mundo"); });   // de vuelta al mundo, acercado a este país
     botonContinuar();
     rejillaNiveles(base);
