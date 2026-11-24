@@ -9,6 +9,7 @@ import { metasDe, evaluar, registrar, desempaquetar, textoEstrellas, contar } fr
 import { elegirDelBanco, cuantos } from "./banco-spider.js";
 import { ayudasDe, recompensa, carteraVacia, saldo, ganarMonedas, gastarMonedas, unirCarteras, unirProgresoSpider } from "./economia-spider.js"; // monedas, ayudas por dificultad y cartera
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
+import { crearCelebracion } from "../compartido/celebracion-estrellas.js"; // estrellas que vuelan, caen en el país y monedas que viajan al chip (13.5)
 import { encolarNivel, leerCola, guardarCola } from "../compartido/cola-puntos.js"; // 1 punto del portal por nivel pasado la primera vez (estándar, sección 12)
 import { crearEtapas } from "../compartido/etapas-mapa.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
@@ -63,6 +64,7 @@ if (prog.opc) { pal = PALOS.includes(prog.opc.palos) ? prog.opc.palos : 1; dif =
 function mostrar(p) {
   pantalla = p;
   quitarResultado();
+  if (p !== "juego") { $("toast").hidden = true; clearTimeout(aviso.id); } // un aviso del nivel (metas de las estrellas) no se queda tapando el mapa o la celebración
   $("pantalla-inicio").hidden = p !== "inicio";
   $("libre").hidden = p !== "libre";
   $("juego").hidden = p !== "juego";
@@ -71,7 +73,7 @@ function mostrar(p) {
   $("btn-mapa-juego").hidden = !nivel; // el 🗺️ solo en los niveles (el Modo libre no tiene mapa)
   ubicarMonedas();
   rotularMenu();
-  if (p !== "mapa") mapa.cerrar();
+  if (p !== "mapa") { mapa.cerrar(); cel.quitar(); cel.quitarTexto(); } // la celebración sí sigue cuando se abre el mapa (lo hace ella misma)
   if (p === "juego") pintar();
   if (p === "libre") pintarLibre();
   if (p === "inicio") pintarInicio();
@@ -100,7 +102,7 @@ function aviso(txt, ms = 2200) {
 const ETAPAS = crearEtapas({ porEtapa: 20, soloPaises: true }); // 195 países × 20 niveles = 3 900 (los creados salen de niveles-spider.js)
 if (ETAPAS.total !== TOTAL) console.warn("spider: el mapa tiene " + ETAPAS.total + " niveles y niveles-spider.js declara " + TOTAL);
 const monedas = () => saldo(prog.cartera);
-function pintarMonedas() { $("monedas-n").textContent = monedas().toLocaleString("es-MX"); }
+function pintarMonedas(v) { $("monedas-n").textContent = (v ?? monedas()).toLocaleString("es-MX"); } // v = número mientras viajan las monedas de la celebración; sin él, el saldo real
 function gastar(n) { if (!gastarMonedas(prog.cartera, idDisp, n)) return false; guardar(); pintarMonedas(); return true; }
 const proximoNivel = () => Math.min(Math.max(1, prog.niv.max), ETAPAS.total);
 // Texto «Nivel 3 · México» del nivel n (el número es el del país: 1 a 20)
@@ -189,6 +191,8 @@ const mapa = montarMapa({
   avisoPrincipal: () => creados().toLocaleString("es-MX") + " de " + TOTAL.toLocaleString("es-MX") + " niveles listos 🕷️",
   alInfo: abrirInfo,
 });
+// Celebración al pasar un nivel (compartido/celebracion-estrellas.js): usa el mapa, el chip de monedas y el saldo de arriba
+const cel = crearCelebracion({ mapa, chipMonedas: () => $("monedas-barra"), totalMonedas: monedas, pintarMonedas });
 
 // ---------- Partida ----------
 const formato = (s) => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
@@ -217,6 +221,7 @@ function empezar(n = 0) {
   historial = []; usos = { pista: 0, retro: 0, r: 0, p: 0 }; sel = null; fin = false; pausado = false; t0 = 0; acum = 0;
   alertaMal = null; pista = null; ultimaAccion = Date.now();
   colecc = []; cancelarAnim(); vistos = new Set([clave(e)]);
+  cel.quitar(); cel.quitarTexto(); // al empezar un nivel el texto «N estrellas» desaparece al instante
   $("nombre-nivel").textContent = n ? nombreNivel(n) : "♾️ Modo libre " + DIFICULTADES[dif - 1].ico; // botón verde de arriba (13.6): sin tamaño ni palos
   mostrar("juego");
   if (n) { const m = metasDe(n, e.palos, e.dif); aviso("★★ " + m.textos[1] + "   ·   ★★★ " + m.textos[2], 4500); } // las metas de estrellas de este nivel
@@ -249,6 +254,14 @@ function terminar() {
   guardar(); pintarMonedas();
   if (nivel && premioPrimera) { encolarNivel("spider"); import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {}); } // 1 punto del portal por nivel, solo la primera vez (se envía cuando hay internet y sesión)
   quitarResultado();
+  if (nivel) { // niveles: celebración de estrellas (13.5) en lugar de la ventana; deja terminar el viaje de la última serie y abre el mapa del país con el agua subiendo
+    const aqui = e, demora = finAnim > Date.now() ? finAnim - Date.now() + 250 : 0;
+    const lineas = reg.previo ? (reg.nuevoRecord ? ["🏆 ¡Nuevo récord! " + formato(s)] : ["⏱️ " + formato(s) + " · tu récord " + formato(reg.previo)]) : ["⏱️ Primer tiempo " + formato(s)];
+    const hechas = reg.mask, metas = metasDe(nivel, e.palos, e.dif).textos;
+    if (!(hechas & 2)) lineas.push("★★ " + metas[1]); if (!(hechas & 4)) lineas.push("★★★ " + metas[2]); // lo que falta para las demás estrellas
+    setTimeout(() => { if (e !== aqui || !fin || pantalla !== "juego") return; cel.celebrar({ estrellas: Math.max(1, contar(reg.mask)), monedas: premio, lineas, abrirMapa: () => abrirMapa(nivel, true) }); }, demora);
+    return;
+  }
   const f = document.createElement("div");
   f.className = "sobre-tablero"; // fin de nivel SOBRE el tablero (ESTANDARES-juegos.md, sección 6)
   const tx = document.createElement("div"); tx.className = "sobre-texto";

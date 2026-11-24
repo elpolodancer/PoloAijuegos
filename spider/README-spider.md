@@ -132,7 +132,7 @@ Cada nivel de la campaña guarda **el mejor tiempo** del jugador y tiene **3 est
 | 6. Modo libre 13.7: Dificultad (5 botones solo con emoji + nombre debajo), Palos, nota, récord, ▶ Jugar | ✔ salvo «💾 Partidas guardadas» (Spider no guarda partidas del Modo libre). Los emojis de dificultad son los círculos 🟢🔵🟣🟠🔴 de Spider (no las caritas de Deslizante) para coincidir con el color de los niveles del mapa |
 | 7. Ajustes 13.8: ℹ️ Cómo se juega · 💾 Copia de seguridad (`almacen.js`) · 🗑️ Borrar historial (pruebas) · Cerrar | ✔ **`MOSTRAR_BORRAR_HISTORIAL = true`: ponerlo en `false` antes de pasar Spider a «Juegos»** |
 | 8. Registro: `sw.js` ya trae contornos, posiciones y banderas | ✔ Falta subir `VERSION` y anotar `economia`/`estrellas` ya listados; la fila del README principal debe decir 3 900 niveles |
-| 9. Celebración de estrellas (13.5) | ❌ No portada: Spider conserva su ventana «¡Ganaste!» sobre el tablero (con las 3 estrellas y el récord) y el botón «🗺️ Mapa» abre el país del nivel para ver subir el agua. Portar la celebración de Deslizante requiere pasar `.est`/`.cel-*` a `inmersivo.css` |
+| 9. Celebración de estrellas (13.5) | ✔ Portada a un módulo compartido nuevo, `compartido/celebracion-estrellas.js` (trae sus propios estilos; Deslizante aún usa su copia). Al pasar un nivel salen las estrellas ganadas (1 a 3, acumuladas del nivel), el país hace «pop», las monedas viajan al chip y sale el texto «N estrellas» con el tiempo y lo que falta para las demás estrellas. Con esto los niveles **ya no muestran la ventana «¡Ganaste!»** (el Modo libre sí); «Repetir» y «Siguiente nivel» son ahora «Continuar» y la lista de niveles del mapa. Los tiempos se ajustan en `TIEMPOS`/`RITMO` del módulo. **Hay que anotar `compartido/celebracion-estrellas.js` en `sw.js`** |
 | 10. Probado en celular real | ❌ Pendiente |
 
 Cambios de comportamiento a tener en cuenta:
@@ -184,7 +184,7 @@ node spider/verificar-campana-spider.mjs 300                # plan, repartos ún
 4. ✔ Plan y generador. Generar por palos: 1 → 2 → 3 → 4.
 5. Con todos los niveles: `ensamblar`, `verificar-campana-spider.mjs`, imagen de tarjeta y registro como terminado (sección 12).
 
-Pendiente aparte: bot en Web Worker, arrastrar cartas, sonidos, imagen de tarjeta (`imagenes/spider.webp`, y anotarla en `ARCHIVOS` de `sw.js`), probar en celular, y **puntos del portal**: hoy Spider no suma nada al perfil (solo da monedas). Por el estándar (`ESTANDARES-juegos.md`, sección 12) debe dar **1 punto por nivel pasado la primera vez**, con `encolarNivel("spider")` de `compartido/cola-puntos.js`, nunca con `encolarPuntos` y otros valores. Mientras esté en `EN_DESARROLLO` ese punto no suma al total de nadie; hay que agregarlo antes de pasarlo a «Juegos».
+Pendiente aparte: probar la celebración en celular real, bot en Web Worker, arrastrar cartas, sonidos, imagen de tarjeta (`imagenes/spider.webp`, y anotarla en `ARCHIVOS` de `sw.js`), probar en celular, y **puntos del portal**: hoy Spider no suma nada al perfil (solo da monedas). Por el estándar (`ESTANDARES-juegos.md`, sección 12) debe dar **1 punto por nivel pasado la primera vez**, con `encolarNivel("spider")` de `compartido/cola-puntos.js`, nunca con `encolarPuntos` y otros valores. Mientras esté en `EN_DESARROLLO` ese punto no suma al total de nadie; hay que agregarlo antes de pasarlo a «Juegos».
 
 ## 12. Registro en el portal
 `juegos.js`: la línea de `spider` en `JUEGOS` y `"spider"` en `EN_DESARROLLO` (al terminar, quitar el id de `EN_DESARROLLO` y actualizar la descripción). `sw.js`:
