@@ -445,6 +445,8 @@ const DIFICULTADES = [
   { emoji: "😡", nombre: "Difícil",    pasos: 12,  nota: "Muy revuelto." },
   { emoji: "😈", nombre: "Demoníaco",  pasos: null, nota: "Totalmente al azar (el más difícil)." },
 ];
+const LIBRE_VISIBLES = 10;                         // tableros que se ven al abrir el Modo libre (3×3 a 10×10); el resto sale con «Mostrar más tableros»
+let libreMas = false;                              // true = ya se pulsó «Mostrar más tableros» (se recuerda mientras la página siga abierta)
 let libreDif = 2;                                  // dificultad elegida (índice de DIFICULTADES)
 try { const g = JSON.parse(localStorage.getItem(CLAVE_LIBRE)); if (g) { if (DIFICULTADES[g.d]) libreDif = g.d; if (g.n >= TAMANO_MIN && g.n <= TAMANO_MAX) libreN = g.n; } } catch (e) {}
 const guardarLibre = () => { try { localStorage.setItem(CLAVE_LIBRE, JSON.stringify({ d: libreDif, n: libreN })); } catch (e) {} };
@@ -466,7 +468,10 @@ function pintarLibre() {
     df.appendChild(b);
   });
   $("dif-nombre").textContent = DIFICULTADES[libreDif].emoji + " " + DIFICULTADES[libreDif].nombre + " · " + DIFICULTADES[libreDif].nota;
-  for (let m = TAMANO_MIN; m <= TAMANO_MAX; m++) {
+  if (libreN > LIBRE_VISIBLES) libreMas = true;       // el tablero elegido (o el de una partida guardada) tiene que verse
+  const ultimo = libreMas ? TAMANO_MAX : Math.min(TAMANO_MAX, LIBRE_VISIBLES);
+  $("btn-mas-tableros").hidden = ultimo >= TAMANO_MAX;
+  for (let m = TAMANO_MIN; m <= ultimo; m++) {
     const abierto = tamanoAbierto(m);
     const b = document.createElement("button");
     b.type = "button";
@@ -971,6 +976,7 @@ function abrirPartidas(para) {
 
 // ----- Botones y teclado -----
 $("btn-libre-jugar").addEventListener("click", () => jugarLibre(libreN));
+$("btn-mas-tableros").addEventListener("click", () => { libreMas = true; pintarLibre(); });
 $("btn-libre-guardadas").addEventListener("click", () => abrirPartidas("cargar"));
 // ☰: en una partida del Modo libre abre la ventana de pausa (Seguir jugando · Guardar partida · Salir a elegir tablero); en la pantalla de opciones del Modo libre
 // o en un nivel vuelve al menú principal (el mapa); dentro de una vista del mapa (Mapa, Niveles) vuelve «Atrás» a su vista principal.
