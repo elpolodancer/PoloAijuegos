@@ -25,10 +25,10 @@ Ruta: `ajedrez/README-ajedrez.md` · Estado: en la zona «Juegos en desarrollo»
 ## Mapa (13.4)
 - `ETAPAS = crearEtapas({ porEtapa: 20, soloPaises: true })` → **195 países × 20 niveles = 3 900**. México primero (niveles 1-20); el orden de los países es `PAISES_MUNDO` (fijo). **No cambiar el orden ni `porEtapa` después de publicar.**
 - `montarMapa({ unPais: true, columnas: 4, etiquetaContinuar, botonesExtra: [♾️ Modo libre], alCambiarVista, progreso, jugarNivel, infoNivel, alInfo })`. En el centro del país: «▶ Jugar» hasta pasar el primer nivel y «▶ Continuar» después. Arriba: ♾️ Modo libre, 🗺️ Mapa (el mundo con solo los países abiertos; al tocar uno se ven sus 20 niveles en 4 columnas), 🗂️ Niveles e ℹ️ Info.
-- Los niveles sin contenido muestran 🚧; al tocarlos avisa «Los niveles todavía no están creados». Prueba: `index-ajedrez.html?dev=1` → al tocar un nivel sin contenido aparece «✅ Superar» (marca el nivel como pasado sin dar punto de portal).
+- Los niveles sin contenido (del 5 en adelante) muestran 🚧; al tocarlos avisa «Los niveles todavía no están creados». Prueba: `index-ajedrez.html?dev=1` → al tocar un nivel sin contenido aparece «✅ Superar» (marca el nivel como pasado sin dar punto de portal).
 - Progreso `{ max, hecho }` (un solo número cada uno) en `localStorage` `ajedrez:mapa`, sincronizado con `conectar("ajedrez-mapa", …)` (gana el más alto). La clave y el formato **no cambiaron**.
-- **Qué cambió con la numeración:** antes eran 100 niveles por estado y por país (22 600). Los 21 niveles que existen siguen siendo los niveles 1-21: del 1 al 20 caen en México y **el 21 (una partida contra la computadora, ia 2) cae en Guatemala 1**. Si se prefiere que México tenga las tres primeras partidas completas, hay que decidirlo antes de crear niveles nuevos.
-- Si algún dispositivo de pruebas guardó un `hecho` mayor a 3 900 (por usar `?dev=1` en el mapa viejo), el juego lo recorta a 3 900; se arregla con ⚙️ Ajustes → «Borrar todo el historial».
+- **Numeración:** antes eran 100 niveles por estado y por país (22 600); ahora son 20 por país. Los niveles viejos (1-21) se borraron: hoy solo existen el 1 al 4, todos en México.
+- Si algún dispositivo de pruebas guardó un `hecho` mayor a 4 (de los niveles viejos), conviene borrarlo con ⚙️ Ajustes → «Borrar todo el historial»; y si guardó uno mayor a 3 900 (por usar `?dev=1` en el mapa viejo), el juego lo recorta a 3 900; se arregla con ⚙️ Ajustes → «Borrar todo el historial».
 
 ## Dentro de un nivel (13.6)
 - **Arriba al centro** (`.barra-nivel`): 🗺️ (`b3d b-azul`) y el **botón verde con el nombre del nivel** («Nivel 3 · México»). Al tocar cualquiera de los dos se abre **«¿Salir?»** (`crearMenuPausa`): ▶ Seguir jugando · 🚪 Salir al mapa (ayuda «Se pierde lo avanzado en este tablero.» si ya hay jugadas). Mientras está abierta la computadora no mueve ni se tocan casillas; Esc la abre y la cierra.
@@ -53,9 +53,20 @@ Ventana `.pausa-fondo` + `.pausa-panel.aj-panel`, solo desde la pantalla de inic
 ## Claves de `localStorage` (no cambiaron)
 `ajedrez:mapa` `{ max, hecho }` · `ajedrez:ganados` `{ "1": true … "5": true }` · `ajedrez:nivel` · `ajedrez:color`. Más las del mapa compartido: `ajedrez-agua` y `ajedrez-mundo-visto`. Las cuatro primeras están en `CLAVES_EXTRA` de `almacen.js` (la copia de seguridad). Si se agrega otra clave `ajedrez:…`, anotarla ahí; el estándar pide que las nuevas terminen en `_v1`.
 
-## Niveles hechos (país 1, México, y el primero de Guatemala)
-1-3 peón · 4-6 torre · 7-9 caballo · 10-12 alfil · 13-15 dama (el 15: jaque mate) · 16-18 rey (el 18: enroque) · 19-20 primeras partidas (ia 1 con blancas y con negras) · **21 partida ia 2 (cae en Guatemala 1)**.
-Son ejercicios de uso, no partidas: solo mueven las blancas. Datos en `LISTA` de `niveles-ajedrez.js`.
+## Niveles hechos (24 nov 2026: se borraron los 21 anteriores y se empezó de cero, de uno en uno)
+En los cuatro, **el rival no mueve nunca** y el jugador es blancas. Datos en `LISTA` de `niveles-ajedrez.js` (tipos P «práctica» y C «colocar»; la cabecera del archivo explica los campos).
+
+| Nivel | Pieza | Qué ve el jugador | Se supera cuando… |
+|---|---|---|---|
+| 1 | Peones | Tablero completo. Mensaje «Mueve los peones». Solo se mueven los peones | captura una pieza rival |
+| 2 | Torres | Tablero completo. «Mueve las torres». Se mueven peones y torres (hay que abrir camino con los peones) | captura una pieza rival **con una torre** |
+| 3 | Alfiles | Tablero completo. «Mueve los alfiles». Se mueven peones y alfiles | captura una pieza rival **con un alfil** |
+| 4 | Caballo | Tablero vacío con un caballo en e4 y **sombras** en las 8 casillas a las que puede saltar (c3 c5 d2 d6 f2 f6 g3 g5) | llena las 8 casillas |
+
+- **Práctica (1-3):** no hay coronación, enroque ni «al paso» (las jugadas que llegan a la última fila no se permiten). Al superar el nivel sale la ventana de fin sobre el tablero (con «Siguiente nivel ▶» y **«Seguir practicando»** en lugar de «Ver tablero»), y además **el botón «▶ Siguiente nivel» queda fijo junto a ↩ y 🔄** y el mensaje pasa a «✅ ¡Nivel superado!…». El jugador puede seguir moviendo las piezas permitidas todo lo que quiera; el rival sigue sin moverse. El punto del portal se da solo la primera vez.
+- **Nivel 2 y 3:** se pidió «basta con que se coma una pieza»; se interpretó como **comer con la pieza del nivel** (torre / alfil), porque si no un peón bastaría. Para que cuente cualquier captura, cambiar `capturaCon` por un valor que no filtre (o quitar la condición `pieza === meta.capturaCon` en `jugarTuto`).
+- **Caballo (4):** al soltar el caballo en una sombra queda fijo (no se puede volver a elegir) y aparece otro caballo en e4; al llenar las 8 sale la ventana de fin (no hay nivel 5 todavía, así que el botón grande es «Repetir nivel»). El caballo se mueve **tocando el caballo y luego la sombra** (como todas las piezas del juego); arrastrarlo no está hecho. ↩ deshace la última colocación.
+- Probado en Node (las mismas reglas del juego, sin pantalla): 16 jugadas iniciales solo de peón en los niveles 1 y 2, comer con peón no supera el 2, Txg7 y Axb7 sí superan el 2 y el 3, ninguna jugada llega a la fila 8, no hay «al paso» contra las propias piezas, las 8 sombras del caballo y el nivel completo tras llenarlas.
 
 ## Revisión del 24 nov 2026 (esta migración)
 - Probado: sintaxis del JS, coincidencia de todos los ids entre HTML y JS, y en Node el mapa (`total` 3 900, nivel 1 = México, 20 = México 20, 21 = Guatemala 1, 3 900 = China), el progreso con `superarNivel` y `fusionarMapa`. **NO se probó en navegador ni en celular real**: inicio, mapa (botella, mundo, 4 columnas), «¿Salir?», la barra del nivel y el tablero en vertical, horizontal y celular horizontal bajo (el tablero ahora se mide con los márgenes de `.aj`), Ajustes y la sesión.
@@ -64,6 +75,6 @@ Son ejercicios de uso, no partidas: solo mueven las blancas. Datos en `LISTA` de
 ## Pendiente
 - Probar todo en navegador y **celular real** (lista de arriba).
 - Subir `VERSION` en `sw.js` (hoy 225) al publicar estos cambios. No hay archivos nuevos que anotar: los contornos, las posiciones de países y `almacen.js` ya están en la lista sin internet, y las banderas se guardan solas al verse.
-- Decidir: `PUNTOS_LIBRE`; los tres cuadros de datos de la barra del nivel; si México lleva las tres primeras partidas (hoy la tercera cae en Guatemala); monedas/estrellas; imagen de tarjeta (`imagenes/ajedrez.webp` ya está anotada en `sw.js`).
+- Decidir: `PUNTOS_LIBRE`; los tres cuadros de datos de la barra del nivel; monedas/estrellas; imagen de tarjeta (`imagenes/ajedrez.webp` ya está anotada en `sw.js`).
 - Texto de la tarjeta en `juegos.js`: dice «gana puntos la primera vez que vences cada nivel»; revisar cuando se decida `PUNTOS_LIBRE`.
-- **Niveles del 22 en adelante** (sección 10: primero estándares, después niveles): tácticas (mate en 1/2/3, ganar material, defender) con la dificultad de la sección 8 (`compartido/dificultad-niveles.js`, `dificultadDeNivel(n, 3900)`), generadas y verificadas con `ia-ajedrez.js`, más un `verificar-niveles-ajedrez.mjs` de consola (que no va en `sw.js`).
+- **Niveles del 5 en adelante** (siguen las órdenes de Polo, de uno en uno; después, tácticas como mate en 1/2/3, ganar material o defender, con la dificultad de la sección 8 (`compartido/dificultad-niveles.js`, `dificultadDeNivel(n, 3900)`), verificadas con `ia-ajedrez.js`, más un `verificar-niveles-ajedrez.mjs` de consola que no va en `sw.js`).

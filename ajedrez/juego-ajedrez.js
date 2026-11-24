@@ -2,7 +2,7 @@
 // Inicio con mapa (ESTANDARES-juegos.md, sección 13, como Puzle deslizante): al abrir se ve UNA SOLA VEZ la pantalla de inicio
 // (♾️ Modo libre · ▶ Jugar · 🗺️ Mapa · ⚙️ Ajustes); de ahí en adelante el «menú principal» es el mapa del país donde va el jugador
 // (compartido/mapa-niveles.js, solo países: 195 × 20 = 3 900 niveles). No hay capa «Comenzar» ni menú de ☰ Pausa.
-import { INICIO, desdeFEN, legales, hacer, deshacer, enJaque, estadoPartida, clave } from "./logica-ajedrez.js";
+import { INICIO, CABALLO, desdeFEN, legales, hacer, deshacer, enJaque, estadoPartida, clave } from "./logica-ajedrez.js";
 import { mejorJugada } from "./ia-ajedrez.js";
 import { encolarPuntos, encolarNivel, leerCola, guardarCola } from "../compartido/cola-puntos.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
@@ -36,7 +36,7 @@ const FIN = {
   material: "Tablas: no hay material para dar mate.", repeticion: "Tablas por repetición de posición.",
 };
 const AYUDA = "Toca una pieza tuya y luego la casilla a donde quieres moverla (los puntos marcan las jugadas posibles). ↩ deshace tu última jugada y 🔄 empieza otra. " +
-  "Los niveles del mapa son ejercicios y partidas; ♾️ Modo libre es ajedrez completo contra la computadora en 5 dificultades.";
+  "Los primeros niveles del mapa enseñan una pieza (el rival no mueve); ♾️ Modo libre es ajedrez completo contra la computadora en 5 dificultades.";
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => n.toLocaleString("es-MX");
@@ -47,12 +47,15 @@ const nivelGuardado = () => Math.min(NIVELES.length, Math.max(1, +localStorage.g
 let nivel = nivelGuardado(); // dificultad con la que se juega en el Modo libre
 let jugador = localStorage.getItem(ID + ":color") === "-1" ? -1 : 1;
 let est, pila = [], claves, legs, sel, ult, fin = false, msgFin, resultado, pensando, partida = 0, nube = null, nubeMapa = null, nivelN = 0, nivelD = null, fotos = [];
+let logrado = false;      // ejercicio superado (en los de práctica el jugador puede seguir moviendo después)
+let objetivos = [];       // nivel del caballo: casillas marcadas (sombras) donde hay que ponerlo
 let pantalla = "inicio";  // "inicio" | "juego" | "libre" (opciones del Modo libre) | "niveles" (mapa)
 let enLibre = false;      // true = se está jugando una partida que se empezó desde la pantalla de Modo libre
 let pausada = false, retraso = false;
 let mapaEnPrincipal = true; // ¿el mapa está en su vista principal (la del país)? Ahí el ☰ no se ve: el mapa ES el menú principal
 let reiniciando = false;    // true mientras se borra el historial: la sincronización con la nube no vuelve a traer lo borrado
 
+const sqDe = (s) => "abcdefgh".indexOf(s[0]) + (8 - +s[1]) * 8;   // «e4» → número de casilla (0 = a8, 63 = h1)
 const ganados = () => { try { return JSON.parse(localStorage.getItem(ID + ":ganados")) || {}; } catch (e) { return {}; } };
 
 // ----- Tablero (64 botones, se crean una vez) -----
@@ -86,8 +89,9 @@ addEventListener("resize", () => { ajustarTam(); colocarFin(); });
 function render() {
   const flip = jugador === -1;
   const reyJaque = enJaque(est, est.turno) ? est.rey[est.turno === 1 ? 0 : 1] : -1;
+  const colocar = modoColocar();
   const dest = new Set(), caps = new Set();
-  if (sel !== null) legs.filter((m) => m.de === sel).forEach((m) => { dest.add(m.a); if (est.b[m.a] || m.ep) caps.add(m.a); });
+  if (sel !== null && !colocar) legs.filter((m) => m.de === sel).forEach((m) => { dest.add(m.a); if (est.b[m.a] || m.ep) caps.add(m.a); });
   for (let d = 0; d < 64; d++) {
     const sq = flip ? 63 - d : d, p = est.b[sq], f = sq >> 3, c = sq & 7, b = celdas[d];
     let cls = "cas " + ((f + c) % 2 ? "osc" : "cla");
@@ -95,6 +99,8 @@ function render() {
     if (sq === sel) cls += " sel";
     if (sq === reyJaque) cls += " jaque";
     if (dest.has(sq)) cls += caps.has(sq) ? " dest cap" : " dest";
+    const sombra = colocar && !p && objetivos.includes(sq);   // sombra del caballo: a dónde puede ir
+    if (sombra) cls += " sombra";
     b.className = cls;
     b.dataset.sq = sq;
     const nom = "abcdefgh"[c] + (8 - f);
@@ -102,17 +108,19 @@ function render() {
     b.innerHTML =
       (d % 8 === 0 ? `<span class="co r">${8 - f}</span>` : "") +
       (d >= 56 ? `<span class="co f">${"abcdefgh"[c]}</span>` : "") +
-      (p ? `<span class="p ${p > 0 ? "bl" : "ng"}">${GLIFO[Math.abs(p)]}\uFE0E</span>` : "");
+      (p ? `<span class="p ${p > 0 ? "bl" : "ng"}">${GLIFO[Math.abs(p)]}\uFE0E</span>` : sombra ? `<span class="p bl som">${GLIFO[CABALLO]}\uFE0E</span>` : "");
   }
   let txt;
   if (fin) txt = msgFin;
-  else if (nivelD && nivelD.tuto) txt = "🎯 " + nivelD.obj;
+  else if (logrado) txt = "✅ ¡Nivel superado! Pasa al siguiente o sigue practicando.";
+  else if (nivelD && nivelD.tuto) txt = "🎯 " + nivelD.obj + (colocar ? " (" + objetivos.filter((s) => est.b[s] === CABALLO).length + " de " + objetivos.length + ")" : "");
   else if (pensando) txt = "Pensando…";
   else txt = "Tu turno" + (enJaque(est, est.turno) ? ": ¡jaque!" : "");
   $("estado").textContent = txt;
   $("desc").textContent = nivelD ? nivelD.titulo + ": " + nivelD.txt : NIVELES[nivel - 1].nombre + ": " + NIVELES[nivel - 1].desc;
   const rot = nivelD ? "Reiniciar nivel" : "Nueva partida";
   $("bNueva").title = rot; $("bNueva").setAttribute("aria-label", rot);
+  $("bSiguiente").hidden = !(logrado && nivelD && datosNivel(nivelN + 1));   // el botón queda a la vista mientras se sigue practicando
 }
 
 // ----- Ventanas de aviso / Info / confirmar (estilo .pausa-*; confirm() del navegador saca de la pantalla completa) -----
@@ -140,9 +148,10 @@ function cambiar(fn) {
 function nueva() {
   partida++;
   est = desdeFEN(nivelD && nivelD.tuto ? nivelD.fen : INICIO);
-  fotos = []; pila = []; claves = [clave(est)]; sel = null; ult = null; fin = false; msgFin = ""; resultado = ""; pensando = false; retraso = false;
+  fotos = []; pila = []; claves = [clave(est)]; sel = null; ult = null; fin = false; msgFin = ""; resultado = ""; pensando = false; retraso = false; logrado = false;
   $("promo").hidden = true;
   $("fin").hidden = true;
+  objetivos = modoColocar() ? legales(est).filter((m) => m.de === sqDe(nivelD.meta.centro)).map((m) => m.a) : [];   // las casillas a las que puede ir el caballo del centro
   legs = nivelD && nivelD.tuto ? tutoLegales() : legales(est);
   ajustarTam();
   render();
@@ -213,7 +222,7 @@ function tocarCasilla(sq) {
     if (ms.length > 1) return pedirCoronacion(ms);
   }
   $("promo").hidden = true;
-  sel = est.b[sq] * jugador > 0 && sq !== sel ? sq : null;
+  sel = est.b[sq] * jugador > 0 && sq !== sel && (!modoColocar() || sq === sqDe(nivelD.meta.centro)) ? sq : null;   // las piezas ya colocadas no se mueven
   render();
 }
 
@@ -253,6 +262,9 @@ function deshacerJugada() {
 
 $("bNueva").addEventListener("click", () => cambiar(() => {}));
 $("bDeshacer").addEventListener("click", deshacerJugada);
+$("bSiguiente").addEventListener("click", () => { const d = datosNivel(nivelN + 1); if (d) empezarNivel(nivelN + 1, d); });
+// Nivel del caballo: ¿este nivel es el de colocar el caballo en las sombras?
+function modoColocar() { return !!(nivelD && nivelD.meta && nivelD.meta.centro); }
 
 // ===== Fin de nivel / de partida: ventana SOBRE el tablero (estándar, sección 6) =====
 function colocarFin() {
@@ -273,11 +285,12 @@ const boton = (texto, icono, clase, fn) => {
 function mostrarFin() {
   const id = partida;
   setTimeout(() => { // un instante para ver la última jugada
-    if (id !== partida || !fin || pantalla !== "juego") return;
+    if (id !== partida || (!fin && !logrado) || pantalla !== "juego") return;
     const gana = resultado === "gana", f = $("fin");
     $("fin-tit").textContent = nivelD && gana ? "¡Nivel " + fmt(nivelN) + " completado!" : gana ? "¡Ganaste!" : resultado === "tablas" ? "Tablas" : resultado === "pierde" ? "Perdiste" : "¡Listo!";
     $("fin-txt").textContent = msgFin;
-    const fila = [], ver = boton("Ver tablero", "👁️", "b-cielo", () => { $("fin").hidden = true; });
+    const practica = !!(nivelD && nivelD.meta && nivelD.meta.capturaCon);
+    const fila = [], ver = boton(practica ? "Seguir practicando" : "Ver tablero", practica ? "♟" : "👁️", "b-cielo", () => { $("fin").hidden = true; });
     let primario;
     if (nivelD && gana) {
       const sig = nivelN + 1, repetir = boton("Repetir nivel", "🔄", "b-cielo", () => nueva());
@@ -438,25 +451,43 @@ function jugarNivel(n) {
 }
 
 // ----- Niveles del mapa: ejercicios de enseñanza (solo mueven las blancas) y partidas -----
-const sqDe = (s) => "abcdefgh".indexOf(s[0]) + (8 - +s[1]) * 8;
-const tutoLegales = () => legales(est).filter((m) => est.b[m.a] !== -6); // en los ejercicios no se captura el rey negro
+// Jugadas del jugador en un ejercicio: el rival no mueve nunca. «mueven» = las únicas piezas que se pueden mover (sin coronar ni enrocar); «centro» = solo el caballo del centro
+const tutoLegales = () => {
+  const meta = nivelD.meta || {};
+  let l = legales(est).filter((m) => est.b[m.a] !== -6);   // en los ejercicios no se captura el rey negro
+  if (nivelD.mueven) l = l.filter((m) => nivelD.mueven.includes(Math.abs(est.b[m.de])) && !m.prom && !m.enr);
+  if (meta.centro) l = l.filter((m) => m.de === sqDe(meta.centro));
+  return l;
+};
 function jugarTuto(m) {
   fotos.push({ b: est.b.slice(), enr: est.enr, ap: est.ap, rel: est.rel, rey: est.rey.slice(), ult });
   const meta = nivelD.meta;
+  const pieza = Math.abs(est.b[m.de]), captura = est.b[m.a] !== 0 || !!m.ep;
   hacer(est, m);
+  est.ap = -1;   // solo mueve el jugador: nunca hay «al paso» contra sus propias piezas
   ult = m; sel = null; $("promo").hidden = true;
   let ok = false;
-  if (meta.llegar) ok = m.a === sqDe(meta.llegar);
+  if (meta.capturaCon) ok = captura && pieza === meta.capturaCon;
+  else if (meta.centro) {
+    ok = objetivos.every((s) => est.b[s] === CABALLO);
+    if (!ok) est.b[sqDe(meta.centro)] = CABALLO * jugador;   // aparece otro caballo en el centro para colocarlo en otra sombra
+  }
+  else if (meta.llegar) ok = m.a === sqDe(meta.llegar);
   else if (meta.coronar) ok = !!m.prom;
   else if (meta.enroque) ok = !!m.enr;
   else if (meta.limpiar) ok = !est.b.some((p) => p < 0 && p !== -6);
   else if (meta.mate) ok = (estadoPartida(est, legales(est), [clave(est)]) || {}).fin === "mate";
-  est.turno = jugador; // las negras no responden
+  est.turno = jugador; // el rival no responde
   legs = tutoLegales();
-  fin = ok; msgFin = ok ? "¡Muy bien! Nivel superado." : ""; resultado = ok ? "gana" : "";
-  if (ok) superado();
+  const primera = ok && !logrado;
+  if (ok) {
+    logrado = true; resultado = "gana";
+    msgFin = meta.capturaCon ? "¡Muy bien! Capturaste una pieza." : meta.centro ? "¡Muy bien! Llenaste todas las casillas del caballo." : "¡Muy bien! Nivel superado.";
+    if (!meta.capturaCon) fin = true;   // en los ejercicios de práctica el juego sigue abierto para experimentar
+    if (primera) superado();
+  }
   render();
-  if (ok) mostrarFin();
+  if (ok && (primera || fin)) mostrarFin();
 }
 // Nivel pasado: se guarda en el mapa y, SOLO la primera vez, se anota el punto estándar del portal (sección 12: 1 por nivel, encolarNivel)
 function superado() {
