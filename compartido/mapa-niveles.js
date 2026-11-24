@@ -71,6 +71,8 @@ const AZUL_ATRAS = "#bfe4fb", AZUL_FRENTE = "#8ccdf5", BORDE = "#8fa9c0", SOMBRA
 const COLOR_HECHO = "#1f78c8", COLOR_ACTUAL = "#ff9a1f";
 // País «bonito» (solo con unPais): tierra verde con playa, árboles, montañas y una banderita; el agua la cubre poco a poco y deja ver la tierra a través
 const VERDE_ARRIBA = "#a6e27a", VERDE_ABAJO = "#56b24e", PLAYA = "#f3e2a6", LINEA_TIERRA = "#2f6f3a";
+// Al completar los 20 niveles de un país: se ve completo un momento y luego se recorre hacia la izquierda mientras entra el siguiente desde la derecha
+const PAUSA_ANTES_DE_DESLIZAR = 1800, DURACION_DESLIZAR = 800;   // milisegundos
 const AGUA_TRANSPARENTE = { atras: 0.84, frente: 0.7 };   // opacidad del agua dentro del país (1 y 0.8 = como antes, sin dejar ver la tierra)
 
 // Fondo: la misma madera que el resto de los juegos (clara u oscura según el modo; la clase «oscura» la pone compartido/fondo-madera.js en <html>)
@@ -1045,6 +1047,7 @@ export function montarMapa(o) {
           for (let y = 0; y <= hh; y += hh / 70) if (sil.isPointInFill(new DOMPoint(x, y))) { ent = { x, y }; break buscar; }
         }
       } catch (e) {}
+      const idxPais = indice;
       const agua = crearAgua(svg, "agua" + id, c.d, { x0: -15, x1: w + 15, yBase: hh, yTope: 0, fondo: hh + 40, amp: acotar(lado * 0.016, 2.5, 5) }, objetivo, desde, {
         vel: 1.1, frec: 2.4, paso: 3.5, opAtras: UN_PAIS ? AGUA_TRANSPARENTE.atras : 1, opFrente: UN_PAIS ? AGUA_TRANSPARENTE.frente : 0.8,
         chorro: { x: ent.x, yTop: yBoca, yEntrada: ent.y, ancho: anchoCh * 1.5, escala: escJarra },
@@ -1056,6 +1059,7 @@ export function montarMapa(o) {
             if (miniBandera) { miniBandera.style.transition = "opacity .8s ease"; miniBandera.style.opacity = 0; }   // solo si hay bandera grande; con unPais la banderita se queda
           }
           setTimeout(() => { agua.quitar(); aguas = aguas.filter((a) => a !== agua); }, 1400);   // ya no hace falta la botella de este país
+          if (UN_PAIS) setTimeout(() => deslizarAlSiguiente(idxPais), PAUSA_ANTES_DE_DESLIZAR);   // con el país completo, se recorre y entra el siguiente
         } : null,
       });
       agua.zona = "pais" + indice;
@@ -1074,7 +1078,38 @@ export function montarMapa(o) {
     }
   }
 
+  // ---------- Del país completo al siguiente (unPais) ----------
+  // El país terminado y sus textos (todo lo que hay en el cuerpo) se mueven a una capa que se recorre hacia la izquierda y se va; el país nuevo (ya dibujado de verdad) entra desde la derecha.
+  let viejoActual = null, anDesliza = null;
+  function limpiarDeslizado() {
+    if (anDesliza) { const a = anDesliza; anDesliza = null; a.onfinish = a.oncancel = null; try { a.cancel(); } catch (e) {} }
+    if (viejoActual) { viejoActual.remove(); viejoActual = null; }
+    raiz.style.overflow = "";
+  }
+  function deslizarAlSiguiente(desde) {
+    if (!UN_PAIS || !abierto || vista !== "pais" || indice !== desde || popsAbiertos || viejoActual) return;
+    const sig = prog().paisActual;
+    if (!(sig > desde) || typeof cuerpo.animate !== "function") return;   // no hay país siguiente (el último) o el navegador no sabe animar
+    const viejo = h("div", "m-cuerpo m-uno");
+    viejo.style.cssText = "position:absolute;left:" + cuerpo.offsetLeft + "px;top:" + cuerpo.offsetTop + "px;width:" + cuerpo.offsetWidth + "px;height:" + cuerpo.offsetHeight + "px;overflow:hidden;pointer-events:none;z-index:1;box-sizing:border-box";
+    viejo.append(...cuerpo.childNodes);   // se MUEVEN (no se copian) para no repetir identificadores del dibujo
+    raiz.appendChild(viejo);
+    viejo.scrollTop = 0;
+    detener(); aguas = []; botella = null;
+    indice = sig; enfoque = null;
+    pintar();                              // dibuja el país nuevo en el cuerpo (limpiarDeslizado de pintar aún no ve el viejo: se anota después)
+    viejoActual = viejo;
+    raiz.style.overflow = "hidden";        // lo que se sale de la pantalla mientras se desliza no se ve
+    const opc = { duration: DURACION_DESLIZAR, easing: "cubic-bezier(.45,.05,.25,1)" };
+    viejo.animate([{ transform: "translateX(0)", opacity: 1 }, { transform: "translateX(-100%)", opacity: 0.2 }], { ...opc, fill: "forwards" });
+    const an = cuerpo.animate([{ transform: "translateX(100%)" }, { transform: "translateX(0)" }], opc);
+    anDesliza = an;
+    an.onfinish = an.oncancel = () => { if (anDesliza === an) { anDesliza = null; limpiarDeslizado(); ubicarCentro(); } };
+    setTimeout(() => { if (viejoActual === viejo) limpiarDeslizado(); }, DURACION_DESLIZAR + 400);   // por si algo cortó la animación
+  }
+
   function pintar() {
+    limpiarDeslizado();
     detener();
     // Si algo redibuja el mapa (sincronizar con la cuenta, llegar las siluetas…) mientras el agua sube, la animación continúa desde donde iba en vez de saltar al final y perder la jarra
     for (const a of aguas) if (a.zona && a.meta - a.nivel() > 0.004) reanudo[a.zona] = a.nivel();
@@ -1115,7 +1150,7 @@ export function montarMapa(o) {
       }
       pintar();
     },
-    cerrar() { abierto = false; raiz.hidden = true; detener(); aguas = []; },
+    cerrar() { abierto = false; raiz.hidden = true; detener(); aguas = []; limpiarDeslizado(); },
     refrescar() { if (abierto) pintar(); },
     principal,
     // unPais: punto de la pantalla (px) dentro del país abierto, lo más cerca posible del centro de su caja: { x, y } o null
