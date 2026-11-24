@@ -379,13 +379,33 @@
     const enOtraApp = /FBAN|FBAV|Instagram|WhatsApp|MicroMessenger|TikTok|Snapchat|Line\/|; wv\)/i.test(navigator.userAgent); // navegador interno de otra app
     const nota = (t) => { $("notaInstalar").textContent = t; $("notaInstalar").hidden = !t; };
     addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); evento = e; });
-    addEventListener("appinstalled", () => { evento = null; $("opInstalar").hidden = true; nota(""); });
+    addEventListener("appinstalled", () => { evento = null; $("opInstalar").hidden = true; nota("✅ Listo: busca «El Polo» en tu pantalla de inicio."); });
     if (instalada) $("opInstalar").hidden = true;
+    // Si Chrome no ofrece instalar, se revisa por qué y se dice la causa concreta (en vez de un texto genérico)
+    async function porQueNoSePuedeInstalar() {
+      if (window.top !== window.self) return "Estás viendo el portal dentro de un marco de otra página (por ejemplo dentro de Polo AI) y ahí no se puede instalar. Ábrelo directo en Chrome («Abrir en otra pestaña»).";
+      if (!isSecureContext) return "Para instalar hace falta abrir el portal con https://.";
+      try {
+        const enlace = document.querySelector('link[rel="manifest"]');
+        const r = await fetch(enlace.href, { cache: "no-cache" });
+        if (!r.ok) return "Chrome no encuentra el manifest del portal (error " + r.status + ").";
+        const m = await r.json();
+        const malos = [];
+        for (const ic of m.icons || []) {
+          const u = new URL(ic.src, r.url).href;
+          const ancho = await new Promise((ok) => { const i = new Image(); i.onload = () => ok(i.naturalWidth); i.onerror = () => ok(0); i.src = u; });
+          if (!ancho) malos.push(ic.src);
+        }
+        if (malos.length) return "Estos iconos del manifest no se pueden cargar y sin ellos Chrome no deja instalar: " + malos.join(", ") + ". Revisa que existan en esa ruta del repositorio.";
+      } catch (e) { return "No pude revisar el manifest del portal (¿sin internet?)."; }
+      return "Chrome no ofrece instalar ahora. Lo más común: el portal ya está instalado en este dispositivo (búscalo en tu pantalla de inicio, o desinstálalo y recarga esta página) o estás en una pestaña de incógnito. Si no, abre el menú de Chrome (⋮) y busca «Instalar aplicación».";
+    }
     $("opInstalar").addEventListener("click", async () => {
       if (evento) { const e = evento; evento = null; e.prompt(); await e.userChoice.catch(() => {}); return; }
-      nota(esIos ? "En iPhone/iPad: toca Compartir (el cuadro con la flecha) y luego «Agregar a pantalla de inicio»."
-         : enOtraApp ? "Estás en el navegador interno de otra app (WhatsApp, Facebook, Instagram…) y ahí no se puede instalar. Toca ⋮ y elige «Abrir en Chrome» (o copia el enlace y ábrelo en Chrome)."
-         : "Abre el menú de Chrome (⋮) y elige «Instalar aplicación» o «Agregar a la pantalla de inicio». Si no aparece, comprueba que no estés en modo incógnito y que Chrome esté actualizado.");
+      if (esIos) return nota("En iPhone/iPad: toca Compartir (el cuadro con la flecha) y luego «Agregar a pantalla de inicio».");
+      if (enOtraApp) return nota("Estás en el navegador interno de otra app (WhatsApp, Facebook, Instagram…) y ahí no se puede instalar. Toca ⋮ y elige «Abrir en Chrome» (o copia el enlace y ábrelo en Chrome).");
+      nota("Revisando…");
+      nota(await porQueNoSePuedeInstalar());
     });
 
     // ----- Copias de seguridad y protección del almacenamiento (compartido/almacen.js; no usa Firebase, funciona sin internet) -----
