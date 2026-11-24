@@ -418,7 +418,7 @@ function celebrar(tier, i, monedas = 0) {
 function pintarBotonMenu() {
   const enMapa = mapa.abierto();
   $("btn-menu").hidden = enMapa && mapaEnPrincipal;   // en el mapa principal no se muestra; en sus vistas internas (Mapa, Niveles) vuelve «Atrás»
-  const texto = enMapa ? "Atrás" : "Volver al menú principal";
+  const texto = enMapa ? "Atrás" : !$("juego").hidden && modo === "libre" ? "Pausa" : "Volver al menú principal";
   $("btn-menu").innerHTML = '<span class="b-ico">☰</span>'; // cuadrado, solo icono: el texto va en title y aria-label
   $("btn-menu").title = texto; $("btn-menu").setAttribute("aria-label", texto);
 }
@@ -452,6 +452,7 @@ const guardarLibre = () => { try { localStorage.setItem(CLAVE_LIBRE, JSON.string
 const claveLibre = (m, d = libreDif) => (DIFICULTADES[d].pasos === null ? String(m) : m + "-" + d);
 
 function pintarLibre() {
+  pintarCuentaGuardadas();
   if (!tamanoAbierto(libreN)) libreN = TAMANO_MIN;  // el tamaño recordado ya no está abierto
   const df = $("dif-fila"), tf = $("tam-fila");
   df.replaceChildren(); tf.replaceChildren();
@@ -488,7 +489,8 @@ let modo = "nivel";                                // "nivel" (niveles fijos) o 
 let libreNum = 0, inicial = [];                    // modo libre: número de tablero de esta sesión y tablero de partida (libreN y libreDif están arriba)
 let idx = 0, n = 3, t = [];                        // t[pos] = número de la ficha (0 = hueco)
 let movs = 0, inicio = 0, reloj = null, jugando = false;
-let previo = 0;                                    // ms ya jugados (siempre 0: ya no hay partidas guardadas)
+let previo = 0;                                    // ms ya jugados (0 en un tablero nuevo; en una partida guardada, lo que llevaba)
+let partidaId = null, guardadaMovs = -1;           // Modo libre: la partida de «Partidas guardadas» que se está jugando y los movimientos que llevaba al guardarla
 let chispas = null;                                // intervalo de la brillantina de la victoria
 const fichas = new Map();                          // número → elemento
 
@@ -620,8 +622,12 @@ async function ganar() {
   const antes = cE ? tierNivel(idx) : 0;
   const nuevoTier = Math.max(antes, cE ? tierPorTiempo(n, ms) : 0);
   prog.puntos += ptsJuego;
-  if (libre) { const k = claveLibre(libreN); prog.libre[k] = { ...nueva, ganados: ((prog.libre[k] && prog.libre[k].ganados) || 0) + 1 }; }
-  else { prog.mejores[idx + 1] = nueva; prog.hechos = Math.max(prog.hechos, idx + 1); if (cE) prog.estrellas[idx + 1] = nuevoTier; }
+  let partidaQuitada = false;
+  if (libre) {
+    const k = claveLibre(libreN); prog.libre[k] = { ...nueva, ganados: ((prog.libre[k] && prog.libre[k].ganados) || 0) + 1 };
+    partidaQuitada = !!partidaId && quitarPartida(partidaId);   // una partida guardada ya resuelta sale de la lista
+    if (partidaQuitada) partidaId = null;
+  } else { prog.mejores[idx + 1] = nueva; prog.hechos = Math.max(prog.hechos, idx + 1); if (cE) prog.estrellas[idx + 1] = nuevoTier; }
   guardarProg();
   pintarMejor();
   pintarMonedas();
@@ -653,7 +659,7 @@ async function ganar() {
   }
 
   if (!primera) {                                   // el punto del portal se da solo la primera vez que se pasa un nivel
-    $("msg").textContent = libre ? "Modo libre: no da monedas ni puntos al perfil, pero guarda tu mejor marca." : "";
+    $("msg").textContent = libre ? "Modo libre: no da monedas ni puntos al perfil, pero guarda tu mejor marca." + (partidaQuitada ? " Tu partida guardada ya resuelta se quitó de la lista." : "") : "";
     return;
   }
   encolarNivel(ID);                                 // 1 punto estándar del portal: se anota en el dispositivo y se envía al perfil cuando haya internet y sesión
@@ -666,20 +672,21 @@ async function ganar() {
 
 // Botón verde de arriba (donde estaban Modo libre y Niveles): el nombre del nivel que se está jugando (sin el tamaño: ese va bajo el tablero)
 function pintarNombre(texto) { $("nombre-nivel").textContent = texto; $("barra-juego").setAttribute("aria-label", texto); }
-function empezar() {
+function empezar(reanudar) {                          // reanudar = { id, mov, ms } al continuar una partida guardada del Modo libre
   clearInterval(reloj); clearInterval(chispas); quitarCelebracion(); quitarTextoCel();   // al empezar un nivel (p. ej. con «Continuar») el texto de estrellas desaparece al instante
   const v = $("victoria"); if (v) v.remove();
   if (modo === "libre") {
     n = libreN; t = inicial.slice();
     pintarNombre("♾️ Modo libre " + DIFICULTADES[libreDif].emoji);
-    $("titulo").innerHTML = n + "×" + n + "<small>" + DIFICULTADES[libreDif].emoji + " " + DIFICULTADES[libreDif].nombre + " · tablero " + libreNum + " de esta sesión</small>";
+    $("titulo").innerHTML = n + "×" + n + "<small>" + DIFICULTADES[libreDif].emoji + " " + DIFICULTADES[libreDif].nombre + " · " + (reanudar ? "partida guardada" : "tablero " + libreNum + " de esta sesión") + "</small>";
   } else {
     const l = NIVELES[idx];
     n = l.n; t = l.fichas.slice();
     pintarNombre(nombreNivel(idx));
     $("titulo").innerHTML = n + "×" + n + (() => { const mk = prog.mejores[idx + 1], p = []; if (l.optimo) p.push("Mínimo posible: " + l.optimo); if (mk) p.push("Tu mejor: " + mk.mov + " mov."); return p.length ? "<small>" + p.join(" · ") + "</small>" : ""; })();
   }
-  movs = 0; previo = 0; jugando = false;
+  movs = reanudar ? reanudar.mov : 0; previo = reanudar ? reanudar.ms : 0; jugando = false;   // el cronómetro arranca con el primer movimiento y suma «previo»
+  partidaId = reanudar ? reanudar.id : null; guardadaMovs = reanudar ? reanudar.mov : -1;
   if (!esResoluble(n, t)) console.warn("deslizante: este tablero no tiene solución");
   $("tiempo").textContent = fmtMs(previo);
   $("msg").textContent = "";
@@ -700,36 +707,192 @@ function jugarLibre(m) {
   empezar();
 }
 
-// ----- Botón verde del nombre del nivel: pregunta si quieres salir y, si aceptas, te lleva al mapa (o a elegir tablero en el Modo libre) -----
+// ----- Ventana de pausa: botón verde del nombre del nivel y ☰ (en una partida del Modo libre) -----
 // Mientras la ventana está abierta el cronómetro se detiene (y sigue donde iba si eliges «Seguir jugando»).
+// Niveles: «Seguir jugando» · «Salir al mapa».   Modo libre: «Seguir jugando» · «💾 Guardar partida» · «Salir a elegir tablero».
 let pausado = false, erajugando = false;
-const opcionesSalir = {
+function reanudarJuego() {
+  pausado = false;
+  if (erajugando && jugando === true) { inicio = Date.now() - previo; reloj = setInterval(mostrarTiempo, 100); }
+}
+function alAbrirPausa() {
+  pausado = true; erajugando = jugando === true;
+  if (erajugando) { previo = Date.now() - inicio; clearInterval(reloj); }   // «previo» queda al día: es lo que se guarda en una partida guardada
+}
+const pausaSalir = crearMenuPausa({                // niveles
   titulo: "¿Salir?",
   textoContinuar: "Seguir jugando",
   textoSalir: "Salir al mapa",
   ayudaSalir: "Se pierde lo avanzado en este tablero.",
-  puedeAbrir: () => !$("juego").hidden,
-  alAbrir: () => {
-    pausado = true; erajugando = jugando === true;
-    if (erajugando) { previo = Date.now() - inicio; clearInterval(reloj); }
-  },
-  alContinuar: () => {
-    pausado = false;
-    if (erajugando && jugando === true) { inicio = Date.now() - previo; reloj = setInterval(mostrarTiempo, 100); }
-  },
-  alSalir: () => { pausado = false; mostrar(modo === "libre" ? "pantalla-libre" : "inicio"); },
-};
-const pausaSalir = crearMenuPausa(opcionesSalir);   // se pasa el mismo objeto: el texto de «Salir» se cambia antes de abrir
-$("barra-juego").addEventListener("click", () => {
-  Object.assign(opcionesSalir, { textoSalir: modo === "libre" ? "Salir a elegir tablero" : "Salir al mapa" });
-  pausaSalir.abrir();
+  puedeAbrir: () => !$("juego").hidden && modo !== "libre",
+  alAbrir: alAbrirPausa,
+  alContinuar: reanudarJuego,
+  alSalir: () => { pausado = false; mostrar("inicio"); },
 });
+const pausaLibre = crearMenuPausa({                // Modo libre (con «Guardar partida»)
+  titulo: "Pausa",
+  textoContinuar: "Seguir jugando",
+  textoSalir: "Salir a elegir tablero",
+  ayudaSalir: () => (jugando === "fin" || movs === 0 ? "" : movs !== guardadaMovs ? "Se pierde lo avanzado en este tablero. Si quieres conservarlo, usa «Guardar partida»." : "Tu partida está guardada."),
+  puedeAbrir: () => !$("juego").hidden && modo === "libre",
+  alAbrir: alAbrirPausa,
+  alContinuar: reanudarJuego,
+  extras: () => (jugando === "fin" ? [] : [{
+    icono: "💾", texto: "Guardar partida", clase: "b-oro",
+    ayuda: partidaId ? "Actualiza la partida que ya habías guardado." : leerPartidas().length + " de " + MAX_PARTIDAS + " partidas guardadas.",
+    alElegir: accionGuardar,
+  }]),
+  alSalir: () => { pausado = false; mostrar("pantalla-libre"); },
+});
+$("barra-juego").addEventListener("click", () => (modo === "libre" ? pausaLibre : pausaSalir).abrir());
+
+// ----- Partidas guardadas del Modo libre (hasta 20, en este dispositivo) -----
+// Clave «_v1»: entra sola en la copia de seguridad de compartido/almacen.js. Se guarda { v: 1, t: última modificación, partidas: [...] }.
+// Cada partida: { id, g (fecha), n (tamaño), d (dificultad), mov, ms (tiempo jugado), f (fichas: 0 = hueco) }. No se sube a la cuenta.
+// Lo que se lee se valida (una copia de seguridad es un archivo de la persona): tamaño, dificultad, fichas sin repetir, con solución y sin resolver.
+const CLAVE_PARTIDAS = "deslizante_partidas_v1";
+const MAX_PARTIDAS = 20;
+const nuevoId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+function partidaValida(p) {
+  if (!p || typeof p !== "object") return null;
+  const m = Math.floor(Number(p.n)), d = Math.floor(Number(p.d));
+  if (!(m >= TAMANO_MIN && m <= TAMANO_MAX) || !DIFICULTADES[d] || !Array.isArray(p.f) || p.f.length !== m * m) return null;
+  if (new Set(p.f).size !== m * m || !p.f.every((v) => Number.isInteger(v) && v >= 0 && v < m * m)) return null;
+  if (!esResoluble(m, p.f) || p.f.every((v, i) => (i === p.f.length - 1 ? v === 0 : v === i + 1))) return null;   // sin solución o ya resuelta: no sirve
+  return {
+    id: String(p.id || "").slice(0, 40) || nuevoId(), g: Number(p.g) || 0, n: m, d,
+    mov: Math.max(0, Math.floor(Number(p.mov)) || 0), ms: Math.max(0, Math.floor(Number(p.ms)) || 0), f: p.f.slice(),
+  };
+}
+function leerPartidas() {
+  const r = [], ids = new Set();
+  try {
+    const o = JSON.parse(localStorage.getItem(CLAVE_PARTIDAS));
+    for (const x of o && Array.isArray(o.partidas) ? o.partidas : []) {
+      const p = partidaValida(x);
+      if (p && !ids.has(p.id) && r.length < MAX_PARTIDAS) { ids.add(p.id); r.push(p); }
+    }
+  } catch (e) {}
+  return r;
+}
+function escribirPartidas(l) {
+  try { localStorage.setItem(CLAVE_PARTIDAS, JSON.stringify({ v: 1, t: Date.now(), partidas: l })); return true; } catch (e) { return false; }
+}
+function pintarCuentaGuardadas() { $("cuenta-guardadas").textContent = "(" + leerPartidas().length + "/" + MAX_PARTIDAS + ")"; }
+function quitarPartida(id) {
+  const l = leerPartidas(), r = l.filter((x) => x.id !== id);
+  if (r.length === l.length) return false;
+  escribirPartidas(r); pintarCuentaGuardadas();
+  return true;
+}
+// Guarda la partida en curso (se llama con la pausa puesta: «previo» ya trae el tiempo jugado). Si ya venía de la lista (o ya se guardó antes), la actualiza;
+// con «reemplazarId» pisa esa otra. Devuelve «ok», «llena» (ya hay 20 y esta es nueva) o «error» (el dispositivo no deja escribir).
+function guardarPartida(reemplazarId) {
+  const l = leerPartidas();
+  const p = { id: partidaId || nuevoId(), g: Date.now(), n, d: libreDif, mov: movs, ms: previo, f: t.slice() };
+  const i = l.findIndex((x) => x.id === (reemplazarId || partidaId));
+  if (i >= 0) { p.id = l[i].id; l[i] = p; }
+  else if (l.length >= MAX_PARTIDAS) return "llena";
+  else l.push(p);
+  if (!escribirPartidas(l)) return "error";
+  partidaId = p.id; guardadaMovs = p.mov;
+  pintarCuentaGuardadas();
+  return "ok";
+}
+function avisoGuardado(r) {
+  aviso(r === "ok" ? "💾 Partida guardada (" + leerPartidas().length + " de " + MAX_PARTIDAS + ")" : "No se pudo guardar: el almacenamiento del dispositivo está lleno o bloqueado.");
+}
+function accionGuardar() {                          // «💾 Guardar partida» de la pausa (la pausa sigue puesta hasta que se reanuda)
+  const r = guardarPartida();
+  if (r === "llena") { abrirPartidas("guardar"); return; }
+  reanudarJuego();
+  avisoGuardado(r);
+}
+function jugarGuardada(p) {
+  modo = "libre"; libreN = p.n; libreDif = p.d; guardarLibre();
+  inicial = p.f.slice();
+  mostrar("juego");
+  empezar({ id: p.id, mov: p.mov, ms: p.ms });
+}
+// Ventana de la lista. para = «cargar» (desde el Modo libre: tocar una la continúa) o «guardar» (ya hay 20: tocar una la reemplaza con la partida en curso;
+// al borrar una se guarda ahí mismo). Se cierra con Cerrar, tocando fuera o con Esc; si venía de la pausa, el juego se reanuda.
+let listaAbierta = false;
+function abrirPartidas(para) {
+  if (listaAbierta) return;
+  listaAbierta = true;
+  const foco = document.activeElement;
+  const el = (tag, clase, texto) => { const x = document.createElement(tag); if (clase) x.className = clase; if (texto != null) x.textContent = texto; return x; };
+  const fondo = el("div", "pausa-fondo");
+  fondo.setAttribute("role", "dialog"); fondo.setAttribute("aria-modal", "true"); fondo.setAttribute("aria-label", "Partidas guardadas");
+  const panel = el("div", "pausa-panel pg-panel");
+  const nota = el("p", "pg-nota"), lista = el("div", "pg-lista"), pie = el("div", "pausa-opciones");
+  const cerrarB = el("button", "b3d txt b-cielo"); cerrarB.type = "button"; cerrarB.appendChild(el("span", "", para === "guardar" ? "Cancelar" : "Cerrar"));
+  pie.appendChild(cerrarB);
+  const tecla = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); cerrar(true); } };   // en captura: la pausa no debe abrirse encima
+  function cerrar(reanudar) {
+    fondo.remove(); removeEventListener("keydown", tecla, true); listaAbierta = false;
+    try { if (foco && foco.focus) foco.focus({ preventScroll: true }); } catch (e) {}
+    if (para === "guardar" && reanudar) reanudarJuego();
+  }
+  addEventListener("keydown", tecla, true);
+  fondo.addEventListener("click", (e) => { if (e.target === fondo) cerrar(true); });
+  cerrarB.addEventListener("click", () => cerrar(true));
+
+  function fila(p) {
+    const f = el("div", "pg-fila");
+    const b = el("button", "b3d txt pg-main " + (para === "guardar" ? "b-oro" : "b-cielo")); b.type = "button";
+    const l1 = p.n + "×" + p.n + " " + DIFICULTADES[p.d].emoji + " · " + p.mov + " mov. · " + fmtMs(p.ms);
+    const l2 = new Date(p.g).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    const tx = el("span", "pg-texto"); tx.append(el("b", "", l1), el("small", "", l2));
+    b.append(el("span", "b-ico", para === "guardar" ? "♻️" : "▶"), tx);
+    b.setAttribute("aria-label", (para === "guardar" ? "Reemplazar con la partida actual: " : "Continuar: ") + l1 + ", " + l2);
+    b.addEventListener("click", () => {
+      if (para === "guardar") { const r = guardarPartida(p.id); cerrar(true); avisoGuardado(r); }
+      else { cerrar(false); jugarGuardada(p); }
+    });
+    const x = el("button", "b3d txt b-rojo pg-borrar"); x.type = "button";
+    const xt = el("span", "", "🗑️"); x.appendChild(xt);
+    x.title = "Borrar esta partida"; x.setAttribute("aria-label", "Borrar esta partida");
+    x.addEventListener("click", () => {
+      if (!x.dataset.seguro) {                       // primer toque: pide confirmar (sin confirm())
+        x.dataset.seguro = "1"; xt.textContent = "¿Borrar?";
+        setTimeout(() => { delete x.dataset.seguro; xt.textContent = "🗑️"; }, 3000);
+        return;
+      }
+      quitarPartida(p.id);
+      if (p.id === partidaId) guardadaMovs = -1;     // la que se está jugando ya no está en la lista
+      if (para === "guardar") { const r = guardarPartida(); cerrar(true); avisoGuardado(r); return; }   // ya hay lugar: se guarda ahí mismo
+      pintar();
+    });
+    f.append(b, x);
+    return f;
+  }
+  function pintar() {
+    const l = leerPartidas().sort((a, b) => b.g - a.g);
+    nota.textContent = para === "guardar"
+      ? "Ya tienes " + MAX_PARTIDAS + " partidas guardadas. Toca una para reemplazarla con la partida actual, o bórrala y la actual se guarda en su lugar."
+      : l.length ? l.length + " de " + MAX_PARTIDAS + " partidas. Toca una para seguir jugándola."
+      : "Todavía no hay partidas guardadas. Mientras juegas en Modo libre toca ☰ y «Guardar partida» (hasta " + MAX_PARTIDAS + ").";
+    lista.replaceChildren(...l.map(fila));
+    pintarCuentaGuardadas();
+  }
+  panel.append(el("h2", "", "💾 Partidas guardadas"), nota, lista, pie);
+  fondo.appendChild(panel);
+  document.body.appendChild(fondo);
+  pintar();
+  try { (lista.querySelector("button") || cerrarB).focus({ preventScroll: true }); } catch (e) {}
+}
 
 // ----- Botones y teclado -----
 $("btn-libre-jugar").addEventListener("click", () => jugarLibre(libreN));
-// ☰: dentro de una partida o del Modo libre vuelve al menú principal (el mapa); dentro de una vista del mapa (Mapa, Niveles) vuelve «Atrás» a su vista principal.
-// No hay menú de pausa; lo que se avanzó en la partida en curso no se guarda (una partida guardada antes no se toca).
-$("btn-menu").addEventListener("click", () => { if (mapa.abierto() && !mapa.esPrincipal()) mapa.principal(); else mostrar("inicio"); });
+$("btn-libre-guardadas").addEventListener("click", () => abrirPartidas("cargar"));
+// ☰: en una partida del Modo libre abre la ventana de pausa (Seguir jugando · Guardar partida · Salir a elegir tablero); en la pantalla de opciones del Modo libre
+// o en un nivel vuelve al menú principal (el mapa); dentro de una vista del mapa (Mapa, Niveles) vuelve «Atrás» a su vista principal.
+$("btn-menu").addEventListener("click", () => {
+  if (mapa.abierto() && !mapa.esPrincipal()) mapa.principal();
+  else if (!$("juego").hidden && modo === "libre") pausaLibre.abrir();
+  else mostrar("inicio");
+});
 addEventListener("keydown", (e) => {
   if ($("juego").hidden) return;
   const d = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [1, 0], ArrowRight: [-1, 0] }[e.key];
