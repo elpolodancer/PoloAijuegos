@@ -311,8 +311,9 @@ html.inmersivo.oscura {
 }
 
 /* ===================================================================================================================
-   INICIO CON MAPA (ESTÁNDAR «estilo Deslizante»; ESTANDARES-juegos.md, sección 13). Referencia: 5deslizante/index-5deslizante.html.
-   Todas las clases llevan un nombre propio (ini-, barra-nivel, cuadros-datos, dif-, libre-, aj-) para no chocar con las de otros juegos.
+   INICIO CON MAPA (ESTÁNDAR «estilo Deslizante»; ESTANDARES-juegos.md, sección 13). Referencia de la lógica: 5deslizante/juego-5deslizante.js.
+   Referencia de USO DIRECTO de estas clases (sin copiarlas al HTML del juego): agua/index-agua.html. El HTML de Deslizante todavía las trae duplicadas con otros nombres (.menu-inicio, #btn-inicio-*, #sesion…).
+   Todas las clases llevan un nombre propio (ini-, barra-nivel, cuadros-datos, dif-, libre-, aj-, chip-sesion) para no chocar con las de otros juegos.
    Lo que NO está aquí (todavía vive en el HTML de Deslizante): estrellas (.est, .fila-est) y celebración (.cel-*), ventana de victoria, zoom y tablero.
    =================================================================================================================== */
 
@@ -325,6 +326,13 @@ html.inmersivo.oscura {
 
 /* Arriba a la derecha en columna: sesión, y debajo monedas y puntos del juego (<div class="hud hud-der columna">) */
 .hud-der.columna { flex-direction: column; align-items: flex-end; gap: 6px; z-index: 8; }   /* z 8: por encima del mapa (z 5), así el chip de monedas se ve también en el mapa */
+/* Chip de sesión (<span class="chip chip-sesion">Sin sesión</span>): un nombre largo se recorta con «…» para no tapar el chip de monedas ni el botón «Volver al menú principal».
+   Es inline-block (no flex) porque text-overflow no recorta dentro de un contenedor flex; 30 px = 34 de alto del .chip menos sus 2 bordes de 2 px. */
+.chip.chip-sesion { display: inline-block; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 30px; }
+.chip.chip-sesion:empty { display: none; }
+/* Chip que es botón (<button class="chip chip-monedas"> que abre la tienda): mismo aspecto que el chip, con foco visible y sin retraso al tocar */
+button.chip { font: inherit; font-size: 15px; font-weight: 800; cursor: pointer; touch-action: manipulation; }
+button.chip:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 
 /* Pantalla de inicio: <div class="pant-menu" id="pantalla-inicio"><div class="ini-menu"> Modo libre · Jugar · Mapa · Ajustes </div></div>
    Botones: .ini-libre y .ini-mapa (56 px), .ini-jugar (112 px, el doble), .ini-ajustes (44 px). Colores: b-morado · b-verde · b-azul · b-cielo. */
@@ -360,9 +368,9 @@ html.inmersivo.oscura {
 .pant-menu .modo-fila { width: min(100%, 520px); }
 .dif-fila .b3d.txt { --t: 52px; padding: 0 10px; font-size: 28px; }          /* Dificultad: 5 botones solo con emoji */
 .dif-fila .b3d.txt .b-ico { font-size: 1em; }
-.dif-nombre { flex: none; margin: 0; font-weight: 800; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+.pant-menu .dif-nombre { flex: none; margin: 0; font-weight: 800; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }   /* con «.pant-menu»: si no, «.pant-menu p» (más específico) le quita el color */
 .pant-menu .libre-nota { flex: none; width: min(100%, 520px); max-width: 520px; margin: 0; text-align: center; color: var(--txt-fondo-suave); font-size: .85rem; }
-.libre-record { flex: none; margin: 0; font-size: .9rem; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+.pant-menu .libre-record { flex: none; margin: 0; font-size: .9rem; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
 .libre-jugar { flex: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; width: min(100%, 520px); }   /* ▶ Jugar y 💾 Partidas guardadas */
 .libre-jugar .b3d > span { position: relative; }
 

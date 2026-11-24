@@ -6,7 +6,7 @@ Referencias: **2048** (capa «Comenzar», opciones dentro de ☰ Pausa y mapa co
 
 **Cambio de estándar (21 nov 2026): el juego abre directo en el nivel y no hay pantalla de menú principal.** Al abrir se ve el juego ya cargado, tapado por una capa semitransparente con un solo botón verde **▶ Comenzar**. Las opciones (♾️ Modo libre, 📋 Niveles, 🔄 Reiniciar, 🚪 Menú principal) están en el menú del botón **☰ Pausa**. Esto reemplaza al velo con tres botones (♾️ · 🗂️ · ▶ Continuar) y a las columnas de botones del menú principal; ver secciones 7 y 9. Los juegos que todavía no se tocan (p. ej. Spider) siguen con el velo viejo hasta que se migren; Deslizante ya no usa el velo: tiene su propio inicio (sección 13). Referencia nueva: **2048** (Comenzar + ☰ Pausa con Modo libre y Niveles + mapa con listas de 5 columnas).
 
-**Segundo estándar de inicio (23 nov 2026): «Inicio con mapa» (el de Puzle deslizante), sección 13.** Existen ahora DOS formas de abrir un juego: la capa «▶ Comenzar» (secciones 7 y 9, referencia 2048) y el **inicio con mapa** (pantalla con ♾️ Modo libre · ▶ Jugar · 🗺️ Mapa · ⚙️ Ajustes, y el mapa de un solo país como menú principal; referencia **Puzle deslizante**). Se usa el que se pida: cuando se diga «inicio con mapa» o «inicio estilo Deslizante» se aplica la sección 13 completa (con su revisión 13.11 en lugar de la 9) y, en ese juego, **manda la 13 sobre 1, 7 y 9 en lo que se contradigan** (los puntos donde difiere están en el recuadro 13.3). Sus estilos compartidos están al final de `compartido/inmersivo.css` (bloque «INICIO CON MAPA»).
+**Segundo estándar de inicio (23 nov 2026): «Inicio con mapa» (el de Puzle deslizante), sección 13.** Existen ahora DOS formas de abrir un juego: la capa «▶ Comenzar» (secciones 7 y 9, referencia 2048) y el **inicio con mapa** (pantalla con ♾️ Modo libre · ▶ Jugar · 🗺️ Mapa · ⚙️ Ajustes, y el mapa de un solo país como menú principal; referencia **Puzle deslizante**). Se usa el que se pida: cuando se diga «inicio con mapa» o «inicio estilo Deslizante» se aplica la sección 13 completa (con su revisión 13.11 en lugar de la 9) y, en ese juego, **manda la 13 sobre 1, 7 y 9 en lo que se contradigan** (los puntos donde difiere están en el recuadro 13.3). Sus estilos compartidos están al final de `compartido/inmersivo.css` (bloque «INICIO CON MAPA»). **Agua** (24 nov 2026) es el primer juego que usa esas clases directamente, sin copiarlas a su HTML; Deslizante todavía las trae duplicadas con otros nombres.
 
 ## 1. Botones fijos (en TODOS los juegos)
 
@@ -85,7 +85,7 @@ Es el estándar para los juegos por niveles que se creen o se rehagan desde ahor
 2. **Orden fijo** (`PAISES_MUNDO` en `compartido/etapas-mapa.js`): el **1.º es México** (niveles 1 a 20, donde empieza el juego); del 2.º al 20.º el resto de Latinoamérica; del 21.º al 24.º Belice, Jamaica, Guyana y Surinam; el **25.º es Estados Unidos** (niveles 481 a 500); del 26.º al 194.º, al azar con semilla fija (20261121); el **último (195.º) es China**. No se cambia después de publicar un juego.
 3. **Cómo se pide:** `crearEtapas({ porEtapa: 20, soloPaises: true })` y `montarMapa({ etapas, … })` como siempre. Con `soloPaises` el mapa **abre directo en el mundo** (con agua que sube un escalón por país terminado), que lleva «▶ Continuar», los botones extra (♾️ Modo libre) e «ℹ️ Info»; no hay México de cerca ni «◀ México». Los países se abren **de uno en uno** (el siguiente al terminar los 20 niveles del anterior); los bloqueados no se listan. El botón de atrás desde un país es «◀ Mundo». Sin la opción `soloPaises` todo funciona como antes.
 4. **Progreso:** «nivel más alto terminado» como **un solo número** (los niveles se abren en orden, así que todos los anteriores están pasados), no una lista con un valor por nivel. Así el progreso cabe en la nube: con 3 900 niveles y un récord por nivel son ≈ 120 000 caracteres de los 300 000 que permite `firestore-unificado.rules` (un documento privado por jugador y por juego en `progreso/{uid}/juegos/{juego}`).
-5. **Dificultad:** sigue la sección 8 (el tramo es de 100 niveles; con 3 900 son 39 tramos, de 50/40/10 % a 25/40/35 %). Los primeros niveles de cada juego pueden ser todos fáciles si el juego lo decide (Deslizante: los 20 de México).
+5. **Dificultad:** sigue la sección 8 (el tramo es de 100 niveles; con 3 900 son 39 tramos, de 50/40/10 % a 25/40/35 %). Los primeros niveles de cada juego pueden ser todos fáciles si el juego lo decide (Deslizante: los 20 de México). Con 20 niveles por país un tramo son 5 países; Agua hace además que **el primer nivel de cada país sea siempre fácil** (`dificultad-agua.js`, intercambiándolo con otro fácil del mismo grupo de 10 para no alterar el reparto).
 
 ### B) Juegos sin niveles (Rubik)
 
@@ -145,7 +145,7 @@ Las opciones que antes estaban en el menú principal (♾️ Modo libre, 📋 Ni
 - **👤 Iniciar sesión**: botón alargado azul (`b3d txt b-azul`) **siempre en la esquina superior derecha**, con las funciones de `compartido/jugador.js` (`alCambiarSesion`, `entrar`, `salir`) cargado con `import()` dinámico y `try/catch`, para que el juego funcione sin internet. Los chips (monedas, sonido) van a su izquierda: el de sesión es siempre el último de la fila. Como ya no hay menú principal donde mostrarlo, el juego decide dónde cabe (en 2048 aún no lo tiene).
 - **ℹ️ Info** (si el juego la necesita): opción `b-cielo` dentro del menú de pausa; abre la ventana «Cómo se juega» (`.pausa-*`) con «Entendido».
 
-**Estado de migración (21 nov 2026).** 2048 ya cumple todo esto. **Slither** (24 nov 2026) ya cumple 7.0 a 7.5 y el mapa solo de países con `columnas: 5` (sin pantalla de menú; «Instalar solo este juego» va en ☰ Pausa; pendiente: las 5 dificultades en su Modo libre). **Solitario y Conecta gominolas** ya abren con «Comenzar», pero su «Menú principal» todavía abre la pantalla vieja (columna con Modo libre · Continuar · Niveles · Info) y su pausa aún no trae «♾️ Modo libre»: pendiente alinearlos con 7.5. Spider y los demás siguen con el velo viejo hasta que se toquen; Deslizante usa el inicio con mapa (sección 13).
+**Estado de migración (21 nov 2026).** 2048 ya cumple todo esto. **Solitario, Conecta gominolas y Slither** ya abren con «Comenzar», pero su «Menú principal» todavía abre la pantalla vieja (columna con Modo libre · Continuar · Niveles · Info) y su pausa aún no trae «♾️ Modo libre»: pendiente alinearlos con 7.5. Spider y los demás siguen con el velo viejo hasta que se toquen; Deslizante usa el inicio con mapa (sección 13).
 
 ### 7.2 Modo libre (pantalla propia, no desplegable)
 
@@ -294,7 +294,7 @@ Hay **tres** cosas distintas y no se mezclan:
 
 ## 13. Inicio con mapa (estándar «estilo Deslizante», 23 nov 2026)
 
-Referencia: **Puzle deslizante** (`5deslizante/index-5deslizante.html`, `juego-5deslizante.js`). Se aplica **cuando se pide** («pon el inicio con mapa», «inicio estilo Deslizante») a juegos **por niveles con el mapa solo de países** (sección A-bis). Estilos compartidos: bloque «INICIO CON MAPA» al final de `compartido/inmersivo.css`. El mapa lo dibuja `compartido/mapa-niveles.js` con `unPais: true`.
+Referencia: **Puzle deslizante** (`5deslizante/index-5deslizante.html`, `juego-5deslizante.js`). Se aplica **cuando se pide** («pon el inicio con mapa», «inicio estilo Deslizante») a juegos **por niveles con el mapa solo de países** (sección A-bis). Estilos compartidos: bloque «INICIO CON MAPA» al final de `compartido/inmersivo.css`. El mapa lo dibuja `compartido/mapa-niveles.js` con `unPais: true`. **Referencia de uso directo de las clases compartidas** (sin CSS copiado al HTML): **Agua** (`agua/index-agua.html`, `juego-agua.js`); un juego nuevo parte de ahí.
 
 ### 13.1 Flujo de pantallas
 
@@ -319,7 +319,7 @@ Niveles → partida → ganar → celebración de estrellas (13.5) → mapa con 
 
 ### 13.2 Pantalla de inicio
 
-Va sobre la madera, sin velo y sin título (`<div class="pant-menu" id="pantalla-inicio">` con una columna `.ini-menu` dentro). De arriba abajo, siempre en este orden y con estos tamaños:
+Va sobre la madera, sin velo y sin título (`<div class="pant-menu" id="pantalla-inicio">` con una columna `.ini-menu` dentro). Los cuatro botones llevan `b3d txt` + su color + su clase de tamaño: `ini-libre`, `ini-jugar`, `ini-mapa` e `ini-ajustes` (los tamaños de la tabla salen de esas clases, el juego no los repite). De arriba abajo, siempre en este orden y con estos tamaños:
 
 | # | Botón | Clase de color | Alto | Letra |
 |---|---|---|---|---|
@@ -356,7 +356,7 @@ Se marca la `<nav>` con la clase `cuadrada` (`<nav class="nav-juego cuadrada">`)
 
 Esc abre y cierra las ventanas de pausa/«¿Salir?» y, dentro del mapa, sube un paso (como el ☰ «Atrás»). **🎮 se oculta** cuando el juego corre como app instalada sola (13.9).
 
-**Arriba a la derecha** (`.hud.hud-der.columna`, en **columna** alineada a la derecha): primero el chip de sesión («Sin sesión» / nombre, recortado con «…»), **debajo** el chip de monedas (`chip chip-monedas`, **amarillo**, sección 3). Los puntos del juego (🏅) no se muestran en esta variante. Dentro de una partida el chip de monedas **pasa a la izquierda del botón 🗺️** (13.6) y el `hud-der` va con `z-index: 8` para verse también sobre el mapa. En la app instalada sola el chip dice «👤 Iniciar sesión» y es tocable (`entrar()` de `compartido/jugador.js`).
+**Arriba a la derecha** (`.hud.hud-der.columna`, en **columna** alineada a la derecha): primero el chip de sesión (`<span class="chip chip-sesion">`: «Sin sesión» / nombre, recortado con «…» por la propia clase), **debajo** el chip de monedas (`chip chip-monedas`, **amarillo**, sección 3; si abre una tienda es un `<button class="chip chip-monedas">`, como en Agua). **Esa columna es solo sesión + monedas:** si el juego tenía otro chip (p. ej. ⭐ estrellas totales) se muestra en el mapa con `resumenEstrellas`, no arriba. Los puntos del juego (🏅) no se muestran en esta variante. Dentro de una partida el chip de monedas **pasa a la izquierda del botón 🗺️** (13.6) y el `hud-der` va con `z-index: 8` para verse también sobre el mapa. En la app instalada sola el chip dice «👤 Iniciar sesión» y es tocable (`entrar()` de `compartido/jugador.js`).
 
 ### 13.4 El mapa (menú principal)
 
@@ -436,7 +436,7 @@ Cada juego con este inicio puede ofrecer su propia app instalable, separada del 
 Se revisa en este orden (si algo no coincide con `compartido/inmersivo.css`, manda el CSS):
 
 1. **Madera clara y oscura** (sección 2) y canvas transparentes.
-2. **Navegación 13.3**: 🎮 y ☰ cuadrados con solo icono, ☰ con el comportamiento de la tabla (oculto en inicio y en la vista principal del mapa), `hud-der` en columna, ⛶ abajo a la derecha.
+2. **Navegación 13.3**: 🎮 y ☰ cuadrados con solo icono, ☰ con el comportamiento de la tabla (oculto en inicio y en la vista principal del mapa), `hud-der columna` con `chip chip-sesion` y `chip chip-monedas`, ⛶ abajo a la derecha. Todo con las clases de `inmersivo.css`: no se redefine ninguna en el HTML del juego.
 3. **Pantalla de inicio 13.2**: los cuatro botones, en su orden, tamaños y colores; se ve una sola vez.
 4. **Mapa 13.4**: `crearEtapas({ porEtapa: 20, soloPaises: true })` + `montarMapa({ unPais: true, columnas: 4, … })`; probar que sin sesión, con sesión y con progreso de la nube se ve el país correcto, que el mundo solo dibuja países abiertos y que «Continuar» queda dentro del país.
 5. **Dentro del nivel 13.6**: barra 🗺️ + nombre, tres cuadros de datos, tablero centrado, «¿Salir?» y Esc.
