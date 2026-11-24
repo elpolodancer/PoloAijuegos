@@ -294,7 +294,17 @@
     addEventListener("offline", marcarRed);
     marcarRed();
 
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+    if ("serviceWorker" in navigator) {
+      // Registra y, unos segundos después de abrir y cada vez que vuelve la conexión, pide terminar de guardar los juegos para usarlos sin internet
+      navigator.serviceWorker.register("sw.js")
+        .then(() => navigator.serviceWorker.ready)
+        .then((reg) => {
+          const completar = () => { if (navigator.onLine !== false && reg.active) reg.active.postMessage({ tipo: "completar" }); };
+          setTimeout(completar, 5000);
+          addEventListener("online", completar);
+        })
+        .catch(() => {});
+    }
 
     // ----- Redes sociales (barra superior): pon aquí tus enlaces. Las que tienen url vacía salen apagadas y sin enlace. -----
     const REDES = [
