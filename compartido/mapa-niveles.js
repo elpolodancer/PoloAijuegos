@@ -167,6 +167,9 @@ const h = (tag, clase, texto) => {
 const proyector = (l0, l1, laTop, laBot, s, kx) => ({ w: (l1 - l0) * s * kx, h: (laTop - laBot) * s, p: (lo, la) => [(lo - l0) * s * kx, (laTop - la) * s] });
 const trazo = (pts, P) => "M" + pts.map(([lo, la]) => { const [x, y] = P.p(lo, la); return x.toFixed(1) + " " + y.toFixed(1); }).join("L") + "Z";
 const acotar = (v, a, b) => Math.max(a, Math.min(b, v));
+// El agua con su jarra y su cascada se anima SIEMPRE (igual que la celebración del juego: en muchos PC «reducir movimiento» viene activado sin que la persona lo sepa y entonces el agua saltaba al final sin jarra).
+// Pon true para que con «reducir movimiento» el agua aparezca ya llena, sin animación.
+const AGUA_RESPETA_MOVIMIENTO_REDUCIDO = false;
 const quieto = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function accesible(nodo, etiqueta, accion) {
@@ -413,16 +416,23 @@ function crearAgua(svg, id, dSilueta, caja, objetivo, desde, op = {}) {
   const atras = el("path", { fill: AZUL_ATRAS, opacity: op.opAtras == null ? 1 : op.opAtras }, g);
   const frente = el("path", { fill: AZUL_FRENTE, opacity: op.opFrente == null ? 0.8 : op.opFrente }, g);
   let cAlto, cBajo, bAlto, bBajo, salpico, jarra;   // chorro: la parte de fuera de la silueta (cAlto) y la de dentro, recortada (cBajo); brillos en movimiento y salpicadura
+  let gotas = [], espuma;
   if (ch) {
-    cAlto = el("path", { fill: AZUL_FRENTE, "pointer-events": "none" }, svg);
+    // la cascada: degradado horizontal (orillas más oscuras, centro claro) para que parezca agua cayendo
+    const gc = el("linearGradient", { id: id + "-ch", x1: 0, y1: 0, x2: 1, y2: 0 }, el("defs", {}, svg));
+    el("stop", { offset: 0, "stop-color": "#5fb4ec" }, gc); el("stop", { offset: 0.5, "stop-color": "#c9ecff" }, gc); el("stop", { offset: 1, "stop-color": "#5fb4ec" }, gc);
+    cAlto = el("path", { fill: "url(#" + id + "-ch)", "pointer-events": "none" }, svg);
     bAlto = el("path", { fill: "none", stroke: "#fff", "stroke-opacity": 0.65, "stroke-linecap": "round", "pointer-events": "none" }, svg);
-    cBajo = el("path", { fill: AZUL_FRENTE }, g);
+    cBajo = el("path", { fill: "url(#" + id + "-ch)" }, g);
     bBajo = el("path", { fill: "none", stroke: "#fff", "stroke-opacity": 0.65, "stroke-linecap": "round" }, g);
+    espuma = el("ellipse", { fill: "#fff", "fill-opacity": 0.55 }, g);   // espuma blanca donde cae la cascada
     salpico = el("ellipse", { fill: "none", stroke: "#fff", "stroke-opacity": 0.8 }, g);
+    for (let k = 0; k < 14; k++) gotas.push(el("circle", { fill: "#e6f6ff", stroke: "#7cc3f2", "stroke-width": 0.5, opacity: 0, "pointer-events": "none" }, svg));   // gotitas que saltan al caer
     // La jarra (dibujada en vectores, con la punta de su pico en el origen para poder girarla sobre ese punto)
     jarra = el("g", { "pointer-events": "none", opacity: 0 }, svg);
     el("path", { d: "M0 0L7 2L26 2Q28 2 28 5L28 22Q28 27 23 27L9 27Q4 27 4 22L4 8Z", fill: "#cfe9ff", stroke: TINTA, "stroke-width": 1.6, "stroke-linejoin": "round" }, jarra);
     el("path", { d: "M28 8Q38 8 38 16Q38 23 28 22", fill: "none", stroke: TINTA, "stroke-width": 2.2, "stroke-linecap": "round" }, jarra);
+    el("path", { d: "M4.6 11L27.4 11L27.4 22Q27.4 26.4 23 26.4L9 26.4Q4.6 26.4 4.6 22Z", fill: AZUL_FRENTE, "fill-opacity": 0.85 }, jarra);   // el agua que lleva adentro
     el("path", { d: "M8 12L8 21", fill: "none", stroke: "#fff", "stroke-width": 1.8, "stroke-linecap": "round", "stroke-opacity": 0.9 }, jarra);
   }
   // con f = 0 las olas quedan por debajo de la silueta (no se ve agua); con f = 1 la cubren por completo
@@ -455,7 +465,7 @@ function crearAgua(svg, id, dSilueta, caja, objetivo, desde, op = {}) {
     jarra.setAttribute("transform", "translate(" + x.toFixed(1) + " " + (ch.yTop - (1 - jv) * 16 * s).toFixed(1) + ") rotate(" + ang.toFixed(1) + ") scale(" + s.toFixed(2) + ")");
   }
   function pintarChorro(t, yN, turb) {
-    if (chor < 0.01) { for (const n of [cAlto, cBajo, bAlto, bBajo]) n.setAttribute("d", ""); salpico.setAttribute("rx", 0); return; }
+    if (chor < 0.01) { for (const n of [cAlto, cBajo, bAlto, bBajo]) n.setAttribute("d", ""); salpico.setAttribute("rx", 0); espuma.setAttribute("rx", 0); for (const q of gotas) q.setAttribute("opacity", 0); return; }
     const w = ch.ancho * (0.5 + 0.5 * chor), x = ch.x + Math.sin(t * 3.1) * ch.ancho * 0.12;
     const yFin = ch.yTop + (Math.max(ch.yTop, superficie(ch.x, yN, turb, t)) - ch.yTop) * chor;   // el chorro baja hasta tocar el agua
     const col = (a, b, ancho) => (b > a ? "M" + (x - ancho / 2).toFixed(1) + " " + a.toFixed(1) + "L" + (x + ancho / 2).toFixed(1) + " " + a.toFixed(1) + "L" + (x + ancho / 2).toFixed(1) + " " + b.toFixed(1) + "L" + (x - ancho / 2).toFixed(1) + " " + b.toFixed(1) + "Z" : "");
@@ -470,6 +480,16 @@ function crearAgua(svg, id, dSilueta, caja, objetivo, desde, op = {}) {
     salpico.setAttribute("cx", x.toFixed(1)); salpico.setAttribute("cy", yFin.toFixed(1));
     salpico.setAttribute("rx", (r * (1 + 1.2 * ag)).toFixed(1)); salpico.setAttribute("ry", (r * 0.3 * (1 + 1.2 * ag)).toFixed(1));
     salpico.setAttribute("stroke-width", (ch.ancho * 0.25).toFixed(1)); salpico.setAttribute("opacity", chor.toFixed(2));
+    espuma.setAttribute("cx", x.toFixed(1)); espuma.setAttribute("cy", (yFin + ch.ancho * 0.1).toFixed(1));
+    espuma.setAttribute("rx", (r * 0.8 * (1 + 0.8 * ag)).toFixed(1)); espuma.setAttribute("ry", (r * 0.28 * (1 + 0.8 * ag)).toFixed(1)); espuma.setAttribute("opacity", chor.toFixed(2));
+    // gotitas: cada una sube y cae en arco desde el punto donde pega la cascada, a un lado u otro
+    gotas.forEach((q, k) => {
+      const ph = (t * 1.7 + k / gotas.length) % 1, lado = k % 2 ? 1 : -1, alcance = ch.ancho * (1.2 + 2.6 * ((k * 7) % 5) / 4);
+      q.setAttribute("cx", (x + lado * ph * alcance).toFixed(1));
+      q.setAttribute("cy", (yFin - Math.sin(ph * Math.PI) * ch.ancho * (1.6 + ((k * 3) % 4) * 0.6) + ph * ph * ch.ancho * 0.8).toFixed(1));
+      q.setAttribute("r", (ch.ancho * 0.2 * (1 - ph * 0.4)).toFixed(2));
+      q.setAttribute("opacity", (chor * Math.min(1, (1 - ph) * 2.2)).toFixed(2));
+    });
   }
   const avisarLlegada = () => { if (!llegado) { llegado = true; if (op.alLlegar) op.alLlegar(); } };
   return {
@@ -493,7 +513,7 @@ function crearAgua(svg, id, dSilueta, caja, objetivo, desde, op = {}) {
       pintar(t);
       if (f === objetivo && chor < 0.05 && jv < 0.05) avisarLlegada();
     },
-    quitar() { g.remove(); if (ch) { cAlto.remove(); bAlto.remove(); jarra.remove(); } },
+    quitar() { g.remove(); if (ch) { cAlto.remove(); bAlto.remove(); jarra.remove(); gotas.forEach((q) => q.remove()); } },
   };
 }
 
@@ -565,7 +585,7 @@ export function montarMapa(o) {
   function arrancar() {
     detener();
     if (!aguas.length) return;
-    if (quieto()) { aguas.forEach((a) => a.quieto()); return; }
+    if (AGUA_RESPETA_MOVIMIENTO_REDUCIDO && quieto()) { aguas.forEach((a) => a.quieto()); return; }
     aguas.forEach((a) => a.pintar(0));
     tPrev = performance.now();
     raf = requestAnimationFrame(bucle);
@@ -969,8 +989,8 @@ export function montarMapa(o) {
     if (UN_PAIS && !CONTORNOS && !contornosFallo) { pendienteContornos = true; return; }
     if (UN_PAIS) { cuerpo.classList.add("m-uno"); cuerpo.appendChild(h("h2", "m-pais-nombre", nombrePais(codigo))); }   // el nombre, grande, justo arriba del país
     const c = (CONTORNOS && CONTORNOS[codigo]) || GOTA, w = c.w, hh = c.h, id = ++idAgua;
-    const lado = Math.max(w, hh), anchoCh = acotar(lado * 0.024, 5, 9), escJarra = anchoCh / 6, yBoca = UN_PAIS ? -30 : -40;   // yBoca = donde queda la boca de la jarra (y de ahí cae el chorro)
-    const vb = { x: -15, y: Math.floor(yBoca - 26 * escJarra - 4), w: w + 30, h: 0 };   // arriba queda espacio para la jarra inclinada y el chorro
+    const lado = Math.max(w, hh), anchoCh = acotar(lado * 0.024, 5, 9), escJarra = anchoCh / 6 * 1.35, yBoca = UN_PAIS ? -30 : -40;   // yBoca = donde queda la boca de la jarra (y de ahí cae el chorro)
+    const vb = { x: -15, y: Math.floor(yBoca - 44 * escJarra - 4), w: w + 30, h: 0 };   // arriba queda espacio para la jarra inclinada y el chorro
     vb.h = hh + 22 - vb.y;
     const svg = el("svg", { viewBox: vb.x + " " + vb.y + " " + vb.w + " " + vb.h, class: "m-botella", role: "img", "aria-label": nombrePais(codigo) + ": " + hechos + " de " + NIVELES_POR_ETAPA + " niveles completados" }, cuerpo);
     if (UN_PAIS) {   // tierra verde con degradado, rodeada de una franja de playa
@@ -1027,7 +1047,7 @@ export function montarMapa(o) {
       } catch (e) {}
       const agua = crearAgua(svg, "agua" + id, c.d, { x0: -15, x1: w + 15, yBase: hh, yTope: 0, fondo: hh + 40, amp: acotar(lado * 0.016, 2.5, 5) }, objetivo, desde, {
         vel: 1.1, frec: 2.4, paso: 3.5, opAtras: UN_PAIS ? AGUA_TRANSPARENTE.atras : 1, opFrente: UN_PAIS ? AGUA_TRANSPARENTE.frente : 0.8,
-        chorro: { x: ent.x, yTop: yBoca, yEntrada: ent.y, ancho: anchoCh, escala: escJarra },
+        chorro: { x: ent.x, yTop: yBoca, yEntrada: ent.y, ancho: anchoCh * 1.5, escala: escJarra },
         alLlegar: objetivo >= 1 ? () => {
           // ¡País lleno! AQUÍ va la animación del destello dorado (pendiente). Por ahora solo se cambia el agua por la bandera.
           if (o.alPaisCompleto) o.alPaisCompleto({ codigo, indice, svg, d: c.d, w, h: hh });
