@@ -1,11 +1,23 @@
 <!doctype html>
 <!-- Ruta: botellascolores/index-botellascolores.html -->
+<!-- Inicio con mapa (ESTANDARES-juegos.md, sección 13; referencia: 5deslizante). Los estilos de .pant-menu, .ini-*, .barra-nivel, .cuadros-datos, .dif-*, .libre-* y .aj-* viven en compartido/inmersivo.css -->
 <html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Botellas de colores</title>
   <meta name="theme-color" content="#d9a866" />
+  <!-- Instalar SOLO este juego: manifest e iconos propios (no el del portal) y service worker propio (sw-botellascolores.js, lo registra juego-botellascolores.js) -->
+  <link rel="manifest" href="manifest-botellascolores.webmanifest" />
+  <link rel="apple-touch-icon" href="icono-180-botellascolores.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Botellas" />
+  <script>
+    // Chrome avisa que se puede instalar con «beforeinstallprompt», a veces ANTES de que cargue el módulo del juego: se guarda aquí para el botón «Instalar».
+    window.__pwa = { evento: null };
+    addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); window.__pwa.evento = e; });
+  </script>
   <link rel="stylesheet" href="../compartido/estilos.css" />
   <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
@@ -15,50 +27,26 @@
 
     /* Fondo: madera clara/oscura (compartido/fondo-madera.js); aquí no se pone fondo propio */
 
-    /* La pantalla no se desplaza; si las botellas no caben, esta zona hace scroll por dentro */
-    .zona { position: fixed; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: calc(58px + env(safe-area-inset-top, 0px)) 12px calc(64px + env(safe-area-inset-bottom, 0px)); } /* 64px abajo: así el ⛶ no tapa las botellas */
+    /* La partida no se desplaza; si las botellas no caben, esta zona hace scroll por dentro.
+       Arriba se deja libre la barra del nivel y los tres cuadros de datos (celular vertical ≈ 190 px; pantalla ancha ≈ 140 px); abajo, 84 px para los boosts y el ⛶ */
+    .zona { position: fixed; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: calc(190px + env(safe-area-inset-top, 0px)) 12px calc(84px + env(safe-area-inset-bottom, 0px)); }
     .zona > section { width: 100%; max-width: 480px; margin: 0 auto; }
-    /* Celular en horizontal (poco alto): la mesa se ensancha para que las botellas queden en una sola fila y quepan sin scroll */
-    @media (orientation: landscape) and (max-height: 520px) {
-      .zona { padding-top: calc(52px + env(safe-area-inset-top, 0px)); }
-      .zona > section { max-width: 860px; }
+    @media (min-width: 640px) { .zona { padding-top: calc(140px + env(safe-area-inset-top, 0px)); } }
+    /* Celular en horizontal (poco alto): la barra y los cuadros pasan a una columna a la izquierda y la mesa ocupa el resto */
+    @media (orientation: landscape) and (max-height: 560px) {
+      .zona { padding: calc(10px + env(safe-area-inset-top, 0px)) 12px calc(70px + env(safe-area-inset-bottom, 0px)) calc(256px + env(safe-area-inset-left, 0px)); }
+      .zona > section { max-width: 760px; }
       #juego { gap: 6px; }
       #mesa { gap: 16px 8px; padding-top: 16px; }
     }
 
-    #pista { margin: 0; font-size: .85rem; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); text-align: center; }
+    #pista { margin: 0; min-height: 1.2em; font-size: .85rem; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); text-align: center; }
     .seg.oculto { display: flex; align-items: center; justify-content: center; background: #4a4f57; color: rgba(255,255,255,.6); font-weight: 800; font-size: 14px; }
 
-    /* ----- Inicio ----- */
-    #menu { display: flex; flex-direction: column; gap: 14px; align-items: center; justify-content: center; min-height: calc(100dvh - 130px); }
-    #menuInfo { margin: 0 0 4px; text-align: center; font-weight: 700; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
-    #menu .b3d { width: 100%; max-width: 340px; --t: 56px; height: 56px; font-size: 17px; }
+    /* Arriba a la derecha: la sesión (tocable) y debajo ↩ Deshacer; el chip de monedas baja a la barra del nivel dentro de una partida */
+    #sesion { cursor: pointer; max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 30px; }
 
-    /* ----- Mapa de niveles ----- */
-    #mapa { position: fixed; inset: 0; z-index: 20; display: flex; justify-content: center; padding: calc(12px + env(safe-area-inset-top, 0px)) 12px 12px; background: rgba(16, 17, 20, .97); overflow: auto; }
-    .mapa-caja { width: 100%; max-width: 760px; }
-    .menu-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-    .menu-cab h2 { margin: 0; font-size: 1.3rem; text-align: center; }
-    #mapaInfo { margin: 0 0 10px; color: var(--suave); font-size: .85rem; }
-    #mapaLienzo svg { display: block; width: 100%; height: auto; border-radius: 12px; }
-    #mapaLienzo .sel { cursor: pointer; }
-    #mapaLienzo [role="button"]:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-    #mapaLienzo .pulso { transform-box: fill-box; transform-origin: center; animation: pulso 1.8s ease-out infinite; }
-    @keyframes pulso { from { transform: scale(1); opacity: .9; } to { transform: scale(2.4); opacity: 0; } }
-    @media (prefers-reduced-motion: reduce) { #mapaLienzo .pulso { animation: none; } }
-    .rejilla-niveles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding-bottom: 16px; }
-    /* Botones de nivel: 3D como los demás; verde = pasado, dorado = el que sigue, gris = bloqueado */
-    .nv { --c1: #d5d9e0; --c2: #8b93a0; --c3: #4f5662; position: relative; aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; padding: 0; font: inherit; font-size: 1.05rem; font-weight: 800; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35); cursor: pointer;
-      background: linear-gradient(180deg, var(--c1) 0%, var(--c2) 55%, var(--c3) 140%); border: 2px solid var(--c3); border-radius: 13px;
-      box-shadow: 0 4px 0 var(--c3), 0 6px 8px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.55); transition: transform .07s, box-shadow .07s; touch-action: manipulation; }
-    .nv:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--c3), inset 0 2px 0 rgba(255,255,255,.45); }
-    .nv.hecho { --c1: #b6f7a6; --c2: #3fcf4a; --c3: #1d7f2a; }
-    .nv.actual { --c1: #fff08c; --c2: #ffb020; --c3: #a85d00; box-shadow: 0 4px 0 var(--c3), 0 0 0 3px #fff, 0 6px 8px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.55); }
-    .nv.bloq { --c1: #5b5f68; --c2: #3d4048; --c3: #26282d; opacity: .55; cursor: default; box-shadow: 0 4px 0 var(--c3); }
-    .nv:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
-
-    .fila { display: flex; gap: 8px; width: 100%; justify-content: space-between; align-items: center; }
-    #info { font-weight: 800; }
+    /* ----- Partida ----- */
     #juego { display: flex; flex-direction: column; gap: 12px; align-items: center; }
     #mesa { display: flex; flex-wrap: wrap; justify-content: center; gap: 26px 12px; width: 100%; padding-top: 22px; }
 
@@ -86,47 +74,96 @@
     .bot.lista .cuerpo, .bot.lista .cuello { border-color: #6ee7a8; }
     .bot.lista .cuerpo { box-shadow: 0 0 12px #6ee7a899; }
 
-    #final { text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; }
-    #final b { font-size: 1.2rem; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
+    /* Boosts: fila abajo al centro, entre 🌙/☀️ (izquierda) y ⛶ (derecha). Gris = no alcanza o no aplica */
+    #boosts { position: fixed; z-index: 5; left: 50%; transform: translateX(-50%); bottom: max(14px, env(safe-area-inset-bottom)); display: flex; gap: 14px; }
+    #boosts[hidden] { display: none; }
+    #boosts .b3d { --t: 48px; }
+    /* Pista: la botella de donde se vierte (dorado) y la que recibe (celeste) */
+    .bot.pista-o .cuerpo, .bot.pista-o .cuello { border-color: #ffe066; }
+    .bot.pista-o .cuerpo { box-shadow: 0 0 14px #ffe066, 0 0 0 3px #ffe06688; }
+    .bot.pista-d .cuerpo, .bot.pista-d .cuello { border-color: #7fe3ff; }
+    .bot.pista-d .cuerpo { box-shadow: 0 0 14px #7fe3ff, 0 0 0 3px #7fe3ff88; }
+    @media (prefers-reduced-motion: no-preference) { .bot.pista-o, .bot.pista-d { animation: latidoPista .7s ease-in-out infinite alternate; } }
+    @keyframes latidoPista { to { filter: brightness(1.35); } }
+
+    /* Aviso breve («🚧 Los niveles todavía no están creados») */
+    #aviso { position: fixed; z-index: 120; left: 50%; top: calc(110px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); max-width: calc(100% - 32px); pointer-events: none; }
+    #aviso[hidden] { display: none; }
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>
-  <!-- Navegación estándar: «🎮 Juegos» vuelve al portal; «☰ Pausa» (solo en partida) abre el menú de pausa -->
-  <nav class="nav-juego">
-    <a class="b3d txt chico b-gris" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
-    <button class="b3d txt chico b-gris" id="btn-menu" type="button" hidden><span class="b-ico">☰</span> Pausa</button>
+  <!-- Navegación del inicio con mapa (sección 13.3): 🎮 y ☰ cuadrados, solo icono (el texto va en title y aria-label). El ☰ lo rotula el juego según la pantalla -->
+  <nav class="nav-juego cuadrada" aria-label="Navegación">
+    <a class="b3d chico b-azuloscuro" id="btn-portal" href="../" title="Juegos: volver al portal" aria-label="Juegos: volver al portal"><span class="b-ico">🎮</span></a>
+    <button class="b3d chico b-verdeclaro" id="btn-menu" type="button" title="Volver al menú principal" aria-label="Volver al menú principal" hidden><span class="b-ico">☰</span></button>
   </nav>
-  <div class="hud hud-der" id="hudJuego" hidden>
-    <button class="b3d chico b-oro" id="deshacer" type="button" title="Deshacer" aria-label="Deshacer"><span class="b-ico">↩</span></button>
-    <button class="b3d chico b-rojo" id="reiniciar" type="button" title="Reiniciar nivel" aria-label="Reiniciar nivel"><span class="b-ico">🔄</span></button>
+  <!-- Arriba a la derecha, en columna: sesión; debajo, el chip de monedas (dentro de una partida pasa a la barra del nivel) y ↩ Deshacer -->
+  <div class="hud hud-der columna">
+    <span class="chip" id="sesion" role="button" tabindex="0" title="Iniciar sesión con Google">👤 Iniciar sesión</span>
+    <span class="chip chip-monedas saldo" id="monedas" title="Tus monedas"><span class="moneda"></span><span class="num-saldo">0</span></span>
+    <button class="b3d chico b-oro" id="deshacer" type="button" title="Deshacer" aria-label="Deshacer" hidden><span class="b-ico">↩</span></button>
   </div>
-  <main class="zona">
-    <section id="menu">
-      <p id="menuInfo"></p>
-      <button class="b3d txt b-verde" id="continuar" type="button">▶ Continuar</button>
-      <button class="b3d txt b-azul" id="verMapa" type="button">🗺️ Niveles</button>
-    </section>
-    <section id="juego" hidden>
-      <div class="fila" style="justify-content:center"><span class="chip" id="info"></span></div>
+  <!-- Dentro de un nivel: 🗺️ + botón verde con el nombre del nivel (al tocarlo pregunta «¿Salir?») -->
+  <div class="barra-nivel" id="barra-nivel" hidden>
+    <button class="b3d b-azul btn-mapa" id="btn-mapa-juego" type="button" title="Mapa" aria-label="Mapa"><span class="b-ico">🗺️</span></button>
+    <button class="b3d txt b-verde nombre" id="barra-juego" type="button" title="Salir al mapa"><span id="nombre-nivel"></span></button>
+  </div>
+  <!-- Tres cuadros azules, cada uno un poco más oscuro que el anterior -->
+  <div class="cuadros-datos" id="cuadros" hidden>
+    <div>Movimientos<b id="movs">0</b></div>
+    <div>Botellas listas<b id="listas">0/0</b></div>
+    <div><span id="rot-tercero">Tipo</span><b id="val-tercero">–</b></div>
+  </div>
+
+  <!-- Pantalla de inicio (13.2): se ve UNA sola vez, al abrir el juego. Sin título y sin ☰ -->
+  <section class="pant-menu" id="pantalla-inicio" hidden>
+    <div class="ini-menu">
+      <button class="b3d txt ini-libre b-morado" id="btn-inicio-libre" type="button"><span class="b-ico">♾️</span><span>Modo libre</span></button>
+      <button class="b3d txt ini-jugar b-verde" id="btn-inicio-jugar" type="button"><span class="b-ico">▶</span><span>Jugar</span></button>
+      <button class="b3d txt ini-mapa b-azul" id="btn-inicio-mapa" type="button"><span class="b-ico">🗺️</span><span>Mapa</span></button>
+      <button class="b3d txt ini-ajustes b-cielo" id="btn-inicio-ajustes" type="button"><span class="b-ico">⚙️</span><span>Ajustes</span></button>
+    </div>
+  </section>
+
+  <!-- Modo libre (13.7): Dificultad (5 emojis) primero y debajo las demás opciones; elegido b-oro on, el resto b-cielo -->
+  <section class="pant-menu" id="pantalla-libre" hidden>
+    <h2>♾️ Modo libre</h2>
+    <p class="modo-grupo">Dificultad</p>
+    <div class="modo-fila dif-fila" id="g-dificultad" role="group" aria-label="Dificultad"></div>
+    <p class="dif-nombre" id="dif-nombre"></p>
+    <p class="modo-grupo">Colores</p>
+    <div class="modo-fila" id="g-colores" role="group" aria-label="Cantidad de colores"></div>
+    <p class="modo-grupo">Capacidad de la botella</p>
+    <div class="modo-fila" id="g-capacidad" role="group" aria-label="Capacidad de la botella"></div>
+    <p class="libre-nota" id="notaLibre"></p>
+    <p class="libre-record" id="recordLibre"></p>
+    <div class="libre-jugar">
+      <button class="b3d txt grande b-verde" id="jugarLibre" type="button"><span class="b-ico">▶</span> Jugar</button>
+    </div>
+  </section>
+
+  <main class="zona" id="zona" hidden>
+    <section id="juego">
       <p id="pista"></p>
       <div id="mesa"></div>
-      <div id="final" hidden>
-        <b id="textoFinal"></b>
-        <button class="b3d txt b-verde" id="siguiente" type="button">Siguiente nivel ▶</button>
-      </div>
     </section>
   </main>
-  <div id="mapa" hidden>
-    <div class="mapa-caja">
-      <div class="menu-cab">
-        <button class="b3d txt chico b-gris" id="mapaAtras" type="button">← Atrás</button>
-        <h2 id="mapaTitulo">Mapa</h2>
-        <button class="b3d txt chico b-verde" id="mapaIr" type="button">📍 México</button>
-      </div>
-      <p id="mapaInfo"></p>
-      <div id="mapaLienzo"></div>
+
+  <!-- Boosts del nivel (los crea el juego desde BOOSTS de economia-botellascolores.js) -->
+  <div id="boosts" role="group" aria-label="Boosts" hidden></div>
+
+  <!-- Fin de nivel o de ronda «sobre el tablero» (sección 6): «Siguiente» es el primer botón y el más grande -->
+  <div class="sobre-tablero" id="final" hidden>
+    <div class="sobre-texto"><h2 id="textoFinal"></h2><div id="detalleFinal"></div></div>
+    <button class="b3d txt grande b-verde" id="siguiente" type="button">Siguiente nivel ▶</button>
+    <div class="sobre-fila">
+      <button class="b3d txt b-cielo" id="repetir" type="button">🔄 Repetir nivel</button>
+      <button class="b3d txt b-cielo" id="finNiveles" type="button">🗺️ Mapa</button>
     </div>
   </div>
+
+  <div id="aviso" class="sobre-texto" hidden></div>
+
   <script type="module" src="juego-botellascolores.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
   <script type="module" src="../compartido/fondo-madera.js"></script>
