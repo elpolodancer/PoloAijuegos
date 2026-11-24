@@ -62,10 +62,15 @@
     .hud-der { flex-direction: column; align-items: flex-end; gap: 6px; }
 
     /* Nombre del nivel en curso: botón verde arriba al centro (misma posición que tenía la barra de Modo libre · Niveles) */
-    .barra-nombre { --t: 50px; position: fixed; z-index: 6; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 24px); font-size: 17px; cursor: pointer; }   /* se puede tocar: pregunta si quieres salir al mapa */
+    /* Arriba al centro: 🗺️ Mapa a la izquierda y, pegado a él, el botón verde con el nombre del nivel */
+    .barra-fila { position: fixed; z-index: 6; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: flex; align-items: flex-start; gap: 8px; max-width: calc(100% - 24px); }
+    .barra-fila[hidden] { display: none; }
+    .barra-fila .b3d { --t: 50px; }
+    #btn-mapa-juego { font-size: 22px; }
+    .barra-nombre { min-width: 0; font-size: 17px; cursor: pointer; }   /* se puede tocar: pregunta si quieres salir al mapa */
     .barra-nombre > span { position: relative; overflow: hidden; text-overflow: ellipsis; }
     .barra-nombre[hidden] { display: none; }
-    @media (max-width: 639px) { .barra-nombre { top: calc(max(8px, env(safe-area-inset-top)) + 52px); } }
+    @media (max-width: 639px) { .barra-fila { top: calc(max(8px, env(safe-area-inset-top)) + 52px); } }
 
     /* Pantalla de juego: el TABLERO va centrado en la ventana (arriba 50 %, centrado en x) y ocupa todo el ancho en celular vertical (tapa la madera de los lados).
        --T = espacio que se deja arriba y abajo (barra de juego + cuadros de datos); --S = lado del tablero. */
@@ -200,7 +205,10 @@
     /* Celular horizontal: barra, cuadros y textos pasan a una columna a la izquierda y el tablero sigue centrado en la ventana */
     @media (orientation: landscape) and (max-height: 560px) {
       #juego { --S: max(160px, min(calc(100vh - 16px), calc(100vw - 508px), 700px)); --S: max(160px, min(calc(100dvh - 16px), calc(100vw - 508px), 700px)); }
-      .barra-nombre { top: max(8px, env(safe-area-inset-top)); left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; max-width: 190px; font-size: 14px; --t: 44px; }
+      .barra-fila { top: max(8px, env(safe-area-inset-top)); left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; max-width: 190px; gap: 6px; }
+      .barra-fila .b3d { --t: 44px; }
+      #btn-mapa-juego { font-size: 18px; }
+      .barra-nombre { font-size: 14px; }
       .datos { left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; top: calc(max(8px, env(safe-area-inset-top)) + 57px); width: 190px; gap: 4px; }
       .datos div { padding: 3px 4px; font-size: .6rem; }
       .datos b { font-size: .95rem; }
@@ -219,7 +227,10 @@
   </nav>
   <div class="hud hud-der"><span class="chip" id="sesion"></span><span class="chip" id="monedas" title="Monedas: de 15 a 80 por cada nivel que pasas por primera vez"></span><span class="chip" id="puntos" title="Puntos del juego: de 80 a 250 por cada partida que ganas"></span></div>
   <!-- Ya dentro del juego: botón verde con el nombre del nivel; al tocarlo pregunta si quieres salir (ventana con botón rojo) y te lleva al mapa -->
-  <button class="b3d txt b-verde barra-nombre" id="barra-juego" type="button" title="Salir al mapa" hidden><span id="nombre-nivel"></span></button>
+  <div class="barra-fila" id="barra-fila" hidden>
+    <button class="b3d b-azul" id="btn-mapa-juego" type="button" title="Mapa" aria-label="Mapa"><span class="b-ico">🗺️</span></button>
+    <button class="b3d txt b-verde barra-nombre" id="barra-juego" type="button" title="Salir al mapa" hidden><span id="nombre-nivel"></span></button>
+  </div>
 
   <main>
     <section class="pantalla" id="pantalla-inicio" hidden>

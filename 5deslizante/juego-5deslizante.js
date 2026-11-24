@@ -430,6 +430,8 @@ function mostrar(nombre) {
   for (const p of ["pantalla-inicio", "pantalla-libre", "juego"]) $(p).hidden = p !== nombre;
   if (nombre !== "pantalla-niveles") mapa.cerrar();
   $("barra-juego").hidden = nombre !== "juego";
+  $("barra-fila").hidden = nombre !== "juego";
+  $("btn-mapa-juego").hidden = modo === "libre";   // el 🗺️ solo en los niveles (el Modo libre no tiene mapa)
   pintarBotonMenu();
   if (nombre !== "juego") { clearInterval(reloj); clearInterval(chispas); }
   pintarMonedas();
@@ -838,6 +840,7 @@ const pausaLibre = crearMenuPausa({                // Modo libre (con «Guardar 
   alSalir: () => { pausado = false; mostrar("pantalla-libre"); },
 });
 $("barra-juego").addEventListener("click", () => (modo === "libre" ? pausaLibre : pausaSalir).abrir());
+$("btn-mapa-juego").addEventListener("click", () => pausaSalir.abrir());   // 🗺️: pregunta «¿Salir?» y, si se confirma, abre el mapa
 
 // ----- Partidas guardadas del Modo libre (hasta 20, en este dispositivo) -----
 // Clave «_v1»: entra sola en la copia de seguridad de compartido/almacen.js. Se guarda { v: 1, t: última modificación, partidas: [...] }.
