@@ -283,7 +283,7 @@ Hay **tres** cosas distintas y no se mezclan:
 |---|---|---|---|
 | **Puntos del portal** (`perfiles/{uid}.total`, los que se ven fuera, en la pantalla con todos los juegos) | Portal | **Exactamente 1** por cada nivel pasado **por primera vez**, **en cualquier juego** | Estándar (aquí) |
 | **Monedas** | Chip dorado del juego | Las fija cada juego (Deslizante: de 15 a 80 por nivel, según el tablero; el resto de los juegos, de 15 a 45) | El juego, en su README |
-| **Puntos del juego** (marcador de dentro del juego) | Dentro del juego | Los fija cada juego (Deslizante: de 80 a 250 por partida ganada, según el tablero) | El juego, en su README |
+| **Puntos del juego** (marcador de dentro del juego) | Dentro del juego | Los fija cada juego (Deslizante ya no los usa desde el 23 nov 2026) | El juego, en su README |
 
 - **Cómo se aplica:** al pasar un nivel por primera vez el juego llama `encolarNivel("<id>")` (`compartido/cola-puntos.js`; vale `PUNTOS_PORTAL_POR_NIVEL` = 1). **No** se llama a `encolarPuntos(id, N)` con otros valores para premiar niveles.
 - **Una sola vez por nivel.** Repetir un nivel no da punto de portal. El Modo libre **nunca** da puntos al portal (7.2).
@@ -356,7 +356,7 @@ Se marca la `<nav>` con la clase `cuadrada` (`<nav class="nav-juego cuadrada">`)
 
 Esc abre y cierra las ventanas de pausa/«¿Salir?» y, dentro del mapa, sube un paso (como el ☰ «Atrás»). **🎮 se oculta** cuando el juego corre como app instalada sola (13.9).
 
-**Arriba a la derecha** (`.hud.hud-der.columna`, en **columna** alineada a la derecha): primero el chip de sesión («Sin sesión» / nombre, recortado con «…»), **debajo** el chip de monedas (`chip chip-monedas`, sección 3) y debajo el de **puntos del juego** (🏅). En la app instalada sola el chip dice «👤 Iniciar sesión» y es tocable (`entrar()` de `compartido/jugador.js`).
+**Arriba a la derecha** (`.hud.hud-der.columna`, en **columna** alineada a la derecha): primero el chip de sesión («Sin sesión» / nombre, recortado con «…»), **debajo** el chip de monedas (`chip chip-monedas`, **amarillo**, sección 3). Los puntos del juego (🏅) no se muestran en esta variante. Dentro de una partida el chip de monedas **pasa a la izquierda del botón 🗺️** (13.6) y el `hud-der` va con `z-index: 8` para verse también sobre el mapa. En la app instalada sola el chip dice «👤 Iniciar sesión» y es tocable (`entrar()` de `compartido/jugador.js`).
 
 ### 13.4 El mapa (menú principal)
 
@@ -389,11 +389,12 @@ Al pasar un nivel las estrellas ganadas salen del centro **una tras otra**, vuel
 - **Tocar salta la celebración, pero solo con un toque NUEVO** (`pointerdown` sobre ella): en celular el toque que movió la ficha no debe cerrarla.
 - El texto «N estrellas» vive en `<body>` (`.cel-txt`, `z-index` 60): se queda ~4,5 s y **desaparece al instante** al empezar otro nivel.
 - `RESPETAR_MOVIMIENTO_REDUCIDO = false` la muestra siempre (en Windows «reducir movimiento» suele estar activo sin querer); con `true` solo se abre el mapa.
+- **Monedas que viajan:** si el nivel dio monedas (solo la primera vez), cuando la última estrella cae en el país salen del **centro del país** tantas monedas como se ganaron (**una por moneda**) y se deslizan una tras otra al chip de monedas de arriba a la derecha; el chip enseña el total de antes y sube de 1 en 1 cuando llega cada una (con un pulso). «Continuar» aparece al llegar la última. Si se salta la celebración, el chip muestra de golpe el total real.
 - Las estrellas son **adorno**: no dan monedas ni puntos (sección 12). Los estilos (`.est`, `.fila-est`, `.cel-*`) todavía viven en `index-5deslizante.html`; **al pedir un segundo juego con estrellas se pasan a `inmersivo.css`** (pendiente).
 
 ### 13.6 Dentro de un nivel
 
-- **Arriba al centro** (`.barra-nivel`): **🗺️** (`b3d b-azul`, 50 px) a la izquierda y, pegado a él, el **botón verde con el nombre del nivel** (`b3d txt b-verde`: «Nivel 3»; en Modo libre «♾️ Modo libre 😐»; **sin el tamaño**). En celular vertical (< 640 px) baja 52 px para no chocar con 🎮 y la sesión; en horizontal bajo pasa a una columna a la izquierda.
+- **Arriba al centro** (`.barra-nivel`): el **chip de monedas** (`chip chip-monedas`, a la izquierda de todo), **🗺️** (`b3d b-azul`, 50 px) y, pegado a él, el **botón verde con el nombre del nivel** (`b3d txt b-verde`: «Nivel 3»; en Modo libre «♾️ Modo libre 😐»; **sin el tamaño**). En celular vertical (< 640 px) baja 52 px para no chocar con 🎮 y la sesión; en horizontal bajo pasa a una columna a la izquierda.
 - **Justo debajo**, tres cuadros azules (`.cuadros-datos`): **Movimientos · Tiempo · Mejor tiempo**, cada uno un poco más oscuro que el anterior. (Otro juego cambia los rótulos pero conserva la forma y los tres tonos.)
 - **El tablero va centrado en la ventana** y en celular vertical ocupa todo el ancho (`--S`). Debajo: título corto («4×4»), estrellas y avisos. **No hay botón 🔄**: se reinicia saliendo y entrando, o con «Repetir» al ganar.
 - **Tocar el botón verde o el 🗺️ abre «¿Salir?»** (`crearMenuPausa`): **▶ Seguir jugando** (verde) y **🚪 Salir al mapa** (rojo, ayuda «Se pierde lo avanzado en este tablero.»). Mientras está abierta el cronómetro y los toques se detienen; Esc la abre y la cierra. Salir **no guarda** lo avanzado en esa partida.

@@ -73,13 +73,14 @@
 
     /* Juego */
     /* Arriba a la derecha: el nombre del jugador y, DEBAJO de él, las monedas y los puntos del juego (en una columna alineada a la derecha) */
-    .hud-der { flex-direction: column; align-items: flex-end; gap: 6px; }
+    .hud-der { flex-direction: column; align-items: flex-end; gap: 6px; z-index: 8; }   /* z 8: por encima del mapa (z 5), para que el chip de monedas se vea también en el mapa */
 
     /* Nombre del nivel en curso: botón verde arriba al centro (misma posición que tenía la barra de Modo libre · Niveles) */
     /* Arriba al centro: 🗺️ Mapa a la izquierda y, pegado a él, el botón verde con el nombre del nivel */
     .barra-fila { position: fixed; z-index: 6; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: flex; align-items: flex-start; gap: 8px; max-width: calc(100% - 24px); }
     .barra-fila[hidden] { display: none; }
     .barra-fila .b3d { --t: 50px; }
+    .barra-fila .chip { flex: none; align-self: flex-start; height: 40px; margin-top: 5px; font-size: 14px; }   /* chip de monedas a la izquierda del 🗺️ (lo mueve ubicarMonedas) */
     #btn-mapa-juego { font-size: 22px; }
     .barra-nombre { min-width: 0; font-size: 17px; cursor: pointer; }   /* se puede tocar: pregunta si quieres salir al mapa */
     .barra-nombre > span { position: relative; overflow: hidden; text-overflow: ellipsis; }
@@ -165,6 +166,7 @@
     .cel-fila { position: relative; display: flex; gap: 30px; --e: 52px; }   /* separadas entre sí: se deslizan una tras otra a su lugar */
     .cel-e { width: var(--e); height: var(--e); }
     .cel-txt { position: fixed; z-index: 60; text-align: center; white-space: nowrap; pointer-events: none; font-weight: 900; font-size: clamp(1.05rem, 4.2vw, 1.5rem); letter-spacing: .02em; color: #fff6b0; text-shadow: 0 2px 0 rgba(120,70,0,.85), 0 0 10px rgba(255,198,31,.9), 0 0 2px #000; }   /* «2 estrellas»: lo crea y mueve el JS (celebrar) en <body>, por encima del mapa */
+    .cel-moneda { position: fixed; left: 0; top: 0; z-index: 61; margin: 0; font-size: 24px; pointer-events: none; will-change: transform; }   /* una por cada moneda ganada: sale del centro del país y se desliza al chip de monedas */
     .cel-txt2 { margin-top: 2px; font-size: .72em; color: #ffe9a6; }   /* «💰 +30 monedas», solo la primera vez que se pasa un nivel */
 
     /* La sesión puede tener un nombre largo: se recorta con «…» para no tapar el botón de monedas ni «Menú principal» */
@@ -222,14 +224,14 @@
     /* Celular horizontal: barra, cuadros y textos pasan a una columna a la izquierda y el tablero sigue centrado en la ventana */
     @media (orientation: landscape) and (max-height: 560px) {
       #juego { --S: max(160px, min(calc(100vh - 16px), calc(100vw - 508px), 700px)); --S: max(160px, min(calc(100dvh - 16px), calc(100vw - 508px), 700px)); }
-      .barra-fila { top: max(8px, env(safe-area-inset-top)); left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; max-width: 190px; gap: 6px; }
+      .barra-fila { top: max(8px, env(safe-area-inset-top)); left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; max-width: 190px; gap: 6px; flex-wrap: wrap; }
       .barra-fila .b3d { --t: 44px; }
       #btn-mapa-juego { font-size: 18px; }
       .barra-nombre { font-size: 14px; }
-      .datos { left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; top: calc(max(8px, env(safe-area-inset-top)) + 57px); width: 190px; gap: 4px; }
+      .datos { left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; top: calc(max(8px, env(safe-area-inset-top)) + 107px); width: 190px; gap: 4px; }   /* +107: la barra ocupa dos filas (monedas + 🗺️, y debajo el nombre del nivel) */
       .datos div { padding: 3px 4px; font-size: .6rem; }
       .datos b { font-size: .95rem; }
-      .abajo { left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; top: calc(max(8px, env(safe-area-inset-top)) + 118px); width: 190px; }
+      .abajo { left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; top: calc(max(8px, env(safe-area-inset-top)) + 168px); width: 190px; }
       #pantalla-libre, #pantalla-inicio { padding-top: calc(96px + env(safe-area-inset-top, 0px)); }
       #btn-inicio-libre, #btn-inicio-mapa { --t: 44px; font-size: 17px; }
       #btn-inicio-ajustes { --t: 40px; font-size: 15px; }
@@ -243,7 +245,7 @@
     <a class="b3d chico b-azuloscuro" id="btn-portal" href="../" title="Juegos: volver al portal" aria-label="Juegos: volver al portal"><span class="b-ico">🎮</span></a>
     <button class="b3d chico b-verdeclaro" id="btn-menu" type="button" title="Volver al menú principal" aria-label="Volver al menú principal" hidden><span class="b-ico">☰</span></button>
   </nav>
-  <div class="hud hud-der"><span class="chip" id="sesion"></span><span class="chip" id="monedas" title="Monedas: de 15 a 80 por cada nivel que pasas por primera vez"></span><span class="chip" id="puntos" title="Puntos del juego: de 80 a 250 por cada partida que ganas"></span></div>
+  <div class="hud hud-der"><span class="chip" id="sesion"></span><span class="chip chip-monedas" id="monedas" title="Monedas: de 15 a 80 por cada nivel que pasas por primera vez"></span></div>
   <!-- Ya dentro del juego: botón verde con el nombre del nivel; al tocarlo pregunta si quieres salir (ventana con botón rojo) y te lleva al mapa -->
   <div class="barra-fila" id="barra-fila" hidden>
     <button class="b3d b-azul" id="btn-mapa-juego" type="button" title="Mapa" aria-label="Mapa"><span class="b-ico">🗺️</span></button>

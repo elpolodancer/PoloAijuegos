@@ -7,7 +7,7 @@ import { encolarNivel, leerCola, guardarCola } from "../compartido/cola-puntos.j
 import { crearEtapas } from "../compartido/etapas-mapa.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
-import { NIVELES, POR_ETAPA, TAMANO_MIN, TAMANO_MAX, monedasDe, puntosJuegoDe } from "./niveles-5deslizante.js";
+import { NIVELES, POR_ETAPA, TAMANO_MIN, TAMANO_MAX, monedasDe } from "./niveles-5deslizante.js";
 
 const ID = "deslizante";
 const MOSTRAR_BORRAR_HISTORIAL = true;            // BOTÓN TEMPORAL DE PRUEBAS en ⚙️ Ajustes: «Borrar todo el historial y reiniciar». Cuando termines la revisión, ponlo en false (o borra «borrarHistorial» y su botón en abrirAjustes)
@@ -30,7 +30,7 @@ try {
 // { v: 2, hechos: NÚMERO = nivel más alto pasado (0 = ninguno; los niveles se abren en orden, así que todos los de antes están pasados), mejores: { "<número de nivel>": { mov, ms } },
 //   libre: { "<tamaño>" o "<tamaño>-<0 a 3>": { mov, ms, ganados } },
 //   estrellas: { "<número de nivel>": mejor escalón 1 a 6 (solo adorno: ver «Estrellas») },
-//   puntos: puntos del JUEGO acumulados (80 a 250 por partida ganada, según el tablero) }
+//   puntos: ya NO se usa ni se muestra (se quitaron las medallas 🏅 el 23 nov 2026); el campo se conserva en el progreso para no romper lo ya guardado }
 //   mov = menos movimientos y ms = menor tiempo en milisegundos: son dos récords independientes (pueden venir de partidas distintas).
 // (Antes «hechos» era una lista con un true por nivel; ahora es un solo número para que el progreso siga cabiendo en la nube con miles de niveles. La lista vieja se convierte sola.)
 // Lo guardado ANTES del reinicio no trae «v: 2»: de eso solo se conservan los récords del modo libre; niveles, estrellas y partidas se descartan.
@@ -183,10 +183,20 @@ function totalMonedas() {
   return s;
 }
 const fmtNum = (x) => Number(x).toLocaleString("es-MX");
+// monedasVis: mientras las monedas de un nivel «viajan» al chip (celebrar), el chip muestra el total de antes y sube de una en una al llegar cada moneda. null = mostrar el total real.
+let monedasVis = null;
 const pintarMonedas = () => {
-  $("monedas").textContent = "💰 " + fmtNum(totalMonedas());
-  $("puntos").textContent = "🏅 " + fmtNum(prog.puntos);
+  const ico = document.createElement("span");
+  ico.className = "moneda";                                   // moneda dibujada con CSS (compartido/inmersivo.css); el chip es dorado: «chip chip-monedas»
+  $("monedas").replaceChildren(ico, document.createTextNode(fmtNum(monedasVis ?? totalMonedas())));
 };
+// El chip de monedas vive arriba a la derecha (bajo la sesión) y, dentro de una partida, pasa a la izquierda del botón 🗺️ (en la barra de arriba al centro)
+function ubicarMonedas() {
+  const chip = $("monedas"), enBarra = !$("barra-fila").hidden;
+  const destino = enBarra ? $("barra-fila") : document.querySelector(".hud-der");
+  if (chip.parentNode === destino) return;
+  if (enBarra) destino.prepend(chip); else destino.appendChild(chip);
+}
 const fmtLimite = (ms) => (ms >= 60000 ? ms / 60000 + " min" : ms / 1000 + " s");
 function metaTexto(m, tier) {
   if (tier >= 6) return "¡Tienes todas las estrellas!";
@@ -323,6 +333,7 @@ function quitarCelebracion() {
   celId++;
   celTimers.forEach(clearTimeout); celTimers = [];
   if (celEl) { celEl.remove(); celEl = null; }
+  if (monedasVis !== null) { monedasVis = null; pintarMonedas(); }   // si se salta o se corta la celebración, el chip muestra de inmediato el total real
   mapa.retenerContinuar(false);   // el botón «Continuar» del centro del país vuelve a verse
 }
 function celebrar(tier, i, monedas = 0) {
@@ -334,6 +345,7 @@ function celebrar(tier, i, monedas = 0) {
   const abrir = () => { if (!abierto) { abierto = true; abrirMapa(i + 1, true); } };   // abrirMapa → mostrar("pantalla-niveles") no cancela la celebración
   if (RESPETAR_MOVIMIENTO_REDUCIDO && matchMedia("(prefers-reduced-motion: reduce)").matches) { abrir(); return; }
 
+  if (monedas > 0) { monedasVis = Math.max(0, totalMonedas() - monedas); pintarMonedas(); }   // el chip enseña el total de antes: sube al llegar cada moneda
   const T = TIEMPOS;
   const mor = Math.max(0, tier - 3), cuantas = Math.min(tier, 3);
   // Solo doradas → «N estrellas doradas»; las 3 moradas → «3 estrellas moradas»; mezcladas (doradas y moradas) → solo la cantidad, sin color
@@ -410,6 +422,37 @@ function celebrar(tier, i, monedas = 0) {
     ], { duration: T.texto, fill: "forwards" }).onfinish = () => { txt.remove(); if (textoCel === txt) textoCel = null; };
   });
 
+  // 4) monedas: salen del centro del país y se deslizan una tras otra hasta el chip de monedas (arriba a la derecha). Hay UNA moneda por cada moneda ganada;
+  //    cada vez que una llega, el chip sube 1 y da un pequeño pulso. Al llegar la última aparece «Continuar».
+  const lanzarMonedas = (c) => {
+    const chip = $("monedas"), n = monedas, base = monedasVis;
+    const rd = chip.getBoundingClientRect(), dx = rd.left + rd.width / 2, dy = rd.top + rd.height / 2;
+    const sep = Math.min(45, 1100 / n), dur = 650, mitad = 12;               // sep = ms entre una moneda y la siguiente · mitad = media moneda (24 px)
+    let llegadas = 0;
+    for (let k = 0; k < n; k++) {
+      const m = document.createElement("i");
+      m.className = "moneda cel-moneda";
+      ov.appendChild(m);
+      const ang = Math.random() * Math.PI * 2, rad = 10 + Math.random() * 34;   // se abren un poco al salir y luego se deslizan hacia el chip
+      m.animate([
+        { transform: "translate(" + (c.x - mitad) + "px," + (c.y - mitad) + "px) scale(.4)", opacity: 0, offset: 0 },
+        { transform: "translate(" + (c.x - mitad + Math.cos(ang) * rad) + "px," + (c.y - mitad + Math.sin(ang) * rad) + "px) scale(1)", opacity: 1, offset: 0.18 },
+        { transform: "translate(" + (dx - mitad) + "px," + (dy - mitad) + "px) scale(.7)", opacity: 1, offset: 1 },
+      ], { duration: dur, delay: k * sep, easing: "cubic-bezier(.45,0,.2,1)", fill: "both" }).onfinish = () => {
+        m.remove();
+        if (id !== celId) return;
+        llegadas++;
+        monedasVis = base + llegadas; pintarMonedas();
+        chip.animate([{ transform: "scale(1)" }, { transform: "scale(1.14)" }, { transform: "scale(1)" }], { duration: 160 });
+        if (llegadas === n) {
+          chisporroteo(ov, dx, dy, 10, ["#fff6b0", "#ffc61f", "#ffffff"]);
+          mapa.retenerContinuar(false);                                       // aparece «Continuar» con su rebote
+          tras(T.final + 150, quitarCelebracion);                             // y se limpia todo (esto también deja el chip con el total real)
+        }
+      };
+    }
+  };
+
   // 3) una por una: cada estrella cae al centro del país, se encoge hasta desaparecer y el país hace «pop»
   const T0 = tMapa + T.velo + T.espera;
   ests.forEach((w, k) => tras(T0 + k * T.caeSep, () => {
@@ -426,10 +469,10 @@ function celebrar(tier, i, monedas = 0) {
       w.style.visibility = "hidden";
       mapa.parpadear(k);                                                                  // el país hace «pop» (cada vez un poco más fuerte)
       chisporroteo(ov, c.x, c.y, ultima ? 16 : 10, ["#fff6b0", "#ffc61f", "#ffffff"]);
-      if (ultima) tras(T.continuar, () => mapa.retenerContinuar(false));                        // aparece «Continuar» con un rebote
+      if (ultima) { if (monedas > 0) lanzarMonedas(c); else tras(T.continuar, () => mapa.retenerContinuar(false)); }   // con monedas ganadas: primero viajan al chip; después aparece «Continuar» con un rebote
     };
   }));
-  tras(T0 + (cuantas - 1) * T.caeSep + T.caeDur + T.final, quitarCelebracion);
+  tras(T0 + (cuantas - 1) * T.caeSep + T.caeDur + T.final + (monedas > 0 ? 4000 : 0), quitarCelebracion);   // con monedas, este es solo el seguro: la celebración termina cuando llega la última moneda
 }
 
 // ----- Pantallas -----
@@ -452,6 +495,7 @@ function mostrar(nombre) {
   if (nombre !== "pantalla-niveles") mapa.cerrar();
   $("barra-juego").hidden = nombre !== "juego";
   $("barra-fila").hidden = nombre !== "juego";
+  ubicarMonedas();
   $("btn-mapa-juego").hidden = modo === "libre";   // el 🗺️ solo en los niveles (el Modo libre no tiene mapa)
   pintarBotonMenu();
   if (nombre !== "juego") { clearInterval(reloj); clearInterval(chispas); }
@@ -509,7 +553,7 @@ function pintarLibre() {
     b.addEventListener("click", () => { libreN = m; guardarLibre(); pintarLibre(); });
     tf.appendChild(b);
   }
-  $("nota-libre").textContent = "Ganar aquí da " + puntosJuegoDe(libreN) + " puntos del juego. No da monedas ni puntos al perfil.";
+  $("nota-libre").textContent = "Ganar aquí no da monedas ni puntos al perfil: solo guarda tu mejor marca.";
   const r = prog.libre[claveLibre(libreN)];
   $("libre-record").textContent = r ? "🏆 Récord " + libreN + "×" + libreN + " " + DIFICULTADES[libreDif].emoji + ": " + fmtMs(r.ms) + " · " + r.mov + " mov. · " + r.ganados + " resueltos" : "🏆 Aún sin resolver en esta combinación";
 }
@@ -734,14 +778,12 @@ async function ganar() {
   const recordMs = !m || ms < m.ms, recordMov = !m || movs < m.mov;
   const nueva = { mov: m ? Math.min(m.mov, movs) : movs, ms: m ? Math.min(m.ms, ms) : ms };
   const primera = !libre && !hecho(idx);
-  // Recompensas: puntos del JUEGO en toda partida ganada; monedas y punto del portal solo la primera vez que se pasa un nivel
-  const ptsJuego = puntosJuegoDe(n);
+  // Recompensas: monedas y punto del portal solo la primera vez que se pasa un nivel
   const monedas = primera ? monedasDe(n) : 0;
   // Estrellas (adorno, antes de actualizar los récords)
   const cE = !libre && conEstrellas(n);
   const antes = cE ? tierNivel(idx) : 0;
   const nuevoTier = Math.max(antes, cE ? tierPorTiempo(n, ms) : 0);
-  prog.puntos += ptsJuego;
   let partidaQuitada = false;
   if (libre) {
     const k = claveLibre(libreN); prog.libre[k] = { ...nueva, ganados: ((prog.libre[k] && prog.libre[k].ganados) || 0) + 1 };
@@ -767,7 +809,7 @@ async function ganar() {
         cuadro(0.6, "🥇 Mejor tiempo", fmtMs(nueva.ms), recordMs ? "🏆 ¡Nuevo récord!" : "") +
         cuadro(0.7, "👣 Movimientos", movs, "") +
         cuadro(0.8, "🏆 Récord mov.", nueva.mov, recordMov ? "🏆 ¡Nuevo récord!" : "") +
-      '</div><div class="vic-premios"><div class="vic-premio" style="--d:1s">🏅 +<span class="cuenta" data-hasta="' + ptsJuego + '">' + fmtNum(ptsJuego) + "</span> puntos</div></div></div>";
+      '</div></div>';
     const caja = document.createElement("div");
     caja.className = "botones";
     const boton = (texto, clase, fn) => { const b = document.createElement("button"); b.className = "b3d txt " + clase; b.textContent = texto; b.addEventListener("click", fn); caja.appendChild(b); };

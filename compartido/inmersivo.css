@@ -324,7 +324,7 @@ html.inmersivo.oscura {
 .nav-juego.cuadrada .b3d { font-size: 20px; }
 
 /* Arriba a la derecha en columna: sesión, y debajo monedas y puntos del juego (<div class="hud hud-der columna">) */
-.hud-der.columna { flex-direction: column; align-items: flex-end; gap: 6px; }
+.hud-der.columna { flex-direction: column; align-items: flex-end; gap: 6px; z-index: 8; }   /* z 8: por encima del mapa (z 5), así el chip de monedas se ve también en el mapa */
 
 /* Pantalla de inicio: <div class="pant-menu" id="pantalla-inicio"><div class="ini-menu"> Modo libre · Jugar · Mapa · Ajustes </div></div>
    Botones: .ini-libre y .ini-mapa (56 px), .ini-jugar (112 px, el doble), .ini-ajustes (44 px). Colores: b-morado · b-verde · b-azul · b-cielo. */
@@ -340,6 +340,7 @@ html.inmersivo.oscura {
 .barra-nivel[hidden] { display: none; }
 .barra-nivel .b3d { --t: 50px; }
 .barra-nivel .btn-mapa { font-size: 22px; }
+.barra-nivel .chip { flex: none; align-self: flex-start; height: 40px; margin-top: 5px; font-size: 14px; }   /* chip de monedas (chip chip-monedas) a la IZQUIERDA del 🗺️ */
 .barra-nivel .nombre { min-width: 0; font-size: 17px; cursor: pointer; }
 .barra-nivel .nombre > span { position: relative; overflow: hidden; text-overflow: ellipsis; }
 .barra-nivel .nombre[hidden] { display: none; }
@@ -375,11 +376,11 @@ html.inmersivo.oscura {
   .ini-menu .ini-libre, .ini-menu .ini-mapa { --t: 44px; font-size: 17px; }
   .ini-menu .ini-ajustes { --t: 40px; font-size: 15px; }
   .ini-menu .ini-jugar { --t: 88px; font-size: 26px; }
-  .barra-nivel { top: max(8px, env(safe-area-inset-top)); left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; max-width: 190px; gap: 6px; }
+  .barra-nivel { top: max(8px, env(safe-area-inset-top)); left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; max-width: 190px; gap: 6px; flex-wrap: wrap; }   /* monedas + 🗺️ en la primera fila y el nombre del nivel debajo */
   .barra-nivel .b3d { --t: 44px; }
   .barra-nivel .btn-mapa { font-size: 18px; }
   .barra-nivel .nombre { font-size: 14px; }
-  .cuadros-datos { left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; top: calc(max(8px, env(safe-area-inset-top)) + 57px); width: 190px; gap: 4px; }
+  .cuadros-datos { left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; top: calc(max(8px, env(safe-area-inset-top)) + 107px); width: 190px; gap: 4px; }
   .cuadros-datos > div { padding: 3px 4px; font-size: .6rem; }
   .cuadros-datos b { font-size: .95rem; }
 }

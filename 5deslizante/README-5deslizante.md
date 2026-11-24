@@ -25,7 +25,7 @@ Ruta: `5deslizante/README-5deslizante.md` · Aquí se anotan las especificacione
   - Ya **no hay** botones de Modo libre y Niveles dentro de la partida, ni ◀ ▶ para cambiar de nivel. Se cambia de nivel con «Siguiente nivel» al ganar, o desde ☰ → menú principal → Niveles.
 
 ## Navegación (estándar de `compartido/inmersivo.css`)
-- Arriba a la derecha: el nombre del jugador y, **debajo de él**, el chip de monedas 💰 y el de puntos del juego 🏅 (en columna, no a su izquierda).
+- Arriba a la derecha: el nombre del jugador y, **debajo de él**, el chip de monedas (**amarillo**, con la moneda dibujada: `chip chip-monedas`). **Dentro de una partida** el chip pasa a la barra de arriba al centro, a la **izquierda** del botón 🗺️ (el botón verde del nivel queda a la derecha de este); en celular horizontal bajo la barra pasa a dos filas (monedas + 🗺️, y debajo el nombre del nivel).
 - Arriba a la izquierda, **🎮** (vuelve al portal), siempre visible: botón **cuadrado de 40 px, azul oscuro** (`b-azuloscuro`), solo icono (el texto «Juegos» va en `title` y `aria-label`).
 - Justo debajo, el botón **☰**, **cuadrado, verde claro** (`b-verdeclaro`) y solo icono, visible en todas las pantallas menos en el mapa principal (en las vistas internas del mapa dice «Atrás»). **También dentro de una partida** vuelve al menú principal (el mapa). No hay menú de pausa.
 
@@ -64,7 +64,7 @@ Ruta: `5deslizante/README-5deslizante.md` · Aquí se anotan las especificacione
 - **Aleatorio e infinito** (es lo único del juego que sí lo es). Los niveles de «Niveles» siguen siendo fijos.
 - **Qué tamaños se pueden elegir:** **los 28 (3×3 a 30×30) están abiertos** (`tamanoAbierto` en `juego-5deslizante.js`).
 - **Guarda** por combinación (tamaño + dificultad) la mejor marca (menos movimientos; si empatan, menos tiempo) y cuántos tableros se resolvieron (`libre` dentro de `deslizante_progreso`, sincronizado con la cuenta). Clave: `"<tamaño>"` para 😈 (así se conservan los récords de antes) y `"<tamaño>-<0 a 3>"` para las otras cuatro.
-- **Recompensas:** el modo libre NO da monedas ni puntos al perfil (así no se pueden repetir sin límite). Sí da los **puntos del juego** (🏅, de 80 a 250 según el tablero; ver «Puntos y progreso»).
+- **Recompensas:** el modo libre NO da monedas ni puntos al perfil (así no se pueden repetir sin límite): solo guarda la mejor marca.
 - Al terminar un tablero: «Otro tablero» y «⚙️ Cambiar tablero» (vuelve a esta pantalla).
 
 ## Plan: 3 900 niveles, monedas y boost (niveles y monedas hechos; boost por hacer)
@@ -110,6 +110,7 @@ No hace falta probar jugadas ni hacer backtracking: la solubilidad depende solo 
 
 ## Estrellas (solo adorno) y monedas
 - **Monedas:** de **15** (3×3) a **80** (30×30) por cada nivel pasado, **una sola vez por nivel** (`monedasDe` en `niveles-5deslizante.js`). El chip 💰 es la suma de lo que pagó cada nivel pasado (se calcula con `hechos`, así que se sincroniza sola con la cuenta). Todavía no se gastan en nada. Cuando exista el boost (1 000 monedas) habrá que guardar una cartera con regla propia (`unirCartera`, como Estacionamiento).
+- **Animación de las monedas (23 nov 2026):** al pasar un nivel por primera vez, cuando las estrellas terminan de caer en el país, salen del **centro del país** tantas monedas como se ganaron (**una por moneda**: 15 a 80) y se **deslizan una tras otra** hasta el chip amarillo de arriba a la derecha. El chip muestra el total de antes y **sube de 1 en 1** cuando llega cada moneda (con un pequeño pulso). «Continuar» aparece cuando llega la última. Tocar para saltar la celebración deja el chip con el total real. Código: `lanzarMonedas` dentro de `celebrar` y `monedasVis`/`pintarMonedas` en `juego-5deslizante.js`; estilo `.cel-moneda` en `index-5deslizante.html`. Ajustes: `sep` (ms entre monedas, máx. 45; con muchas se acorta para que todas salgan en ~1,1 s) y `dur` (650 ms por moneda).
 - **Estrellas:** **ya no dan monedas.** Quedan como adorno de los niveles 3×3 y 4×4 (6 escalones por tiempo, tabla `LIMITES` en `juego-5deslizante.js`; se pide «menos de»):
   | Tamaño | ★ | ★★ | ★★★ | 1 morada | 2 moradas | 3 moradas |
   |---|---|---|---|---|---|---|
@@ -118,16 +119,15 @@ No hace falta probar jugadas ni hacer backtracking: la solubilidad depende solo 
   Un tamaño que no esté en `LIMITES` no da estrellas. Subir los límites nunca quita estrellas ya ganadas (se guarda el mejor escalón). Se guardan en `estrellas` (`{ "<nivel>": 1 a 6 }`) y gana el escalón mayor al sincronizar. Pendiente decidir si se rediseñan o se quitan.
 
 ## Puntos y progreso
-Tres cosas distintas (`ESTANDARES-juegos.md`, sección 12). Todas se reparten **en línea recta** entre el 3×3 y el 30×30 (más tamaño = más recompensa):
+Ahora son **dos** cosas (`ESTANDARES-juegos.md`, sección 12; antes había una tercera, los puntos del juego, ya eliminada). Las monedas se reparten **en línea recta** entre el 3×3 y el 30×30 (más tamaño = más recompensa):
 
 | Tablero | 3×3 | 4×4 | 5×5 | 10×10 | 15×15 | 20×20 | 30×30 |
 |---|---|---|---|---|---|---|---|
 | 💰 Monedas por nivel (1.ª vez) | 15 | 17 | 20 | 32 | 44 | 56 | 80 |
-| 🏅 Puntos del juego por partida ganada | 80 | 86 | 93 | 124 | 156 | 187 | 250 |
 
 - **Puntos del portal** (los de fuera, `perfiles.total`): **1 por nivel**, solo la primera vez que se pasa (`encolarNivel` de `compartido/cola-puntos.js`; se envían al perfil cuando hay internet y sesión). El Modo libre no da. Desde el 23 nov 2026 el juego está en la zona «Juegos», así que ese punto sí suma al total (antes, mientras estuvo en `EN_DESARROLLO`, no sumaba al total de nadie).
 - **Monedas:** ver «Estrellas (solo adorno) y monedas».
-- **Puntos del juego** 🏅 (chip bajo las monedas): se suman en **cada partida ganada**, sea nivel (también al repetirlo) o Modo libre: `puntosJuegoDe(n)`. Se guardan en `puntos` y al sincronizar gana el mayor de los dos (un marcador acumulado no se puede sumar entre dispositivos sin duplicar). Son solo un marcador del juego: no suben el total del portal.
+- **Puntos del juego (medallas 🏅): eliminados el 23 nov 2026.** Ya no hay chip, ni premio en la ventana del Modo libre, ni se suman. El campo `puntos` sigue existiendo en el progreso guardado (vale 0 y se fusiona con el mayor) para no romper lo que ya hay en dispositivos y cuentas; `puntosJuegoDe` queda en `niveles-5deslizante.js` sin usarse.
 - Progreso en `localStorage` con la clave `deslizante_progreso`: `{ v: 2, hechos (número), mejores, libre, estrellas, puntos }`. Se sincroniza con la cuenta (`compartido/progreso.js`): un nivel pasado en cualquier sitio cuenta como pasado y de cada récord se queda el mejor (ver «Tiempos y récords»).
 - **Reinicio (21 nov 2026):** lo guardado sin `v: 2` solo conserva los récords del modo libre; niveles, estrellas y partidas guardadas se descartan. Una sola vez por dispositivo (`deslizante_reinicio_v1`) se quitan de la cola los puntos pendientes de este juego. En la nube, los puntos y datos viejos se borran con `herramientas/reiniciar-puntos.mjs` (simulacro por defecto).
 
@@ -139,6 +139,7 @@ Tres cosas distintas (`ESTANDARES-juegos.md`, sección 12). Todas se reparten **
 - Nombre definitivo del juego (se busca el del juguete de plástico mexicano).
 
 ## Cambios recientes
+- **Sin medallas y monedas amarillas (23 nov 2026):** (1) se quitó el chip 🏅 y el premio «🏅 +N puntos» del Modo libre (ver «Puntos y progreso»); (2) el chip de monedas ahora es **amarillo** (`chip chip-monedas` con la moneda de CSS) y ya no tiene fondo oscuro; (3) dentro de una partida va a la **izquierda del botón 🗺️**; (4) en el mapa se ve arriba a la derecha (`.hud-der` con `z-index: 8`, por encima del mapa); (5) **animación de monedas** del centro del país al chip, una por moneda ganada (ver «Estrellas (solo adorno) y monedas»). Probado en Chromium sin pantalla (celular vertical 390×780 y horizontal 780×360, 17 monedas simuladas, sin errores de JavaScript); NO con el dedo en celular real.
 - **Texto que se queda (23 nov 2026):** el texto «N estrellas» ya no desaparece con la celebración: se crea aparte en `<body>` (clase `.cel-txt`, `z-index` 60, por encima del mapa), sale de las estrellas, se coloca encima y **se queda ~4,5 s** (`TIEMPOS.texto`: ~2,7 s completo subiendo apenas y ~1,8 s desvaneciéndose poco a poco). **Desaparece al instante** al empezar cualquier nivel (`empezar()` llama a `quitarTextoCel()`, así que «Continuar» lo quita) y al empezar otra celebración. Si se ganaron monedas (solo la primera vez que se pasa un nivel) agrega una segunda línea «💰 +N monedas» (`.cel-txt2`). Tocar para saltar la celebración NO lo quita. `sw.js` sube a 217.
 - **Pausa con las estrellas quietas (23 nov 2026):** la celebración dura **25 % más** (~1,85 s con 3 estrellas) y el tiempo extra es `TIEMPOS.quieta` (370 ms): al llegar arriba a la derecha las estrellas se quedan **estáticas** (se quitó el vaivén `cel-mueve`, que las movía justo al llegar) mientras sale el texto «N estrellas»; después empieza el velo. Para más pausa, subir `quieta`. `sw.js` sube a 216.
 - **El «pop» del país ya no muestra barras de desplazamiento (23 nov 2026):** al hincharse el país (`parpadear` en `compartido/mapa-niveles.js`) sobrepasaba el contenedor desplazable `.m-cuerpo` y aparecía una barra (la de abajo) a cada estrella que caía. Ahora, mientras dura cada pop, `.m-cuerpo` lleva la clase `m-pop` (`overflow: clip` con margen de 48 px; `hidden` donde no exista) y después se devuelve a como estaba, con su posición de desplazamiento. El efecto se ve igual, pero la vista no se mueve. Afecta a todos los juegos con mapa de un solo país. `sw.js` sube a 215.
