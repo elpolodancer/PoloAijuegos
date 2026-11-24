@@ -16,7 +16,7 @@
 //   Al llegar a los 20 niveles el país queda lleno y se cambia por su bandera (ahí está el gancho «alPaisCompleto» para el destello dorado, todavía sin hacer).
 //   Banderas: imagenes-banderas/xx.svg (xx = código ISO en minúsculas). mapa.abrir(n, true) abre la botella del país del nivel n para verla subir.
 //   PAÍS BONITO (con unPais, 23 nov 2026): la silueta es tierra verde con franja de playa, manchas de pasto, flores, montañas con nieve, árboles (redondos y pinos, siempre los mismos en cada país) y una banderita en un poste;
-//   nada de eso queda debajo del botón «Continuar». El agua es un poco translúcida (AGUA_TRANSPARENTE) y la banderita queda encima de ella; al completar el país se desvanece y la bandera grande lo cubre.
+//   nada de eso queda debajo del botón «Continuar». El agua es un poco translúcida (AGUA_TRANSPARENTE) y la banderita queda encima de ella; al completar el país la banderita se queda y la tierra con su decoración sigue a la vista (la bandera grande ya no la tapa).
 //
 // Uso:
 //   import { crearEtapas } from "../compartido/etapas-mapa.js";
@@ -936,9 +936,10 @@ export function montarMapa(o) {
     const objetivo = acotar(hechos / NIVELES_POR_ETAPA, 0, 1);
     const desde = memoriaAgua("pais" + indice, objetivo);   // dónde estaba el agua la última vez: de ahí sube
 
-    // La bandera cubre la silueta cuando el país está completo (entra con un desvanecido si se acaba de llenar)
+    // La bandera cubre la silueta cuando el país está completo (entra con un desvanecido si se acaba de llenar).
+    // Con unPais (24 nov 2026) NO se cubre: la tierra bonita (pasto, árboles, montañas) se queda a la vista y la bandera es solo la banderita plantada.
     let bandera = null;
-    if (objetivo >= 1) {
+    if (objetivo >= 1 && !UN_PAIS) {
       const cb = el("clipPath", { id: "cb" + id }, el("defs", {}, svg));
       el("path", { d: c.d }, cb);
       bandera = el("image", { href: urlBandera(codigo), x: 0, y: 0, width: w, height: hh, preserveAspectRatio: "xMidYMid slice", "clip-path": "url(#cb" + id + ")", "pointer-events": "none" }, svg);
@@ -959,15 +960,17 @@ export function montarMapa(o) {
         alLlegar: objetivo >= 1 ? () => {
           // ¡País lleno! AQUÍ va la animación del destello dorado (pendiente). Por ahora solo se cambia el agua por la bandera.
           if (o.alPaisCompleto) o.alPaisCompleto({ codigo, indice, svg, d: c.d, w, h: hh });
-          if (bandera) { bandera.style.transition = "opacity 1.2s ease"; bandera.style.opacity = 1; }
-          if (miniBandera) { miniBandera.style.transition = "opacity .8s ease"; miniBandera.style.opacity = 0; }
+          if (bandera) {
+            bandera.style.transition = "opacity 1.2s ease"; bandera.style.opacity = 1;
+            if (miniBandera) { miniBandera.style.transition = "opacity .8s ease"; miniBandera.style.opacity = 0; }   // solo si hay bandera grande; con unPais la banderita se queda
+          }
           setTimeout(() => { agua.quitar(); aguas = aguas.filter((a) => a !== agua); }, 1400);   // ya no hace falta la botella de este país
         } : null,
       });
       aguas.push(agua);
     }
-    // la banderita va encima del agua (siempre se ve); si el país ya estaba completo, no hace falta: la bandera grande lo cubre
-    if (spotBandera && !(objetivo >= 1 && desde >= 1)) miniBandera = dibujarBanderita(svg, codigo, spotBandera, id, urlBandera(codigo));
+    // la banderita va encima del agua y se queda también cuando el país está completo (con unPais ya no lo cubre la bandera grande)
+    if (spotBandera) miniBandera = dibujarBanderita(svg, codigo, spotBandera, id, urlBandera(codigo));
     el("path", { d: c.d, fill: "none", stroke: UN_PAIS ? LINEA_TIERRA : BORDE, "stroke-width": UN_PAIS ? 2.6 : 2, "stroke-linejoin": "round", "pointer-events": "none" }, svg);   // con unPais, línea verde oscura fina en la orilla de la tierra
     // las siluetas se cargan aparte: al llegar, se vuelve a dibujar la botella (si no hay una animación en curso)
     if (!CONTORNOS) pendienteContornos = true;
