@@ -1,0 +1,19 @@
+{
+  "id": "juego-slither-el-polo",
+  "name": "Slither",
+  "short_name": "Slither",
+  "description": "Slither: guía tu serpiente en una arena con bots, en niveles por estados y países y en un modo libre.",
+  "lang": "es",
+  "start_url": "./index-1slither.html?app=1",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#d9a866",
+  "theme_color": "#d9a866",
+  "icons": [
+    { "src": "iconos-slither/icono-192-1slither.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "iconos-slither/icono-512-1slither.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "iconos-slither/icono-maskable-512-1slither.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "categories": ["games", "entertainment"]
+}
