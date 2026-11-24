@@ -127,7 +127,22 @@ const mapa = montarMapa({
   infoNivel: (n) => {
     if (!NIVELES[n - 1]) return { sub: "🚧", aria: "todavía no está creado" };
     const mk = prog.mejores[n];
-    return { sub: mk ? fmtMs(mk.ms) : "", aria: mk ? "mejor tiempo " + fmtMs(mk.ms) : "" };
+    const aria = [mk ? "mejor tiempo " + fmtMs(mk.ms) : "", conEstrellas(NIVELES[n - 1].n) ? textoEstrellas(tierNivel(n - 1)) : ""].filter(Boolean).join(", ");
+    // estrellitas del nivel (vacías si todavía no se pasa); los tableros sin estrellas no muestran nada
+    return { sub: mk ? fmtMs(mk.ms) : "", aria, estrellasHtml: conEstrellas(NIVELES[n - 1].n) ? htmlEstrellas(tierNivel(n - 1)) : "" };
+  },
+  resumenEstrellas: (desde, hasta) => {   // estrellas del país: doradas y moradas ganadas / posibles (las moradas reemplazan a las doradas, así que cada nivel da como máximo 3 en total)
+    let posibles = 0, oro = 0, mor = 0;
+    for (let n = desde; n <= hasta; n++) {
+      const lv = NIVELES[n - 1];
+      if (!lv || !conEstrellas(lv.n)) continue;
+      posibles += 3;
+      const t = tierNivel(n - 1), m = Math.max(0, t - 3);
+      mor += m; oro += Math.min(t, 3) - m;
+    }
+    if (!posibles) return '<small>Los niveles de este país no dan estrellas</small>';
+    return '<span><i class="est oro"></i>' + oro + ' / ' + posibles + ' <small>doradas</small></span>' +
+           '<span><i class="est mor"></i>' + mor + ' / ' + posibles + ' <small>moradas</small></span>';
   },
 });
 // n = nivel cuya etapa se abre (por defecto, el que toca); alcanzado = true abre la vista principal de su zona (se ve subir el agua)

@@ -32,6 +32,8 @@
 //                                              //   aria = texto para lectores de pantalla, sinMarca = true quita el ✓ de los terminados
 //     leyenda: "texto sobre la lista de niveles",
 //     columnas: 5,                             // columnas fijas en la lista de niveles de cada etapa (sin esto, las que quepan en la pantalla)
+//     resumenEstrellas: (primerNivel, ultimoNivel) => html,   // (con unPais) línea de estrellas del país: va bajo «N de 20 niveles completados» y sobre los niveles; "" = no se muestra
+//     infoNivel: (n) => ({ sub, aria, clase, sinMarca, estrellasHtml }),   // estrellasHtml = estrellitas del nivel (entre el número y el tiempo)
 //     botonesExtra: [{ icono, texto, clase, fn }], // van a la derecha de «Continuar» (por ejemplo ♾️ Juego libre)
 //     alInfo: () => { ... },                   // botón «Info» de la vista principal
 //     avisoPrincipal: () => "texto",           // línea de información bajo el título de la vista principal
@@ -97,6 +99,11 @@ html.oscura .m-raiz{background:url("${MADERA_OSCURA}") center/cover no-repeat,#1
 .m-rej{display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:12px 10px;width:100%;max-width:880px;padding:6px 6px 14px}
 .m-nv.b3d{width:100%;height:58px;margin:0 0 5px;flex-direction:column;gap:1px;font-size:17px;font-weight:800}
 .m-nv small{font-size:11px;font-weight:600;opacity:.92}
+.m-nv .m-est{display:flex;justify-content:center;line-height:0;--e:11px}   /* estrellas ganadas del nivel (las pinta el juego con infoNivel → estrellasHtml) */
+.m-nv .m-est .fila-est{gap:2px}
+.m-resumen{flex:none;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px 16px;margin:8px 0 0;font-size:.95rem;font-weight:800;color:var(--txt-fondo,#2b3a4a);text-shadow:var(--sombra-txt,none);text-align:center}   /* «Estrellas del país»: ganadas / posibles (lo arma el juego con resumenEstrellas) */
+.m-resumen .est{--e:20px;vertical-align:middle;margin-right:4px}
+.m-resumen small{font-weight:700;font-size:.8em;opacity:.85}
 .m-paises{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;width:100%;max-width:900px;padding:10px 6px 14px}
 .m-pais{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 6px;font:inherit;color:${TINTA};text-align:center;background:#f2f7fb;border:2px solid #c9d9e8;border-radius:14px;cursor:pointer;touch-action:manipulation}
 .m-pais:hover:not(:disabled){border-color:#5aa9e6}
@@ -636,7 +643,9 @@ export function montarMapa(o) {
       b.type = "button";
       b.disabled = bloq;
       b.setAttribute("aria-label", "Nivel " + k + (inf.aria ? ": " + inf.aria : "") + (bloq ? " (bloqueado)" : hecho ? " (completado)" : ""));
-      b.append(h("b", "", String(k)), h("small", "", inf.sub || ""));
+      b.append(h("b", "", String(k)));
+      if (inf.estrellasHtml) { const e = h("span", "m-est"); e.innerHTML = inf.estrellasHtml; b.appendChild(e); }   // 3 estrellitas (doradas, moradas o vacías) entre el número y el tiempo
+      b.append(h("small", "", inf.sub || ""));
       if (hecho && !inf.sinMarca) b.appendChild(h("span", "b-info", "✓"));
       b.addEventListener("click", () => o.jugarNivel(n));
       rej.appendChild(b);
@@ -883,6 +892,14 @@ export function montarMapa(o) {
   }
 
   // --- SOLO PAÍSES con unPais · los niveles de un país (se llega con el botón «Niveles» de la botella o tocando un país en el Mapa) ---
+  // Resumen de estrellas de un país (lo arma el juego): ganadas / posibles, doradas y moradas. Va debajo de «N de 20 niveles completados» y arriba de la lista de niveles
+  function resumenEstrellasPais(base) {
+    const html = o.resumenEstrellas ? o.resumenEstrellas(base + 1, base + NIVELES_POR_ETAPA) : "";
+    if (!html) return null;
+    const d = h("div", "m-resumen");
+    d.innerHTML = html;
+    return d;
+  }
   function vistaNivelesPais() {
     const p = prog(), codigo = PAISES_ORDEN[indice], base = basePais(indice);
     const hechos = acotar(p.hecho - base, 0, NIVELES_POR_ETAPA);
@@ -892,6 +909,8 @@ export function montarMapa(o) {
     botonPais(() => ir("pais", mio), codigo);
     botonMapa(() => { enfoque = mio; ir("mundo"); });   // de vuelta al mundo, acercado a este país
     botonContinuar();
+    const rs = resumenEstrellasPais(base);
+    if (rs) cuerpo.appendChild(rs);
     rejillaNiveles(base);
   }
 
@@ -994,6 +1013,8 @@ export function montarMapa(o) {
     if (!CONTORNOS) pendienteContornos = true;
     if (UN_PAIS) {
       cuerpo.appendChild(h("p", "m-pais-niveles", hechos + " de " + NIVELES_POR_ETAPA + " niveles completados" + (completo ? " · ¡completo! ⭐" : "")));   // debajo del país, un poco separado
+      const rs = resumenEstrellasPais(base);
+      if (rs) cuerpo.appendChild(rs);
       botonContinuarCentro();
     }
   }
