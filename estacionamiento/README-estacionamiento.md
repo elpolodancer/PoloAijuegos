@@ -8,7 +8,7 @@ Todo lo que dice «Meta» es la visión final; lo que dice «Hoy» es lo que exi
 Puzle isométrico: un estacionamiento cuadrado lleno de autos. Cada auto tiene una flecha; al tocarlo avanza hacia donde apunta y sale por la orilla. Se gana cuando no queda ningún auto. Si un auto tiene otro enfrente, no puede salir hasta que lo despejes.
 
 - **Hoy (verificado en el código):** tablero de tamaño variable por nivel (de 5×5 a 10×10, siempre lleno), generado con semilla; todos los niveles tienen solución.
-- **Meta:** **22 600 niveles** en total.
+- **Meta:** **3 900 niveles** en el mapa (195 países × 20; desde el 24-nov-2026, ver sección 15). El generador sigue pudiendo hacer los 22 600 de antes.
 
 | Bloque | Niveles | Cuenta |
 |---|---|---|
@@ -20,6 +20,8 @@ Puzle isométrico: un estacionamiento cuadrado lleno de autos. Cada auto tiene u
 Los niveles se desbloquean **en orden**. Los de países **no se mencionan ni se ven** hasta terminar los 3 200 de México.
 
 ## 2. El mapa (pantalla de progreso)
+
+> **Desactualizado desde el 24-nov-2026:** el mapa ya es el estándar de un solo país (`compartido/mapa-niveles.js`, `unPais`) y ya no hay estados de México. Ver sección 15. Lo que sigue describe el mapa anterior.
 
 Es el menú principal del juego. Estilo parecido al mapa de Paperio.
 
@@ -97,9 +99,8 @@ Menú de pausa (`compartido/menu-pausa.js`): **▶ Continuar**, **🔄 Reiniciar
 | `juego-estacionamiento.js` | Juego: dibujo, controles, vía de salida, progreso. Ya usa tamaño de tablero variable |
 | `niveles-estacionamiento.js` | **Generador** de los 22 600 niveles (tamaños, autos, dificultad, monedas). No usa `document`: se prueba en Node |
 | `probar-niveles-estacionamiento.mjs` | Pruebas automáticas del generador (`node probar-niveles-estacionamiento.mjs`, Node 22+, junto a `niveles-estacionamiento.js`) |
-| `mapa-estacionamiento.js` | **El mapa** (menú principal): México con agua que sube un escalón por estado, mapa del mundo (solo tras los 3 200 niveles), listas de 100 niveles. Se monta con `montarMapa({ progreso, jugarNivel, alInfo, alCambiarVista })` |
-| `etapas-estacionamiento.js` | Orden de los 32 estados y los 194 países (con su lon/lat y código ISO) y cuentas de progreso (`resumen`, `etapaDe`) |
-| `geografia-estacionamiento.js` | Contornos simplificados de México, continentes y lagos para dibujar el mapa |
+| ~~`mapa-estacionamiento.js`~~, ~~`etapas-estacionamiento.js`~~, ~~`geografia-estacionamiento.js`~~ | **Ya no se usan** (24-nov-2026): el juego importa `compartido/mapa-niveles.js` y `compartido/etapas-mapa.js`. Se pueden borrar del repositorio |
+| `dificultades-estacionamiento.js` | Sorteo fijo de la dificultad de cada nivel (lo escribe `sorteo-dificultades.mjs`); lo importa `niveles-estacionamiento.js` |
 
 Cuando el juego crezca conviene separar también `monedas.js` (premios, tienda y boosts). El mapa, las etapas y la geografía están pensados para reutilizarse en otros juegos: ver `ESTANDARES-juegos.md`.
 Recordatorio: `niveles-estacionamiento.js` debe ir en la lista `ARCHIVOS` de `sw.js` (y subir `VERSION`) para que funcione sin internet.
@@ -197,3 +198,26 @@ Hoy el juego abre directo en el mapa de México y ahí solo hay **▶ Continuar 
 
 ### Descartado ❌
 Tableros de 11×11 a 50×50 y las dificultades 3, 4 y 5. Las funciones `tamanoMexico`, `tamanosPais`, `REPARTO_PAIS` y `TRAMOS_MEXICO` se borraron de `niveles-estacionamiento.js`.
+
+## 15. Inicio con mapa y 3 900 niveles (24-nov-2026)
+
+**Qué cambió** (estándar de `ESTANDARES-juegos.md`, sección 13, el mismo de Puzle deslizante):
+- **Pantalla de inicio** (se ve una sola vez al abrir): ♾️ Modo libre · ▶ Jugar · 🗺️ Mapa · ⚙️ Ajustes (`#pantalla-inicio`, clases `.pant-menu` / `.ini-*` de `compartido/inmersivo.css`). ▶ Jugar abre el nivel `hecho + 1`; si no se ha pasado ninguno, abre el mapa en el nivel 1.
+- **Navegación cuadrada** (🎮 y ☰, solo icono). El ☰ no se ve en el inicio ni en la vista del país del mapa; dice «Atrás» en las vistas internas del mapa y «Pausa» en una partida.
+- **Mapa estándar de un solo país:** `crearEtapas({ porEtapa: 20, soloPaises: true })` + `montarMapa({ unPais: true, columnas: 4 })`. México es un país más (los estados desaparecen): 195 países × 20 = **3 900 niveles**, con el orden `PAISES_MUNDO` de `compartido/etapas-mapa.js`.
+- **Pantallas del código** (`mostrar("inicio" | "mapa" | "juego")`): fuera de una partida el lienzo y los marcadores se ocultan con la clase `fuera` del `<body>`. El chip de monedas va arriba a la derecha en el inicio y el mapa, y baja a la fila de información dentro de una partida. Chip de sesión arriba a la derecha (se oculta si está vacío).
+- **⚙️ Ajustes:** madera clara/oscura y Cerrar. El botón flotante 🌙/☀️ ahora está oculto (`data-madera-boton="oculto"`).
+- El rótulo «Nivel N» dentro de la partida muestra el número dentro del país (1 a 20) y su `title` dice el país.
+- `sw.js` v226: se quitan `etapas-`, `geografia-` y `mapa-estacionamiento.js` de la lista y se agrega `dificultades-estacionamiento.js` (faltaba, y `niveles-estacionamiento.js` lo importa: sin internet por primera vez habría fallado).
+
+**Qué NO cambió:** los tableros. Dependen solo del número de nivel, así que los niveles 1 a 3 900 son los mismos de antes (solo cambia a qué país pertenecen: el nivel 1 ahora es México 1, antes Quintana Roo 1). Los niveles 3 901 a 22 600 ya no se alcanzan desde el mapa.
+
+**Monedas y avance guardado:** `prog.hecho` NO se recorta a 3 900 (puede traer más de cuando había 22 600 niveles); las monedas se calculan con él (`premiosHasta` sigue usando `TOTAL_NIVELES` = 22 600), así que el saldo de quien ya jugaba no baja. Solo el mapa y el avance de niveles usan `TOTAL` = 3 900.
+
+**Pendiente ⏳:**
+1. **Modo libre:** el botón ya está en el inicio y en el mapa pero solo avisa «🚧 Próximamente» (sección 12).
+2. **Dificultad:** el sorteo (sección 3) se hizo para 22 600 niveles (de 15 % a 50 % difíciles a lo largo de las 226 etapas de 100). Con 3 900 niveles el tramo final ya no llega a la parte más difícil. Decidir si se vuelve a sortear: cambiaría el tablero de los niveles ya jugados.
+3. **Instalar solo este juego (13.9, opcional):** falta `manifest-estacionamiento.webmanifest`, `sw-estacionamiento.js`, iconos y el botón en Ajustes.
+4. **Copia de seguridad (`compartido/almacen.js`):** la clave de progreso es `estacionamiento-progreso` y no termina en `_v1`, así que la copia no la incluye; agregar las claves `estacionamiento-progreso`, `estacionamiento-cartera` y `estacionamiento-dispositivo` a `CLAVES_EXTRA` o renombrarlas con `_v1`.
+5. **Probar en celular real** (se probó en un navegador de escritorio simulando celular vertical y horizontal). En horizontal, las fichas de información (❤️ y Movs) quedan encima del tablero: no se tocó esa parte.
+6. Borrar `etapas-estacionamiento.js`, `geografia-estacionamiento.js` y `mapa-estacionamiento.js` del repositorio.

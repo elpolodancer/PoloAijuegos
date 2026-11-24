@@ -1,18 +1,17 @@
 // Ruta: 1slither/niveles-1slither.js
-// NIVELES de «Slither»: 3 900 niveles = 195 países × 20 (mapa solo de países, ESTANDARES-juegos.md A-bis; México primero), generados con semilla: el nivel n es SIEMPRE
-// el mismo para todos los jugadores.
-// ⚠️ TEMPORAL (24 nov 2026): estos niveles son un relleno para poder probar el mapa y la pausa. Se van a borrar y rehacer (meta mínima de ~2000, monedas, estrellas y
-// el boost de explosión). Para borrarlos basta poner NIVELES_CREADOS = false: el mapa muestra «🚧» y el juego abre en Modo libre. No usa document (se puede probar en Node: 1slither/verificar-1slither.mjs).
+// NIVELES de «Slither»: 22 600 niveles (32 estados de México + 194 países, 100 por etapa), generados con semilla: el nivel n es SIEMPRE
+// el mismo para todos los jugadores. No usa document (se puede probar en Node: 1slither/verificar-1slither.mjs).
 //
 // Cada nivel = { n, etapa, k, dif, mapa, meta, reto, respiro }
 //   • El OBJETIVO es siempre de puntos: llegar a «meta» de Largo (el número que se ve en pantalla) sin que te choquen.
-//   • dif  (0 Fácil · 1 Normal · 2 Difícil) = dificultad de los BOTS (ver DIFICULTADES en juego-1slither.js)
+//   • dif  (0 Fácil · 1 Normal · 2 Difícil) = dificultad de los BOTS. El Modo libre ya tiene 5 (😁 😬 😐 😡 😈 en DIFICULTADES de juego-1slither.js) pero los NIVELES siguen con estas 3,
+//           que el juego pasa a 😬 😐 😡 con DIF_NIVEL = [1, 2, 3]; sus parámetros no cambiaron, así que CALIBRACION y todas las metas siguen valiendo tal cual.
 //   • mapa (0 Pequeño · 1 Mediano · 2 Grande) = tamaño de la arena (ver MAPAS en juego-1slither.js)
 //
 // REPARTO (se hace etapa por etapa, con cuentas EXACTAS por cada 100 niveles y el orden sorteado con semilla):
-//   Dificultad: la primera etapa (México) es 50 % Fácil · 40 % Normal · 10 % Difícil (10 · 8 · 2 de 20) y va cambiando poco a poco, en línea recta, hasta que la
-//               última etapa (China) es 25 % · 35 % · 40 % (5 · 7 · 8).
-//   Mapas:      un tercio cada uno (7/7/6 por etapa; los dos que reciben el nivel extra van rotando, así el total es 1 300 de cada uno).
+//   Dificultad: la primera etapa es 50 % Fácil · 40 % Normal · 10 % Difícil y va cambiando poco a poco, en línea recta, hasta que la
+//               última etapa (el último país) es 25 % · 35 % · 40 %.
+//   Mapas:      un tercio cada uno (33/33/34 por etapa; el que recibe el nivel extra va rotando, así el total es 33.3 % cada uno).
 //   Metas:      crecen de 250 a 2000 puntos a lo largo del juego (curva geométrica) y se sortean con altibajos: ~10 % son «retos»
 //               (+20 a +40 %), ~20 % son «respiros» (−15 a −30 %) y el resto varía ±10 %. Los primeros 5 niveles no se sortean.
 // Si cambias algo de aquí, jugadores con progreso verían otro nivel con el mismo número: no lo cambies después de publicar.
@@ -20,10 +19,9 @@
 //               (CALIBRACION, abajo): así TODOS los niveles se pueden pasar. Las metas que topan se sortean entre 85 y 100 % del techo.
 // La calibración y cómo repetirla están en README-1slither.md.
 
-export const NIVELES_CREADOS = true;           // false = sin niveles: nivelDe() devuelve null, el mapa muestra «🚧» y el juego abre en Modo libre
-export const POR_ETAPA = 20;                   // niveles por país
-export const NUM_ETAPAS = 195;                 // países (PAISES_MUNDO de compartido/etapas-mapa.js)
-export const TOTAL = NUM_ETAPAS * POR_ETAPA;   // 3 900
+export const POR_ETAPA = 100;
+export const NUM_ETAPAS = 32 + 194;            // 226
+export const TOTAL = NUM_ETAPAS * POR_ETAPA;   // 22 600
 
 export const MEZCLA_INI = [50, 40, 10];        // % Fácil / Normal / Difícil en la primera etapa
 export const MEZCLA_FIN = [25, 35, 40];        // ... y en la última
@@ -83,17 +81,17 @@ function barajar(a, rng) {
 // Cuántos niveles de cada dificultad tiene la etapa e (suman 100). Método del mayor residuo.
 export function mezclaEtapa(e) {
   const u = e / (NUM_ETAPAS - 1);
-  const p = MEZCLA_INI.map((v, i) => (v + (MEZCLA_FIN[i] - v) * u) * POR_ETAPA / 100);   // porcentajes → cuántos de POR_ETAPA
+  const p = MEZCLA_INI.map((v, i) => v + (MEZCLA_FIN[i] - v) * u);
   const c = p.map(Math.floor);
   let falta = POR_ETAPA - c.reduce((a, b) => a + b, 0);
   const orden = p.map((v, i) => ({ i, r: v - Math.floor(v) })).sort((a, b) => b.r - a.r || b.i - a.i); // en empate gana la más difícil
   for (let k = 0; falta > 0; k++, falta--) c[orden[k % 3].i]++;
   return c;
 }
-// Cuántos niveles de cada mapa tiene la etapa e: POR_ETAPA ÷ 3 para cada uno y los que sobran (2 de 20) rotando con e
+// Cuántos niveles de cada mapa tiene la etapa e: 33, 33 y 33 + 1 para el mapa e % 3
 export function mapasEtapa(e) {
-  const base = Math.floor(POR_ETAPA / 3), c = [base, base, base];
-  for (let k = 0, falta = POR_ETAPA - 3 * base; k < falta; k++) c[(e + k) % 3]++;
+  const c = [33, 33, 33];
+  c[e % 3]++;
   return c;
 }
 
@@ -126,7 +124,6 @@ export const puntosNivel = () => 1;
 export const abrev = (v) => (v >= 1000 ? (v / 1000).toFixed(v % 1000 === 0 ? 0 : 1).replace(/\.0$/, "") + "k" : String(v));
 
 export function nivelDe(n) {
-  if (!NIVELES_CREADOS) return null;
   n = Math.max(1, Math.min(TOTAL, Math.floor(Number(n)) || 1));
   const e = Math.floor((n - 1) / POR_ETAPA), k = (n - 1) % POR_ETAPA, d = etapa(e);
   const r = mulberry32(n * 2246822519 + 3266489917), a = r(), b = r();

@@ -1,13 +1,16 @@
 // Ruta: estacionamiento/juego-estacionamiento.js
-// Saca todos los autos de un estacionamiento cuadrado (vista 2.5D: cuadrícula recta con cámara elevada e inclinada). El tamaño cambia con cada nivel (de 10×10 a 50×50).
+// Saca todos los autos de un estacionamiento cuadrado (vista 2D desde arriba). Tablero de 10×10 (los 10 primeros niveles suben desde 6×6).
 // - Cada auto avanza solo hacia donde apunta su flecha; si algo le estorba, no se mueve.
 // - Alrededor del estacionamiento hay una vía de un solo sentido (horario) con la salida en las 4 esquinas.
-// - Hay 22 600 niveles (3200 de México y 100 por cada país). Todos salen de niveles-estacionamiento.js: tamaño, autos y premio dependen solo del número
-//   de nivel, y siempre tienen solución (cada auto se coloca con su camino libre respecto a los ya colocados).
+// - Hay 3 900 niveles en el mapa: 195 países × 20 niveles, con México primero (inicio con mapa, ESTANDARES-juegos.md sección 13; ya no hay estados de México).
+//   El generador (niveles-estacionamiento.js) sigue pudiendo hacer los 22 600 de antes: el tablero de cada nivel depende solo de su número, así que los
+//   niveles 1 a 3 900 son EXACTAMENTE los mismos tableros de siempre. Siempre tienen solución.
+// - Pantallas: «inicio» (♾️ Modo libre · ▶ Jugar · 🗺️ Mapa · ⚙️ Ajustes; se ve UNA sola vez al abrir) → el MAPA (menú principal) → una partida.
 
 import { encolarNivel } from "../compartido/cola-puntos.js"; // cola local de puntos: no usa Firebase, funciona sin internet
 import { TOTAL_NIVELES, DIFICULTADES, configNivel, generarNivel } from "./niveles-estacionamiento.js";
-import { montarMapa } from "./mapa-estacionamiento.js";   // menú principal: México con agua, mundo y listas de niveles
+import { crearEtapas } from "../compartido/etapas-mapa.js";
+import { montarMapa } from "../compartido/mapa-niveles.js";   // mapa estándar de un solo país (unPais): el país se llena de agua con cada nivel
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
 
 let N = 25;                         // casillas por lado (cambia con cada nivel)
@@ -27,6 +30,10 @@ const ALTO_TOQUE = 0.22;            // al tocar la pantalla se busca el auto a e
 const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0]; // 0 arriba, 1 derecha, 2 abajo, 3 izquierda
 const ID_JUEGO = "estacionamiento";
 const CLAVE = "estacionamiento-progreso";
+const ETAPAS = crearEtapas({ porEtapa: 20, soloPaises: true });   // 195 países (México primero) × 20 niveles = 3 900
+const TOTAL = ETAPAS.total;
+// OJO: prog.hecho puede traer más de 3 900 (de cuando el juego tenía 22 600 niveles). NO se recorta: las monedas se calculan con él (premiosHasta usa
+// TOTAL_NIVELES) y recortarlo bajaría el saldo de quien ya había avanzado. Solo el mapa y el avance de niveles usan TOTAL.
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -197,7 +204,7 @@ let camTocada = false; // true cuando el jugador movió o acercó la vista (así
 let ultAutos = "", ultMovs = -1; // últimos textos puestos en pantalla (para no reescribirlos 60 veces por segundo)
 
 function cargarNivel(n) {
-  n = clamp(Math.floor(Number(n)) || 1, 1, TOTAL_NIVELES);
+  n = clamp(Math.floor(Number(n)) || 1, 1, TOTAL);
   nivel = n;
   cfg = configNivel(n);
   N = cfg.tam;
@@ -859,12 +866,12 @@ function victoria() {
       if (faltan === 0 && ganado && nivel === mio && !$("victoria").hidden) $("vtexto").textContent = txt + " +1 punto ✓";
     }).catch(() => {});
   }
-  prog.max = Math.max(prog.max, Math.min(TOTAL_NIVELES, nivel + 1));
+  prog.max = Math.max(prog.max, Math.min(TOTAL, nivel + 1));
   guardar();
   hudNiveles();
   pintarMonedas(); // ya con prog.hecho al día
-  const ultimo = nivel >= TOTAL_NIVELES;
-  $("vtitulo").textContent = ultimo ? "¡Terminaste los " + TOTAL_NIVELES.toLocaleString("es-MX") + " niveles! 🎉" : "¡Nivel " + nivel + " completado!";
+  const ultimo = nivel >= TOTAL;
+  $("vtitulo").textContent = ultimo ? "¡Terminaste los " + TOTAL.toLocaleString("es-MX") + " niveles! 🎉" : "¡Nivel " + ETAPAS.etapaDe(nivel).k + " completado!";
   $("vtexto").textContent = txt + (pts ? " +1 punto" : "");
   $("siguiente").hidden = ultimo;
   $("victoria").hidden = false;
@@ -884,8 +891,10 @@ function aviso(t) {
 // No muestra las monedas del nivel. El cambio de nivel se hace desde el mapa.
 function hudNiveles() {
   // Si la página es de otra versión y le faltan estos elementos, no se rompe nada (antes eso impedía abrir el mapa)
-  const n = $("nivel-num"), t = $("tam-txt");
-  if (n) n.textContent = nivel;
+  const n = $("nivel-num"), t = $("tam-txt"), chip = $("chip-nivel");
+  const e = ETAPAS.etapaDe(nivel);                  // el rótulo dice el número dentro del país (1 a 20), como en el mapa
+  if (n) n.textContent = e.k;
+  if (chip) { const txt = "Nivel " + e.k + " · " + ETAPAS.nombreEtapa(nivel); chip.title = txt; chip.setAttribute("aria-label", txt); }
   if (t) t.textContent = cfg.tam + "×" + cfg.tam;
 }
 
@@ -933,25 +942,45 @@ $("reiniciar").addEventListener("click", () => cargarNivel(nivel));
 $("repetir").addEventListener("click", () => cargarNivel(nivel));
 $("d-repetir").addEventListener("click", () => cargarNivel(nivel));
 $("d-vida").addEventListener("click", () => comprarVida());
-$("d-mapa").addEventListener("click", () => abrirMapa(false));
-// Al terminar el último nivel de un estado/país se abre el mapa principal para VER SUBIR el agua; si no, la lista de niveles de su etapa
-$("al-mapa").addEventListener("click", () => { $("victoria").hidden = true; abrirMapa(nivel % 100 === 0); });
-$("siguiente").addEventListener("click", () => cargarNivel(Math.min(TOTAL_NIVELES, nivel + 1)));
+$("d-mapa").addEventListener("click", () => abrirMapa());
+// «Mapa» abre el país del nivel que se acaba de jugar (con el agua subiendo); «inicio» siempre significa abrir el mapa (nunca la pantalla de inicio)
+$("al-mapa").addEventListener("click", () => abrirMapa());
+$("siguiente").addEventListener("click", () => cargarNivel(Math.min(TOTAL, nivel + 1)));
 addEventListener("resize", () => {
   redim();
   ajustarCamara(); // la vista es fija: siempre se vuelve a encuadrar al cambiar el tamaño o girar el celular
 });
 
-// ----- Mapa (menú principal), botón ☰ y menú de pausa -----
-// Botón ☰ (estándar): en el mapa principal NO se muestra; en el resto del mapa dice «Menú principal» y vuelve al mapa principal;
-// dentro de una partida dice «Pausa» y abre el menú de pausa.
+// ----- Pantallas, botón ☰ y chip de monedas (inicio con mapa: ESTANDARES-juegos.md, sección 13) -----
+// «inicio» = pantalla con ♾️ Modo libre · ▶ Jugar · 🗺️ Mapa · ⚙️ Ajustes (se ve UNA sola vez, al abrir; nada vuelve a ella)
+// «mapa»   = el mapa (compartido/mapa-niveles.js con unPais): es el menú principal del juego
+// «juego»  = una partida
+let pantalla = "inicio";
+let mapaEnPrincipal = true;            // ¿el mapa está en la vista del país? Ahí el ☰ no se ve
 const btnMenu = $("btn-menu");
+// ☰ (cuadrado, solo icono): oculto en el inicio y en la vista principal del mapa; «Atrás» en las vistas internas del mapa (Mapa, Niveles); «Pausa» en una partida
 function botonMenu() {
   const enMapa = mapa.abierto();
-  btnMenu.hidden = enMapa && mapa.esPrincipal();
-  btnMenu.innerHTML = '<span class="b-ico">☰</span> ' + (enMapa ? "Menú principal" : "Pausa");
-  btnMenu.title = enMapa ? "Volver al mapa principal" : "Pausa";
-  chipMonedas.hidden = enMapa; // el saldo solo se ve en partida
+  btnMenu.hidden = pantalla === "inicio" || (enMapa && mapaEnPrincipal);
+  const texto = enMapa ? "Atrás" : "Pausa";
+  btnMenu.innerHTML = '<span class="b-ico">☰</span>';
+  btnMenu.title = texto; btnMenu.setAttribute("aria-label", texto);
+}
+// El chip de monedas va arriba a la derecha (bajo la sesión) en el inicio y en el mapa, y dentro de una partida pasa a la fila de información bajo el ☰
+function ubicarMonedas() {
+  const enPartida = pantalla === "juego";
+  const destino = enPartida ? $("fila-info") : document.querySelector(".hud-der");
+  chipMonedas.classList.toggle("chip-info", enPartida);
+  if (destino && chipMonedas.parentNode !== destino) { if (enPartida) destino.prepend(chipMonedas); else destino.appendChild(chipMonedas); }
+}
+function mostrar(p) {                  // p = «inicio» | «mapa» | «juego»
+  pantalla = p;
+  $("pantalla-inicio").hidden = p !== "inicio";
+  if (p !== "mapa") mapa.cerrar();
+  document.body.classList.toggle("fuera", p !== "juego");   // fuera de una partida no se ven el lienzo ni los marcadores de la partida
+  if (p !== "juego") { $("victoria").hidden = true; $("derrota").hidden = true; salirModoQuitar(); salirModoBomba(); }
+  ubicarMonedas();
+  botonMenu();
 }
 // ----- Ventana «Info»: cómo se juega (usa los estilos .pausa-* de compartido/inmersivo.css) -----
 const TEXTO_INFO = [
@@ -961,7 +990,7 @@ const TEXTO_INFO = [
   ["❤️ Corazones", "Cada nivel trae corazones: " + DIFICULTADES[1].corazones + " en los medios y " + DIFICULTADES[2].corazones + " en los difíciles. Si tocas un auto que tiene otro enfrente, pierdes uno. Si se acaban, pierdes el nivel (puedes seguir con una vida extra o reintentar)."],
   ["💰 Monedas", "Ganas monedas la primera vez que terminas un nivel: " + DIFICULTADES[1].premio + " en los medios y " + DIFICULTADES[2].premio + " en los difíciles."],
   ["💥 Boosts", "Quitar un auto (30 monedas): toca el botón y luego el auto que quieres quitar. Paquete ×3 (50 monedas): te da 3 usos de quitar un auto. Bomba (100 monedas): toca un lugar, mira los 8 autos marcados en rojo y toca otra vez para soltarla: desaparecen. Vida extra (30 monedas): +3 corazones."],
-  ["🗺️ Mapa", "Los niveles se desbloquean en orden. Cada estado tiene 100 niveles; al terminarlo se desbloquea el siguiente y el agua del mapa sube. Con 🔄 reinicias el nivel y con ☰ Pausa puedes salir al mapa."],
+  ["🗺️ Mapa", "Los niveles se desbloquean en orden. Cada país tiene 20 niveles y el agua de su silueta sube con cada uno; al terminarlo se desbloquea el siguiente país, empezando por México. Con 🔄 reinicias el nivel y con ☰ Pausa puedes salir al mapa."],
 ];
 let infoAbierta = null;
 function abrirInfo() {
@@ -996,38 +1025,105 @@ function abrirInfo() {
   try { ok.focus({ preventScroll: true }); } catch (e) {}
 }
 
+// Modo libre: todavía no existe en este juego (README, sección 12). El botón ya está donde manda el estándar y avisa.
+const modoLibrePronto = () => aviso("🚧 El Modo libre llegará pronto");
 const mapa = montarMapa({
-  progreso: () => prog,
+  prefijo: ID_JUEGO,
+  etapas: ETAPAS,
+  unPais: true,                        // se abre el país donde va el jugador; 🗺️ Mapa = el mundo con los países abiertos y, al tocar uno, sus 20 niveles
+  columnas: 4,                         // los 20 niveles de un país: 4 columnas × 5 filas
+  etiquetaContinuar: () => (prog.hecho === 0 ? "▶ Jugar" : "▶ Continuar"),
+  botonesExtra: [{ icono: "♾️", texto: "Modo libre", clase: "b-morado", fn: modoLibrePronto }],
   alInfo: abrirInfo,
-  jugarNivel: (n) => { mapa.cerrar(); cargarNivel(n); botonMenu(); },
-  alCambiarVista: () => botonMenu(),
+  alCambiarVista: (esPrincipal) => { mapaEnPrincipal = esPrincipal; botonMenu(); },
+  leyenda: "El color indica la dificultad: 🟩 medio · 🟦 difícil. El número chico es el tamaño del tablero.",
+  progreso: () => ({ hecho: Math.min(TOTAL, prog.hecho), max: clamp(prog.max, 1, TOTAL) }),   // hecho = nivel más alto terminado (un solo número)
+  jugarNivel: (n) => jugar(n),
+  infoNivel: (n) => {
+    const c = configNivel(n);
+    return { sub: c.tam + "×" + c.tam, clase: c.dificultad === 1 ? "b-verde" : "b-azul",   // medio = verde, difícil = azul
+      aria: "tablero " + c.tam + " por " + c.tam + ", " + (c.dificultad === 1 ? "medio" : "difícil") + ", " + c.premio + " monedas" };
+  },
 });
-function abrirMapa(aguaSube) {
-  $("victoria").hidden = true;
-  $("derrota").hidden = true;
-  mapa.abrir(nivel, !!aguaSube);
+// n = nivel cuyo país se abre (por defecto, el nivel cargado: el que se acaba de jugar o, al abrir el juego, donde va el jugador); el agua sube hasta el nivel ya pasado
+function abrirMapa(n) {
+  mostrar("mapa");
+  mapa.abrir(n || nivel, true);
   botonMenu();
 }
+function jugar(n) { mostrar("juego"); cargarNivel(n); }   // mostrar() cierra el mapa
 const pausa = crearMenuPausa({
-  puedeAbrir: () => !mapa.abierto(), // en el mapa no hay nada que pausar
+  puedeAbrir: () => pantalla === "juego",   // fuera de una partida no hay nada que pausar (ni el mapa ni el inicio)
   extras: () => [{ icono: "🔄", texto: "Reiniciar nivel", clase: "b-oro", alElegir: () => cargarNivel(nivel) }],
   textoSalir: "Salir al mapa",
-  alSalir: () => abrirMapa(false),
+  ayudaSalir: "Se pierde lo avanzado en este tablero.",
+  alSalir: () => abrirMapa(),
 });
 btnMenu.addEventListener("click", () => { if (mapa.abierto()) mapa.principal(); else pausa.abrir(); });
 
+// ----- Pantalla de inicio (13.2): se ve una sola vez; ▶ Jugar abre el nivel que toca (si no se ha pasado ninguno, abre el mapa en el nivel 1) -----
+$("btn-inicio-libre").addEventListener("click", modoLibrePronto);
+$("btn-inicio-jugar").addEventListener("click", () => { if (prog.hecho > 0) jugar(Math.min(TOTAL, prog.hecho + 1)); else abrirMapa(1); });
+$("btn-inicio-mapa").addEventListener("click", () => abrirMapa());
+$("btn-inicio-ajustes").addEventListener("click", () => abrirAjustes());
+
+// ----- ⚙️ Ajustes (13.8; desde la pantalla de inicio): madera clara/oscura y cerrar. Usa los estilos .pausa-* de compartido/inmersivo.css (sin confirm()) -----
+// El botón flotante 🌙/☀️ está oculto en este juego (data-madera-boton="oculto"): el cambio de madera se hace aquí.
+let ajustesAbierto = false;
+function abrirAjustes() {
+  if (ajustesAbierto) return;
+  ajustesAbierto = true;
+  const foco = document.activeElement;
+  const el = (tag, clase, texto) => { const x = document.createElement(tag); if (clase) x.className = clase; if (texto != null) x.textContent = texto; return x; };
+  const fondo = el("div", "pausa-fondo");
+  fondo.setAttribute("role", "dialog"); fondo.setAttribute("aria-modal", "true"); fondo.setAttribute("aria-label", "Ajustes");
+  const panel = el("div", "pausa-panel aj-panel");
+  const lista = el("div", "pausa-opciones");
+  const tecla = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); cerrar(); } };
+  function cerrar() {
+    fondo.remove(); removeEventListener("keydown", tecla, true); ajustesAbierto = false;
+    try { if (foco && foco.focus) foco.focus({ preventScroll: true }); } catch (e) {}
+  }
+  addEventListener("keydown", tecla, true);
+  fondo.addEventListener("click", (e) => { if (e.target === fondo) cerrar(); });
+  const boton = (icono, texto, clase, fn) => {
+    const b = el("button", "b3d txt " + clase); b.type = "button";
+    if (icono) b.append(el("span", "b-ico", icono));
+    b.append(el("span", "", texto));
+    b.addEventListener("click", fn);
+    lista.appendChild(b);
+    return b;
+  };
+  const oscura = () => document.documentElement.classList.contains("oscura");
+  const rotuloMadera = () => (oscura() ? ["☀️", "Madera clara"] : ["🌙", "Madera oscura"]);
+  const bm = boton(rotuloMadera()[0], rotuloMadera()[1], "b-oro", async () => {
+    try { (await import("../compartido/fondo-madera.js")).alternarMadera(); } catch (e) {}
+    const [i, t] = rotuloMadera();
+    bm.firstChild.textContent = i; bm.lastChild.textContent = t;
+  });
+  boton("", "Cerrar", "b-cielo", () => cerrar());
+  panel.append(el("h2", "", "⚙️ Ajustes"), lista);
+  fondo.appendChild(panel);
+  document.body.appendChild(fondo);
+  try { bm.focus({ preventScroll: true }); } catch (e) {}
+}
+
+// ----- Sesión: el chip de arriba a la derecha (opcional: si Firebase no carga, el juego igual funciona) -----
+import("../compartido/jugador.js").then(({ alCambiarSesion }) =>
+  alCambiarSesion((u) => { $("sesion").textContent = u ? (u.displayName || "Jugador") : "Sin sesión"; })
+).catch(() => {});
+
 // ----- Inicio -----
 redim();
-cargarNivel(clamp(prog.max, 1, TOTAL_NIVELES));
-mapa.abrir(); // el juego empieza en el mapa (México de cerca)
-botonMenu();
+cargarNivel(clamp(prog.max, 1, TOTAL));   // deja un nivel listo para dibujar; no se ve hasta jugar
+mostrar("inicio");                        // única vez que se ve la pantalla de inicio: al abrir el juego
 let ultimo = performance.now();
 function bucle(ahora) {
   const dt = Math.min(0.05, (ahora - ultimo) / 1000);
   ultimo = ahora;
   actualizar(dt);
   colocarVictoria(); // si la ventana de fin de nivel está abierta, sigue al tablero
-  if (mapa.abierto()) firmaPrev = ""; // con el mapa encima no se dibuja; al cerrarlo se redibuja
+  if (pantalla !== "juego") firmaPrev = ""; // fuera de una partida (inicio o mapa) no se dibuja; al volver se redibuja
   else {
     // El tablero solo se redibuja si cambió la vista (cámara, tamaño, bomba, autos que quedan, nivel nuevo) o si algo se está moviendo.
     // Con el tablero quieto no se gasta CPU ni batería. Un cuadro extra al terminar cada animación deja la imagen final.
@@ -1046,7 +1142,7 @@ import("../compartido/progreso.js").then((m) => {
     clave: CLAVE,
     fusionar: m.unirMaximos,
     alCambiar: (v) => {
-      prog.max = clamp(Number(v.max) || 1, 1, TOTAL_NIVELES);
+      prog.max = clamp(Number(v.max) || 1, 1, TOTAL);
       prog.hecho = Math.max(0, Number(v.hecho) || 0);
       hudNiveles(); // repinta el rótulo con lo que trajo la nube
       pintarMonedas(); pintarBoosts(); // las monedas ganadas dependen de prog.hecho
