@@ -611,7 +611,7 @@ function zoomEn(factor, cx, cy) {                                  // multiplica
     punteros.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (punteros.size === 1) {
       const f = e.target.closest && e.target.closest(".ficha");
-      gesto = { k: f ? Number(f.dataset.k) : 0, x0: e.clientX, y0: e.clientY, movido: false, multi: false };
+      gesto = { k: f ? Number(f.dataset.k) : 0, el: f || null, x0: e.clientX, y0: e.clientY, movido: false, multi: false };
     } else if (gesto) gesto.multi = gesto.movido = true;           // segundo dedo: es un pellizco, no un toque
   });
   vent.addEventListener("pointermove", (e) => {
@@ -625,7 +625,9 @@ function zoomEn(factor, cx, cy) {                                  // multiplica
       zx += (mAhoraX - mAntesX) / r.width; zy += (mAhoraY - mAntesY) / r.height;   // primero se mueve con los dos dedos…
       if (dAntes > 0) zoomEn(dAhora / dAntes, mAhoraX, mAhoraY); else zoomAplicar(); // …y luego se acerca alrededor de ellos
     } else {
-      if (!gesto.movido && Math.hypot(e.clientX - gesto.x0, e.clientY - gesto.y0) < 8) return;   // todavía puede ser un toque
+      // Con el ratón un clic ágil casi siempre se arrastra un poco: se necesita mover más para que cuente como arrastre (hasta media casilla, máx. 30 px). Con el dedo se queda en 8 px.
+      const umbral = e.pointerType === "mouse" ? Math.min(30, Math.max(8, r.width * zoom / n * 0.5)) : 8;
+      if (!gesto.movido && Math.hypot(e.clientX - gesto.x0, e.clientY - gesto.y0) < umbral) return;   // todavía puede ser un toque
       gesto.movido = true;
       if (zoom > 1) { zx += (e.clientX - p.x) / r.width; zy += (e.clientY - p.y) / r.height; zoomAplicar(); }
     }
@@ -634,7 +636,9 @@ function zoomEn(factor, cx, cy) {                                  // multiplica
   const soltar = (e) => {
     if (!punteros.delete(e.pointerId) || punteros.size || !gesto) return;
     const g = gesto; gesto = null;
-    if (e.type === "pointerup" && !g.movido && !g.multi && g.k) tocar(t.indexOf(g.k));        // fue un toque: se mueve la ficha
+    // Fue un toque si casi no se movió; o, sin zoom (no hay nada que mover con el arrastre), si empezó y terminó dentro de la MISMA casilla aunque se haya arrastrado dentro de ella
+    const sobre = document.elementFromPoint(e.clientX, e.clientY), mismaFicha = !!(g.el && sobre && sobre.closest && sobre.closest(".ficha") === g.el);
+    if (e.type === "pointerup" && !g.multi && g.k && (!g.movido || (zoom === 1 && mismaFicha))) tocar(t.indexOf(g.k));        // se mueve la ficha
   };
   vent.addEventListener("pointerup", soltar);
   vent.addEventListener("pointercancel", soltar);
