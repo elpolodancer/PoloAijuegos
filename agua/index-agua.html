@@ -1,0 +1,71 @@
+<!doctype html>
+<!-- Ruta: agua/index-agua.html -->
+<!-- Inicio con mapa (ESTANDARES-juegos.md, sección 13). Todo lo de la navegación, el inicio, el Modo libre, la ventana de Ajustes y los chips sale de compartido/inmersivo.css (bloque «INICIO CON MAPA»): aquí solo hay lo propio de Agua. -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Agua</title>
+  <meta name="theme-color" content="#d9a866" />
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script> <!-- evita el parpadeo de la madera clara en modo oscuro -->
+  <style>
+    /* Tienda (usa las ventanas .pausa-* de inmersivo.css; las monedas del chip de arriba a la derecha la abren) */
+    .tienda .b3d.txt { justify-content: flex-start; gap: 8px; }
+    .tienda .t-nom { flex: 1; text-align: left; }
+    .tienda .t-precio { display: inline-flex; align-items: center; }
+    .t-saldo { display: flex; justify-content: center; margin: -4px 0 12px; }
+
+    /* Aviso breve («🚧 todavía no está creado») */
+    .aviso-juego { position: fixed; z-index: 200; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+      max-width: min(90vw, 420px); padding: 10px 16px; font-weight: 700; text-align: center; color: #f1f2f4;
+      background: rgba(10,10,12,.88); border: 2px solid #121316; border-radius: 14px; box-shadow: 0 4px 0 #0c0d0f, 0 8px 16px rgba(0,0,0,.4); }
+  </style>
+</head>
+<body class="inmersivo">
+
+  <!-- Navegación (sección 13.3): 🎮 y ☰ cuadrados, solo icono. El ☰ está oculto en la pantalla de inicio y en la vista principal del mapa; el texto va en title y aria-label -->
+  <nav class="nav-juego cuadrada" aria-label="Navegación">
+    <a class="b3d chico b-azuloscuro" id="btn-portal" href="../" title="Juegos: volver al portal" aria-label="Juegos: volver al portal"><span class="b-ico">🎮</span></a>
+    <button class="b3d chico b-verdeclaro" id="btn-menu" type="button" title="Volver al menú principal" aria-label="Volver al menú principal" hidden><span class="b-ico">☰</span></button>
+  </nav>
+
+  <!-- Arriba a la derecha, en columna (13.3): primero la sesión y, debajo, las monedas (tocarlas abre la tienda) -->
+  <div class="hud hud-der columna">
+    <span class="chip chip-sesion" id="sesion">Sin sesión</span>
+    <button class="chip chip-monedas" id="chip-monedas" type="button" title="Tienda"><span class="moneda"></span><b id="n-monedas">0</b></button>
+  </div>
+
+  <main>
+    <!-- Pantalla de inicio (13.2): se ve UNA sola vez, al abrir el juego. Modo libre · Jugar (el doble de alto) · Mapa · Ajustes -->
+    <div class="pant-menu" id="pantalla-inicio" hidden>
+      <div class="ini-menu">
+        <button class="b3d txt b-morado ini-libre" id="btn-inicio-libre" type="button"><span class="b-ico">♾️</span><span>Modo libre</span></button>
+        <button class="b3d txt b-verde ini-jugar" id="btn-inicio-jugar" type="button"><span class="b-ico">▶</span><span>Jugar</span></button>
+        <button class="b3d txt b-azul ini-mapa" id="btn-inicio-mapa" type="button"><span class="b-ico">🗺️</span><span>Mapa</span></button>
+        <button class="b3d txt b-cielo ini-ajustes" id="btn-inicio-ajustes" type="button"><span class="b-ico">⚙️</span><span>Ajustes</span></button>
+      </div>
+    </div>
+
+    <!-- Modo libre (7.2 y 13.7): primero «Dificultad» (5 emojis). Las demás opciones propias del juego se agregarán aquí -->
+    <div class="pant-menu" id="pantalla-libre" hidden>
+      <h2>♾️ Modo libre</h2>
+      <p class="modo-grupo">Dificultad</p>
+      <div class="modo-fila dif-fila" id="dif-fila" role="group" aria-label="Dificultad"></div>
+      <p class="dif-nombre" id="dif-nombre"></p>
+      <p class="libre-nota" id="libre-nota"></p>
+      <p class="libre-record" id="libre-record"></p>
+      <div class="libre-jugar">
+        <button class="b3d txt grande b-verde" id="btn-libre-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
+      </div>
+    </div>
+  </main>
+
+  <div class="aviso-juego" id="aviso" role="status" aria-live="polite" hidden></div>
+
+  <script type="module" src="juego-agua.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+</body>
+</html>
