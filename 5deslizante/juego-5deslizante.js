@@ -10,6 +10,8 @@ import { crearMenuPausa } from "../compartido/menu-pausa.js";
 import { NIVELES, POR_ETAPA, TAMANO_MIN, TAMANO_MAX, monedasDe, puntosJuegoDe } from "./niveles-5deslizante.js";
 
 const ID = "deslizante";
+const MOSTRAR_BORRAR_HISTORIAL = true;            // BOTÓN TEMPORAL DE PRUEBAS en ⚙️ Ajustes: «Borrar todo el historial y reiniciar». Cuando termines la revisión, ponlo en false (o borra «borrarHistorial» y su botón en abrirAjustes)
+let reiniciando = false;                          // true mientras se borra el historial: la sincronización con la nube no vuelve a traer lo borrado
 const ETAPAS = crearEtapas({ porEtapa: POR_ETAPA, soloPaises: true });   // 195 países (México primero) × 20 niveles = 3 900
 const TOTAL = ETAPAS.total;
 let libreN = 3;                                    // modo libre: tamaño elegido
@@ -448,7 +450,6 @@ function mostrar(nombre) {
   for (const p of ["pantalla-inicio", "pantalla-libre", "juego"]) $(p).hidden = p !== nombre;
   if (nombre !== "pantalla-niveles") mapa.cerrar();
   $("barra-juego").hidden = nombre !== "juego";
-  document.body.classList.toggle("en-partida", nombre === "juego");   // 📲 Instalar solo se ve fuera de las partidas
   $("barra-fila").hidden = nombre !== "juego";
   $("btn-mapa-juego").hidden = modo === "libre";   // el 🗺️ solo en los niveles (el Modo libre no tiene mapa)
   pintarBotonMenu();
@@ -1038,19 +1039,94 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw-5deslizan
 
 const yaEnApp = matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: fullscreen)").matches || navigator.standalone === true;
 let eventoInstalar = (window.__pwa && window.__pwa.evento) || null;
-const notaInstalar = (t) => { $("nota-instalar").textContent = t; $("nota-instalar").hidden = !t; };
+let notaInstalar = () => {};                      // la fija la ventana de Ajustes mientras está abierta (muestra el mensaje ahí dentro)
 addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); eventoInstalar = e; });
-addEventListener("appinstalled", () => { eventoInstalar = null; $("btn-instalar").hidden = true; notaInstalar("✅ Listo: busca «Deslizante» en tu pantalla de inicio."); });
-$("btn-instalar").hidden = yaEnApp;   // ya dentro de una app instalada no tiene sentido ofrecerlo
-$("nota-instalar").addEventListener("click", () => notaInstalar(""));   // tocar el aviso lo cierra
-$("btn-instalar").addEventListener("click", async () => {
+addEventListener("appinstalled", () => { eventoInstalar = null; notaInstalar("✅ Listo: busca «Deslizante» en tu pantalla de inicio."); });
+async function instalarJuego() {
   if (eventoInstalar) { const e = eventoInstalar; eventoInstalar = null; e.prompt(); await e.userChoice.catch(() => {}); return; }
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const otraApp = /FBAN|FBAV|Instagram|WhatsApp|MicroMessenger|TikTok|Snapchat|Line\/|; wv\)/i.test(navigator.userAgent);
   notaInstalar(ios ? "En iPhone/iPad: toca Compartir (el cuadro con la flecha) y luego «Agregar a pantalla de inicio»."
     : otraApp ? "Estás en el navegador interno de otra app (WhatsApp, Facebook, Instagram…) y ahí no se puede instalar. Toca ⋮ y elige «Abrir en Chrome»."
     : "Abre el menú de Chrome (⋮) y elige «Instalar aplicación» o «Agregar a la pantalla de inicio». Si no aparece, comprueba que no estés en modo incógnito y que Chrome esté actualizado.");
-});
+}
+
+// ----- BORRAR TODO EL HISTORIAL (temporal, para pruebas: ver MOSTRAR_BORRAR_HISTORIAL) -----
+// Borra en este dispositivo el progreso (niveles, estrellas, monedas, récords, puntos del juego), el Modo libre elegido y las partidas guardadas, quita de la cola los puntos
+// pendientes de este juego y, con sesión, deja vacío el progreso de la cuenta (si no, la sincronización lo volvería a traer). NO toca los puntos que el perfil del portal ya recibió.
+// Devuelve true (también se borró en la cuenta), false (no se pudo borrar en la cuenta) o null (no había sesión).
+async function borrarHistorial() {
+  reiniciando = true;
+  const vacio = { v: VERSION_PROG, hechos: 0, mejores: {}, libre: {}, estrellas: {}, puntos: 0 };
+  prog = vacio;
+  try { for (const k of [CLAVE, CLAVE_LIBRE, CLAVE_PARTIDAS]) localStorage.removeItem(k); } catch (e) {}
+  try { guardarCola(leerCola().filter((e) => e.j !== ID)); } catch (e) {}
+  try {
+    const { auth, db } = await import("../compartido/firebase.js");
+    if (!auth || !auth.currentUser || !db) return null;
+    const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js");
+    const ref = doc(db, "progreso", auth.currentUser.uid, "juegos", ID);
+    await Promise.race([setDoc(ref, { datos: JSON.stringify(vacio), actualizado: serverTimestamp() }), new Promise((_, no) => setTimeout(() => no(new Error("lento")), 8000))]);
+    return true;
+  } catch (e) { console.warn("borrar historial (nube):", e.code || e.message); return false; }
+}
+
+// ----- ⚙️ Ajustes (desde la pantalla de inicio): instalar solo este juego y, mientras duren las pruebas, borrar el historial -----
+let ajustesAbierto = false;
+function abrirAjustes() {
+  if (ajustesAbierto) return;
+  ajustesAbierto = true;
+  const foco = document.activeElement;
+  const el = (tag, clase, texto) => { const x = document.createElement(tag); if (clase) x.className = clase; if (texto != null) x.textContent = texto; return x; };
+  const fondo = el("div", "pausa-fondo");
+  fondo.setAttribute("role", "dialog"); fondo.setAttribute("aria-modal", "true"); fondo.setAttribute("aria-label", "Ajustes");
+  const panel = el("div", "pausa-panel pg-panel");
+  const msg = el("p", "pg-nota"); msg.setAttribute("role", "status"); msg.hidden = true;
+  const lista = el("div", "pausa-opciones");
+  const decir = (t) => { msg.textContent = t; msg.hidden = !t; };
+  notaInstalar = decir;
+  let ocupado = false;
+  const tecla = (e) => { if (e.key === "Escape" && !ocupado) { e.preventDefault(); e.stopPropagation(); cerrar(); } };
+  function cerrar() {
+    fondo.remove(); removeEventListener("keydown", tecla, true); notaInstalar = () => {}; ajustesAbierto = false;
+    try { if (foco && foco.focus) foco.focus({ preventScroll: true }); } catch (e) {}
+  }
+  addEventListener("keydown", tecla, true);
+  fondo.addEventListener("click", (e) => { if (e.target === fondo && !ocupado) cerrar(); });
+  const boton = (icono, texto, clase, fn) => {
+    const b = el("button", "b3d txt " + clase); b.type = "button";
+    b.append(el("span", "b-ico", icono), el("span", "", texto));
+    b.addEventListener("click", fn);
+    lista.appendChild(b);
+    return b;
+  };
+  if (!yaEnApp) boton("📲", "Instalar solo este juego", "b-azulmarino", instalarJuego);   // ya dentro de una app instalada no tiene sentido ofrecerlo
+  if (MOSTRAR_BORRAR_HISTORIAL) {
+    const TXT = "Borrar todo el historial y reiniciar";
+    const borrar = boton("🗑️", TXT, "b-rojo", async () => {
+      if (ocupado) return;
+      if (!borrar.dataset.seguro) {                // primer toque: pide confirmar (sin confirm())
+        borrar.dataset.seguro = "1"; borrar.lastChild.textContent = "¿Seguro? Toca otra vez para borrar TODO";
+        decir("Se borran los niveles, estrellas, monedas, récords, puntos del juego y partidas guardadas (en este dispositivo y en tu cuenta). Es solo para pruebas.");
+        setTimeout(() => { if (!ocupado) { delete borrar.dataset.seguro; borrar.lastChild.textContent = TXT; } }, 5000);
+        return;
+      }
+      ocupado = true;
+      for (const b of lista.querySelectorAll("button")) b.disabled = true;
+      decir("Borrando…");
+      const enNube = await borrarHistorial();
+      decir(enNube === false ? "Se borró en este dispositivo, pero no se pudo borrar en tu cuenta: al iniciar sesión se volverá a bajar. Reinténtalo con internet." : "✅ Listo. Reiniciando el juego…");
+      setTimeout(() => location.reload(), enNube === false ? 3500 : 900);
+    });
+  }
+  const cerrarB = boton("", "Cerrar", "b-cielo", () => cerrar());
+  cerrarB.firstChild.remove();
+  panel.append(el("h2", "", "⚙️ Ajustes"), msg, lista);
+  fondo.appendChild(panel);
+  document.body.appendChild(fondo);
+  try { lista.querySelector("button").focus({ preventScroll: true }); } catch (e) {}
+}
+$("btn-inicio-ajustes").addEventListener("click", abrirAjustes);
 let haySesion = false;
 $("sesion").addEventListener("click", async () => {
   if (!ES_APP_SOLA || haySesion) return;
@@ -1077,6 +1153,7 @@ import("../compartido/progreso.js").then((m) => {
   nube = m.conectar(ID, {
     clave: CLAVE,
     fusionar: (a, b) => {
+      if (reiniciando) return null;                 // se está borrando todo: no se une nada
       a = limpiar(a); b = limpiar(b);
       if (!a && !b) return null;
       const mej = { ...(b ? b.mejores : {}) };
