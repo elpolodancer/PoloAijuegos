@@ -134,12 +134,15 @@ const mapa = montarMapa({
 function abrirMapa(n, alcanzado) { mostrar("pantalla-niveles"); mapa.abrir(n || Math.min(TOTAL, hechoMax() + 1), alcanzado); }
 
 // ----- Estrellas (solo adorno) y monedas -----
-// 6 escalones por nivel según el tiempo (el cronómetro cuenta desde el primer movimiento; se pide «menos de»):
-//   1 a 3 = estrellas doradas   (1: pasarlo · 2: menos de 2 min · 3: menos de 1 min)
-//   4 a 6 = estrellas moradas, que reemplazan a las doradas una por una (4: menos de 40 s · 5: menos de 30 s · 6: menos de 20 s)
+// 6 escalones por nivel según el tiempo (el cronómetro cuenta desde el primer movimiento; se pide «menos de»). Los tiempos de cada tamaño están en LIMITES (abajo):
+//   1 a 3 = estrellas doradas   (1: pasarlo · 2 y 3: tiempos de LIMITES)
+//   4 a 6 = estrellas moradas, que reemplazan a las doradas una por una (tiempos de LIMITES)
 // Las estrellas YA NO dan monedas. Las monedas son fijas por tamaño (niveles-5deslizante.js, monedasDe): de 15 a 80 por nivel, una sola vez.
 // Tiempos límite en milisegundos por tamaño: LIMITES[tamaño][escalón - 1]. Un tamaño que no esté aquí no da estrellas.
-const LIMITES = { 3: [Infinity, 120000, 60000, 40000, 30000, 20000] };
+const LIMITES = {
+  3: [Infinity, 120000, 60000, 40000, 30000, 20000],   // 3×3: pasar · 2 min · 1 min · 40 s · 30 s · 20 s
+  4: [Infinity, 150000, 120000, 90000, 60000, 40000],  // 4×4: pasar · 2 min 30 s · 2 min · 1 min 30 s · 1 min · 40 s
+};
 const conEstrellas = (m) => !!LIMITES[m];
 // Escalón (0 a 6) que corresponde a un tiempo en ese tamaño
 function tierPorTiempo(m, ms) {

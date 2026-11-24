@@ -110,7 +110,12 @@ No hace falta probar jugadas ni hacer backtracking: la solubilidad depende solo 
 
 ## Estrellas (solo adorno) y monedas
 - **Monedas:** de **15** (3×3) a **80** (30×30) por cada nivel pasado, **una sola vez por nivel** (`monedasDe` en `niveles-5deslizante.js`). El chip 💰 es la suma de lo que pagó cada nivel pasado (se calcula con `hechos`, así que se sincroniza sola con la cuenta). Todavía no se gastan en nada. Cuando exista el boost (1 000 monedas) habrá que guardar una cartera con regla propia (`unirCartera`, como Estacionamiento).
-- **Estrellas:** **ya no dan monedas.** Quedan como adorno de los niveles 3×3 (6 escalones por tiempo: ★ pasarlo · ★★ menos de 2 min · ★★★ menos de 1 min · y 1, 2 o 3 moradas con menos de 40 s, 30 s y 20 s). Se activan por tamaño agregando su fila en `LIMITES`. Se guardan en `estrellas` (`{ "<nivel>": 1 a 6 }`) y gana el escalón mayor al sincronizar. Pendiente decidir si se rediseñan o se quitan.
+- **Estrellas:** **ya no dan monedas.** Quedan como adorno de los niveles 3×3 y 4×4 (6 escalones por tiempo, tabla `LIMITES` en `juego-5deslizante.js`; se pide «menos de»):
+  | Tamaño | ★ | ★★ | ★★★ | 1 morada | 2 moradas | 3 moradas |
+  |---|---|---|---|---|---|---|
+  | 3×3 | pasarlo | 2 min | 1 min | 40 s | 30 s | 20 s |
+  | 4×4 (23 nov 2026) | pasarlo | 2 min 30 s | 2 min | 1 min 30 s | 1 min | 40 s |
+  Un tamaño que no esté en `LIMITES` no da estrellas. Subir los límites nunca quita estrellas ya ganadas (se guarda el mejor escalón). Se guardan en `estrellas` (`{ "<nivel>": 1 a 6 }`) y gana el escalón mayor al sincronizar. Pendiente decidir si se rediseñan o se quitan.
 
 ## Puntos y progreso
 Tres cosas distintas (`ESTANDARES-juegos.md`, sección 12). Todas se reparten **en línea recta** entre el 3×3 y el 30×30 (más tamaño = más recompensa):
