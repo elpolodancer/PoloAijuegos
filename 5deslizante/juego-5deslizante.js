@@ -988,10 +988,11 @@ $("btn-libre-jugar").addEventListener("click", () => jugarLibre(libreN));
 $("btn-mas-tableros").addEventListener("click", () => { libreMas = true; pintarLibre(); });
 $("btn-libre-guardadas").addEventListener("click", () => abrirPartidas("cargar"));
 // ☰: en una partida del Modo libre abre la ventana de pausa (Seguir jugando · Guardar partida · Salir a elegir tablero); en la pantalla de opciones del Modo libre
-// o en un nivel vuelve al menú principal (el mapa); dentro de una vista del mapa (Mapa, Niveles) vuelve «Atrás» a su vista principal.
+// vuelve al menú principal (el mapa); en un nivel pregunta «¿Salir?» antes de salir; dentro de una vista del mapa (Mapa, Niveles) vuelve «Atrás» a su vista principal.
 $("btn-menu").addEventListener("click", () => {
   if (mapa.abierto() && !mapa.esPrincipal()) mapa.principal();
   else if (!$("juego").hidden && modo === "libre") pausaLibre.abrir();
+  else if (!$("juego").hidden) pausaSalir.abrir();   // en un nivel: pregunta «¿Salir?» (Seguir jugando / Salir al mapa), igual que el botón verde del nombre
   else mostrar("inicio");
 });
 addEventListener("keydown", (e) => {
