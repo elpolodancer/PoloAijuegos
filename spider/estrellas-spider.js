@@ -17,7 +17,7 @@ export const RAPIDO = 0.6;                                         // ⚡: pasar
 export const TIPOS_RETO = ["rapido", "sin_deshacer", "sin_pista", "sin_ayudas"];
 export const BIT = { paso: 1, tiempo: 2, reto: 4 };
 const MAX_T = 99999;                                               // tope de segundos que se guarda (≈ 27 h)
-const MAX_NIVEL = 22600;
+const MAX_NIVEL = 3900;
 
 const mezcla = (x) => { x = Math.imul(x ^ (x >>> 16), 0x45d9f3b); x = Math.imul(x ^ (x >>> 16), 0x45d9f3b); return (x ^ (x >>> 16)) >>> 0; };
 

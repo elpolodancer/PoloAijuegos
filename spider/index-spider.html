@@ -9,43 +9,27 @@
 <link rel="stylesheet" href="../compartido/estilos.css">
 <link rel="stylesheet" href="../compartido/inmersivo.css">
 <style>
-/* Respaldo del velo de inicio: copia de las reglas de compartido/inmersivo.css (si ese archivo ya las trae, no cambia nada; se puede borrar este bloque cuando esté actualizado) */
 [hidden] { display: none !important; }
-.velo-inicio { --ini: 56px; position: fixed; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 0 12px; background: rgba(8, 6, 4, .5); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); touch-action: none; }
-.fila-menu { --ini: 56px; display: flex; align-items: flex-start; justify-content: center; gap: 4px; }
-.velo-inicio .b3d { --t: var(--ini); flex-direction: column; gap: 2px; padding: 0 2px; margin: 0 0 5px; font-weight: 800; }
-.velo-inicio .b-ico { font-size: calc(var(--ini) * .46); line-height: 1; }
-.velo-inicio .b-rot { position: relative; font-size: 10px; font-weight: 700; line-height: 1.1; text-align: center; white-space: nowrap; }
-.velo-inicio .b3d.central { --t: calc(var(--ini) * 2); border-radius: 22px; }
-.velo-inicio .central .b-ico { font-size: calc(var(--ini) * .9); }
-.velo-inicio .central .b-rot { font-size: 17px; font-weight: 800; }
-@media (orientation: landscape) and (max-height: 560px) { .velo-inicio, .fila-menu { --ini: 46px; } .velo-inicio .central .b-rot { font-size: 14px; } }
 .pantalla { position: fixed; inset: 0; }
 .pantalla[hidden] { display: none; }
-/* Modo libre (pantalla de menú sobre la madera estándar; zona reservada arriba-izquierda ≈ 190 × 92). El menú principal es el velo de inicio (.velo-inicio, de inmersivo.css) */
-.capa { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 104px 16px 72px; overflow-y: auto; text-align: center; color: var(--txt-fondo); }
-.capa h1, .capa h2 { margin: 0; font-size: clamp(1.8rem, 7vw, 2.6rem); text-shadow: var(--sombra-txt); }
-.capa p { margin: 0; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
-.grupo { display: flex; flex-direction: column; gap: 8px; align-items: center; }
-.rotulo { font-size: .95rem; font-weight: 700; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
-.fila { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-.capa .fila .b3d.txt { --t: 44px; }
-.nota { min-height: 2.6em; max-width: 440px; font-size: .85rem; }
-.record-libre { font-weight: 800; color: var(--txt-fondo) !important; }
+/* Inicio con mapa (ESTANDARES-juegos.md, sección 13): la pantalla de inicio, el Modo libre, la navegación cuadrada, la barra del nivel y los cuadros de datos
+   usan las clases de compartido/inmersivo.css (.pant-menu, .ini-menu, .modo-grupo, .modo-fila, .dif-fila, .libre-*, .barra-nivel, .cuadros-datos, .hud-der.columna). */
 .info-texto { margin: 0 0 14px; text-align: left; font-size: .9rem; line-height: 1.4; color: #e3e5ea; }
 .info-texto p { margin: 0 0 8px; color: inherit; text-shadow: none; }
 .info-texto ul { margin: 0 0 8px; padding-left: 18px; }
-/* Arriba a la derecha: monedas y 👤 Iniciar sesión (solo fuera de la partida; en partida están los marcadores) */
-#hud-sesion { z-index: 6; }
-body.jugando #hud-sesion { display: none; }
-/* Con el velo de inicio puesto (no se está jugando) el juego de atrás se ve pero no se usa: sin marcadores ni botones de ayuda encima del velo */
-body:not(.jugando) #juego .hud, body:not(.jugando) #juego .barra-inf { visibility: hidden; }
+/* La sesión puede tener un nombre largo: se recorta con «…». Sin sesión es tocable (abre el acceso con Google) */
+#sesion { display: inline-block; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 30px; }
+#sesion:empty { display: none; }
+#sesion.tocable { cursor: pointer; }
+.libre-nota { min-height: 2.6em; }
+#c-estado { white-space: nowrap; }
 /* Mesa */
 /* Tablero = fila superior + mesa de columnas. La fila superior NO tiene fondo: son cartas como las de la partida, con los mismos límites
    que las columnas (series terminadas desde el borde izquierdo de la 1.ª columna; el mazo, carta boca abajo, sobre la última columna).
    Su alto y las medidas las ajusta juego-spider.js (medidas). */
-#tablero { position: absolute; left: 0; right: 0; top: 100px; bottom: 68px; display: flex; flex-direction: column; } /* a todo el ancho: sin bordes de madera a los lados */
-@media (min-aspect-ratio: 1/1) { #tablero { left: 196px; top: 52px; } } /* 196: «🎮 Portal de Juegos» + ☰ miden ≈ 190 de ancho */
+#tablero { position: absolute; left: 0; right: 0; top: calc(max(8px, env(safe-area-inset-top)) + 184px); bottom: 68px; display: flex; flex-direction: column; } /* a todo el ancho; 184 = barra del nivel + cuadros de datos en celular vertical */
+@media (min-width: 640px) { #tablero { top: calc(max(8px, env(safe-area-inset-top)) + 136px); } } /* en pantallas anchas la barra y los cuadros van en la fila de arriba */
+@media (orientation: landscape) and (max-height: 560px) { #tablero { left: calc(56px + 190px + 10px + env(safe-area-inset-left, 0px)); top: 52px; } } /* celular horizontal bajo: la barra y los cuadros van en una columna a la izquierda (190 px) */
 #barra { position: relative; flex: none; height: 56px; margin-bottom: 6px; }
 #series { position: absolute; inset: 0; pointer-events: none; }
 #mesa { position: relative; flex: 1; min-height: 0; }
@@ -94,33 +78,54 @@ body:not(.jugando) #juego .hud, body:not(.jugando) #juego .barra-inf { visibilit
 </style>
 </head>
 <body class="inmersivo">
-<nav class="nav-juego" aria-label="Navegación">
-  <a class="b3d b-azuloscuro" href="../" title="Volver al portal de juegos" aria-label="Volver al portal de juegos"><span class="b-ico">🎮</span></a>
-  <button class="b3d b-cielo" id="btn-menu" type="button" title="Pausa" aria-label="Pausa" hidden><span class="b-ico">☰</span></button>
+<!-- Navegación cuadrada (13.3): 🎮 siempre; ☰ oculto en el inicio y en la vista principal del mapa -->
+<nav class="nav-juego cuadrada" aria-label="Navegación">
+  <a class="b3d chico b-azuloscuro" id="btn-portal" href="../" title="Juegos: volver al portal" aria-label="Juegos: volver al portal"><span class="b-ico">🎮</span></a>
+  <button class="b3d chico b-verdeclaro" id="btn-menu" type="button" title="Volver al menú principal" aria-label="Volver al menú principal" hidden><span class="b-ico">☰</span></button>
 </nav>
 
-<!-- Modo libre: pantalla propia (no desplegable) -->
-<main class="pantalla capa" id="libre" hidden>
+<!-- Arriba a la derecha, en columna: sesión y, debajo, monedas (en partida el chip de monedas pasa a la barra del nivel) -->
+<div class="hud hud-der columna" id="hud-sesion">
+  <span class="chip" id="sesion" title="Entrar con Google para guardar tus puntos"></span>
+  <span id="monedas-barra" class="chip chip-monedas" title="Tus monedas"><span class="moneda"></span><span id="monedas-n">0</span></span>
+</div>
+
+<!-- Pantalla de inicio (13.2): se ve UNA sola vez al abrir el juego. Nada vuelve a ella: «inicio» = abrir el mapa -->
+<div class="pant-menu" id="pantalla-inicio" hidden>
+  <div class="ini-menu">
+    <button class="b3d txt b-morado ini-libre" id="btn-inicio-libre" type="button"><span class="b-ico">♾️</span><span>Modo libre</span></button>
+    <button class="b3d txt b-verde ini-jugar" id="btn-inicio-jugar" type="button"><span class="b-ico">▶</span><span>Jugar</span></button>
+    <button class="b3d txt b-azul ini-mapa" id="btn-inicio-mapa" type="button"><span class="b-ico">🗺️</span><span>Mapa</span></button>
+    <button class="b3d txt b-cielo ini-ajustes" id="btn-inicio-ajustes" type="button"><span class="b-ico">⚙️</span><span>Ajustes</span></button>
+  </div>
+</div>
+
+<!-- Modo libre (13.7): pantalla propia, no desplegable -->
+<main class="pant-menu" id="libre" hidden>
   <h2>♾️ Modo libre</h2>
   <p>Repartos al azar sin fin. No da monedas ni puntos.</p>
-  <div class="grupo"><span class="rotulo">Palos</span><div class="fila" id="palos" role="group" aria-label="Palos de la baraja"></div></div>
-  <div class="grupo"><span class="rotulo">Dificultad</span><div class="fila" id="dificultades" role="group" aria-label="Dificultad del reparto"></div></div>
-  <p id="desc-dif" class="nota"></p>
-  <p class="record-libre">🏆 Récord: <span id="mejores">–</span></p>
-  <button class="b3d txt grande b-verde" id="b-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
+  <span class="modo-grupo">Dificultad</span>
+  <div class="modo-fila dif-fila" id="dificultades" role="group" aria-label="Dificultad del reparto"></div>
+  <div class="dif-nombre" id="dif-nombre"></div>
+  <span class="modo-grupo">Palos</span>
+  <div class="modo-fila" id="palos" role="group" aria-label="Palos de la baraja"></div>
+  <p id="desc-dif" class="libre-nota"></p>
+  <div class="libre-record">🏆 Récord: <span id="mejores">–</span></div>
+  <div class="libre-jugar"><button class="b3d txt grande b-verde" id="b-jugar" type="button"><span class="b-ico">▶</span> Jugar</button></div>
 </main>
 
-<div class="hud hud-der" id="hud-sesion">
-  <span id="monedas-barra" class="chip chip-monedas" title="Tus monedas"><span class="moneda"></span><span id="monedas-n">0</span></span>
-  <button id="entrar" class="b3d chico txt b-azul" type="button" hidden title="Entrar con Google para guardar puntos"><span class="b-ico">👤</span> Iniciar sesión</button>
+<!-- Dentro de un nivel (13.6): chip de monedas + 🗺️ + botón verde con el nombre del nivel; debajo, tres cuadros azules -->
+<div class="barra-nivel" id="barra-nivel" hidden>
+  <button class="b3d b-azul btn-mapa" id="btn-mapa-juego" type="button" title="Mapa" aria-label="Mapa"><span class="b-ico">🗺️</span></button>
+  <button class="b3d txt b-verde nombre" id="barra-juego" type="button" title="Salir al mapa"><span id="nombre-nivel"></span></button>
+</div>
+<div class="cuadros-datos" id="cuadros-datos" hidden>
+  <div>Movimientos<b id="c-movs">0</b></div>
+  <div>Tiempo<b id="c-tiempo">0:00</b></div>
+  <div>Mejor tiempo<b id="c-mejor">–</b></div>
 </div>
 
 <section class="pantalla" id="juego" hidden aria-label="Partida">
-  <div class="hud hud-der">
-    <span class="chip" id="c-tiempo">0:00</span>
-    <span class="chip"><small>Mov.</small><span id="c-movs">0</span></span>
-    <span class="chip"><small>Series</small><span id="c-series">0/8</span></span>
-  </div>
   <div id="tablero">
     <div id="barra" aria-label="Series terminadas y mazo de repartos">
       <div id="series" aria-hidden="true"></div>
@@ -131,19 +136,9 @@ body:not(.jugando) #juego .hud, body:not(.jugando) #juego .barra-inf { visibilit
   <div class="barra-inf">
     <button class="b3d txt b-azul" id="b-deshacer" type="button"><span class="b-ico">↶</span> <span id="t-deshacer">Deshacer</span><span class="b-info" id="p-deshacer" hidden></span></button>
     <button class="b3d txt b-oro" id="b-pista" type="button"><span class="b-ico">💡</span> <span id="t-pista">Pista</span><span class="b-info" id="p-pista" hidden></span></button>
-    <span class="chip chip-monedas" id="chip-monedas-juego" title="Tus monedas" hidden><span class="moneda"></span><span id="monedas-juego">0</span></span>
     <span class="chip" id="c-estado"></span>
   </div>
 </section>
-<!-- Menú principal = VELO DE INICIO sobre el juego ya cargado (ESTANDARES-juegos.md, 7.0 y 7.1; estilos en compartido/inmersivo.css) -->
-<div class="velo-inicio" id="velo-inicio" role="dialog" aria-label="Menú principal" hidden>
-  <div class="fila-menu">
-    <button class="b3d b-morado" id="b-libre" type="button" title="Modo libre"><span class="b-ico">♾️</span><span class="b-rot">Modo libre</span></button>
-    <button class="b3d b-azul" id="b-niveles" type="button" title="Niveles"><span class="b-ico">🗂️</span><span class="b-rot">Niveles</span></button>
-  </div>
-  <button class="b3d central b-verde" id="b-continuar" type="button"><span class="b-ico">▶</span><span class="b-rot" id="txt-continuar">Continuar</span></button>
-  <button class="b3d chico b-cielo" id="b-info" type="button" title="Cómo se juega"><span class="b-ico">ℹ️</span><span class="b-rot">Info</span></button>
-</div>
 <div id="toast" hidden role="status"></div>
 
 <!-- Ventana «Cómo se juega» -->

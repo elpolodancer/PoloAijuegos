@@ -1,10 +1,11 @@
 // Ruta: ajedrez/niveles-ajedrez.js
-// Mapa de niveles del ajedrez: 100 niveles por estado y por país = 32×100 (México, 3 200) + 194×100 (mundo, 19 400) = 22 600.
+// Mapa de niveles del ajedrez (estándar «mapa solo de países», ESTANDARES-juegos.md sección 4A-bis): 195 países × 20 niveles = 3 900 niveles.
+// México es el país 1 (niveles 1-20) y el orden de los países es el fijo de PAISES_MUNDO (compartido/etapas-mapa.js).
 // Progreso { max, hecho } en localStorage; juego-ajedrez.js lo sincroniza con la cuenta (conectar, id «ajedrez-mapa»).
-// NO cambiar el orden de estados/países ni porEtapa después de publicar (cambia qué nivel es cuál y rompe el progreso).
+// NO cambiar el orden de los países ni porEtapa después de publicar (cambia qué nivel es cuál y rompe el progreso).
 import { crearEtapas } from "../compartido/etapas-mapa.js";
 
-export const ETAPAS = crearEtapas({ porEtapa: 100 });
+export const ETAPAS = crearEtapas({ porEtapa: 20, soloPaises: true });   // 195 países (México primero) × 20 niveles = 3 900
 export const CLAVE_MAPA = "ajedrez:mapa";
 
 export function leerMapa() {
@@ -27,7 +28,7 @@ export const fusionarMapa = (a, b) => (!a && !b ? null : {
   max: Math.max(Number(a && a.max) || 1, Number(b && b.max) || 1),
   hecho: Math.max(Number(a && a.hecho) || 0, Number(b && b.hecho) || 0),
 });
-// ===== Contenido de los niveles (etapa 1 = Quintana Roo, niveles 1-100; por ahora hay 21) =====
+// ===== Contenido de los niveles (país 1 = México, niveles 1-20; por ahora hay 21: el 21 ya cae en el país 2, Guatemala) =====
 // Ejercicio de enseñanza: solo mueven las blancas (las negras no responden). Meta: llegar:"e4" | limpiar:true (capturar todo lo negro salvo el rey)
 // | coronar:true | enroque:true | mate:true. Partida: contra la computadora con el nivel de dificultad «ia» (1-8) y el color del jugador.
 const T = (icono, titulo, txt, obj, fen, meta) => ({ tuto: true, icono, titulo, txt, obj, fen: fen.includes(" ") ? fen : fen + " w - - 0 1", meta });

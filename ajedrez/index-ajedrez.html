@@ -1,5 +1,7 @@
 <!doctype html>
 <!-- PROYECTO: Portal Juegos · Ruta: ajedrez/index-ajedrez.html -->
+<!-- Inicio con mapa (ESTANDARES-juegos.md, sección 13): pantalla de inicio (Modo libre · Jugar · Mapa · Ajustes), el mapa de países es el menú principal.
+     Los estilos de navegación, inicio, barra del nivel y Modo libre vienen de compartido/inmersivo.css (bloque «INICIO CON MAPA»). -->
 <html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
@@ -11,7 +13,8 @@
   <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
     body.inmersivo { touch-action: manipulation; }
-    .aj { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; /* arriba 104 y abajo 66: zonas reservadas de 🎮 Portal de Juegos + ☰ y de 🌙 / ⛶ */ padding: calc(104px + env(safe-area-inset-top, 0px)) 10px calc(66px + env(safe-area-inset-bottom, 0px)); }
+    /* Zonas reservadas: arriba, la barra del nivel (🗺️ + nombre) y 🎮 / ☰; abajo, 🌙 y ⛶. La medida del tablero (ajustarTam en juego-ajedrez.js) lee estos márgenes. */
+    .aj { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: calc(116px + env(safe-area-inset-top, 0px)) 10px calc(66px + env(safe-area-inset-bottom, 0px)); }
     .aj[hidden] { display: none; }
     .cab { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
     .fila { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center; }
@@ -37,31 +40,55 @@
     #promo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 4; display: flex; gap: 10px; padding: 10px; border-radius: 16px; background: rgba(15, 16, 19, .9); box-shadow: 0 8px 24px rgba(0,0,0,.6); }
     #promo[hidden] { display: none; }
     #promo .b3d { --t: 56px; font-size: 2rem; font-family: "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols 2", "DejaVu Sans", sans-serif; }
-    /* 👤 Iniciar sesión: arriba a la derecha, siempre el último de .hud-der */
-    .hud .b3d { --t: 40px; border-radius: 12px; font-size: 14px; }
+    /* Chip de sesión (arriba a la derecha, en columna): tocable para iniciar o cerrar sesión; el nombre largo se recorta con «…» */
+    #sesion { display: inline-block; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 30px; cursor: pointer; }
     /* ventanas de aviso / Info / confirmar: mismo estilo que la pausa (.pausa-*), sin velo propio */
     #dialogo { z-index: 110; }
     #dialogo p { margin: 0 0 14px; line-height: 1.4; font-size: 1rem; }
     .aj.en-nivel #desc { font-size: .95rem; max-width: 560px; }
     @media (prefers-reduced-motion: no-preference) { .cas::before { transition: background .15s; } }
+    /* ≥ 640 px de ancho: la barra del nivel va en la fila de arriba, así que sobra espacio */
+    @media (min-width: 640px) { .aj { padding-top: calc(70px + env(safe-area-inset-top, 0px)); } }
     /* Pantalla horizontal (PC, celular acostado): el tablero a la izquierda y los controles a la derecha */
     @media (min-aspect-ratio: 23/20) {
-      .aj { display: grid; grid-template-columns: auto 280px; grid-template-rows: auto 1fr auto; grid-template-areas: "tab cab" "tab estado" "tab acc"; align-content: center; justify-content: center; gap: 12px 22px; padding: calc(56px + env(safe-area-inset-top, 0px)) 64px calc(8px + env(safe-area-inset-bottom, 0px)) 128px; }
+      .aj { display: grid; grid-template-columns: auto 280px; grid-template-rows: auto 1fr auto; grid-template-areas: "tab cab" "tab estado" "tab acc"; align-content: center; justify-content: center; gap: 12px 22px; padding: calc(70px + env(safe-area-inset-top, 0px)) 64px calc(8px + env(safe-area-inset-bottom, 0px)) 64px; }
       .aj[hidden] { display: none; }
       .zona-tab { grid-area: tab; align-self: center; } .cab { grid-area: cab; } #estado { grid-area: estado; align-self: center; } .acc { grid-area: acc; }
+    }
+    /* Celular horizontal bajo: la barra del nivel se queda arriba al centro (en una sola fila, sin invadir el chip de sesión) y el tablero baja un poco */
+    @media (orientation: landscape) and (max-height: 560px) {
+      .barra-nivel { left: 50%; transform: translateX(-50%); max-width: calc(100% - 340px); flex-wrap: nowrap; }
+      .aj { padding-top: calc(56px + env(safe-area-inset-top, 0px)); }
     }
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>
-  <nav class="nav-juego" aria-label="Navegación">
-    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Portal de Juegos</a>
-    <button class="b3d txt b-cielo" id="btn-menu" type="button" title="Pausa"><span class="b-ico">☰</span> <span id="txt-menu">Pausa</span></button>
+  <!-- Navegación cuadrada (13.3): 🎮 siempre; ☰ oculto en el inicio y en la vista principal del mapa -->
+  <nav class="nav-juego cuadrada" aria-label="Navegación">
+    <a class="b3d chico b-azuloscuro" id="btn-portal" href="../" title="Juegos: volver al portal" aria-label="Juegos: volver al portal"><span class="b-ico">🎮</span></a>
+    <button class="b3d chico b-verdeclaro" id="btn-menu" type="button" title="Volver al menú principal" aria-label="Volver al menú principal" hidden><span class="b-ico">☰</span></button>
   </nav>
-  <div class="hud hud-der">
-    <button class="b3d txt b-azul" id="btn-sesion" type="button"><span class="b-ico">👤</span> <span id="txt-sesion">Iniciar sesión</span></button>
+  <div class="hud hud-der columna">
+    <span class="chip" id="sesion" role="button" tabindex="0" title="Iniciar sesión con Google"></span>
   </div>
 
-  <!-- El juego (se ve ya cargado detrás de la capa «Comenzar») -->
+  <!-- Dentro de un nivel o de una partida libre: 🗺️ + botón verde con el nombre (al tocarlo pregunta si quieres salir) -->
+  <div class="barra-nivel" id="barra-nivel" hidden>
+    <button class="b3d b-azul btn-mapa" id="btn-mapa-juego" type="button" title="Mapa" aria-label="Mapa"><span class="b-ico">🗺️</span></button>
+    <button class="b3d txt b-verde nombre" id="barra-juego" type="button"><span id="nombre-nivel"></span></button>
+  </div>
+
+  <!-- Pantalla de inicio (13.2): se ve UNA vez al abrir el juego; después el menú principal es el mapa -->
+  <div class="pant-menu" id="inicio" hidden>
+    <div class="ini-menu">
+      <button class="b3d txt b-morado ini-libre" id="btn-inicio-libre" type="button"><span class="b-ico">♾️</span><span>Modo libre</span></button>
+      <button class="b3d txt b-verde ini-jugar" id="btn-inicio-jugar" type="button"><span class="b-ico">▶</span><span>Jugar</span></button>
+      <button class="b3d txt b-azul ini-mapa" id="btn-inicio-mapa" type="button"><span class="b-ico">🗺️</span><span>Mapa</span></button>
+      <button class="b3d txt b-cielo ini-ajustes" id="btn-inicio-ajustes" type="button"><span class="b-ico">⚙️</span><span>Ajustes</span></button>
+    </div>
+  </div>
+
+  <!-- El juego -->
   <main class="aj" hidden>
     <div class="cab"><div id="desc"></div></div>
     <div id="estado" role="status" aria-live="polite"></div>
@@ -75,16 +102,19 @@
     </div>
   </main>
 
-  <!-- ♾️ Modo libre (pantalla propia, se abre desde ☰ Pausa) -->
+  <!-- ♾️ Modo libre (13.7): Dificultad (5 emojis) · Tu color · nota · récord · ▶ Jugar -->
   <div class="pant-menu" id="libre" hidden>
     <h2>♾️ Modo libre</h2>
-    <p>Ajedrez completo contra la computadora.</p>
-    <div class="modo-grupo">Dificultad</div>
-    <div class="modo-fila" id="libre-niveles" role="group" aria-label="Dificultad"></div>
-    <div class="modo-grupo">Tu color</div>
+    <p class="modo-grupo">Dificultad</p>
+    <div class="modo-fila dif-fila" id="libre-niveles" role="group" aria-label="Dificultad"></div>
+    <p class="dif-nombre" id="dif-nombre"></p>
+    <p class="modo-grupo">Tu color</p>
     <div class="modo-fila" id="libre-color" role="group" aria-label="Tu color"></div>
-    <p class="nota" id="libre-nota"></p>
-    <button class="b3d txt grande b-verde" id="libre-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
+    <p class="libre-nota" id="libre-nota"></p>
+    <p class="libre-record" id="libre-record"></p>
+    <div class="libre-jugar">
+      <button class="b3d txt grande b-verde" id="btn-libre-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
+    </div>
   </div>
 
   <!-- Fin de nivel / de partida: SOBRE el tablero, sin velo (ESTANDARES-juegos.md, sección 6) -->
@@ -92,11 +122,6 @@
     <div class="sobre-texto"><h2 id="fin-tit"></h2><div id="fin-txt"></div></div>
     <div id="fin-prim"></div>
     <div class="sobre-fila" id="fin-fila"></div>
-  </div>
-
-  <!-- Capa «Comenzar» (7.0): único botón, el juego queda detrás y no responde hasta tocarlo -->
-  <div class="capa-comenzar" id="comenzar" hidden>
-    <button class="b3d txt grande b-verde" id="btn-comenzar" type="button"><span class="b-ico">▶</span> Comenzar</button>
   </div>
 
   <!-- Avisos, Info y confirmaciones (ventana .pausa-*) -->

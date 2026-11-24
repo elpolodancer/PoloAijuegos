@@ -1,5 +1,5 @@
 // Ruta: spider/generar-niveles-spider.mjs   (solo consola; guarda su avance, se puede parar con Ctrl+C y seguir después)
-// Genera los 22 600 niveles de la campaña en dos pasos:
+// Genera los 3 900 niveles de la campaña en dos pasos:
 //   1) «generar»: busca repartos con solución COMPROBADA (ia-spider.js) para una cantidad de palos y los guarda en reserva-spider-<palos>.json.
 //   2) «ensamblar»: ordena cada reserva por dificultad (nodos del bot: más nodos = más difícil), los reparte por el plan (plan-niveles-spider.js)
 //      y escribe niveles-spider.js. Los niveles que todavía no tienen reparto quedan en 0 («🚧 todavía no creado»).

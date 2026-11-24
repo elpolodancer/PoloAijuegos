@@ -1,5 +1,5 @@
 // Ruta: spider/plan-niveles-spider.js
-// PLAN de los 22 600 niveles de la campaña: qué DIFICULTAD y cuántos PALOS lleva cada nivel (todavía sin repartos). Módulo puro, se prueba en Node.
+// PLAN de los 3 900 niveles de la campaña (195 países × 20, estándar nuevo del 21 nov 2026; antes eran 22 600 = 226 etapas × 100): qué DIFICULTAD y cuántos PALOS lleva cada nivel (todavía sin repartos). Módulo puro, se prueba en Node.
 // Lo usan generar-niveles-spider.mjs (para saber cuántos repartos de cada tipo hay que conseguir) y la prueba. El plan sale de una fórmula con
 // semillas fijas: es SIEMPRE el mismo. No lo cambies después de publicar (cambiaría la dificultad de niveles que ya se jugaron).
 //
@@ -10,7 +10,7 @@
 //   Experto 2 y 3 (3 palos: 20 % → 60 %) · Maestro 3 y 4 (4 palos: 25 % → 75 %).
 import { aleatorio } from "./logica-spider.js";
 
-export const TOTAL = 22600, POR_TRAMO = 100, LEGADO = 5;
+export const TOTAL = 3900, POR_TRAMO = 100, LEGADO = 5;   // 39 tramos de 100 niveles (el tramo del estándar de dificultad es siempre de 100, no de un país)
 const lineal = (a, b, t) => a + (b - a) * t;
 
 function barajar(lista, rnd) { for (let i = lista.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [lista[i], lista[j]] = [lista[j], lista[i]]; } return lista; }

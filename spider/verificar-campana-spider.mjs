@@ -1,5 +1,5 @@
 // Ruta: spider/verificar-campana-spider.mjs   (solo consola)
-//   node spider/verificar-campana-spider.mjs [muestra=200]     «todos» como muestra = revisa los 22 600 (lento: ≈ 0.1 s por nivel de 1 palo)
+//   node spider/verificar-campana-spider.mjs [muestra=200]     «todos» como muestra = revisa los 3 900 (lento: ≈ 0.1 s por nivel de 1 palo)
 // Revisa niveles-spider.js: (1) que cada nivel creado coincida con el plan (palos y dificultad), (2) que no haya dos niveles con el mismo reparto
 // (palos + semilla) y (3) que el bot vuelva a resolver los repartos (con la solución repetida jugada por jugada con las reglas del juego).
 import { nivelDe, creados, TOTAL } from "./niveles-spider.js";

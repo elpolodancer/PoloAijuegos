@@ -1,6 +1,6 @@
 // Ruta: spider/juego-spider.js
-// Solitario Spider: menú principal = velo de inicio sobre el nivel donde va el jugador (♾️ Modo libre · 🗂️ Niveles · ▶ Continuar · ℹ️ Info), Modo libre, partida y mapa estándar de México/mundo.
-// Niveles: campaña de 22 600 (niveles-spider.js, generado por generar-niveles-spider.mjs; los que todavía no tienen reparto salen «🚧 todavía no creado»).
+// Solitario Spider con el inicio con mapa (ESTANDARES-juegos.md, sección 13, estilo Deslizante): pantalla de inicio (una sola vez) → mapa de países (menú principal), Modo libre y partida.
+// Niveles: campaña de 3 900 = 195 países × 20 (niveles-spider.js, generado por generar-niveles-spider.mjs; los que todavía no tienen reparto salen «🚧 todavía no creado»).
 // Cada nivel guarda su mejor tiempo y hasta 3 estrellas (estrellas-spider.js); las monedas siguen saliendo solo la primera vez (economia-spider.js).
 import { DIFICULTADES, PALOS, nuevaPartida, clonar, largoTramo, puedeMover, mover, puedeRepartir, repartir, ganada, jugadas, palo, rango, SERIES } from "./logica-spider.js";
 import { generarVerificada } from "./ia-spider.js";
@@ -9,6 +9,7 @@ import { metasDe, evaluar, registrar, desempaquetar, textoEstrellas, contar } fr
 import { elegirDelBanco, cuantos } from "./banco-spider.js";
 import { ayudasDe, recompensa, carteraVacia, saldo, ganarMonedas, gastarMonedas, unirCarteras, unirProgresoSpider } from "./economia-spider.js"; // monedas, ayudas por dificultad y cartera
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
+import { encolarNivel, leerCola, guardarCola } from "../compartido/cola-puntos.js"; // 1 punto del portal por nivel pasado la primera vez (estándar, sección 12)
 import { crearEtapas } from "../compartido/etapas-mapa.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
 
@@ -34,10 +35,11 @@ function guardar() { // pasa por unirProgresoSpider para dejar las claves en el 
   try { localStorage.setItem(CLAVE, JSON.stringify(unirProgresoSpider(prog, null))); } catch (e) {}
   if (nube) nube.guardado();
 }
-import("../compartido/progreso.js").then((m) => { nube = m.conectar("spider", { clave: CLAVE, fusionar: unirProgresoSpider, alCambiar: (u) => { prog = { ...prog, ...u }; if (pantalla === "menu") mostrar("menu"); else pintarMenu(); } }); }).catch(() => {}); // con el velo puesto, el nivel de fondo pasa a ser el de la cuenta (7.0)
+let reiniciando = false; // true mientras se borra el historial (Ajustes): la sincronización con la nube no vuelve a traer lo borrado
+import("../compartido/progreso.js").then((m) => { nube = m.conectar("spider", { clave: CLAVE, fusionar: (x, y) => (reiniciando ? null : unirProgresoSpider(x, y)), alCambiar: (u) => { prog = { ...prog, ...u }; mapa.refrescar(); pintarMonedas(); pintarInicio(); if (pantalla === "libre") pintarLibre(); } }); }).catch(() => {}); // con el progreso de la cuenta el mapa se redibuja solo
 
 // ---------- Pantallas ----------
-let pantalla = "menu", pal = 1, dif = 1, recientes = [], e = null, historial = [], sel = null, fin = false, pausado = false;
+let pantalla = "inicio", mapaEnPrincipal = true, pal = 1, dif = 1, recientes = [], e = null, historial = [], sel = null, fin = false, pausado = false;
 let t0 = 0, acum = 0, verificada = false, nivel = 0; // nivel 0 = modo libre
 let usos = { pista: 0, retro: 0, r: 0, p: 0 }; // pista / retro = ayudas de PAGO usadas en este intento (los topes se reinician al reiniciar) · r / p = veces que el jugador pidió ↶ / 💡 (para el reto de la 3.ª estrella)
 let resultado = null; // ventana «¡Ganaste!» (sobre el tablero)
@@ -56,76 +58,76 @@ let colecc = [], mostradas = 0, fantasmas = [], animTimers = [], finAnim = 0, tb
 const btnMenu = $("btn-menu");
 if (prog.opc) { pal = PALOS.includes(prog.opc.palos) ? prog.opc.palos : 1; dif = DIFICULTADES[prog.opc.dif - 1] ? prog.opc.dif : 1; }
 
-// «menu» = el juego ya cargado (el nivel donde va el jugador) detrás del velo de inicio; no abre otra pantalla (ESTANDARES-juegos.md, 7.0)
-function mostrar(p) { // p = «menu» | «libre» | «juego» | «mapa» (con «mapa» las otras quedan ocultas y lo dibuja compartido/mapa-niveles.js)
+// Pantallas (13.1): «inicio» (solo al abrir el juego) · «libre» (opciones del Modo libre) · «juego» (una partida) · «mapa» (el menú principal: lo dibuja compartido/mapa-niveles.js).
+// «inicio» como destino NO existe después de abrir: el ☰, «Salir al mapa» y los botones de fin de nivel llevan al mapa (irMenu).
+function mostrar(p) {
   pantalla = p;
   quitarResultado();
-  if (p === "menu") cargarVista();
-  $("velo-inicio").hidden = p !== "menu";
+  $("pantalla-inicio").hidden = p !== "inicio";
   $("libre").hidden = p !== "libre";
-  $("juego").hidden = !(p === "juego" || p === "menu"); // con el velo, el tablero se ve detrás
-  $("juego").inert = p === "menu";                      // …pero no responde (ni toques ni teclado)
-  document.body.classList.toggle("jugando", p === "juego");
-  btnMenu.hidden = p === "menu"; // el ☰ no se ve mientras está el velo
+  $("juego").hidden = p !== "juego";
+  $("barra-nivel").hidden = p !== "juego";
+  $("cuadros-datos").hidden = p !== "juego";
+  $("btn-mapa-juego").hidden = !nivel; // el 🗺️ solo en los niveles (el Modo libre no tiene mapa)
+  ubicarMonedas();
   rotularMenu();
   if (p !== "mapa") mapa.cerrar();
-  if (p === "juego" || p === "menu") pintar();
-  if (p === "menu" || p === "libre") pintarMenu();
-  if (p === "menu") { try { $("b-continuar").focus({ preventScroll: true }); } catch (err) {} }
+  if (p === "juego") pintar();
+  if (p === "libre") pintarLibre();
+  if (p === "inicio") pintarInicio();
+  pintarMonedas();
 }
-// Deja cargado el juego que se ve detrás del velo: el nivel donde va el jugador (lo del dispositivo y, con sesión, lo de su cuenta).
-// Si ese nivel todavía no está creado se ve, solo de fondo, el último creado antes; «Continuar» avisa «🚧 todavía no creado» (igual que el mapa).
-function cargarVista() {
-  let n = proximoNivel();
-  while (n > 1 && !nivelDe(n)) n--;
-  const N = nivelDe(n);
-  nivel = N ? n : 0; verificada = true;
-  e = N ? nuevaPartida(N.palos, N.semilla, N.dif) : nuevaPartida(1, 1, 1);
-  historial = []; usos = { pista: 0, retro: 0, r: 0, p: 0 }; sel = null; fin = false; pausado = false; t0 = 0; acum = 0;
-  alertaMal = null; pista = null; ultimaAccion = Date.now();
-  colecc = []; cancelarAnim(); vistos = new Set([clave(e)]);
-}
-// ☰: «Pausa» dentro de una partida en curso, «Atrás» en el resto de pantallas (ESTANDARES-juegos.md, 7.4)
+// ☰ (13.3): oculto en el inicio y en la vista principal del mapa; «Atrás» en las vistas internas del mapa; «Pausa» en una partida del Modo libre; «Volver al menú principal» en lo demás
 function rotularMenu() {
-  const jugando = pantalla === "juego" && !fin;
-  btnMenu.title = btnMenu.ariaLabel = jugando ? "Pausa" : "Volver al menú principal"; // solo icono ☰ (sin texto)
+  let texto = "Volver al menú principal", oculto = false;
+  if (pantalla === "inicio") oculto = true;
+  else if (pantalla === "mapa") { oculto = mapaEnPrincipal; texto = "Atrás"; }
+  else if (pantalla === "juego" && !nivel && !fin) texto = "Pausa";
+  btnMenu.hidden = oculto; btnMenu.title = texto; btnMenu.setAttribute("aria-label", texto);
+}
+// El chip de monedas vive arriba a la derecha (bajo la sesión) y, dentro de una partida, pasa a la izquierda del botón 🗺️ en la barra del nivel
+function ubicarMonedas() {
+  const chip = $("monedas-barra"), enBarra = pantalla === "juego", destino = enBarra ? $("barra-nivel") : $("hud-sesion");
+  if (chip.parentNode === destino) return;
+  if (enBarra) destino.prepend(chip); else destino.appendChild(chip);
 }
 function aviso(txt, ms = 2200) {
   const t = $("toast"); t.textContent = txt; t.hidden = false;
   clearTimeout(aviso.id); aviso.id = setTimeout(() => { t.hidden = true; }, ms);
 }
 
-// ---------- Menú principal (velo de inicio) ----------
-const ETAPAS = crearEtapas({ porEtapa: 100 }); // 32 estados + 194 países, 100 niveles cada uno = 22 600 (los creados salen de niveles-spider.js)
+// ---------- Mapa de países = menú principal (13.4) ----------
+const ETAPAS = crearEtapas({ porEtapa: 20, soloPaises: true }); // 195 países × 20 niveles = 3 900 (los creados salen de niveles-spider.js)
+if (ETAPAS.total !== TOTAL) console.warn("spider: el mapa tiene " + ETAPAS.total + " niveles y niveles-spider.js declara " + TOTAL);
 const monedas = () => saldo(prog.cartera);
-function pintarMonedas() { $("monedas-n").textContent = monedas().toLocaleString("es-MX"); $("monedas-juego").textContent = monedas().toLocaleString("es-MX"); }
+function pintarMonedas() { $("monedas-n").textContent = monedas().toLocaleString("es-MX"); }
 function gastar(n) { if (!gastarMonedas(prog.cartera, idDisp, n)) return false; guardar(); pintarMonedas(); return true; }
 const proximoNivel = () => Math.min(Math.max(1, prog.niv.max), ETAPAS.total);
-function pintarContinuar() { // «Jugar» si aún no pasó ningún nivel, «Continuar» si ya (7.1)
-  const txt = prog.niv.hecho > 0 ? "Continuar" : "Jugar", b = $("b-continuar");
-  $("txt-continuar").textContent = txt;
-  b.title = txt + " · nivel " + proximoNivel(); b.setAttribute("aria-label", b.title);
-}
-function pintarMenu() { pintarContinuar(); pintarLibre(); pintarMonedas(); }
-$("b-libre").addEventListener("click", () => mostrar("libre"));
-$("b-continuar").addEventListener("click", () => jugarNivel(proximoNivel()));
-$("b-niveles").addEventListener("click", () => abrirMapa(proximoNivel()));
-function abrirMapa(n, alcanzado) { mostrar("mapa"); mapa.abrir(n, alcanzado); }
+// Texto «Nivel 3 · México» del nivel n (el número es el del país: 1 a 20)
+function nombreNivel(n) { const x = ETAPAS.etapaDe(n); return "Nivel " + x.k + " · " + ETAPAS.nombreEtapa(n); }
+function pintarInicio() { const b = $("btn-inicio-jugar"); b.title = "Jugar · " + nombreNivel(proximoNivel()); b.setAttribute("aria-label", b.title); } // en el centro del país el botón dice «Jugar» hasta pasar el primer nivel y «Continuar» después (etiquetaContinuar)
+// «inicio» siempre significa «abrir el mapa» en el país donde va el jugador
+function abrirMapa(n, alcanzado) { mostrar("mapa"); mapa.abrir(n || proximoNivel(), alcanzado); }
+const irMenu = () => abrirMapa(proximoNivel());
 function jugarNivel(n) { if (nivelDe(n)) empezar(n); else aviso("🚧 Los niveles todavía no están creados"); }
+// Pantalla de inicio: Jugar = el nivel que toca (si no hay ninguno pasado, abre el mapa en el nivel 1) · Modo libre · Mapa · Ajustes
+$("btn-inicio-jugar").addEventListener("click", () => { if (prog.niv.hecho === 0) abrirMapa(1); else jugarNivel(proximoNivel()); });
+$("btn-inicio-libre").addEventListener("click", () => mostrar("libre"));
+$("btn-inicio-mapa").addEventListener("click", () => irMenu());
+$("btn-inicio-ajustes").addEventListener("click", () => abrirAjustes());
 
 // ---------- Info: «Cómo se juega» ----------
 const infoFondo = $("info-fondo");
 function abrirInfo() { infoFondo.hidden = false; try { $("info-ok").focus({ preventScroll: true }); } catch (err) {} }
 function cerrarInfo() { infoFondo.hidden = true; }
-$("b-info").addEventListener("click", abrirInfo);
 $("info-ok").addEventListener("click", cerrarInfo);
 infoFondo.addEventListener("click", (ev) => { if (ev.target === infoFondo) cerrarInfo(); });
 addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !infoFondo.hidden) { ev.preventDefault(); ev.stopPropagation(); cerrarInfo(); } }, true);
 
-// ---------- 👤 Iniciar sesión (la sesión se carga aparte: sin internet el juego funciona igual) ----------
-let entrarFn = null;
-import("../compartido/jugador.js").then((m) => { entrarFn = m.entrar; m.alCambiarSesion((u) => { $("entrar").hidden = !!u; }); }).catch(() => {});
-$("entrar").addEventListener("click", () => { if (entrarFn) entrarFn().catch((err) => aviso(err.message)); });
+// ---------- 👤 Sesión (arriba a la derecha; se carga aparte: sin internet el juego funciona igual). Sin sesión, tocar el chip abre el acceso con Google ----------
+let entrarFn = null, haySesion = false;
+import("../compartido/jugador.js").then((m) => { entrarFn = m.entrar; m.alCambiarSesion((u) => { haySesion = !!u; $("sesion").textContent = u ? (u.displayName || "Jugador") : "👤 Iniciar sesión"; $("sesion").classList.toggle("tocable", !u); }); }).catch(() => {});
+$("sesion").addEventListener("click", () => { if (!haySesion && entrarFn) entrarFn().catch((err) => aviso(err.message)); });
 
 // ---------- Modo libre (pantalla propia: palos, dificultad, nota, récord y «Jugar») ----------
 const SIMBOLOS_PALOS = ["♠", "♠♥", "♠♥♣", "♠♥♣♦"];
@@ -141,14 +143,15 @@ function pintarLibre() {
     cp.appendChild(b);
   }
   const caja = $("dificultades"); caja.replaceChildren();
-  for (const d of DIFICULTADES) {
+  for (const d of DIFICULTADES) { // 5 botones solo con emoji (13.7); el nombre de la elegida va debajo
     const b = document.createElement("button");
     b.type = "button"; b.className = "b3d txt " + (d.id === dif ? "b-oro on" : "b-cielo");
-    b.setAttribute("aria-pressed", String(d.id === dif));
-    b.innerHTML = '<span class="b-ico">' + d.ico + "</span> " + d.nombre;
+    b.setAttribute("aria-pressed", String(d.id === dif)); b.title = d.nombre; b.setAttribute("aria-label", d.nombre);
+    b.innerHTML = '<span class="b-ico">' + d.ico + "</span>";
     b.addEventListener("click", () => elegir("dif", d.id));
     caja.appendChild(b);
   }
+  $("dif-nombre").textContent = DIFICULTADES[dif - 1].ico + " " + DIFICULTADES[dif - 1].nombre;
   const d = DIFICULTADES[dif - 1], n = cuantos(pal, dif);
   $("desc-dif").textContent = pal + (pal === 1 ? " palo" : " palos") + " · reparto " + d.nombre + (d.deshacer ? " · con deshacer" : " · SIN deshacer") +
     (n ? " · " + n + " repartos con solución comprobada" : " · todavía sin repartos comprobados: se buscará uno al momento");
@@ -157,14 +160,18 @@ function pintarLibre() {
 }
 $("b-jugar").addEventListener("click", () => empezar());
 
-// ---------- Niveles: mapa estándar (México y mundo armados; el mundo sale al terminar los 32 estados) ----------
+// ---------- Niveles: el mapa de un solo país (compartido/mapa-niveles.js con unPais) ----------
 const CLASE_DIF = ["b-verde", "b-azul", "b-morado", "b-oro", "b-rojo"]; // = color de cada dificultad (🟢 🔵 🟣 🟠 🔴)
 const mapa = montarMapa({
   prefijo: "spider",
   etapas: ETAPAS,
-  progreso: () => prog.niv,
+  unPais: true,                                    // se abre el país donde va el jugador; 🗺️ Mapa = el mundo con los países abiertos y, al tocar uno, sus 20 niveles
+  columnas: 4,                                     // los 20 niveles de un país: 4 columnas × 5 filas
+  etiquetaContinuar: () => (prog.niv.hecho === 0 ? "▶ Jugar" : "▶ Continuar"),
+  botonesExtra: [{ icono: "♾️", texto: "Modo libre", clase: "b-morado", fn: () => mostrar("libre") }],
+  alCambiarVista: (esPrincipal) => { mapaEnPrincipal = esPrincipal; rotularMenu(); },
+  progreso: () => ({ hecho: prog.niv.hecho, max: Math.min(TOTAL, prog.niv.hecho + 1) }),
   jugarNivel,
-  nivelContinuar: proximoNivel,
   infoNivel: (n) => {
     const N = nivelDe(n);
     if (!N) return { sub: "🚧", clase: "b-cielo", aria: "todavía no está creado" };
@@ -172,6 +179,11 @@ const mapa = montarMapa({
     const base = d.nombre + ", " + N.palos + (N.palos === 1 ? " palo" : " palos");
     if (r.t) return { sub: textoEstrellas(r.mask), clase: CLASE_DIF[N.dif - 1], sinMarca: true, aria: base + ", " + contar(r.mask) + " de 3 estrellas, récord " + formato(r.t) };
     return { sub: d.ico + " " + N.palos + "♠", clase: CLASE_DIF[N.dif - 1], aria: base };
+  },
+  resumenEstrellas: (desde, hasta) => { // estrellas ganadas del país (3 por nivel)
+    let ganadas = 0, posibles = 0;
+    for (let n = desde; n <= hasta; n++) { if (!nivelDe(n)) continue; posibles += 3; ganadas += contar(recDe(n).mask); }
+    return posibles ? "<span>★ " + ganadas + " / " + posibles + " <small>estrellas</small></span>" : "";
   },
   leyenda: "🟢 Fácil · 🔵 Normal · 🟣 Difícil · 🟠 Experto · 🔴 Maestro · ♠ = cantidad de palos · 🚧 todavía no creado",
   avisoPrincipal: () => creados().toLocaleString("es-MX") + " de " + TOTAL.toLocaleString("es-MX") + " niveles listos 🕷️",
@@ -205,6 +217,7 @@ function empezar(n = 0) {
   historial = []; usos = { pista: 0, retro: 0, r: 0, p: 0 }; sel = null; fin = false; pausado = false; t0 = 0; acum = 0;
   alertaMal = null; pista = null; ultimaAccion = Date.now();
   colecc = []; cancelarAnim(); vistos = new Set([clave(e)]);
+  $("nombre-nivel").textContent = n ? nombreNivel(n) : "♾️ Modo libre " + DIFICULTADES[dif - 1].ico; // botón verde de arriba (13.6): sin tamaño ni palos
   mostrar("juego");
   if (n) { const m = metasDe(n, e.palos, e.dif); aviso("★★ " + m.textos[1] + "   ·   ★★★ " + m.textos[2], 4500); } // las metas de estrellas de este nivel
 }
@@ -219,9 +232,10 @@ function jugar(fn, op) { // op = qué jugada es ({de,k,a} o {rep:true}); sirve p
 function terminar() {
   fin = true; acum = segundos(); t0 = 0; rotularMenu(); // el ☰ vuelve a decir «Atrás»
   const s = Math.round(acum);
-  let premio = 0, est = null, reg = null;
+  let premio = 0, est = null, reg = null, premioPrimera = false;
   if (nivel) { // monedas (solo la primera vez que se pasa el nivel) y desbloquea el siguiente (hasta donde haya niveles)
-    premio = recompensa(e.dif, nivel > prog.niv.hecho);
+    premioPrimera = nivel > prog.niv.hecho;
+    premio = recompensa(e.dif, premioPrimera);
     if (premio) ganarMonedas(prog.cartera, idDisp, premio);
     est = evaluar({ nivel, palos: e.palos, dif: e.dif, segundos: acum, retros: usos.r, pistas: usos.p }); // estrellas y récord de tiempo del nivel
     reg = registrar(prog.rec, nivel, acum, est.mask);
@@ -233,15 +247,16 @@ function terminar() {
     if (!prog.mejor[k] || s < prog.mejor[k]) prog.mejor[k] = s;
   }
   guardar(); pintarMonedas();
+  if (nivel && premioPrimera) { encolarNivel("spider"); import("../compartido/progreso.js").then((m) => m.vaciarPuntos()).catch(() => {}); } // 1 punto del portal por nivel, solo la primera vez (se envía cuando hay internet y sesión)
   quitarResultado();
   const f = document.createElement("div");
   f.className = "sobre-tablero"; // fin de nivel SOBRE el tablero (ESTANDARES-juegos.md, sección 6)
   const tx = document.createElement("div"); tx.className = "sobre-texto";
-  tx.innerHTML = "<h2>🎉 ¡Ganaste" + (nivel ? " el nivel " + nivel : "") + "!</h2><div>" + formato(s) + " · " + e.movs + " movimientos" + (premio ? " · +" + premio + " monedas" : "") + "</div>" + (reg ? bloqueEstrellas(est, reg) : "");
+  tx.innerHTML = "<h2>🎉 ¡Ganaste!</h2>" + (nivel ? "<div>" + nombreNivel(nivel) + "</div>" : "") + "<div><div>" + formato(s) + " · " + e.movs + " movimientos" + (premio ? " · +" + premio + " monedas" : "") + "</div>" + (reg ? bloqueEstrellas(est, reg) : "");
   f.appendChild(tx);
   const fila = document.createElement("div"); fila.className = "sobre-fila";
   const sig = nivel && nivel < TOTAL && nivelDe(nivel + 1) ? [["▶", "Siguiente nivel", "b-verde", () => empezar(nivel + 1)]] : nivel ? [] : [["▶", "Otra partida", "b-verde", () => empezar()]];
-  const otras = nivel ? [["🔄", "Repetir nivel", "b-azul", () => empezar(nivel)], ["📋", "Niveles", "b-azul", () => abrirMapa(nivel, nivel % 100 === 0)]] : [["⚙️", "Cambiar tablero", "b-cielo", () => mostrar("libre")]];
+  const otras = nivel ? [["🔄", "Repetir nivel", "b-azul", () => empezar(nivel)], ["🗺️", "Mapa", "b-cielo", () => abrirMapa(nivel, true)]] : [["⚙️", "Cambiar tablero", "b-cielo", () => mostrar("libre")], ["🗺️", "Mapa", "b-cielo", () => irMenu()]]; // «Mapa» abre el país del nivel para ver subir el agua
   const boton = (ico, txt, cl, fn, grande) => {
     const b = document.createElement("button"); b.type = "button"; b.className = "b3d txt " + (grande ? "grande " : "") + cl;
     b.innerHTML = '<span class="b-ico">' + ico + "</span><span>" + txt + "</span>";
@@ -249,7 +264,7 @@ function terminar() {
     return b;
   };
   for (const [ico, txt, cl, fn] of sig) f.appendChild(boton(ico, txt, cl, fn, true)); // «Siguiente nivel» siempre primero y el más grande
-  for (const [ico, txt, cl, fn] of [...otras, ["🏠", "Menú principal", "b-cielo", () => mostrar("menu")]]) fila.appendChild(boton(ico, txt, cl, fn));
+  for (const [ico, txt, cl, fn] of otras) fila.appendChild(boton(ico, txt, cl, fn));
   f.appendChild(fila);
   const esta = e, espera = finAnim > Date.now() ? finAnim - Date.now() + 250 : 0; // deja terminar el viaje de la última serie
   setTimeout(() => { if (e !== esta || !fin || pantalla !== "juego") return; quitarResultado(); document.body.appendChild(f); resultado = f; colocarResultado(); }, espera);
@@ -471,11 +486,14 @@ function pintar() {
     });
     m.appendChild(col);
   }
-  $("c-movs").textContent = e.movs; $("c-series").textContent = e.hechos + "/" + SERIES;
+  $("c-movs").textContent = e.movs;
   $("n-rep").textContent = 5 - e.rep; $("b-repartir").disabled = e.rep >= 5;
   $("b-repartir").classList.toggle("alerta-rep", !!(pista && pista.tipo === "repartir")); // sin movimientos: parpadea el reparto
   pintarAyudas();
-  $("c-estado").textContent = nivel ? "Nivel " + nivel + (recDe(nivel).t ? " · 🏆 " + formato(recDe(nivel).t) : "") : verificada ? "✔ Con solución" : "🎲 Al azar";
+  const rt = nivel ? recDe(nivel).t : prog.mejor[llave(e.palos, e.dif)]; // mejor tiempo del nivel (o de esta combinación de palos y dificultad en el Modo libre)
+  $("c-mejor").textContent = rt ? formato(rt) : "–";
+  $("c-estado").textContent = "Series " + e.hechos + "/" + SERIES;
+  $("c-estado").title = nivel ? "Series terminadas" : verificada ? "Series terminadas · ✔ este reparto tiene solución comprobada" : "Series terminadas · 🎲 reparto al azar (sin comprobar)";
   $("c-tiempo").textContent = formato(segundos());
 }
 // Botones ↶ y 💡: gratis (sin precio) o de pago (precio en la esquina, cuántos quedan junto al nombre; se apagan al llegar al tope o si no alcanzan las monedas)
@@ -490,8 +508,6 @@ function pintarAyudas() {
   $("t-pista").textContent = pp ? "Pista " + (pp.tope - usos.pista) : "Pista";
   $("p-pista").hidden = !pp; if (pp) $("p-pista").textContent = pp.precio;
   bp.title = pp ? "Muestra un movimiento: " + pp.precio + " monedas. Quedan " + (pp.tope - usos.pista) + " en este nivel" : "Muestra un movimiento";
-  $("chip-monedas-juego").hidden = !(rp || pp); // el saldo solo se ve donde hay algo que comprar
-  $("c-estado").hidden = !!(rp || pp);
 }
 // Recuadro (div .zona) que rodea las cartas desde la posición «desde» hasta «hasta» de una columna. y2 = donde termina; alFinal = incluye la última carta
 function marco(z, ys, y2, w, alFinal) {
@@ -585,30 +601,123 @@ $("b-deshacer").addEventListener("click", () => {
   if (rp) { if (usos.retro >= rp.tope || !gastar(rp.precio)) return; usos.retro++; }
   usos.r++;
   actividad(); cancelarAnim(); e = historial.pop(); colecc.length = Math.min(colecc.length, e.hechos); mostradas = colecc.length; sel = null; pintar(); });
-addEventListener("resize", () => { if (pantalla === "juego" || pantalla === "menu") { pintar(); colocarResultado(); } });
+addEventListener("resize", () => { if (pantalla === "juego") { pintar(); colocarResultado(); } });
 setInterval(() => {
   if (pantalla !== "juego" || !e || fin || pausado) return;
   $("c-tiempo").textContent = formato(segundos());
   if (!pista && pistaAuto() && Date.now() - ultimaAccion >= PISTA_MS) calcularPista(); // 15 s sin tocar nada
 }, 500);
 
-// ---------- Menú de pausa estándar (solo en partida): Continuar · Reiniciar nivel · Niveles · Menú principal ----------
-// En Modo libre solo «Continuar» y «Salir a elegir tablero»
-const pausa = crearMenuPausa({
-  boton: btnMenu,
-  puedeAbrir: () => pantalla === "juego" && !fin,
-  alAbrir: () => { acum = segundos(); t0 = 0; pausado = true; },
-  alContinuar: () => { pausado = false; ultimaAccion = Date.now(); if (acum > 0 || e.movs) t0 = Date.now(); },
-  extras: () => nivel ? [
-    { icono: "🔄", texto: "Reiniciar nivel", clase: "b-azul", ayuda: "Vuelves a empezar este nivel desde cero. Las monedas que gastaste no vuelven.", alElegir: () => { pausado = false; empezar(nivel); } },
-    { icono: "📋", texto: "Niveles", clase: "b-azul", ayuda: "Vas a la zona de niveles. Se pierde lo avanzado en este nivel.", alElegir: () => { pausado = false; abrirMapa(nivel); } },
-  ] : [],
-  get textoSalir() { return nivel ? "Menú principal" : "Salir a elegir tablero"; },
-  ayudaSalir: () => (nivel ? "Se pierde lo avanzado en este nivel." : "La partida termina; no se pierde ningún récord."),
-  alSalir: () => { pausado = false; mostrar(nivel ? "menu" : "libre"); },
+// ---------- Ventanas de pausa (13.6 y 13.7). Mientras están abiertas el reloj se detiene y los toques no mueven cartas ----------
+// Niveles: «¿Salir?» → Seguir jugando · Salir al mapa (se pierde lo avanzado; se reinicia saliendo y entrando o con «Repetir nivel» al ganar).
+// Modo libre: «Pausa» → Seguir jugando · Salir a elegir tablero (no se pierde ningún récord).
+const alAbrirPausa = () => { acum = segundos(); t0 = 0; pausado = true; };
+const alContinuarPausa = () => { pausado = false; ultimaAccion = Date.now(); if (acum > 0 || e.movs) t0 = Date.now(); };
+const pausaNivel = crearMenuPausa({
+  titulo: "¿Salir?",
+  textoContinuar: "Seguir jugando",
+  textoSalir: "Salir al mapa",
+  ayudaSalir: "Se pierde lo avanzado en este nivel. Las monedas que gastaste no vuelven.",
+  puedeAbrir: () => pantalla === "juego" && !fin && !!nivel,
+  alAbrir: alAbrirPausa,
+  alContinuar: alContinuarPausa,
+  alSalir: () => { pausado = false; irMenu(); },
 });
-// Fuera de una partida en curso (mapa, Modo libre, resultado) el ☰ dice «Atrás» y vuelve al menú principal; en partida lo atiende la pausa
-btnMenu.addEventListener("click", () => { if (!(pantalla === "juego" && !fin)) mostrar("menu"); });
+const pausaLibre = crearMenuPausa({
+  titulo: "Pausa",
+  textoContinuar: "Seguir jugando",
+  textoSalir: "Salir a elegir tablero",
+  ayudaSalir: "La partida termina; no se pierde ningún récord.",
+  puedeAbrir: () => pantalla === "juego" && !fin && !nivel,
+  alAbrir: alAbrirPausa,
+  alContinuar: alContinuarPausa,
+  alSalir: () => { pausado = false; mostrar("libre"); },
+});
+$("barra-juego").addEventListener("click", () => { if (pantalla === "juego" && !fin) (nivel ? pausaNivel : pausaLibre).abrir(); }); // el botón verde del nombre
+$("btn-mapa-juego").addEventListener("click", () => { if (pantalla === "juego" && !fin) pausaNivel.abrir(); else if (pantalla === "juego") irMenu(); }); // 🗺️: pregunta «¿Salir?» y, si se confirma, abre el mapa
+// ☰ (13.3): vista interna del mapa → «Atrás» a la vista del país · partida en curso → su ventana de pausa · lo demás (opciones del Modo libre, fin de nivel) → el mapa
+btnMenu.addEventListener("click", () => {
+  if (pantalla === "mapa" && !mapa.esPrincipal()) mapa.principal();
+  else if (pantalla === "juego" && !fin) (nivel ? pausaNivel : pausaLibre).abrir();
+  else irMenu();
+});
+// Esc dentro del mapa sube un paso (como el ☰ «Atrás»)
+addEventListener("keydown", (ev) => {
+  if (ev.key !== "Escape" || ev.repeat || pantalla !== "mapa" || !infoFondo.hidden || mapa.esPrincipal()) return;
+  ev.preventDefault(); mapa.principal();
+});
 
-pintarMenu();
-mostrar("menu");
+// ---------- ⚙️ Ajustes (13.8): se abre desde la pantalla de inicio ----------
+const MOSTRAR_BORRAR_HISTORIAL = true; // BOTÓN TEMPORAL DE PRUEBAS: «Borrar todo el historial y reiniciar». DEBE quedar en false antes de pasar Spider a la zona «Juegos»
+// Borra en este dispositivo el progreso (niveles, estrellas, monedas, récords) y los puntos pendientes de Spider y, con sesión, deja vacío el de la cuenta
+// (si no, la sincronización lo volvería a traer). NO toca los puntos que el perfil del portal ya recibió. Devuelve true / false (no se pudo en la cuenta) / null (sin sesión).
+async function borrarHistorial() {
+  reiniciando = true;
+  prog = { niv: { max: 1, hecho: 0 }, mejor: {}, rec: {}, ganadas: 0, cartera: carteraVacia(), t: 0 };
+  try { localStorage.removeItem(CLAVE); } catch (err) {}
+  try { guardarCola(leerCola().filter((x) => x.j !== "spider")); } catch (err) {}
+  try {
+    const { auth, db } = await import("../compartido/firebase.js");
+    if (!auth || !auth.currentUser || !db) return null;
+    const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js");
+    const ref = doc(db, "progreso", auth.currentUser.uid, "juegos", "spider");
+    await Promise.race([setDoc(ref, { datos: JSON.stringify(unirProgresoSpider(prog, null)), actualizado: serverTimestamp() }), new Promise((_, no) => setTimeout(() => no(new Error("lento")), 8000))]);
+    return true;
+  } catch (err) { console.warn("borrar historial (nube):", err.code || err.message); return false; }
+}
+let ajustesAbierto = false;
+function abrirAjustes() {
+  if (ajustesAbierto) return;
+  ajustesAbierto = true;
+  const foco = document.activeElement;
+  const el = (tag, clase, texto) => { const x = document.createElement(tag); if (clase) x.className = clase; if (texto != null) x.textContent = texto; return x; };
+  const fondo = el("div", "pausa-fondo");
+  fondo.setAttribute("role", "dialog"); fondo.setAttribute("aria-modal", "true"); fondo.setAttribute("aria-label", "Ajustes");
+  const panel = el("div", "pausa-panel aj-panel");
+  const nota = el("p", "aj-nota"); nota.setAttribute("role", "status"); nota.hidden = true;
+  const lista = el("div", "pausa-opciones");
+  const decir = (t) => { nota.textContent = t; nota.hidden = !t; };
+  let ocupado = false;
+  const tecla = (ev) => { if (ev.key === "Escape" && !ocupado) { ev.preventDefault(); ev.stopPropagation(); cerrar(); } };
+  function cerrar() {
+    fondo.remove(); removeEventListener("keydown", tecla, true); ajustesAbierto = false;
+    try { if (foco && foco.focus) foco.focus({ preventScroll: true }); } catch (err) {}
+  }
+  addEventListener("keydown", tecla, true);
+  fondo.addEventListener("click", (ev) => { if (ev.target === fondo && !ocupado) cerrar(); });
+  const boton = (icono, texto, clase, fn) => {
+    const b = el("button", "b3d txt " + clase); b.type = "button";
+    if (icono) b.append(el("span", "b-ico", icono));
+    b.append(el("span", "", texto));
+    b.addEventListener("click", fn);
+    lista.appendChild(b);
+    return b;
+  };
+  boton("ℹ️", "Cómo se juega", "b-azul", () => { cerrar(); abrirInfo(); });
+  boton("💾", "Copia de seguridad", "b-oro", () => { cerrar(); import("../compartido/almacen.js").then((m) => m.abrirPanelCopias()).catch(() => aviso("No se pudo abrir la copia de seguridad.")); });
+  if (MOSTRAR_BORRAR_HISTORIAL) {
+    const TXT = "Borrar todo el historial y reiniciar";
+    const borrar = boton("🗑️", TXT, "b-rojo", async () => {
+      if (ocupado) return;
+      if (!borrar.dataset.seguro) { // primer toque: pide confirmar (sin confirm())
+        borrar.dataset.seguro = "1"; borrar.lastChild.textContent = "¿Seguro? Toca otra vez para borrar TODO";
+        decir("Se borran los niveles, estrellas, monedas y récords (en este dispositivo y en tu cuenta). Es solo para pruebas.");
+        setTimeout(() => { if (!ocupado) { delete borrar.dataset.seguro; borrar.lastChild.textContent = TXT; } }, 5000);
+        return;
+      }
+      ocupado = true;
+      for (const b of lista.querySelectorAll("button")) b.disabled = true;
+      decir("Borrando…");
+      const enNube = await borrarHistorial();
+      decir(enNube === false ? "Se borró en este dispositivo, pero no se pudo borrar en tu cuenta: al iniciar sesión se volverá a bajar. Reinténtalo con internet." : "✅ Listo. Reiniciando el juego…");
+      setTimeout(() => location.reload(), enNube === false ? 3500 : 900);
+    });
+  }
+  const cerrarB = boton("", "Cerrar", "b-cielo", () => cerrar());
+  panel.append(el("h2", "", "⚙️ Ajustes"), nota, lista);
+  fondo.appendChild(panel);
+  document.body.appendChild(fondo);
+  try { lista.querySelector("button").focus({ preventScroll: true }); } catch (err) {}
+}
+
+mostrar("inicio"); // única vez que se ve la pantalla de inicio: al abrir el juego
