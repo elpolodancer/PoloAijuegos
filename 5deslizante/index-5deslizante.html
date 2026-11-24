@@ -79,7 +79,14 @@
     #tablero { --n: 3; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: var(--S);
       aspect-ratio: 1 / 1; container-type: inline-size; background: #1a1b20; border: 2px solid var(--borde); border-radius: 16px; padding: 6px;
       box-shadow: 0 6px 0 #0c0d0f, 0 12px 20px rgba(0,0,0,.5); touch-action: none; user-select: none; }
-    #fichas { position: relative; width: 100%; height: 100%; }
+    /* Zoom (tableros de 10×10 en adelante): la ventana recorta lo que se sale al acercar; #fichas se escala y se mueve con transform (ver «Zoom» en juego-5deslizante.js) */
+    #ventana-fichas { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 10px; }
+    #fichas { position: relative; width: 100%; height: 100%; transform-origin: 0 0; }
+    .zoom-barra { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 8px; }
+    .zoom-barra .b3d { --t: 38px; margin: 0; }
+    #zoom-nivel { min-width: 3.4em; text-align: center; font-weight: 800; font-size: .85rem; color: var(--txt-fondo); text-shadow: var(--sombra-txt); font-variant-numeric: tabular-nums; }
+    #zoom-ayuda { flex-basis: 100%; text-align: center; font-size: .72rem; color: var(--txt-fondo-suave); }
+    #zoom-ayuda[hidden] { display: none; }
     .ficha { position: absolute; top: 0; left: 0; width: calc(100% / var(--n)); height: calc(100% / var(--n)); padding: 3px;
       transition: transform .16s ease-out; cursor: pointer; }
     .ficha > span { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; border-radius: 12%;
@@ -225,8 +232,15 @@
         <div>Tiempo<b id="tiempo">0:00</b></div>
         <div>Mejor tiempo<b id="mejor">–</b></div>
       </div>
-      <div id="tablero"><div id="fichas"></div></div>
+      <div id="tablero"><div id="ventana-fichas"><div id="fichas"></div></div></div>
       <div class="abajo">
+        <div class="zoom-barra" id="zoom-barra" hidden>
+          <button class="b3d chico b-cielo" id="zoom-menos" type="button" title="Alejar" aria-label="Alejar"><span class="b-ico">−</span></button>
+          <span id="zoom-nivel" aria-live="polite">100 %</span>
+          <button class="b3d chico b-cielo" id="zoom-mas" type="button" title="Acercar" aria-label="Acercar"><span class="b-ico">＋</span></button>
+          <button class="b3d chico b-cielo" id="zoom-ajustar" type="button" title="Ver todo el tablero" aria-label="Ver todo el tablero"><span class="b-ico">⤢</span></button>
+          <small id="zoom-ayuda">Pellizca para acercar · arrastra para mover</small>
+        </div>
         <div class="titulo-nivel" id="titulo"></div>
         <div class="meta-estrellas" id="meta-estrellas" hidden></div>
         <p id="msg"></p>

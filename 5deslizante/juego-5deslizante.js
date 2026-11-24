@@ -513,6 +513,7 @@ function construir() {
   $("fichas").innerHTML = "";
   fichas.clear();
   $("tablero").style.setProperty("--n", n);
+  zoomReiniciar();
   for (let k = 1; k < n * n; k++) {
     const f = document.createElement("div");
     f.className = "ficha";
@@ -520,7 +521,8 @@ function construir() {
     s.textContent = k;
     s.style.background = color(k);
     f.appendChild(s);
-    f.addEventListener("pointerdown", (e) => { e.preventDefault(); tocar(t.indexOf(k)); });
+    f.dataset.k = k;
+    f.addEventListener("pointerdown", (e) => { if (n >= ZOOM_DESDE) return; e.preventDefault(); tocar(t.indexOf(k)); });   // con zoom (n ≥ 10) la jugada se hace al soltar, ver «Zoom»
     $("fichas").appendChild(f);
     fichas.set(k, f);
   }
@@ -554,6 +556,90 @@ function mover(dx, dy) {                            // flechas: mueve la ficha q
   const f = fh + dy, c = ch + dx;
   if (f < 0 || f >= n || c < 0 || c >= n) return;
   tocar(f * n + c);
+}
+
+// ----- Zoom (tableros de ZOOM_DESDE × ZOOM_DESDE en adelante, en niveles y en Modo libre) -----
+// Se escala #fichas con transform (origen arriba a la izquierda) dentro de #ventana-fichas, que recorta lo que se sale. zx y zy son el desplazamiento en «lados del tablero»
+// (así no cambian si la ventana cambia de tamaño). Acercar: pellizco con dos dedos, rueda del ratón (o Ctrl + rueda), botones ＋ −, o las teclas + y −. Mover: arrastrar.
+// En estos tableros la ficha se mueve al SOLTAR si fue un toque (sin arrastrar ni pellizcar); en los tableros chicos sigue moviéndose al tocar.
+const ZOOM_DESDE = 10;
+let zoom = 1, zx = 0, zy = 0;
+const zoomMax = () => Math.min(8, Math.max(3, n * 0.4));          // 10×10 → ×4 · 20×20 y más → ×8
+const acotarZoom = (v) => Math.max(1, Math.min(zoomMax(), v));
+function zoomAplicar() {
+  zoom = acotarZoom(zoom);
+  zx = Math.max(1 - zoom, Math.min(0, zx));
+  zy = Math.max(1 - zoom, Math.min(0, zy));
+  $("fichas").style.transform = zoom === 1 ? "" : "translate(" + zx * 100 + "%," + zy * 100 + "%) scale(" + zoom + ")";
+  $("zoom-nivel").textContent = Math.round(zoom * 100) + " %";
+  $("zoom-ayuda").hidden = zoom > 1;
+}
+function zoomReiniciar() {                                         // tablero nuevo (o «Ver todo»): sin zoom; la barra solo sale en tableros grandes
+  zoom = 1; zx = 0; zy = 0;
+  $("zoom-barra").hidden = n < ZOOM_DESDE;
+  zoomAplicar();
+}
+function zoomEn(factor, cx, cy) {                                  // multiplica el zoom dejando quieto el punto (cx, cy) de la pantalla (por defecto, el centro)
+  const r = $("ventana-fichas").getBoundingClientRect();
+  if (!r.width || !r.height) return;
+  const mx = cx == null ? 0.5 : (cx - r.left) / r.width, my = cy == null ? 0.5 : (cy - r.top) / r.height;
+  const z2 = acotarZoom(zoom * factor);
+  const px = (mx - zx) / zoom, py = (my - zy) / zoom;              // punto del tablero que está bajo el dedo
+  zx = mx - px * z2; zy = my - py * z2; zoom = z2;
+  zoomAplicar();
+}
+{
+  const vent = $("ventana-fichas"), punteros = new Map();
+  let gesto = null;                                                // { k: ficha tocada, x0, y0, movido, multi }
+  vent.addEventListener("pointerdown", (e) => {
+    if (n < ZOOM_DESDE || jugando === "fin" || pausado) return;
+    e.preventDefault();
+    try { vent.setPointerCapture(e.pointerId); } catch (err) {}
+    punteros.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (punteros.size === 1) {
+      const f = e.target.closest && e.target.closest(".ficha");
+      gesto = { k: f ? Number(f.dataset.k) : 0, x0: e.clientX, y0: e.clientY, movido: false, multi: false };
+    } else if (gesto) gesto.multi = gesto.movido = true;           // segundo dedo: es un pellizco, no un toque
+  });
+  vent.addEventListener("pointermove", (e) => {
+    const p = punteros.get(e.pointerId);
+    if (!p || !gesto) return;
+    const r = vent.getBoundingClientRect();
+    if (punteros.size >= 2) {
+      const otro = [...punteros.entries()].find(([id]) => id !== e.pointerId)[1];
+      const dAntes = Math.hypot(p.x - otro.x, p.y - otro.y), dAhora = Math.hypot(e.clientX - otro.x, e.clientY - otro.y);
+      const mAntesX = (p.x + otro.x) / 2, mAntesY = (p.y + otro.y) / 2, mAhoraX = (e.clientX + otro.x) / 2, mAhoraY = (e.clientY + otro.y) / 2;
+      zx += (mAhoraX - mAntesX) / r.width; zy += (mAhoraY - mAntesY) / r.height;   // primero se mueve con los dos dedos…
+      if (dAntes > 0) zoomEn(dAhora / dAntes, mAhoraX, mAhoraY); else zoomAplicar(); // …y luego se acerca alrededor de ellos
+    } else {
+      if (!gesto.movido && Math.hypot(e.clientX - gesto.x0, e.clientY - gesto.y0) < 8) return;   // todavía puede ser un toque
+      gesto.movido = true;
+      if (zoom > 1) { zx += (e.clientX - p.x) / r.width; zy += (e.clientY - p.y) / r.height; zoomAplicar(); }
+    }
+    p.x = e.clientX; p.y = e.clientY;
+  });
+  const soltar = (e) => {
+    if (!punteros.delete(e.pointerId) || punteros.size || !gesto) return;
+    const g = gesto; gesto = null;
+    if (e.type === "pointerup" && !g.movido && !g.multi && g.k) tocar(t.indexOf(g.k));        // fue un toque: se mueve la ficha
+  };
+  vent.addEventListener("pointerup", soltar);
+  vent.addEventListener("pointercancel", soltar);
+  vent.addEventListener("wheel", (e) => {
+    if (n < ZOOM_DESDE) return;
+    e.preventDefault();
+    const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    zoomEn(Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.0015)), e.clientX, e.clientY);
+  }, { passive: false });
+  $("zoom-mas").addEventListener("click", () => zoomEn(1.5));
+  $("zoom-menos").addEventListener("click", () => zoomEn(1 / 1.5));
+  $("zoom-ajustar").addEventListener("click", zoomReiniciar);
+  addEventListener("keydown", (e) => {
+    if ($("juego").hidden || n < ZOOM_DESDE || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === "+" || e.key === "=") zoomEn(1.25);
+    else if (e.key === "-" || e.key === "_") zoomEn(0.8);
+    else if (e.key === "0") zoomReiniciar();
+  });
 }
 
 const transcurrido = () => Date.now() - inicio;     // milisegundos desde el primer movimiento
