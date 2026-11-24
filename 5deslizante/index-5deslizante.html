@@ -31,6 +31,7 @@
     /* Navegación arriba a la izquierda: botones cuadrados solo con icono (🎮 azul oscuro, ☰ verde claro) */
     .nav-juego .b3d { font-size: 20px; }
     .b-azuloscuro { --c1: #6c8ee0; --c2: #2a4fa8; --c3: #122a66; }
+    .b-azulmarino { --c1: #3f5fa6; --c2: #172f6b; --c3: #070f33; }   /* azul más oscuro que el de 🎮 (solo lo usa «Instalar solo este juego») */
     .b-verdeclaro { --c1: #e4ffd6; --c2: #9be87a; --c3: #4aa22f; }
 
 
@@ -41,8 +42,12 @@
     #btn-inicio-libre, #btn-inicio-mapa { --t: 56px; font-size: 20px; }
     #btn-inicio-jugar { --t: 112px; font-size: 30px; }   /* el doble de alto que Modo libre y Mapa */
     .menu-inicio .b-ico { font-size: 1.15em; margin-right: 8px; }
-    #btn-instalar { --t: 40px; font-size: 14px; margin-top: 8px; border-radius: 14px; }
-    #nota-instalar { margin: 0; text-align: center; color: var(--txt-fondo-suave); font-size: .8rem; line-height: 1.3; }
+    /* 📲 Instalar solo este juego: arriba a la izquierda, justo a la derecha de 🎮 (mismo tamaño y misma altura). No se ve dentro de una partida (ahí la barra de juego usa esa esquina) */
+    #btn-instalar { position: fixed; z-index: 6; top: max(8px, env(safe-area-inset-top)); left: calc(max(8px, env(safe-area-inset-left)) + var(--t) + 8px); font-size: 20px; }
+    body.en-partida #btn-instalar { display: none; }
+    /* Aviso del botón de instalar: burbuja junto al botón; se cierra al tocarla */
+    #nota-instalar { position: fixed; z-index: 7; top: calc(max(8px, env(safe-area-inset-top)) + 48px); left: max(8px, env(safe-area-inset-left)); width: min(320px, calc(100vw - 16px)); margin: 0; padding: 8px 12px; border-radius: 12px; cursor: pointer;
+      background: rgba(10,10,12,.92); color: #f1f2f4; font-size: .8rem; line-height: 1.3; box-shadow: 0 4px 12px rgba(0,0,0,.45); }
     #sesion.tocable { cursor: pointer; }   /* en la app instalada sola: tocar «Iniciar sesión» abre el acceso con Google */
 
     #pantalla-libre { justify-content: flex-start; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
@@ -239,6 +244,8 @@
     <a class="b3d chico b-azuloscuro" id="btn-portal" href="../" title="Juegos: volver al portal" aria-label="Juegos: volver al portal"><span class="b-ico">🎮</span></a>
     <button class="b3d chico b-verdeclaro" id="btn-menu" type="button" title="Volver al menú principal" aria-label="Volver al menú principal" hidden><span class="b-ico">☰</span></button>
   </nav>
+  <button class="b3d chico b-azulmarino" id="btn-instalar" type="button" title="Instalar solo este juego, sin el resto del portal" aria-label="Instalar solo este juego"><span class="b-ico">📲</span></button>
+  <p id="nota-instalar" role="status" hidden></p>
   <div class="hud hud-der"><span class="chip" id="sesion"></span><span class="chip" id="monedas" title="Monedas: de 15 a 80 por cada nivel que pasas por primera vez"></span><span class="chip" id="puntos" title="Puntos del juego: de 80 a 250 por cada partida que ganas"></span></div>
   <!-- Ya dentro del juego: botón verde con el nombre del nivel; al tocarlo pregunta si quieres salir (ventana con botón rojo) y te lleva al mapa -->
   <div class="barra-fila" id="barra-fila" hidden>
@@ -252,8 +259,6 @@
         <button class="b3d txt b-morado" id="btn-inicio-libre" type="button"><span class="b-ico">♾️</span><span>Modo libre</span></button>
         <button class="b3d txt b-verde" id="btn-inicio-jugar" type="button"><span class="b-ico">▶</span><span>Jugar</span></button>
         <button class="b3d txt b-azul" id="btn-inicio-mapa" type="button"><span class="b-ico">🗺️</span><span>Mapa</span></button>
-        <button class="b3d txt chico b-cielo" id="btn-instalar" type="button" title="Instalar este juego solo, sin el resto del portal"><span class="b-ico">📲</span><span>Instalar solo este juego</span></button>
-        <p id="nota-instalar" role="status" hidden></p>
       </div>
     </section>
 

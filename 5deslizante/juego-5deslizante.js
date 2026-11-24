@@ -433,6 +433,7 @@ function mostrar(nombre) {
   for (const p of ["pantalla-inicio", "pantalla-libre", "juego"]) $(p).hidden = p !== nombre;
   if (nombre !== "pantalla-niveles") mapa.cerrar();
   $("barra-juego").hidden = nombre !== "juego";
+  document.body.classList.toggle("en-partida", nombre === "juego");   // 📲 Instalar solo se ve fuera de las partidas
   $("barra-fila").hidden = nombre !== "juego";
   $("btn-mapa-juego").hidden = modo === "libre";   // el 🗺️ solo en los niveles (el Modo libre no tiene mapa)
   pintarBotonMenu();
@@ -1022,6 +1023,7 @@ const notaInstalar = (t) => { $("nota-instalar").textContent = t; $("nota-instal
 addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); eventoInstalar = e; });
 addEventListener("appinstalled", () => { eventoInstalar = null; $("btn-instalar").hidden = true; notaInstalar("✅ Listo: busca «Deslizante» en tu pantalla de inicio."); });
 $("btn-instalar").hidden = yaEnApp;   // ya dentro de una app instalada no tiene sentido ofrecerlo
+$("nota-instalar").addEventListener("click", () => notaInstalar(""));   // tocar el aviso lo cierra
 $("btn-instalar").addEventListener("click", async () => {
   if (eventoInstalar) { const e = eventoInstalar; eventoInstalar = null; e.prompt(); await e.userChoice.catch(() => {}); return; }
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
