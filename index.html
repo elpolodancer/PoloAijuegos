@@ -125,7 +125,7 @@
     .perfil > div { min-width: 0; display: flex; flex-direction: column; }
     .perfil b, .perfil small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .perfil small { color: var(--suave); }
-    .op-nota { margin: 0; font-size: .85rem; line-height: 1.4; color: var(--suave); }
+    .op-nota { margin: 0; font-size: .85rem; line-height: 1.4; color: var(--suave); white-space: pre-line; overflow-wrap: anywhere; }
     .qr-zona { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 14px; text-align: center; background: var(--fondo); border: 2px solid var(--borde); border-radius: 14px; }
     .qr-zona h3 { margin: 0; font-size: 1rem; }
     .qr-zona canvas { width: min(100%, 220px); height: auto; aspect-ratio: 1; border-radius: 10px; background: #fff; }
@@ -393,10 +393,20 @@
         const malos = [];
         for (const ic of m.icons || []) {
           const u = new URL(ic.src, r.url).href;
-          const ancho = await new Promise((ok) => { const i = new Image(); i.onload = () => ok(i.naturalWidth); i.onerror = () => ok(0); i.src = u; });
-          if (!ancho) malos.push(ic.src);
+          let motivo = "";
+          try {
+            const x = await fetch(u, { cache: "no-store" });
+            const tipo = x.headers.get("content-type") || "";
+            if (!x.ok) motivo = "error " + x.status;
+            else if (!tipo.startsWith("image/")) motivo = "llega como «" + (tipo || "desconocido") + "», no como imagen";
+          } catch (e) { motivo = "no se pudo descargar"; }
+          if (!motivo) {
+            const ancho = await new Promise((ok) => { const i = new Image(); i.onload = () => ok(i.naturalWidth); i.onerror = () => ok(0); i.src = u; });
+            if (!ancho) motivo = "se descarga pero no se puede abrir como imagen";
+          }
+          if (motivo) malos.push("\n• " + u + " → " + motivo);
         }
-        if (malos.length) return "Estos iconos del manifest no se pueden cargar y sin ellos Chrome no deja instalar: " + malos.join(", ") + ". Revisa que existan en esa ruta del repositorio.";
+        if (malos.length) return "Chrome no puede cargar estos iconos del manifest, y sin ellos no deja instalar:" + malos.join("") + "\nCopia una de esas direcciones en una pestaña de Chrome para comprobarlo. GitHub distingue mayúsculas: la carpeta y los archivos deben llamarse exactamente igual que en el manifest.";
       } catch (e) { return "No pude revisar el manifest del portal (¿sin internet?)."; }
       return "Chrome no ofrece instalar ahora. Lo más común: el portal ya está instalado en este dispositivo (búscalo en tu pantalla de inicio, o desinstálalo y recarga esta página) o estás en una pestaña de incógnito. Si no, abre el menú de Chrome (⋮) y busca «Instalar aplicación».";
     }
