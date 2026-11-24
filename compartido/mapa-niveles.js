@@ -273,7 +273,7 @@ function azarDe(texto) {
   return () => { s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 // Pinta sobre la silueta (ya verde): manchas de pasto, flores, montañas y árboles. «libre(x, y, m)» dice si un punto cae donde va el botón «Continuar» (ahí no se pone nada).
-function pintarTierra(svg, dSil, codigo, w, hh, id, dentro, boton, banderita) {
+function pintarTierra(svg, dSil, codigo, w, hh, id, dentro, boton, banderita, ligero = false) {   // ligero = menos intentos (para dibujar muchos países a la vez en el mapa del mundo)
   const rnd = azarDe(codigo), lado = Math.max(w, hh);
   // «tapado»: ahí va el botón «Continuar» o la banderita, así que no se pone nada (m = margen extra)
   const tapado = (x, y, m = 0) => (Math.abs(x - boton.x) < boton.kx + m && Math.abs(y - boton.y) < boton.ky + m) ||
@@ -289,7 +289,7 @@ function pintarTierra(svg, dSil, codigo, w, hh, id, dentro, boton, banderita) {
   }
   // flores chiquitas
   const FLORES = ["#ffffff", "#ffe066", "#ff9ecb", "#ffb347"];
-  for (let i = 0, n = 0; i < 160 && n < 22; i++) {
+  for (let i = 0, n = 0; i < (ligero ? 60 : 160) && n < (ligero ? 8 : 22); i++) {
     const x = rnd() * w, y = rnd() * hh;
     if (!dentro(x, y) || tapado(x, y, 6)) continue;
     el("circle", { cx: x.toFixed(1), cy: y.toFixed(1), r: (0.9 + rnd() * 0.7).toFixed(1), fill: FLORES[Math.floor(rnd() * FLORES.length)] }, suelo);
@@ -297,7 +297,7 @@ function pintarTierra(svg, dSil, codigo, w, hh, id, dentro, boton, banderita) {
   }
   // montañas (pocas, con nieve arriba)
   const sM = acotar(lado * 0.055, 9, 17), montes = [];
-  for (let i = 0, n = 0, meta = rnd() < 0.5 ? 3 : 2; i < 220 && n < meta; i++) {
+  for (let i = 0, n = 0, meta = rnd() < 0.5 ? 3 : 2; i < (ligero ? 90 : 220) && n < meta; i++) {
     const x = rnd() * w, y = rnd() * hh;
     if (!dentro(x, y) || !dentro(x - sM, y) || !dentro(x + sM, y) || !dentro(x, y - 1.3 * sM) || tapado(x, y - sM * 0.6, sM)) continue;
     if (montes.some((m) => Math.hypot(m.x - x, m.y - y) < sM * 3.2)) continue;
@@ -313,7 +313,7 @@ function pintarTierra(svg, dSil, codigo, w, hh, id, dentro, boton, banderita) {
   }
   // árboles: redondos y pinos, sin salirse de la costa, sin amontonarse y sin quedar debajo del botón «Continuar»
   const r = acotar(lado * 0.022, 4.5, 8), arboles = [];
-  for (let i = 0; i < 1100 && arboles.length < 52; i++) {
+  for (let i = 0; i < (ligero ? 320 : 1100) && arboles.length < (ligero ? 26 : 52); i++) {
     const x = rnd() * w, y = rnd() * hh, pino = rnd() < 0.4;
     const alto = pino ? 3.3 : 2.3;
     if (!dentro(x, y) || !dentro(x - r, y - r) || !dentro(x + r, y - r) || !dentro(x, y - alto * r)) continue;
@@ -474,6 +474,7 @@ function crearAgua(svg, id, dSilueta, caja, objetivo, desde, op = {}) {
   const avisarLlegada = () => { if (!llegado) { llegado = true; if (op.alLlegar) op.alLlegar(); } };
   return {
     pintar,
+    nivel: () => f, meta: objetivo,   // dónde va el agua y a dónde llega (para seguir la animación si el mapa se redibuja a la mitad)
     quieto() { f = objetivo; chor = 0; jv = 0; ag = 0; pintar(0); avisarLlegada(); },
     tick(dt, t) {
       if (espera > 0) espera -= dt;
@@ -507,10 +508,12 @@ export function montarMapa(o) {
   const CLAVE_MUNDO = pre + "-mundo-visto";  // «1» cuando ya entraste al mundo (apaga el aviso de novedad)
 
   // ---------- Memoria de dónde estaba el agua ----------
+  let reanudo = {};   // { zona: nivel del agua } de las animaciones que un redibujado interrumpió
   function memoriaAgua(zona, objetivo) {
     let m = {};
     try { m = JSON.parse(localStorage.getItem(CLAVE_AGUA) || "{}") || {}; } catch (e) {}
-    const antes = typeof m[zona] === "number" ? m[zona] : objetivo; // primera vez: sin animación
+    let antes = typeof m[zona] === "number" ? m[zona] : objetivo; // primera vez: sin animación
+    if (typeof reanudo[zona] === "number") { antes = Math.min(reanudo[zona], objetivo); delete reanudo[zona]; }   // el mapa se redibujó con el agua a medio subir: sigue desde ahí (con su jarra)
     m[zona] = objetivo;
     try { localStorage.setItem(CLAVE_AGUA, JSON.stringify(m)); } catch (e) {}
     return antes;
@@ -832,13 +835,14 @@ export function montarMapa(o) {
   // --- SOLO PAÍSES con unPais · botón «Mapa»: el mundo en blanco; solo se dibuja (con su trazo) cada país ya desbloqueado y al tocarlo se abren sus 20 niveles ---
   // Las siluetas salen de compartido/contornos-paises.js y su lugar en el mundo de compartido/posiciones-paises.js (se cargan aparte; mientras llegan se ve el mundo en blanco).
   // Con zoom (rueda, pellizco, arrastrar) se acerca: los países chicos se marcan con un punto y, al acercar, se ven sus nombres.
+  const tierraMundo = new Map();   // código de país → su tierra decorada ya dibujada (para el mapa del mundo)
   function vistaMundoPaises() {
     const p = prog();
     const meta = enfoque != null ? enfoque : p.paisActual;   // el país desde el que se abrió el Mapa: ahí se acerca la vista y a él vuelve «País»
     enfoque = null;
     titulo.textContent = "🗺️ Mapa";
     info.textContent = "💧 " + p.paisesHechos + " de " + NUM_PAISES + " países completados · toca un país para ver sus niveles";
-    boton("País", "◀", "b-montana", () => ir("pais", meta)).setAttribute("aria-label", "Volver al país");
+    botonPais(() => ir("pais", meta), PAISES_ORDEN[meta]).setAttribute("aria-label", "Volver al país");   // con la bandera del país donde se está jugando
     botonContinuar();
     for (const x of o.botonesExtra || []) boton(x.texto, x.icono || "•", x.clase || "b-azul", x.fn);
     if (o.alInfo) boton("Info", "ℹ️", "b-azul", o.alInfo);
@@ -860,7 +864,7 @@ export function montarMapa(o) {
       const pos = POSICIONES[codigo], c = CONTORNOS[codigo];
       if (!pos || !c) return;
       const hechos = acotar(p.hecho - bs, 0, NIVELES_POR_ETAPA), completo = hechos >= NIVELES_POR_ETAPA, actual = !completo && i === p.paisActual;
-      const relleno = completo ? "#ffd23f" : actual ? "#ffb257" : VERDE_ARRIBA, linea = completo ? "#a8780b" : actual ? COLOR_ACTUAL : LINEA_TIERRA;
+      const relleno = completo ? "#ffd23f" : actual ? "#ffb257" : VERDE_ARRIBA, linea = completo ? "#a8780b" : actual ? COLOR_ACTUAL : LINEA_TIERRA;   // relleno: solo para el puntito de los países diminutos
       const nombre = nombrePais(codigo);
       const g = el("g", { class: "m-punto" }, svg);
       el("title", {}, g).textContent = nombre;
@@ -868,7 +872,24 @@ export function montarMapa(o) {
       if (pos.length === 2) { [cx, cy] = P.p(pos[0], pos[1]); tam = 0; }   // país diminuto sin silueta: solo un punto
       else {
         const [x0, y0] = P.p(pos[0], pos[1]), a = 2 * pos[2], dd = 2 * pos[3];   // 2 = unidades del mapa por grado
-        el("path", { d: c.d, transform: "matrix(" + a + " 0 0 " + dd + " " + x0.toFixed(2) + " " + y0.toFixed(2) + ")", fill: relleno, stroke: linea, "stroke-width": 1.6, "stroke-linejoin": "round", "vector-effect": "non-scaling-stroke" }, g);
+        const matriz = "matrix(" + a + " 0 0 " + dd + " " + x0.toFixed(2) + " " + y0.toFixed(2) + ")";
+        // La tierra se ve como en el mapa del país: playa, pasto, flores, montañas y árboles (sin bandera). Se dibuja en las coordenadas de la silueta y se coloca con la misma matriz.
+        // La decoración de cada país es siempre la misma, así que se guarda ya armada y no se vuelve a calcular al reabrir el mapa.
+        const gt = el("g", { transform: matriz }, g);
+        if (tierraMundo.has(codigo)) gt.innerHTML = tierraMundo.get(codigo);
+        else {
+          const idT = "w" + codigo;
+          const gr = el("linearGradient", { id: "tierra" + idT, x1: 0, y1: 0, x2: 0, y2: 1 }, el("defs", {}, gt));
+          el("stop", { offset: 0, "stop-color": VERDE_ARRIBA }, gr);
+          el("stop", { offset: 1, "stop-color": VERDE_ABAJO }, gr);
+          el("path", { d: c.d, fill: "rgba(0,40,0,.22)", transform: "translate(0 5)" }, gt);
+          el("path", { d: c.d, fill: PLAYA, stroke: PLAYA, "stroke-width": 9, "stroke-linejoin": "round", "pointer-events": "none" }, gt);
+          const silT = el("path", { d: c.d, fill: "url(#tierra" + idT + ")" }, gt);
+          const dentroT = (x, y) => { try { return silT.isPointInFill(new DOMPoint(x, y)); } catch (e) { return false; } };
+          try { pintarTierra(gt, c.d, codigo, c.w, c.h, idT, dentroT, { x: -1e9, y: -1e9, kx: 0, ky: 0 }, null, true); } catch (e) {}
+          if (CONTORNOS && POSICIONES) tierraMundo.set(codigo, gt.innerHTML);
+        }
+        el("path", { d: c.d, transform: matriz, fill: "none", stroke: linea, "stroke-width": completo ? 2.2 : 1.6, "stroke-linejoin": "round", "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, g);   // el borde marca el estado: dorado = completo, naranja = actual
         cx = x0 + c.w * a / 2; cy = y0 + c.h * dd / 2; tam = Math.max(c.w * a, c.h * dd);
       }
       if (tam < 40) {   // chico para el dedo: un punto visible y una zona de toque más grande (su tamaño en pantalla lo ajusta «actualizar»)
@@ -1017,6 +1038,7 @@ export function montarMapa(o) {
           setTimeout(() => { agua.quitar(); aguas = aguas.filter((a) => a !== agua); }, 1400);   // ya no hace falta la botella de este país
         } : null,
       });
+      agua.zona = "pais" + indice;
       aguas.push(agua);
     }
     // la banderita va encima del agua y se queda también cuando el país está completo (con unPais ya no lo cubre la bandera grande)
@@ -1034,6 +1056,8 @@ export function montarMapa(o) {
 
   function pintar() {
     detener();
+    // Si algo redibuja el mapa (sincronizar con la cuenta, llegar las siluetas…) mientras el agua sube, la animación continúa desde donde iba en vez de saltar al final y perder la jarra
+    for (const a of aguas) if (a.zona && a.meta - a.nivel() > 0.004) reanudo[a.zona] = a.nivel();
     aguas = [];
     botella = null;
     cuerpo.replaceChildren();

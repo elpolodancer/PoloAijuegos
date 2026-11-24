@@ -134,14 +134,14 @@ const mapa = montarMapa({
     // estrellitas del nivel (vacías si todavía no se pasa); los tableros sin estrellas no muestran nada
     return { sub: mk ? fmtMs(mk.ms) : "", aria, estrellasHtml: conEstrellas(NIVELES[n - 1].n) ? htmlEstrellas(tierNivel(n - 1)) : "" };
   },
-  resumenEstrellas: (desde, hasta) => {   // estrellas del país: doradas y moradas ganadas / posibles (las moradas reemplazan a las doradas, así que cada nivel da como máximo 3 en total)
+  resumenEstrellas: (desde, hasta) => {   // estrellas del país: doradas y moradas ganadas / posibles (las moradas reemplazan a las doradas en el nivel, pero en este contador cada morada también suma como dorada)
     let posibles = 0, oro = 0, mor = 0;
     for (let n = desde; n <= hasta; n++) {
       const lv = NIVELES[n - 1];
       if (!lv || !conEstrellas(lv.n)) continue;
       posibles += 3;
       const t = tierNivel(n - 1), m = Math.max(0, t - 3);
-      mor += m; oro += Math.min(t, 3) - m;
+      mor += m; oro += Math.min(t, 3);   // una estrella morada también cuenta como dorada (ya no se puede ganar la dorada de ese escalón): 3 moradas = 3 doradas + 3 moradas
     }
     if (!posibles) return '<small>Los niveles de este país no dan estrellas</small>';
     return '<span><i class="est oro"></i>' + oro + ' / ' + posibles + ' <small>doradas</small></span>' +
