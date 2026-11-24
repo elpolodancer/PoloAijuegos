@@ -1001,11 +1001,48 @@ addEventListener("keydown", (e) => {
   if (d) { e.preventDefault(); mover(d[0], d[1]); }
 });
 
+// ----- Instalar SOLO este juego (manifest-5deslizante.webmanifest + sw-5deslizante.js; no baja ningún otro juego del portal) -----
+// ES_APP_SOLA = abierto desde SU PROPIO ícono instalado (start_url trae «?app=1»; se recuerda en sessionStorage por si se recarga). Ahí el portal no existe:
+// se oculta 🎮 (llevaría fuera del alcance de la app) y «Sin sesión» pasa a ser un botón para iniciar sesión (sin portal no habría dónde hacerlo).
+// Abierto dentro de la app del portal o en el navegador, todo sigue como siempre.
+const ES_APP_SOLA = (() => {
+  try { if (new URLSearchParams(location.search).has("app")) sessionStorage.setItem("deslizante_app", "1"); } catch (e) {}
+  let marca = false; try { marca = sessionStorage.getItem("deslizante_app") === "1"; } catch (e) {}
+  return marca && (matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: fullscreen)").matches || navigator.standalone === true);
+})();
+if (ES_APP_SOLA) $("btn-portal").hidden = true;
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw-5deslizante.js", { scope: "./" }).catch(() => {});
+
+const yaEnApp = matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: fullscreen)").matches || navigator.standalone === true;
+let eventoInstalar = (window.__pwa && window.__pwa.evento) || null;
+const notaInstalar = (t) => { $("nota-instalar").textContent = t; $("nota-instalar").hidden = !t; };
+addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); eventoInstalar = e; });
+addEventListener("appinstalled", () => { eventoInstalar = null; $("btn-instalar").hidden = true; notaInstalar("✅ Listo: busca «Deslizante» en tu pantalla de inicio."); });
+$("btn-instalar").hidden = yaEnApp;   // ya dentro de una app instalada no tiene sentido ofrecerlo
+$("btn-instalar").addEventListener("click", async () => {
+  if (eventoInstalar) { const e = eventoInstalar; eventoInstalar = null; e.prompt(); await e.userChoice.catch(() => {}); return; }
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const otraApp = /FBAN|FBAV|Instagram|WhatsApp|MicroMessenger|TikTok|Snapchat|Line\/|; wv\)/i.test(navigator.userAgent);
+  notaInstalar(ios ? "En iPhone/iPad: toca Compartir (el cuadro con la flecha) y luego «Agregar a pantalla de inicio»."
+    : otraApp ? "Estás en el navegador interno de otra app (WhatsApp, Facebook, Instagram…) y ahí no se puede instalar. Toca ⋮ y elige «Abrir en Chrome»."
+    : "Abre el menú de Chrome (⋮) y elige «Instalar aplicación» o «Agregar a la pantalla de inicio». Si no aparece, comprueba que no estés en modo incógnito y que Chrome esté actualizado.");
+});
+let haySesion = false;
+$("sesion").addEventListener("click", async () => {
+  if (!ES_APP_SOLA || haySesion) return;
+  try { await (await import("../compartido/jugador.js")).entrar(); }
+  catch (e) { aviso("No se pudo iniciar sesión. Revisa tu conexión."); }
+});
+
 mostrar("pantalla-inicio");   // única vez que se ve: al abrir el juego
 
 // ----- Sesión y nube (opcionales: si Firebase no carga, el juego igual funciona) -----
 import("../compartido/jugador.js").then(({ alCambiarSesion }) =>
-  alCambiarSesion((u) => ($("sesion").textContent = u ? (u.displayName || "Jugador") : "Sin sesión"))
+  alCambiarSesion((u) => {
+    haySesion = !!u;
+    $("sesion").textContent = u ? (u.displayName || "Jugador") : ES_APP_SOLA ? "👤 Iniciar sesión" : "Sin sesión";
+    $("sesion").classList.toggle("tocable", ES_APP_SOLA && !u);
+  })
 ).catch(() => {});
 
 // Niveles pasados: gana el nivel más alto (pasado en cualquier sitio = pasado). Récords: por nivel (o por tamaño en el modo libre),
