@@ -1,6 +1,6 @@
 // Ruta: 5deslizante/juego-5deslizante.js
 // Puzle deslizante (estilo «15 puzzle»): ordena las fichas numeradas de 1 en adelante, con el hueco al final.
-// Al abrir se ve el mapa del país donde va el jugador (Mapa · Niveles · Modo libre arriba y «Continuar · Nivel N» en el centro). El mapa estándar de países
+// Al abrir se ve UNA SOLA VEZ la pantalla de inicio (♾️ Modo libre · ▶ Jugar · 🗺️ Mapa); de ahí en adelante el «menú principal» es el mapa del país donde va el jugador (Mapa · Niveles · Modo libre arriba y «Continuar · Nivel N» en el centro). El mapa estándar de países
 // (compartido/mapa-niveles.js, modo soloPaises): 3 900 niveles, 20 por país, con México primero y China al final (orden en compartido/etapas-mapa.js).
 // Los 3 900 niveles están en niveles-5deslizante.js (si algún día falta alguno, el mapa muestra 🚧).
 import { encolarNivel, leerCola, guardarCola } from "../compartido/cola-puntos.js";
@@ -412,12 +412,14 @@ function celebrar(tier, i, monedas = 0) {
 }
 
 // ----- Pantallas -----
-// El MENÚ PRINCIPAL es el MAPA (compartido/mapa-niveles.js, vista del país donde va el jugador): al abrir el juego o recargar con F5 se ve directo el mapa,
+// PANTALLA DE INICIO («pantalla-inicio»): se muestra solo al abrir el juego (o recargar con F5), una vez. Nada vuelve a ella: «inicio» y el ☰ siempre llevan al mapa.
+// Su ☰ no se muestra. Jugar = el nivel que toca; Modo libre = pantalla del Modo libre; Mapa = el mapa del país donde va el jugador.
+// Después, el MENÚ PRINCIPAL es el MAPA (compartido/mapa-niveles.js, vista del país donde va el jugador),
 // con Mapa · Niveles · Modo libre · Info y «Continuar» en el centro del país.
 // «pantalla-niveles» = el mapa, que se dibuja encima de todo y no es una sección; «inicio» = abrir el mapa.
 function pintarBotonMenu() {
   const enMapa = mapa.abierto();
-  $("btn-menu").hidden = enMapa && mapaEnPrincipal;   // en el mapa principal no se muestra; en sus vistas internas (Mapa, Niveles) vuelve «Atrás»
+  $("btn-menu").hidden = !$("pantalla-inicio").hidden || (enMapa && mapaEnPrincipal);   // tampoco se ve en la pantalla de inicio   // en el mapa principal no se muestra; en sus vistas internas (Mapa, Niveles) vuelve «Atrás»
   const texto = enMapa ? "Atrás" : !$("juego").hidden && modo === "libre" ? "Pausa" : "Volver al menú principal";
   $("btn-menu").innerHTML = '<span class="b-ico">☰</span>'; // cuadrado, solo icono: el texto va en title y aria-label
   $("btn-menu").title = texto; $("btn-menu").setAttribute("aria-label", texto);
@@ -425,7 +427,7 @@ function pintarBotonMenu() {
 function mostrar(nombre) {
   if (nombre === "inicio") { abrirMapa(); return; }
   if (nombre !== "pantalla-niveles") quitarCelebracion();
-  for (const p of ["pantalla-libre", "juego"]) $(p).hidden = p !== nombre;
+  for (const p of ["pantalla-inicio", "pantalla-libre", "juego"]) $(p).hidden = p !== nombre;
   if (nombre !== "pantalla-niveles") mapa.cerrar();
   $("barra-juego").hidden = nombre !== "juego";
   pintarBotonMenu();
@@ -975,6 +977,10 @@ function abrirPartidas(para) {
 }
 
 // ----- Botones y teclado -----
+// Pantalla de inicio (solo al abrir): Jugar = el nivel que toca · Modo libre · Mapa
+$("btn-inicio-jugar").addEventListener("click", () => jugarNivel(Math.min(TOTAL, hechoMax() + 1) - 1));
+$("btn-inicio-libre").addEventListener("click", () => mostrar("pantalla-libre"));
+$("btn-inicio-mapa").addEventListener("click", () => abrirMapa());
 $("btn-libre-jugar").addEventListener("click", () => jugarLibre(libreN));
 $("btn-mas-tableros").addEventListener("click", () => { libreMas = true; pintarLibre(); });
 $("btn-libre-guardadas").addEventListener("click", () => abrirPartidas("cargar"));
@@ -991,7 +997,7 @@ addEventListener("keydown", (e) => {
   if (d) { e.preventDefault(); mover(d[0], d[1]); }
 });
 
-mostrar("inicio");
+mostrar("pantalla-inicio");   // única vez que se ve: al abrir el juego
 
 // ----- Sesión y nube (opcionales: si Firebase no carga, el juego igual funciona) -----
 import("../compartido/jugador.js").then(({ alCambiarSesion }) =>

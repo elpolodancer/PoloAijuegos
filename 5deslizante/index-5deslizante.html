@@ -22,6 +22,15 @@
     .b-azuloscuro { --c1: #6c8ee0; --c2: #2a4fa8; --c3: #122a66; }
     .b-verdeclaro { --c1: #e4ffd6; --c2: #9be87a; --c3: #4aa22f; }
 
+
+    /* ----- Pantalla de inicio (solo al abrir el juego): Modo libre (morado) · Jugar (el doble de alto) · Mapa ----- */
+    #pantalla-inicio { justify-content: flex-start; overflow-y: auto; }
+    .menu-inicio { display: flex; flex-direction: column; align-items: stretch; gap: 12px; width: min(300px, 86vw); margin: auto; }
+    .menu-inicio .b3d.txt { width: 100%; margin: 0 0 5px; border-radius: 18px; }
+    #btn-inicio-libre, #btn-inicio-mapa { --t: 56px; font-size: 20px; }
+    #btn-inicio-jugar { --t: 112px; font-size: 30px; }   /* el doble de alto que Modo libre y Mapa */
+    .menu-inicio .b-ico { font-size: 1.15em; margin-right: 8px; }
+
     #pantalla-libre { justify-content: flex-start; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
     #pantalla-libre h2 { margin: 0; font-size: 1.4rem; }
     /* Modo libre (estándar 7.2): Dificultad (5 emojis) y Tablero (tamaños). Usa .modo-grupo y .modo-fila de compartido/inmersivo.css */
@@ -196,7 +205,9 @@
       .datos div { padding: 3px 4px; font-size: .6rem; }
       .datos b { font-size: .95rem; }
       .abajo { left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; top: calc(max(8px, env(safe-area-inset-top)) + 118px); width: 190px; }
-      #pantalla-libre { padding-top: calc(96px + env(safe-area-inset-top, 0px)); }
+      #pantalla-libre, #pantalla-inicio { padding-top: calc(96px + env(safe-area-inset-top, 0px)); }
+      #btn-inicio-libre, #btn-inicio-mapa { --t: 44px; font-size: 17px; }
+      #btn-inicio-jugar { --t: 88px; font-size: 26px; }
     }
   </style>
 </head>
@@ -211,6 +222,14 @@
   <button class="b3d txt b-verde barra-nombre" id="barra-juego" type="button" title="Salir al mapa" hidden><span id="nombre-nivel"></span></button>
 
   <main>
+    <section class="pantalla" id="pantalla-inicio" hidden>
+      <div class="menu-inicio">
+        <button class="b3d txt b-morado" id="btn-inicio-libre" type="button"><span class="b-ico">♾️</span><span>Modo libre</span></button>
+        <button class="b3d txt b-verde" id="btn-inicio-jugar" type="button"><span class="b-ico">▶</span><span>Jugar</span></button>
+        <button class="b3d txt b-azul" id="btn-inicio-mapa" type="button"><span class="b-ico">🗺️</span><span>Mapa</span></button>
+      </div>
+    </section>
+
     <section class="pantalla" id="pantalla-libre" hidden>
       <h2>♾️ Modo libre</h2>
       <p class="modo-grupo">Dificultad</p>
