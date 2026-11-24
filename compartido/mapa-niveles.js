@@ -34,6 +34,7 @@
 //     columnas: 5,                             // columnas fijas en la lista de niveles de cada etapa (sin esto, las que quepan en la pantalla)
 //     resumenEstrellas: (primerNivel, ultimoNivel) => html,   // (con unPais) línea de estrellas del país: va bajo «N de 20 niveles completados» y sobre los niveles; "" = no se muestra
 //     infoNivel: (n) => ({ sub, aria, clase, sinMarca, estrellasHtml }),   // estrellasHtml = estrellitas del nivel (entre el número y el tiempo)
+//     etiquetaContinuar: () => "▶ Jugar",    // (con unPais) texto de la línea de arriba del botón del centro (por defecto «▶ Continuar»)
 //     botonesExtra: [{ icono, texto, clase, fn }], // van a la derecha de «Continuar» (por ejemplo ♾️ Juego libre)
 //     alInfo: () => { ... },                   // botón «Info» de la vista principal
 //     avisoPrincipal: () => "texto",           // línea de información bajo el título de la vista principal
@@ -618,7 +619,7 @@ export function montarMapa(o) {
     const b = h("button", "b3d txt b-verde m-centro");
     b.type = "button";
     b.classList.add("m-dos");
-    b.append(h("span", "m-l1", "▶ Continuar"), h("span", "m-l2", "Nivel " + n));
+    b.append(h("span", "m-l1", o.etiquetaContinuar ? o.etiquetaContinuar() : "▶ Continuar"), h("span", "m-l2", "Nivel " + n));
     b.addEventListener("click", () => o.jugarNivel(n));
     b.style.visibility = "hidden";   // hasta tener su sitio (se ve en el siguiente cuadro)
     cuerpo.appendChild(b);

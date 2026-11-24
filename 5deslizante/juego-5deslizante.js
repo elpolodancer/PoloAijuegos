@@ -120,6 +120,7 @@ let mapaEnPrincipal = true;                        // ¿el mapa está en su vist
 const mapa = montarMapa({
   prefijo: ID,
   etapas: ETAPAS,
+  etiquetaContinuar: () => (hechoMax() === 0 ? "▶ Jugar" : "▶ Continuar"),   // el botón del centro del país dice «Jugar» mientras no se haya pasado ningún nivel
   unPais: true,                                    // se abre el país donde va el jugador; 🗺️ Mapa = el mundo con los países abiertos y, al tocar uno, sus 20 niveles
   columnas: 4,                                     // los 20 niveles de un país: 4 columnas × 5 filas
   botonesExtra: [{ icono: "♾️", texto: "Modo libre", clase: "b-morado", fn: () => mostrar("pantalla-libre") }],   // el Modo libre se abre desde el mapa
@@ -1005,7 +1006,8 @@ function abrirPartidas(para) {
 
 // ----- Botones y teclado -----
 // Pantalla de inicio (solo al abrir): Jugar = el nivel que toca · Modo libre · Mapa
-$("btn-inicio-jugar").addEventListener("click", () => jugarNivel(Math.min(TOTAL, hechoMax() + 1) - 1));
+// Primera vez (ningún nivel pasado): «Jugar» no abre el nivel 1 directo, abre el mapa de México (con ▶ Jugar en su centro y arriba Mapa · Niveles · Modo libre). Después, sigue en el nivel que toca.
+$("btn-inicio-jugar").addEventListener("click", () => { if (hechoMax() === 0) abrirMapa(1); else jugarNivel(Math.min(TOTAL, hechoMax() + 1) - 1); });
 $("btn-inicio-libre").addEventListener("click", () => mostrar("pantalla-libre"));
 $("btn-inicio-mapa").addEventListener("click", () => abrirMapa());
 $("btn-libre-jugar").addEventListener("click", () => jugarLibre(libreN));
