@@ -124,6 +124,7 @@ html.oscura .m-raiz{background:url("${MADERA_OSCURA}") center/cover no-repeat,#1
 .m-cuerpo>svg.m-botella{cursor:default;touch-action:auto}
 .m-cuerpo.m-uno{position:relative}
 .m-cuerpo.m-pop{overflow:hidden;overflow:clip;overflow-clip-margin:48px} /* durante el «pop» del país: lo que se hincha NO crea barras de desplazamiento ni mueve la vista (clip con margen de 48 px; hidden donde no existe clip) */
+.b3d.b-montana{--c1:#74b57f;--c2:#2f7a45;--c3:#16452a}   /* botón «País»: verde oscuro de monte, como los pinos y el relieve del mapa */
 .m-centro.b3d{--t:46px;position:absolute;z-index:2;margin:0;font-size:16px}
 .m-centro.m-dos{height:auto;min-height:54px;flex-direction:column;gap:2px;padding:6px 20px;line-height:1.1}   /* «Continuar» en una línea y el nivel en la de abajo */
 .m-centro.m-dos .m-l2{font-size:13px;font-weight:700;opacity:.95}
@@ -750,7 +751,7 @@ export function montarMapa(o) {
     const p = prog();
     titulo.textContent = UN_PAIS ? "🗺️ Mapa" : "🌍 Niveles";
     if (UN_PAIS) {
-      boton("País", "◀", "b-cielo", () => ir("pais", indice)).setAttribute("aria-label", "Volver al país");
+      boton("País", "◀", "b-montana", () => ir("pais", indice)).setAttribute("aria-label", "Volver al país");
       info.textContent = "Toca un país para abrirlo";
     } else info.textContent = "💧 " + p.paisesHechos + " de " + NUM_PAISES + " países completados · toca un país para ver su mapa" + (o.avisoPrincipal && o.avisoPrincipal() ? " · " + o.avisoPrincipal() : "");
     botonContinuar();
@@ -798,7 +799,7 @@ export function montarMapa(o) {
     enfoque = null;
     titulo.textContent = "🗺️ Mapa";
     info.textContent = "💧 " + p.paisesHechos + " de " + NUM_PAISES + " países completados · toca un país para ver sus niveles";
-    boton("País", "◀", "b-cielo", () => ir("pais", meta)).setAttribute("aria-label", "Volver al país");
+    boton("País", "◀", "b-montana", () => ir("pais", meta)).setAttribute("aria-label", "Volver al país");
     botonContinuar();
     for (const x of o.botonesExtra || []) boton(x.texto, x.icono || "•", x.clase || "b-azul", x.fn);
     if (o.alInfo) boton("Info", "ℹ️", "b-azul", o.alInfo);
@@ -871,7 +872,7 @@ export function montarMapa(o) {
     titulo.textContent = nombrePais(codigo);
     info.textContent = hechos + " de " + NIVELES_POR_ETAPA + " niveles completados";
     const mio = indice;
-    boton("País", "◀", "b-cielo", () => ir("pais", mio));
+    boton("País", "◀", "b-montana", () => ir("pais", mio));
     boton("Mapa", "🗺️", "b-cielo", () => { enfoque = mio; ir("mundo"); });   // de vuelta al mundo, acercado a este país
     botonContinuar();
     rejillaNiveles(base);
