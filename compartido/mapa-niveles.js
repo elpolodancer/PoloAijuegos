@@ -338,35 +338,47 @@ function pintarTierra(svg, dSil, codigo, w, hh, id, dentro, boton, banderita) {
     }
   }
 }
-// Busca dónde plantar la banderita: dentro del país, lejos del botón «Continuar», lo más cerca posible del centro (y mejor arriba que abajo). Devuelve { x, y, fw, fh, poste } o null.
+// Busca dónde plantar la banderita: el PIE DEL POSTE y el poste van sobre el pasto (con margen respecto a la costa, para que no parezcan estar en el mar o en la playa),
+// lejos del botón «Continuar», lo más cerca posible del centro (y mejor arriba que abajo). La tela debe quedar dentro del país siempre que se pueda. Devuelve { x, y, fw, fh, poste } o null.
 function ubicarBanderita(w, hh, dentro, boton) {
   const lado = Math.max(w, hh);
+  // punto «firme»: él y 8 puntos a su alrededor (radio m) están dentro de la silueta, o sea, pasto y no costa
+  const firme = (x, y, m) => dentro(x, y) && [[m, 0], [-m, 0], [0, m], [0, -m], [m * 0.7, m * 0.7], [-m * 0.7, m * 0.7], [m * 0.7, -m * 0.7], [-m * 0.7, -m * 0.7]].every(([dx, dy]) => dentro(x + dx, y + dy));
+  const lejosDelBoton = (x0, x1, y0, y1) => {
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    return !(Math.abs(cx - boton.x) < boton.kx + (x1 - x0) / 2 && Math.abs(cy - boton.y) < boton.ky + (y1 - y0) / 2);
+  };
+  // candidatos ordenados de mejor a peor (así solo se prueban con «dentro» los primeros, que es lo caro)
+  function candidatos(fw, fh, poste, n) {
+    const r = [];
+    for (let i = 1; i < n; i++) for (let j = 1; j < n; j++) {
+      const x = w * i / n, y = hh * j / n;                    // pie del poste
+      const x0 = x - 3, x1 = x + fw + 3, y0 = y - poste - 3, y1 = y + 4;
+      if (!lejosDelBoton(x0, x1, y0, y1)) continue;
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      r.push({ x, y, fw, fh, poste, x0, x1, y0, y1, sc: Math.hypot(cx - boton.x, cy - boton.y) + (cy > boton.y ? 0.35 * (cy - boton.y) : 0) });
+    }
+    return r.sort((a, b) => a.sc - b.sc);
+  }
+  // el poste entero sobre pasto: el pie con margen grande y varios puntos a lo largo del poste con margen menor
+  const posteOk = (c, mPie, mPoste) => firme(c.x, c.y, mPie) && [0.25, 0.5, 0.75, 1].every((t) => firme(c.x, c.y - c.poste * t, mPoste));
+  // la tela dentro del país: rejilla de puntos sobre su caja
+  const telaOk = (c) => {
+    for (let a = 0; a <= 4; a++) for (let b = 0; b <= 3; b++) if (!dentro(c.x + 1.5 + (c.fw + 1) * a / 4, c.y - c.poste + 1 + c.fh * b / 3)) return false;
+    return true;
+  };
+  const limpiar = ({ x, y, fw, fh, poste }) => ({ x, y, fw, fh, poste });
+  // 1) poste en el pasto (margen 6) y tela dentro, del tamaño normal a más chico
   for (const f of [1, 0.78, 0.6]) {
     const fw = acotar(lado * 0.16, 30, 52) * f, fh = fw * 0.66, poste = fh * 1.55;
-    let mejor = null, ms = Infinity;
-    for (let i = 1; i < 30; i++) for (let j = 1; j < 30; j++) {
-      const x = w * i / 30, y = hh * j / 30;                  // pie del poste
-      const x0 = x - 3, x1 = x + fw + 3, y0 = y - poste - 3, y1 = y + 4;   // caja que ocupan poste y bandera
-      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-      if (Math.abs(cx - boton.x) < boton.kx + (x1 - x0) / 2 && Math.abs(cy - boton.y) < boton.ky + (y1 - y0) / 2) continue;
-      if (![[x0, y0], [x1, y0], [x0, y1], [x1, y1], [cx, y0], [cx, y1], [x0, cy], [x1, cy]].every(([a, b]) => dentro(a, b))) continue;
-      const sc = Math.hypot(cx - boton.x, cy - boton.y) + (cy > boton.y ? 0.35 * (cy - boton.y) : 0);
-      if (sc < ms) { ms = sc; mejor = { x, y, fw, fh, poste }; }
-    }
-    if (mejor) return mejor;
+    for (const c of candidatos(fw, fh, poste, 30)) if (posteOk(c, 6, 3) && telaOk(c)) return limpiar(c);
   }
-  // país muy angosto (Chile, Japón…): basta con que el poste quede en tierra; la bandera puede asomar sobre el mar
-  const fw = acotar(lado * 0.16, 30, 52) * 0.75, fh = fw * 0.66, poste = fh * 1.55;
-  let mejor = null, ms = Infinity;
-  for (let i = 1; i < 40; i++) for (let j = 1; j < 40; j++) {
-    const x = w * i / 40, y = hh * j / 40;
-    const x0 = x - 3, x1 = x + fw + 3, y0 = y - poste - 3, y1 = y + 4, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-    if (Math.abs(cx - boton.x) < boton.kx + (x1 - x0) / 2 && Math.abs(cy - boton.y) < boton.ky + (y1 - y0) / 2) continue;
-    if (![[x, y], [x, y - poste * 0.5], [x - 3, y]].every(([a, b]) => dentro(a, b))) continue;
-    const sc = Math.hypot(cx - boton.x, cy - boton.y) + (cy > boton.y ? 0.35 * (cy - boton.y) : 0);
-    if (sc < ms) { ms = sc; mejor = { x, y, fw, fh, poste }; }
+  // 2) país angosto (Chile, Japón, Baja California…): el poste SIEMPRE en el pasto; la tela puede asomar un poco sobre el mar
+  for (const [mPie, mPoste] of [[6, 3], [4.5, 2.5], [3, 1.5]]) {
+    const fw = acotar(lado * 0.16, 30, 52) * 0.75, fh = fw * 0.66, poste = fh * 1.55;
+    for (const c of candidatos(fw, fh, poste, 40)) if (posteOk(c, mPie, mPoste)) return limpiar(c);
   }
-  return mejor;
+  return null;
 }
 // Poste de madera con la bandera del país (se mece un poquito; quieta con «reducir movimiento»)
 function dibujarBanderita(svg, codigo, p, id, url) {

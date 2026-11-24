@@ -195,6 +195,9 @@
         radial-gradient(circle at 20% 80%, #fff2a8 0 1px, transparent 1.7px),
         radial-gradient(circle at 50% 8%, #b8ffd9 0 1px, transparent 1.7px);
       animation: centelleo 1.3s ease-in-out infinite alternate; }
+    /* El centelleo de las moradas se sale un poco de la estrella; sin esto agrandaba el área de desplazamiento del mapa y hacía aparecer y desaparecer la barra lateral.
+       Con «clip» (y un margen fijo de 9 px) lo que sobresale ya no cuenta como contenido: el tamaño de la pantalla no cambia mientras brillan. */
+    .est.mor { overflow: hidden; overflow: clip; overflow-clip-margin: 9px; }
     @keyframes reflejo { to { background-position: -60% 0, 100% 50%, 0 0; } }
     @keyframes centelleo { from { opacity: .2; transform: scale(.85) rotate(0deg); } to { opacity: 1; transform: scale(1.1) rotate(25deg); } }
     .est.pop { animation: pop .55s cubic-bezier(.2,1.7,.4,1) both; animation-delay: calc(var(--i, 0) * .22s); }
