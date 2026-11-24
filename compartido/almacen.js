@@ -24,6 +24,8 @@ const CLAVES_EXTRA = [
   "fondo_madera",
   // Ajedrez guarda con «ajedrez:nombre» (no termina en _v1), así que se anota aquí para que entre en la copia
   "ajedrez:ganados", "ajedrez:mapa", "ajedrez:nivel", "ajedrez:color",
+  // Solitario guarda con «solitario-nombre» (con guion, sin _v1). Su Modo libre usa «solitario_libre_v1», que ya entra por el patrón
+  "solitario-niveles", "solitario-tiempos", "solitario-monedas", "solitario-nube",
 ];
 const EXCLUIR = ["almacen_estado_v1"];          // lo que guarda este mismo módulo (fechas de última copia y de la invitación)
 const APP = "poloaijuegos";
