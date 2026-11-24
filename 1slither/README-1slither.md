@@ -1,28 +1,33 @@
 # Slither (`1slither/`)
 
+> **24 nov 2026 (2.ª sesión): Slither vuelve a «Juegos en desarrollo»** (`"slither"` en `EN_DESARROLLO` de `juegos.js`) mientras se rehacen los niveles. Hecho: sin pantalla de menú principal (capa «Comenzar» + pausa completa), **mapa solo de países** (195 × 20 = **3 900 niveles**, antes 226 × 100) con `columnas: 5` y estado «🚧» sin niveles, y progreso en formato `v: 2`. **Los niveles actuales son un relleno temporal** (misma curva y calibración de antes, repartida en 3 900): para borrarlos basta `NIVELES_CREADOS = false` en `niveles-1slither.js`. Pendiente, en este orden: monedas, estrellas y el boost de explosión (500 monedas) → recalibrar con metas de 2000 o más → rehacer niveles y verificador → Modo libre con las 5 dificultades y récord por combinación. Probado en Chromium de escritorio (sin celular); ver el registro de la sesión en `REGISTRO-1slither.md`.
+
 > **24 nov 2026:** la carpeta pasó de `slither/` a `1slither/` y los archivos llevan ese nombre (`index-1slither.html`, `juego-1slither.js`, `niveles-1slither.js`, `verificar-1slither.mjs`). El **id de puntos sigue siendo `slither`** (y las claves `slither_progreso_v1`, `slither_config`, `slither_nombre`), así que nadie pierde puntos ni progreso. Es el **1.er juego** de la zona «Juegos» (primera línea de `JUEGOS` en `juegos.js`).
 
 Arena redonda con bots: come bolitas para crecer, no toques el cuerpo de otra serpiente ni la orilla. id de puntos: `slither`. Tipo **A) por niveles** del estándar (mapa de México con agua y, al terminarlo, el mundo) más un **♾️ Modo libre**. **Terminado** (zona «Juegos» del portal desde `sw.js` VERSION 189).
 
-## Pantallas (estándar de `ESTANDARES-juegos.md`, secciones 1, 6, 7 y 11)
-- **Menú principal** (`#menu`, clases `.pant-menu` de `inmersivo.css`): ♾️ Modo libre · ▶ Continuar · nivel N · 📋 Niveles · ℹ️ Info, y 👤 Iniciar sesión arriba a la derecha (`jugador.js` con `import()`; sin internet dice «Sin conexión»). El ☰ no se ve aquí.
-- **Modo libre** (`#inicio`): bots Fácil/Normal/Difícil y mapa Pequeño/Mediano/Grande (elegido `b-oro on`, resto `b-cielo`), nombre y ▶ Jugar. Sin metas **ni puntos de perfil** (`PUNTOS_LIBRE = false` en `juego-1slither.js`; ponerlo en `true` devuelve la regla antigua de 1 punto por cada 10 de masa).
-- **Niveles**: «📋 Niveles» abre `compartido/mapa-niveles.js` en la etapa del jugador (ya no lleva el botón ♾️). ☰ «Atrás» sale siempre al menú principal.
-- **Partida**: ☰ «Pausa» → Continuar · 🔄 Reiniciar nivel · 📋 Niveles · 🚪 Menú principal (en Modo libre: Continuar y «Salir a elegir mapa y bots»).
-- **Fin** (`#fin`, `.sobre-tablero`): «Siguiente nivel ▶» (solo al ganar), Reintentar / Repetir nivel / Jugar otra vez, 🗺️ Mapa de niveles o ⚙️ Cambiar mapa y bots. Sin velo oscuro: la arena se sigue viendo.
+## Pantallas (estándar de `ESTANDARES-juegos.md`, secciones 7 y 9; actualizado el 24 nov 2026)
+**Ya no hay pantalla de menú principal.** Al abrir se ve el juego cargado (el nivel donde va el jugador, con los bots moviéndose) tapado por la capa **▶ Comenzar**. Todo lo demás está en **☰ Pausa**.
+- **Capa «Comenzar»** (`#comenzar`, estado `listo`): sin jugador; 🎮 y ☰ siguen usables. Con sesión, si la capa sigue puesta cuando llega el progreso de la nube, se recarga el nivel mostrado (`alCambiar`). Si no hay niveles creados (`NIVELES_CREADOS = false`) se muestra el Modo libre.
+- **☰ Pausa** (`crearMenuPausa`), en este orden: ▶ Continuar · ♾️ Modo libre · 📋 Niveles · 🔄 Reiniciar nivel (solo jugando un nivel) · ℹ️ Info · 📲 Instalar solo este juego (si se puede) · 🚪 Menú principal (vuelve a la capa «Comenzar»). En una partida de **Modo libre** solo hay Continuar y «Salir a elegir mapa y bots». Info abierta desde la pausa vuelve a la pausa al cerrarla.
+- **☰ «Atrás»** (mapa, Modo libre y resultado de la partida) vuelve a la capa «Comenzar»; siempre visible.
+- **Modo libre** (`#inicio`): bots Fácil/Normal/Difícil y mapa Pequeño/Mediano/Grande (elegido `b-oro on`, resto `b-cielo`), nombre y ▶ Jugar. Sin metas **ni puntos de perfil** (`PUNTOS_LIBRE = false`).
+- **Niveles**: `compartido/mapa-niveles.js` con **mapa solo de países** (`crearEtapas({ porEtapa: 20, soloPaises: true })`, `columnas: 5`): lista que baja de país en país, México primero, un país a la vez. Sin niveles creados: cada botón dice «🚧» y al tocarlo sale «🚧 Los niveles todavía no están creados».
+- **👤 Iniciar sesión**: arriba a la derecha en todo menos mientras se juega (para no estorbar en la arena).
+- **Fin** (`#fin`, `.sobre-tablero`): «Siguiente nivel ▶» (solo al ganar), Reintentar / Repetir nivel / Jugar otra vez, 🗺️ Mapa de niveles o ⚙️ Cambiar mapa y bots. Sin velo oscuro.
 
 ## Archivos
 | Archivo | Qué es |
 |---|---|
-| `index-1slither.html` | Página: canvas, botones fijos (🎮 Portal de Juegos, ☰, 👤), HUD (Largo y Récord) y las pantallas (menú principal, Modo libre, Info, fin) |
+| `index-1slither.html` | Página: canvas, botones fijos (🎮 Portal de Juegos, ☰, 👤), HUD (Largo y Récord) y las pantallas (capa «Comenzar», Modo libre, Info, fin) |
 | `juego-1slither.js` | Todo el juego: simulación, bots, dibujo, entrada, menús, progreso y mapa. Al final trae la herramienta de calibración (solo con `#calibrar`) |
-| `niveles-1slither.js` | Los **22 600 niveles**: reparto de dificultad y mapas, metas y tabla de calibración. Sin `document` (se prueba en Node) |
-| `instalar-1slither.js` | Registra el service worker propio, oculta «🎮 Portal de Juegos» dentro de la app instalada sola y agrega «📲 Instalar solo este juego» al menú principal |
+| `niveles-1slither.js` | Los **3 900 niveles** (temporales): reparto de dificultad y mapas, metas y tabla de calibración; `NIVELES_CREADOS` los apaga. Sin `document` (se prueba en Node) |
+| `instalar-1slither.js` | Registra el service worker propio, oculta «🎮 Portal de Juegos» dentro de la app instalada sola y exporta `puedeInstalar()` / `instalar()` (el juego los pone como «📲 Instalar solo este juego» en ☰ Pausa) |
 | `manifest-1slither.webmanifest`, `sw-1slither.js`, `iconos-slither/icono-180/192/512-1slither.png` y `iconos-slither/icono-maskable-512-1slither.png` | App instalable SOLO de Slither (estándar 13.9): alcance = esta carpeta, `start_url` con `?app=1`, caché `app-slither-vN` (no empieza con `juegos-`, así `sw.js` del portal no la borra). **Estos cuatro no van en `JUEGOS` de `sw.js`** (son del service worker propio); `instalar-1slither.js` sí |
 | `verificar-1slither.mjs`, `package.json` | Solo consola, **no van al service worker**: `node 1slither/verificar-1slither.mjs` comprueba todo el reparto |
 
-## Niveles (22 600 = 226 etapas × 100)
-Etapas = los 32 estados de México (Quintana Roo primero, de sur a norte) y los 194 países, con el mapa estándar (`compartido/mapa-niveles.js`). Los niveles se abren en orden; se guarda el nivel más alto abierto y el más alto terminado.
+## Niveles (3 900 = 195 países × 20) — TEMPORALES, se van a rehacer
+Etapas = los 195 países de `PAISES_MUNDO` (México primero, China al final), con el mapa estándar solo de países (`compartido/mapa-niveles.js`). Los niveles se abren en orden; se guarda el nivel más alto abierto y el más alto terminado. **Todas las cifras de más abajo (metas, porcentajes, techos) son las del diseño anterior de 22 600 niveles y se reharán** con la meta mínima de ~2000.
 
 Cada nivel es `{ n, etapa, k, dif, mapa, meta, reto, respiro, techo }` y **es siempre el mismo para todos** (semilla por número de nivel). **Si cambias el generador cuando ya hay jugadores con progreso, verían otro nivel con el mismo número: no lo cambies después de publicar.**
 
@@ -35,13 +40,13 @@ Se reparte **etapa por etapa con cuentas exactas** (método del mayor residuo) y
 
 | | Fácil | Normal | Difícil |
 |---|---|---|---|
-| Primera etapa (Quintana Roo) | 50 | 40 | 10 |
-| Última etapa (último país) | 25 | 35 | 40 |
+| Primera etapa (México): 10 · 8 · 2 de 20 | 50 | 40 | 10 |
+| Última etapa (China): 5 · 7 · 8 de 20 | 25 | 35 | 40 |
 
 Por décimas del juego (de `verificar-1slither.mjs`): 49/40/11 → 46/39/15 → 44/39/17 → 41/38/21 → 39/38/23 → 36/37/27 → 34/37/29 → 31/36/33 → 29/36/35 → 26/35/39 (% Fácil/Normal/Difícil). Entre etapas los Fáciles nunca suben ni los Difíciles bajan.
 
 ### Reparto de mapas
-33/33/34 por etapa (el mapa que recibe el nivel extra rota con `etapa % 3`): **7534 / 7533 / 7533** en total (33.3 % cada uno). La racha más larga con el mismo mapa es de 8 niveles. Mapa y dificultad se sortean por separado.
+7/7/6 por etapa (los dos mapas que reciben el nivel extra rotan con `etapa`): **1300 / 1300 / 1300** en total (33.3 % cada uno). La racha más larga con el mismo mapa es de 7 niveles. Mapa y dificultad se sortean por separado.
 
 ### Metas (puntos)
 - Curva geométrica de **250** (nivel 1) a **2000** (último), con `CURVA = 0.85` (sube un poco más rápido al principio).
@@ -80,7 +85,7 @@ Sin metas: eliges la dificultad de los bots (Fácil, Normal, Difícil) y el tama
 Las **bolitas doradas** valen 10 veces una normal; reaparecen entre 8 y 22 s después de comerse. Los bots: Fácil piensa lento, ve poco y casi no caza (y es 8 % más lento); Normal es el comportamiento original; Difícil reacciona rápido, ve 1.5 veces más lejos, caza casi siempre con turbo y es un poco más rápido y ágil, y nace más grande.
 
 ## Progreso
-`localStorage` `slither_progreso_v1` = `{ record, max, hecho }`, sincronizado con `compartido/progreso.js` (gana el mayor de cada dato). Antes el récord era un número suelto en `slither_record`: se migra solo y la fusión entiende el formato viejo. Niveles que pasaste no se pierden aunque cambies de aparato.
+`localStorage` `slither_progreso_v1` = `{ v: 2, record, max, hecho }`, sincronizado con `compartido/progreso.js` (gana el mayor de cada dato). Antes el récord era un número suelto en `slither_record`: se migra solo. **Desde el 24 nov 2026 `v: 2`**: lo que no trae `v: 2` (formato de 22 600 niveles, también el que pueda haber en la nube) conserva el `record` pero `max` y `hecho` vuelven a 1 y 0, porque el nivel n ya no es el mismo. Niveles que pasaste no se pierden aunque cambies de aparato.
 
 ## Pendiente
 - Afinar con jugadores reales (ver la nota de la calibración).

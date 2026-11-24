@@ -1,51 +1,64 @@
 <!doctype html>
+<!-- Ruta: billar/index-billar.html -->
 <html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#d9a866">
   <title>Billar</title>
-  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script> <!-- evita el parpadeo de la madera clara en modo oscuro -->
   <link rel="stylesheet" href="../compartido/estilos.css">
   <link rel="stylesheet" href="../compartido/inmersivo.css">
   <style>
-    /* Solo lo propio de Billar; botones, madera y colores vienen de compartido/inmersivo.css */
-    .pantalla { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 90px 16px 80px; text-align: center; }
-    .pantalla h1, .pantalla h2 { margin: 0 0 6px; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
-    .pantalla p { margin: 0; color: var(--txt-fondo-suave); text-shadow: var(--sombra-txt); }
-    .columna { display: flex; flex-direction: column; gap: 12px; width: min(320px, 100%); }
+    /* Solo lo propio de Billar. Botones, madera, pantalla de inicio (.pant-menu, .ini-*), Modo libre (.dif-*, .libre-*), Ajustes (.aj-*) y navegación cuadrada
+       vienen de compartido/inmersivo.css (bloque «INICIO CON MAPA», ESTANDARES-juegos.md sección 13). */
+    #sesion { display: inline-block; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 30px; }   /* chip de sesión recortado con «…» */
+    #sesion:empty { display: none; }
     #aviso-billar { position: fixed; z-index: 7; left: 50%; bottom: max(70px, env(safe-area-inset-bottom)); transform: translateX(-50%);
       max-width: min(92vw, 420px); padding: 10px 16px; border-radius: 12px; background: rgba(20, 20, 24, .92); color: #f1f2f4; font-weight: 600; text-align: center; }
+    #aviso-billar[hidden] { display: none; }
   </style>
 </head>
-<body class="inmersivo">
-  <nav class="nav-juego" aria-label="Navegación">
-    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Juegos</a>
-    <button class="b3d txt b-gris" id="btn-menu" type="button" title="Menú principal" hidden><span class="b-ico">☰</span> Menú principal</button>
+<!-- data-madera-boton="oculto": sin el 🌙/☀️ flotante; el cambio de madera está en ⚙️ Ajustes -->
+<body class="inmersivo" data-madera-boton="oculto">
+  <!-- Navegación cuadrada (13.3): 🎮 siempre; ☰ oculto en el inicio y en la vista principal del mapa (lo rotula juego-billar.js) -->
+  <nav class="nav-juego cuadrada" aria-label="Navegación">
+    <a class="b3d chico b-azuloscuro" id="btn-portal" href="../" title="Juegos: volver al portal" aria-label="Juegos: volver al portal"><span class="b-ico">🎮</span></a>
+    <button class="b3d chico b-verdeclaro" id="btn-menu" type="button" title="Volver al menú principal" aria-label="Volver al menú principal" hidden><span class="b-ico">☰</span></button>
   </nav>
 
-  <!-- Monedas (chip estándar dorado, arriba a la derecha) -->
-  <div class="hud hud-der"><span class="chip chip-monedas" id="chip-monedas" title="Monedas"><span class="moneda"></span><span id="n-monedas">0</span></span></div>
+  <!-- Arriba a la derecha, en columna: sesión y, debajo, el chip dorado de monedas -->
+  <div class="hud hud-der columna">
+    <span class="chip" id="sesion"></span>
+    <span class="chip chip-monedas" id="chip-monedas" title="Monedas: de 15 a 45 por nivel según tus estrellas"><span class="moneda"></span><span id="n-monedas">0</span></span>
+  </div>
 
-  <!-- 1) MENÚ PRINCIPAL ESTÁNDAR (sección 7): Modo libre · Niveles · Mapa · Salir -->
-  <main class="pantalla" id="pantalla-menu">
-    <h1>🎱 Billar</h1>
-    <div class="columna">
-      <button class="b3d txt grande b-verde" id="btn-libre" type="button"><span class="b-ico">♾️</span> <span>Modo libre</span></button>
-      <button class="b3d txt grande b-azul" id="btn-niveles" type="button"><span class="b-ico">🪜</span> <span>Niveles</span></button>
-      <button class="b3d txt grande b-azul" id="btn-mapa" type="button"><span class="b-ico">🗺️</span> <span>Mapa</span></button>
-      <a class="b3d txt grande b-rojo" id="btn-salir" href="../"><span class="b-ico">🚪</span> <span>Salir</span></a>
+  <main>
+    <!-- 1) PANTALLA DE INICIO (13.2): se ve UNA sola vez, al abrir el juego. Sin título ni velo. Orden y tamaños fijos: ♾️ Modo libre · ▶ Jugar (el doble de alto) · 🗺️ Mapa · ⚙️ Ajustes -->
+    <div class="pant-menu" id="pantalla-inicio" hidden>
+      <div class="ini-menu">
+        <button class="b3d txt b-morado ini-libre" id="btn-inicio-libre" type="button"><span class="b-ico">♾️</span><span>Modo libre</span></button>
+        <button class="b3d txt b-verde ini-jugar" id="btn-inicio-jugar" type="button"><span class="b-ico">▶</span><span>Jugar</span></button>
+        <button class="b3d txt b-azul ini-mapa" id="btn-inicio-mapa" type="button"><span class="b-ico">🗺️</span><span>Mapa</span></button>
+        <button class="b3d txt b-cielo ini-ajustes" id="btn-inicio-ajustes" type="button"><span class="b-ico">⚙️</span><span>Ajustes</span></button>
+      </div>
     </div>
+
+    <!-- 2) MODO LIBRE (13.7): 5 dificultades solo con emoji, su nombre debajo, nota, récord y ▶ Jugar -->
+    <div class="pant-menu" id="pantalla-libre" hidden>
+      <h2>♾️ Modo libre</h2>
+      <p class="modo-grupo">Dificultad</p>
+      <div class="modo-fila dif-fila" id="dif-fila" role="group" aria-label="Dificultad"></div>
+      <p class="dif-nombre" id="dif-nombre"></p>
+      <p class="libre-nota" id="libre-nota"></p>
+      <p class="libre-record" id="libre-record"></p>
+      <div class="libre-jugar">
+        <button class="b3d txt grande b-verde" id="btn-libre-jugar" type="button"><span class="b-ico">▶</span> <span>Jugar</span></button>
+      </div>
+    </div>
+
+    <!-- 3) El mapa (Mapa, Niveles y «Continuar») lo dibuja compartido/mapa-niveles.js encima de todo: no necesita HTML aquí -->
   </main>
-
-  <!-- 2) DIFICULTADES DEL MODO LIBRE (5 niveles) -->
-  <section class="pantalla" id="pantalla-libre" hidden>
-    <h2>♾️ Modo libre</h2>
-    <p>Elige la dificultad</p>
-    <div class="columna" id="lista-dificultad"></div>
-  </section>
-
-  <!-- 3) El mapa (Niveles y Mapa) lo dibuja compartido/mapa-niveles.js encima de todo: no necesita HTML aquí -->
 
   <div id="aviso-billar" role="status" hidden></div>
 

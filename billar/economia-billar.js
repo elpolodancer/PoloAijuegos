@@ -14,7 +14,7 @@
 
 export const ID_JUEGO = "billar";
 export const CLAVE_PROGRESO = "billar_progreso_v1";   // { e: { "nivel": estrellas }, gastado, t }
-export const TOTAL_NIVELES = 22600;                   // 226 etapas × 100 (igual que ETAPAS.total)
+export const TOTAL_NIVELES = 3900;                    // 195 países × 20 niveles (mapa solo de países, ESTANDARES A-bis; igual que ETAPAS.total)
 export const MONEDAS_POR_ESTRELLAS = [0, 15, 30, 45]; // índice = estrellas
 export const MONEDAS_MIN = 15, MONEDAS_MAX = 45;
 

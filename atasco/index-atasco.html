@@ -1,0 +1,61 @@
+<!doctype html>
+<!-- Ruta: atasco/index-atasco.html · Inicio con mapa (ESTANDARES-juegos.md, sección 13). Los estilos viven en compartido/inmersivo.css -->
+<html lang="es" class="inmersivo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Atasco</title>
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script> <!-- evita el parpadeo de la madera clara en modo oscuro -->
+  <!-- Instalar SOLO este juego: manifest e iconos propios y service worker propio (sw-atasco.js, lo registra juego-atasco.js) -->
+  <link rel="manifest" href="manifest-atasco.webmanifest" />
+  <link rel="apple-touch-icon" href="icono-180-atasco.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Atasco" />
+  <script>
+    // Chrome avisa que se puede instalar con «beforeinstallprompt», a veces ANTES de que cargue el módulo del juego: se guarda aquí.
+    window.__pwa = { evento: null };
+    addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); window.__pwa.evento = e; });
+  </script>
+  <link rel="stylesheet" href="../compartido/estilos.css" />
+  <link rel="stylesheet" href="../compartido/inmersivo.css" />
+  <style>#sesion.tocable { cursor: pointer; }   /* en la app instalada sola: tocar «Iniciar sesión» abre el acceso con Google */</style>
+</head>
+<body class="inmersivo" data-madera-boton="oculto"> <!-- oculto: la madera clara/oscura se cambia desde ⚙️ Ajustes -->
+  <nav class="nav-juego cuadrada" aria-label="Navegación">
+    <a class="b3d chico b-azuloscuro" id="btn-portal" href="../" title="Juegos: volver al portal" aria-label="Juegos: volver al portal"><span class="b-ico">🎮</span></a>
+    <button class="b3d chico b-verdeclaro" id="btn-menu" type="button" title="Volver al menú principal" aria-label="Volver al menú principal" hidden><span class="b-ico">☰</span></button>
+  </nav>
+  <div class="hud hud-der columna"><span class="chip" id="sesion">Sin sesión</span></div>
+
+  <main>
+    <!-- Pantalla de inicio: se ve UNA vez al abrir el juego; después el mapa es el menú principal -->
+    <div class="pant-menu" id="pantalla-inicio" hidden>
+      <div class="ini-menu">
+        <button class="b3d txt b-morado ini-libre" id="btn-inicio-libre" type="button"><span class="b-ico">♾️</span><span>Modo libre</span></button>
+        <button class="b3d txt b-verde ini-jugar" id="btn-inicio-jugar" type="button"><span class="b-ico">▶</span><span>Jugar</span></button>
+        <button class="b3d txt b-azul ini-mapa" id="btn-inicio-mapa" type="button"><span class="b-ico">🗺️</span><span>Mapa</span></button>
+        <button class="b3d txt b-cielo ini-ajustes" id="btn-inicio-ajustes" type="button"><span class="b-ico">⚙️</span><span>Ajustes</span></button>
+      </div>
+    </div>
+
+    <!-- Modo libre (7.2 y 13.7): Dificultad (5 emojis) → Tablero → nota, récord y Jugar -->
+    <div class="pant-menu" id="pantalla-libre" hidden>
+      <h2>♾️ Modo libre</h2>
+      <p class="modo-grupo">Dificultad</p>
+      <div class="modo-fila dif-fila" id="dif-fila" role="group" aria-label="Dificultad"></div>
+      <p class="dif-nombre" id="dif-nombre" role="status"></p>
+      <p class="modo-grupo">Tablero</p>
+      <div class="modo-fila" id="tam-fila" role="group" aria-label="Tamaño del tablero"></div>
+      <p class="libre-nota" id="nota-libre"></p>
+      <p class="libre-record" id="libre-record"></p>
+      <div class="libre-jugar"><button class="b3d txt grande b-verde" id="btn-libre-jugar" type="button"><span class="b-ico">▶</span> Jugar</button></div>
+    </div>
+  </main>
+
+  <script type="module" src="juego-atasco.js"></script>
+  <script type="module" src="../compartido/pantalla-completa.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
+</body>
+</html>

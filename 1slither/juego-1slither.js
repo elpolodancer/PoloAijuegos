@@ -52,7 +52,10 @@ import { encolarPuntos, encolarNivel } from "../compartido/cola-puntos.js"; // e
 import { crearMenuPausa } from "../compartido/menu-pausa.js";
 import { crearEtapas } from "../compartido/etapas-mapa.js";
 import { montarMapa } from "../compartido/mapa-niveles.js";
-import { nivelDe, TOTAL, POR_ETAPA, abrev } from "./niveles-1slither.js";
+import { nivelDe, TOTAL, POR_ETAPA, NIVELES_CREADOS, abrev } from "./niveles-1slither.js";
+// «Instalar solo este juego» ya no está en un menú principal: vive en ☰ Pausa (instalar-1slither.js exporta puedeInstalar() e instalar())
+let instalador = null;
+import("./instalar-1slither.js").then((m) => { instalador = m; }).catch(() => {});
 
 // ---------- Elementos y récord ----------
 const $ = (id) => document.getElementById(id);
@@ -66,11 +69,19 @@ const puntaje = (m) => Math.round(m * 10);
 // con la cuenta (compartido/progreso.js); al unir gana el mayor de cada dato. (Antes el récord era un número suelto en «slither_record».)
 const CLAVE_PROG = "slither_progreso_v1";
 const entero = (v, a, b, d) => Math.max(a, Math.min(b, Math.floor(Number(v)) || d));
-const normProg = (p) => { if (typeof p === "number") p = { record: p }; p = p || {}; return { record: entero(p.record, 0, 1e9, 0), max: entero(p.max, 1, TOTAL, 1), hecho: entero(p.hecho, 0, TOTAL, 0) }; };
+// v = 2: mapa solo de países (195 × 20 = 3 900 niveles). El formato anterior (22 600 niveles, sin «v») se descarta en max y hecho (vuelven a 1 y 0, porque el nivel n ya
+// no es el mismo); el récord del Modo libre se conserva. Así también la nube, que puede traer el formato viejo, queda con niveles bien numerados.
+const VERSION_PROG = 2;
+const normProg = (p) => {
+  if (typeof p === "number") p = { record: p };
+  p = p || {};
+  const nuevo = p.v === VERSION_PROG;
+  return { v: VERSION_PROG, record: entero(p.record, 0, 1e9, 0), max: nuevo ? entero(p.max, 1, TOTAL, 1) : 1, hecho: nuevo ? entero(p.hecho, 0, TOTAL, 0) : 0 };
+};
 const unirProg = (a, b) => {
   if (a == null && b == null) return null;
   a = normProg(a); b = normProg(b);
-  return { record: Math.max(a.record, b.record), max: Math.max(a.max, b.max), hecho: Math.max(a.hecho, b.hecho) };
+  return { v: VERSION_PROG, record: Math.max(a.record, b.record), max: Math.max(a.max, b.max), hecho: Math.max(a.hecho, b.hecho) };
 };
 let prog = normProg(null);
 try { const g = localStorage.getItem(CLAVE_PROG); prog = normProg(g ? JSON.parse(g) : Number(localStorage.getItem("slither_record")) || null); } catch (e) {}
@@ -87,7 +98,10 @@ import("../compartido/progreso.js").then((m) => {
   nube = m.conectar(ID, {
     clave: CLAVE_PROG,
     fusionar: unirProg,
-    alCambiar: (v) => { prog = normProg(v); record = prog.record; pintarRecord(); pintarMenu(); pintarOpciones(); mapaNiveles.refrescar(); },
+    alCambiar: (v) => {
+      prog = normProg(v); record = prog.record; pintarRecord(); pintarOpciones(); mapaNiveles.refrescar();
+      if (estado === "listo" && !pausado) irAListo(prog.max);   // 7.0: con la capa puesta, el nivel mostrado pasa a ser el de la cuenta
+    },
   });
 }).catch(() => {});
 try { $("nombre").value = localStorage.getItem("slither_nombre") || ""; } catch (e) {}
@@ -100,7 +114,7 @@ const angDif = (a, b) => { const d = b - a; return Math.atan2(Math.sin(d), Math.
 function puntoArena(margen) { const a = Math.random() * 6.2832, d = Math.sqrt(Math.random()) * (R - margen); return { x: Math.cos(a) * d, y: Math.sin(a) * d }; }
 
 // ---------- Estado ----------
-let serps = [], jug = null, estado = "menu", pausado = false;   // estado: menu (menú principal) | mapa (niveles) | inicio (Modo libre) | listo (nivel a la vista, esperando «Comenzar») | jugando | fin
+let serps = [], jug = null, estado = "listo", pausado = false;   // estado: listo (el juego a la vista, esperando «Comenzar») | jugando | fin | mapa (niveles) | inicio (pantalla del Modo libre)
 let pendEsp = [];   // momentos en que reaparecen las doradas comidas
 let t = 0, t0 = 0, maxM = 0, matados = 0, enviados = 0;
 let cam = { x: 0, y: 0, z: 0.8 };
@@ -264,9 +278,9 @@ function crearMundo() {
 function menuBoton() {   // ESTANDARES-juegos.md 7.4: oculto en el menú principal; «Pausa» en partida y «Atrás» en el resto
   const b = $("btn-menu"), enPartida = estado === "jugando" || estado === "listo";
   document.body.dataset.estado = estado;
-  b.hidden = estado === "menu";
+  b.hidden = false;   // 7.4: siempre visible (también bajo la capa «Comenzar»)
   $("txt-menu").textContent = enPartida ? "Pausa" : "Atrás";
-  b.title = enPartida ? "Pausa" : "Volver al menú principal";
+  b.title = enPartida ? "Pausa" : "Volver al juego";
 }
 const limpiar = () => { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, lienzo.width, lienzo.height); };   // sin partida a la vista: se ve la madera
 const mostrar = (id, si) => { $(id).hidden = !si; };
@@ -281,11 +295,11 @@ function puntoSeguro() {
   }
   return mejor;
 }
-function iniciar(n) {   // n = número de nivel; sin n = Juego libre
-  nivel = n ? nivelDe(n) : null;
+function iniciar(n) {   // n = número de nivel; sin n (o sin niveles creados) = Modo libre
+  nivel = n && NIVELES_CREADOS ? nivelDe(n) : null;
   if (mundoCfg !== claveCfg()) crearMundo();   // el nivel trae sus propios bots y su propio mapa
   let nombre;
-  if (n) { try { nombre = localStorage.getItem("slither_nombre"); } catch (e) {} nombre = nombre || "Jugador"; }
+  if (nivel) { try { nombre = localStorage.getItem("slither_nombre"); } catch (e) {} nombre = nombre || "Jugador"; }
   else { nombre = ($("nombre").value || "").trim().slice(0, 14) || "Jugador"; try { localStorage.setItem("slither_nombre", nombre); } catch (e) {} }
   pintarRecord(); if (nivel) $("largo").textContent = "Largo: " + puntaje(M0) + " / " + nivel.meta;
   if (jug) { jug.muerta = true; serps = serps.filter((s) => s !== jug); }
@@ -293,7 +307,7 @@ function iniciar(n) {   // n = número de nivel; sin n = Juego libre
   jug = crearSerp(q.x, q.y, Math.random() * 6.2832, M0, false, nombre);
   cam.x = q.x; cam.y = q.y;
   estado = "jugando"; pausado = false; t0 = t; maxM = M0; matados = 0; enviados = 0;
-  mostrar("menu", false); mostrar("inicio", false); mostrar("fin", false); mostrar("comenzar", false); bt.classList.add("activo"); menuBoton();
+  mostrar("inicio", false); mostrar("fin", false); mostrar("comenzar", false); bt.classList.add("activo"); menuBoton();
 }
 function enviarPerfil() {
   if (nivel || !PUNTOS_LIBRE) return 0;   // en los niveles los puntos del perfil los da pasar el nivel (victoria), no la masa; el Modo libre no da
@@ -350,25 +364,33 @@ function salirPartida() {
   enviarPerfil();
   if (jug) { jug.muerta = true; serps = serps.filter((s) => s !== jug); jug = null; }
   pausado = false; bt.classList.remove("activo");
-  mostrar("fin", false); mostrar("inicio", false); mostrar("menu", false); mostrar("info", false); mostrar("comenzar", false); mapaNiveles.cerrar();
+  mostrar("fin", false); mostrar("inicio", false); mostrar("info", false); mostrar("comenzar", false); mapaNiveles.cerrar();
   limpiar();
 }
-function pintarMenu() { $("txt-continuar").textContent = "Continuar · nivel " + prog.max; }
-function irAlMenu() {   // MENÚ PRINCIPAL
-  salirPartida(); nivel = null; pintarRecord(); pintarMenu();
-  estado = "menu"; mostrar("menu", true); menuBoton();
-  try { $("m-libre").focus({ preventScroll: true }); } catch (e) {}
+// Aviso corto sobre todo lo demás (por ejemplo «🚧 Los niveles todavía no están creados»)
+let avisoEl = null, avisoT = 0;
+function aviso(msg) {
+  if (!avisoEl) {
+    avisoEl = document.createElement("div");
+    avisoEl.setAttribute("role", "status");
+    avisoEl.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:2147481500;max-width:min(92vw,420px);padding:12px 16px;border-radius:14px;background:#1e2025;color:#f1f2f4;border:1px solid #7c5cff;font:600 .95rem/1.35 system-ui,sans-serif;text-align:center;box-shadow:0 8px 28px rgba(0,0,0,.45)";
+    document.body.appendChild(avisoEl);
+  }
+  avisoEl.textContent = msg; avisoEl.hidden = !msg;
+  clearTimeout(avisoT); if (msg) avisoT = setTimeout(() => { avisoEl.hidden = true; }, 3500);
 }
+// 7.0: «Menú principal» y «Atrás» vuelven al juego ya cargado con la capa «Comenzar» (en el nivel del jugador; sin niveles creados, sobre el Modo libre)
+function volverAlInicio() { salirPartida(); irAListo(prog.max); }
 function irAListo(n) {   // ARRANQUE: el nivel n a la vista (los bots se mueven), sin jugador, con la capa «Comenzar»
-  nivel = nivelDe(n);
+  nivel = NIVELES_CREADOS ? nivelDe(n) : null;
   if (mundoCfg !== claveCfg()) crearMundo();
-  pintarRecord(); $("largo").textContent = "Largo: " + puntaje(M0) + " / " + nivel.meta;
+  pintarRecord(); $("largo").textContent = nivel ? "Largo: " + puntaje(M0) + " / " + nivel.meta : "";
   jug = null; pausado = false;
   estado = "listo"; mostrar("comenzar", true); menuBoton();
   try { $("btn-comenzar").focus({ preventScroll: true }); } catch (e) {}
 }
 function irAlMapa(n) {   // lista de niveles de la etapa del nivel n (o la del jugador); al pasar el último de una etapa se ve subir el agua
-  const completada = !!n && n % POR_ETAPA === 0 && prog.hecho >= n;
+  const completada = NIVELES_CREADOS && !!n && n % POR_ETAPA === 0 && prog.hecho >= n;
   salirPartida(); nivel = null; pintarRecord();
   estado = "mapa"; mapaNiveles.abrir(n || prog.max, completada); menuBoton();
 }
@@ -376,26 +398,32 @@ function irALibre() {   // MODO LIBRE
   salirPartida(); nivel = null; pintarRecord(); pintarOpciones();
   estado = "inicio"; mostrar("inicio", true); menuBoton();
 }
-// Pausa estándar (7.5). Niveles: Continuar · 🔄 Reiniciar nivel · 📋 Niveles · 🚪 Menú principal. Modo libre: solo Continuar y «Salir a elegir mapa y bots».
+// Pausa estándar (7.5): ▶ Continuar · ♾️ Modo libre · 📋 Niveles · 🔄 Reiniciar nivel (solo jugando un nivel) · ℹ️ Info · 📲 Instalar (si se puede) · 🚪 Menú principal.
+// Partida de Modo libre (jugando sin nivel): solo Continuar y «Salir a elegir mapa y bots».
+const enLibre = () => estado === "jugando" && !nivel;
+const jugandoNivel = () => estado === "jugando" && !!nivel;
 const pausa = crearMenuPausa({
   boton: $("btn-menu"), puedeAbrir: () => estado === "jugando" || estado === "listo",
   alAbrir: () => { pausado = true; }, alContinuar: () => { pausado = false; },
-  extras: () => (nivel ? [
-    { icono: "🔄", texto: "Reiniciar nivel", clase: "b-azul", ayuda: "Vuelves a empezar este nivel con tus puntos de antes.", alElegir: () => { pausado = false; iniciar(nivel.n); } },
-    { icono: "📋", texto: "Niveles", clase: "b-azul", ayuda: "Vas a la zona de niveles. Se pierde lo avanzado en este nivel.", alElegir: () => irAlMapa(nivel.n) },
-  ] : []),
-  get textoSalir() { return nivel ? "Menú principal" : "Salir a elegir mapa y bots"; },
-  ayudaSalir: () => (nivel ? "Se pierde lo avanzado en este nivel." : "La partida termina; tu mejor largo se guarda en el récord."),
-  alSalir: () => (nivel ? irAlMenu() : irALibre()),
+  extras: () => {
+    if (enLibre()) return [];
+    const pierde = jugandoNivel();   // en una partida de nivel, salir hace perder lo avanzado (el tiempo real no se puede guardar)
+    const x = [
+      { icono: "♾️", texto: "Modo libre", clase: "b-morado", ayuda: pierde ? "Eliges bots y mapa. Se pierde lo avanzado en este nivel." : "Eliges la dificultad de los bots y el tamaño del mapa.", alElegir: irALibre },
+      { icono: "📋", texto: "Niveles", clase: "b-azul", ayuda: pierde ? "Lista de niveles. Se pierde lo avanzado en este nivel." : "Lista de niveles.", alElegir: () => irAlMapa(nivel ? nivel.n : prog.max) },
+    ];
+    if (pierde) x.push({ icono: "🔄", texto: "Reiniciar nivel", clase: "b-azul", ayuda: "Vuelves a empezar este nivel con tus puntos de antes.", alElegir: () => { pausado = false; iniciar(nivel.n); } });
+    x.push({ icono: "ℹ️", texto: "Info", clase: "b-cielo", alElegir: abrirInfo });
+    if (instalador && instalador.puedeInstalar()) x.push({ icono: "📲", texto: "Instalar solo este juego", clase: "b-azulmarino", alElegir: () => { instalador.instalar().then((m) => { aviso(m); pausa.abrir(); }).catch(() => pausa.abrir()); } });
+    return x;
+  },
+  get textoSalir() { return enLibre() ? "Salir a elegir mapa y bots" : "Menú principal"; },
+  ayudaSalir: () => (enLibre() ? "La partida termina; tu mejor largo se guarda en el récord." : jugandoNivel() ? "Se pierde lo avanzado en este nivel." : ""),
+  alSalir: () => (enLibre() ? irALibre() : volverAlInicio()),
 });
-// ☰ fuera de una partida = «Atrás»: vuelve al menú principal (dentro de la partida lo atiende la pausa)
-$("btn-menu").addEventListener("click", () => { if (estado !== "jugando" && estado !== "listo") irAlMenu(); });
-$("btn-comenzar").addEventListener("click", () => { if (estado === "listo" && !pausado) iniciar(nivel.n); });
-// Menú principal (7.1)
-$("m-libre").addEventListener("click", irALibre);
-$("m-continuar").addEventListener("click", () => { mostrar("menu", false); iniciar(prog.max); });
-$("m-niveles").addEventListener("click", () => irAlMapa(prog.max));
-$("m-info").addEventListener("click", () => abrirInfo());
+// ☰ fuera de una partida = «Atrás»: vuelve al juego con la capa «Comenzar» (dentro de la partida lo atiende la pausa)
+$("btn-menu").addEventListener("click", () => { if (estado !== "jugando" && estado !== "listo") volverAlInicio(); });
+$("btn-comenzar").addEventListener("click", () => { if (estado === "listo" && !pausado) iniciar(nivel ? nivel.n : undefined); });
 $("aAjustes").addEventListener("click", irALibre);
 $("jugar").addEventListener("click", () => iniciar());
 $("otra").addEventListener("click", () => iniciar(nivel ? nivel.n : undefined));
@@ -538,32 +566,42 @@ function cuadro(ahora) {
   requestAnimationFrame(cuadro);
   if (!ultimo) ultimo = ahora;
   const dt = Math.min(0.05, (ahora - ultimo) / 1000); ultimo = ahora;
-  if (estado === "menu" || estado === "mapa" || estado === "inicio") return;   // pantallas sobre la madera (menú, niveles, Modo libre): no se simula ni se dibuja
+  if (estado === "mapa" || estado === "inicio") return;   // pantallas sobre la madera (niveles, Modo libre): no se simula ni se dibuja
   if (!pausado) actualizar(dt);
   dibujar();
 }
 // ---------- Info (ventana estándar «Cómo se juega»), mapa de niveles y Modo libre ----------
-// 22 600 niveles (100 por estado y por país, niveles-1slither.js). El mapa (compartido/mapa-niveles.js) se abre desde «📋 Niveles»; el Modo libre, desde el menú principal.
+// 3 900 niveles (20 por país, 195 países, niveles-1slither.js). El mapa (compartido/mapa-niveles.js) y el Modo libre se abren desde ☰ Pausa.
 let previoInfo = null;
 function abrirInfo() { previoInfo = document.activeElement; mostrar("info", true); try { $("infoVolver").focus({ preventScroll: true }); } catch (e) {} }
-function cerrarInfo() { if ($("info").hidden) return; mostrar("info", false); try { if (previoInfo && previoInfo.focus) previoInfo.focus({ preventScroll: true }); } catch (e) {} }
+function cerrarInfo() {
+  if ($("info").hidden) return;
+  mostrar("info", false);
+  if (pausado && (estado === "jugando" || estado === "listo")) { pausa.abrir(); return; }   // se abrió desde ☰ Pausa: vuelve la pausa (el juego sigue congelado)
+  try { if (previoInfo && previoInfo.focus) previoInfo.focus({ preventScroll: true }); } catch (e) {}
+}
 $("infoVolver").addEventListener("click", cerrarInfo);
 $("info").addEventListener("click", (e) => { if (e.target === $("info")) cerrarInfo(); });
 addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("info").hidden) { e.preventDefault(); e.stopImmediatePropagation(); cerrarInfo(); } }, true);
 const mapaNiveles = montarMapa({
   prefijo: ID,
-  etapas: crearEtapas({ porEtapa: POR_ETAPA }),
+  etapas: crearEtapas({ porEtapa: POR_ETAPA, soloPaises: true }),   // mapa solo de países (A-bis): México primero, un país a la vez
+  columnas: 5,                                                       // 7.3: listas de niveles de 5 en 5
   progreso: () => ({ max: prog.max, hecho: prog.hecho }),
-  jugarNivel: (n) => { mapaNiveles.cerrar(); iniciar(n); },
-  // el color indica los bots, el número la meta de puntos y la letra el mapa
+  jugarNivel: (n) => {
+    if (!NIVELES_CREADOS) { aviso("🚧 Los niveles todavía no están creados"); return; }
+    mapaNiveles.cerrar(); iniciar(n);
+  },
+  // el color indica los bots, el número la meta de puntos y la letra el mapa. Sin niveles creados: «🚧» en cada botón
   infoNivel: (n) => {
+    if (!NIVELES_CREADOS) return { sub: "🚧", clase: "b-cielo", aria: "nivel todavía no creado", sinMarca: true };
     const L = nivelDe(n);
     return { sub: abrev(L.meta) + " " + "PMG"[L.mapa], clase: ["b-verde", "b-azul", "b-rojo"][L.dif],
       aria: "bots " + ["fáciles", "normales", "difíciles"][L.dif] + ", mapa " + MAPAS[L.mapa].nombre.toLowerCase() + ", meta " + L.meta + " puntos" };
   },
-  leyenda: "Color = bots (verde fáciles · azul normales · rojo difíciles) · número = puntos de meta · P / M / G = tamaño del mapa",
+  leyenda: NIVELES_CREADOS ? "Color = bots (verde fáciles · azul normales · rojo difíciles) · número = puntos de meta · P / M / G = tamaño del mapa" : "",
   alInfo: abrirInfo,
-  avisoPrincipal: () => "Nivel " + prog.max + ": llega a " + nivelDe(prog.max).meta + " puntos",
+  avisoPrincipal: () => (NIVELES_CREADOS ? "Nivel " + prog.max + ": llega a " + nivelDe(prog.max).meta + " puntos" : "🚧 Los niveles todavía no están creados"),
   alCambiarVista: () => menuBoton(),
 });
 // ---------- Opciones del Modo libre: dificultad de los bots y tamaño del mapa (elegido b-oro on, resto b-cielo) ----------
@@ -591,8 +629,8 @@ import("../compartido/jugador.js").then((m) => {
     try { if (usuario) await m.salir(); else await m.entrar(); } catch (e) { console.warn("sesión:", e.code || e.message); }
   });
 }).catch(() => { $("btn-sesion").addEventListener("click", () => { $("txt-sesion").textContent = "Sin conexión"; setTimeout(() => { $("txt-sesion").textContent = "Iniciar sesión"; }, 2500); }); });
-pintarOpciones(); pintarMenu();
-// Arranque: directo al nivel donde va el jugador (o el 1), con la capa «Comenzar». El menú principal se alcanza desde ☰ Pausa → Menú principal.
+pintarOpciones();
+// Arranque: directo al nivel donde va el jugador (o el 1; sin niveles creados, el Modo libre), con la capa «Comenzar». Todo lo demás está en ☰ Pausa.
 irAListo(prog.max);
 requestAnimationFrame(cuadro);
 

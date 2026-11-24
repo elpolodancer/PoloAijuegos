@@ -1,7 +1,9 @@
 // Ruta: 1slither/verificar-1slither.mjs  (herramienta de desarrollo: NO se sube al service worker)
-// Comprueba que el reparto de los 22 600 niveles cumple lo pedido. Uso:   node 1slither/verificar-1slither.mjs
+// Comprueba que el reparto de los 3 900 niveles (195 países × 20) cumple lo pedido. Uso:   node 1slither/verificar-1slither.mjs
 // (necesita el package.json {"type":"module"} de esta carpeta). Sale con error si algo no cumple.
-import { nivelDe, TOTAL, POR_ETAPA, NUM_ETAPAS, mezclaEtapa, META_INI, META_FIN, TECHO, P_TECHO, probExito } from "./niveles-1slither.js";
+import { nivelDe, TOTAL, POR_ETAPA, NUM_ETAPAS, NIVELES_CREADOS, MEZCLA_INI, MEZCLA_FIN, mezclaEtapa, META_INI, META_FIN, TECHO, P_TECHO, probExito } from "./niveles-1slither.js";
+
+if (!NIVELES_CREADOS) { console.log("NIVELES_CREADOS = false: no hay niveles que verificar."); process.exit(0); }
 
 let fallos = 0;
 const ok = (cond, msg) => { console.log((cond ? "  ✔ " : "  ✘ ") + msg); if (!cond) fallos++; };
@@ -9,20 +11,21 @@ const pct = (a) => { const s = a.reduce((x, y) => x + y, 0); return a.map((v) =>
 const niv = Array.from({ length: TOTAL }, (_, i) => nivelDe(i + 1));
 
 console.log("Total y determinismo");
-ok(niv.length === 22600, "22 600 niveles (" + NUM_ETAPAS + " etapas de " + POR_ETAPA + ")");
+ok(niv.length === 3900 && NUM_ETAPAS === 195 && POR_ETAPA === 20, "3 900 niveles (" + NUM_ETAPAS + " países de " + POR_ETAPA + ")");
 ok(niv.every((l, i) => JSON.stringify(l) === JSON.stringify(nivelDe(i + 1))), "el nivel n sale igual cada vez");
 ok(niv[0].dif === 0 && niv[0].mapa === 0 && niv[0].meta === META_INI, "el nivel 1 es Fácil, Pequeño y de " + META_INI + " puntos");
 
 console.log("\nMezcla de dificultad (Fácil / Normal / Difícil) por etapa");
 const mix = (desde, hasta) => { const c = [0, 0, 0]; for (let n = desde; n <= hasta; n++) c[niv[n - 1].dif]++; return c; };
 const primera = mix(1, POR_ETAPA), ultima = mix(TOTAL - POR_ETAPA + 1, TOTAL);
-console.log("  primera etapa (Quintana Roo…):", primera.join(" / "), " última (el último país):", ultima.join(" / "));
-ok(primera.join() === "50,40,10", "primera etapa = 50 / 40 / 10");
-ok(ultima.join() === "25,35,40", "última etapa = 25 / 35 / 40");
+console.log("  primera etapa (México):", primera.join(" / "), " última (el último país):", ultima.join(" / "));
+const esperada = (m) => m.map((v) => v * POR_ETAPA / 100).join();
+ok(primera.join() === esperada(MEZCLA_INI), "primera etapa = " + MEZCLA_INI.join(" / ") + " % (" + esperada(MEZCLA_INI) + " de " + POR_ETAPA + ")");
+ok(ultima.join() === esperada(MEZCLA_FIN), "última etapa = " + MEZCLA_FIN.join(" / ") + " % (" + esperada(MEZCLA_FIN) + " de " + POR_ETAPA + ")");
 let sube = true;
 for (let e = 1; e < NUM_ETAPAS; e++) { const a = mezclaEtapa(e - 1), b = mezclaEtapa(e); if (b[0] > a[0] || b[2] < a[2]) sube = false; }
 ok(sube, "de etapa a etapa los Fáciles nunca suben y los Difíciles nunca bajan");
-ok(niv.every((l, i) => i % POR_ETAPA !== 0 || mix(i + 1, i + POR_ETAPA).reduce((a, b) => a + b) === 100), "cada etapa suma 100");
+ok(niv.every((l, i) => i % POR_ETAPA !== 0 || mix(i + 1, i + POR_ETAPA).reduce((a, b) => a + b) === POR_ETAPA), "cada etapa suma " + POR_ETAPA);
 console.log("  por décimas del juego:");
 for (let d = 0; d < 10; d++) console.log("   ", String(d * 10).padStart(2) + "–" + String(d * 10 + 10).padEnd(3) + "%  ", pct(mix(Math.floor(d * TOTAL / 10) + 1, Math.floor((d + 1) * TOTAL / 10))));
 

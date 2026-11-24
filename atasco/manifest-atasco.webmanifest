@@ -1,0 +1,19 @@
+{
+  "id": "juego-atasco-el-polo",
+  "name": "Atasco",
+  "short_name": "Atasco",
+  "description": "Atasco: abre paso al carro rojo. Niveles por países y un modo libre sin fin.",
+  "lang": "es",
+  "start_url": "./index-atasco.html?app=1",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#d9a866",
+  "theme_color": "#d9a866",
+  "icons": [
+    { "src": "icono-192-atasco.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icono-512-atasco.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icono-maskable-512-atasco.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "categories": ["games", "entertainment"]
+}
