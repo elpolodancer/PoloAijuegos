@@ -85,7 +85,9 @@ html.oscura .m-raiz{background:url("${MADERA_OSCURA}") center/cover no-repeat,#1
 .m-titulo{margin:0;font-size:1.25rem;line-height:1.2}
 .m-info{margin:2px 0 0;font-size:.82rem;color:var(--txt-fondo-suave,#5b6b7c);line-height:1.3}
 .m-acciones{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
-.m-acciones .b3d{--t:42px;font-size:15px}
+.m-acciones .b3d{--t:42px;font-size:15px;height:63px}   /* alto +50 % (42 → 63 px) en País · Mapa · Continuar; el ancho sigue siendo automático (igual que antes) */
+.m-mx{display:inline-flex;margin:0 0 5px;filter:drop-shadow(0 5px 0 var(--c3)) drop-shadow(0 8px 6px rgba(0,0,0,.4))}   /* envoltorio del botón «Mapa»: el recorte quita la sombra del botón, así que la sombra 3D se dibuja aquí */
+.m-mx .b3d,.m-mx .b3d:active:not(:disabled){margin:0;box-shadow:none;clip-path:polygon(2% 3%,26% 0%,56% 0%,68% 3%,87% 20%,92% 34%,95% 38%,97% 30%,100% 34%,100% 60%,95% 70%,88% 68%,80% 78%,68% 82%,56% 98%,46% 84%,34% 78%,27% 64%,23% 58%,22% 68%,20% 78%,14% 66%,8% 48%,5% 30%)}   /* «Mapa» con forma de México (Baja California a la izquierda, Yucatán a la derecha); mantiene el borde de 2 px para no cambiar el ancho */
 .m-cuerpo{flex:1 1 0;min-height:0;display:flex;flex-direction:column;align-items:center;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 2px 12px}
 .m-cuerpo>svg{display:block;width:100%;flex:1 1 auto;min-height:0;max-height:100%;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
 .m-cuerpo.m-mundo>svg{flex:none;height:auto;max-height:42vh}
@@ -554,6 +556,13 @@ export function montarMapa(o) {
     acciones.appendChild(b);
     return b;
   }
+  // «Mapa» con forma de México: se envuelve el botón en un span (.m-mx) que pone la sombra 3D, porque el recorte (clip-path) la cortaría
+  function enMexico(b) {
+    const w = h("span", "m-mx b-cielo");
+    acciones.replaceChild(w, b);
+    w.appendChild(b);
+    return b;
+  }
   function botonContinuar() {
     const p = prog(), n = o.nivelContinuar ? o.nivelContinuar() : p.max;
     boton("Continuar · nivel " + n, "▶", "b-verde", () => o.jugarNivel(n));
@@ -873,7 +882,7 @@ export function montarMapa(o) {
     info.textContent = hechos + " de " + NIVELES_POR_ETAPA + " niveles completados";
     const mio = indice;
     boton("País", "◀", "b-montana", () => ir("pais", mio));
-    boton("Mapa", "🗺️", "b-cielo", () => { enfoque = mio; ir("mundo"); });   // de vuelta al mundo, acercado a este país
+    enMexico(boton("Mapa", "🗺️", "b-cielo", () => { enfoque = mio; ir("mundo"); }));   // de vuelta al mundo, acercado a este país
     botonContinuar();
     rejillaNiveles(base);
   }
@@ -886,7 +895,7 @@ export function montarMapa(o) {
     info.textContent = UN_PAIS ? "" : "País " + (indice + 1) + " de " + NUM_PAISES + " · " + hechos + " de " + NIVELES_POR_ETAPA + " niveles completados" + (completo ? " · ¡completo! ⭐" : "");
     if (UN_PAIS) {
       // 🗺️ Mapa = el mundo con los países abiertos dibujados (al tocar uno se ven sus 20 niveles) · 🗂️ niveles de este país
-      boton("Mapa", "🗺️", "b-cielo", () => { enfoque = indice; ir("mundo"); });
+      enMexico(boton("Mapa", "🗺️", "b-cielo", () => { enfoque = indice; ir("mundo"); }));
       boton("Niveles", "🗂️", "b-azul", () => ir("niveles", indice));
       for (const x of o.botonesExtra || []) boton(x.texto, x.icono || "•", x.clase || "b-azul", x.fn);
       if (o.alInfo) boton("Info", "ℹ️", "b-azul", o.alInfo);
