@@ -6,12 +6,12 @@
 export const COLUMNAS = 10;
 export const FILAS = 15;
 export const MIN_GRUPO = 3;                 // desde 3 bloques del mismo color juntos (arriba/abajo/izquierda/derecha) se pueden quitar
-export const DIFICULTADES = [               // en Modo libre: más colores = grupos más difíciles de encontrar
-  { id: "muyfacil", nombre: "Muy fácil", colores: 3, clase: "b-verde" },
-  { id: "facil", nombre: "Fácil", colores: 4, clase: "b-azul" },
-  { id: "normal", nombre: "Normal", colores: 5, clase: "b-morado" },
-  { id: "dificil", nombre: "Difícil", colores: 6, clase: "b-oro" },
-  { id: "experto", nombre: "Experto", colores: 7, clase: "b-rojo" },
+export const DIFICULTADES = [               // en Modo libre: más colores = grupos más difíciles de encontrar. Las 5 estándar (ESTANDARES-juegos.md, 7.2)
+  { id: "muyfacil", emoji: "😁", nombre: "Muy fácil", colores: 3, nota: "3 colores: casi todo se puede quitar." },
+  { id: "facil", emoji: "😬", nombre: "Fácil", colores: 4, nota: "4 colores: grupos grandes con facilidad." },
+  { id: "normal", emoji: "😐", nombre: "Normal", colores: 5, nota: "5 colores: hay que buscar los grupos." },
+  { id: "dificil", emoji: "😡", nombre: "Difícil", colores: 6, nota: "6 colores: los grupos escasean." },
+  { id: "demoniaco", emoji: "😈", nombre: "Demoníaco", colores: 7, nota: "7 colores: el más difícil." },   // antes «Experto»; el récord se guarda por número de colores, así que no cambia
 ];
 
 const nueva = (colores, azar, y) => ({ c: Math.floor(azar() * colores), y, v: 0 });

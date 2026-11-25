@@ -3,55 +3,83 @@
 <html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#d9a866">
   <title>Explota colores</title>
-  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script>
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script> <!-- evita el parpadeo de la madera clara en modo oscuro -->
+  <!-- Instalar SOLO este juego: manifest e iconos propios (no el del portal) y service worker propio (sw-explotacolores.js, lo registra juego-explotacolores.js) -->
+  <link rel="manifest" href="manifest-explotacolores.webmanifest">
+  <link rel="apple-touch-icon" href="icono-180-explotacolores.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Explota colores">
+  <script>
+    // Chrome avisa que se puede instalar con «beforeinstallprompt», a veces ANTES de que cargue el módulo del juego: se guarda aquí para el botón «Instalar».
+    window.__pwa = { evento: null };
+    addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); window.__pwa.evento = e; });
+  </script>
   <link rel="stylesheet" href="../compartido/estilos.css">
   <link rel="stylesheet" href="../compartido/inmersivo.css">
   <style>
-    /* Solo lo propio de este juego; botones, chips y madera vienen de compartido/inmersivo.css */
-    .pantalla { position: fixed; inset: 0; z-index: 1; }
-    .menu { display: flex; flex-direction: column; align-items: center; gap: 12px; overflow-y: auto; padding: 104px 16px 64px; }
-    .menu > * { flex: none; }
-    .menu h1 { margin: 0 0 6px; font-size: clamp(1.8rem, 7vw, 2.6rem); text-align: center; color: var(--txt-fondo); text-shadow: var(--sombra-txt); }
-    .menu .b3d.grande { width: min(320px, 86vw); }
-    .lista-dif { display: flex; flex-direction: column; gap: 8px; width: min(300px, 80vw); }
-    .lista-dif .b3d { width: 100%; }
-    .info { position: fixed; z-index: 4; display: flex; gap: 10px; pointer-events: none; }
+    /* Solo lo propio de este juego. Navegación, pantalla de inicio, barra del nivel, cuadros de datos, Modo libre y Ajustes
+       vienen de compartido/inmersivo.css (bloque «INICIO CON MAPA»; ESTANDARES-juegos.md, sección 13). */
     #tablero { position: fixed; z-index: 2; touch-action: none; cursor: pointer; }
-    .fin { position: fixed; z-index: 8; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; background: rgba(0,0,0,.45); }
+    .fin { position: fixed; z-index: 7; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; background: rgba(0,0,0,.45); }
     .fin .caja { padding: 12px 18px; text-align: center; color: #f1f2f4; background: rgba(20,22,26,.9); border-radius: 14px; }
     .fin .caja b { display: block; font-size: 1.6rem; }
-    .fin .fila { display: flex; gap: 10px; }
-    .aviso-niv { position: fixed; z-index: 9; left: 50%; bottom: 80px; transform: translateX(-50%); padding: 10px 16px; border-radius: 12px; color: #fff; background: rgba(20,22,26,.92); }
+    .fin .fila { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+    .aviso-niv { position: fixed; z-index: 2147481000; left: 50%; bottom: calc(70px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 14px; text-align: center; font: 700 .9rem system-ui, sans-serif; color: #f1f2f4; background: #1e2025; border: 1px solid #7c5cff; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+    #sesion.tocable { cursor: pointer; }
   </style>
 </head>
 <body class="inmersivo">
-  <nav class="nav-juego" aria-label="Navegación">
-    <a class="b3d txt b-azuloscuro" href="../" title="Volver al portal de juegos"><span class="b-ico">🎮</span> Portal de Juegos</a>
-    <button class="b3d txt b-verde" id="btn-menu" type="button" title="Pausa" hidden><span class="b-ico">☰</span> Pausa</button>
+  <!-- Navegación del inicio con mapa (13.3): 🎮 y ☰ cuadrados, solo icono. El ☰ se rotula desde el JS según la pantalla -->
+  <nav class="nav-juego cuadrada" aria-label="Navegación">
+    <a class="b3d chico b-azuloscuro" id="btn-portal" href="../" title="Juegos: volver al portal" aria-label="Juegos: volver al portal"><span class="b-ico">🎮</span></a>
+    <button class="b3d chico b-verdeclaro" id="btn-menu" type="button" title="Volver al menú principal" aria-label="Volver al menú principal" hidden><span class="b-ico">☰</span></button>
   </nav>
-  <div class="hud hud-der" id="hud-sesion"><button class="b3d txt b-azul" id="btn-sesion" type="button"><span class="b-ico">👤</span> Iniciar sesión</button></div>
+  <!-- Arriba a la derecha, en columna: sesión (y, cuando el juego tenga monedas, el chip dorado debajo) -->
+  <div class="hud hud-der columna"><span class="chip" id="sesion"></span></div>
 
-  <main class="pantalla menu" id="menu">
-    <h1>💥 Explota colores</h1>
-    <button class="b3d txt grande b-verde" id="b-libre" type="button" aria-expanded="false"><span class="b-ico">♾️</span> Modo libre</button>
-    <div class="lista-dif" id="lista-dif" hidden></div>
-    <button class="b3d txt grande b-azul" id="b-niveles" type="button"><span class="b-ico">🪜</span> Niveles</button>
-    <button class="b3d txt grande b-azul" id="b-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
-    <a class="b3d txt grande b-rojo" href="../"><span class="b-ico">🚪</span> Salir</a>
-  </main>
-
-  <div class="info" id="info" hidden>
-    <span class="chip" id="chip-puntos"></span>
-    <span class="chip" id="chip-tiempo"></span>
+  <!-- Dentro de una partida: botón verde con el nombre (13.6) y, solo en niveles, 🗺️ -->
+  <div class="barra-nivel" id="barra-nivel" hidden>
+    <button class="b3d b-azul btn-mapa" id="btn-mapa-juego" type="button" title="Mapa" aria-label="Mapa" hidden><span class="b-ico">🗺️</span></button>
+    <button class="b3d txt b-verde nombre" id="barra-juego" type="button" title="Pausa"><span id="nombre-nivel"></span></button>
   </div>
+  <div class="cuadros-datos" id="cuadros" hidden>
+    <div>Puntos<b id="c-puntos">0</b></div>
+    <div>Tiempo<b id="c-tiempo">60 s</b></div>
+    <div>Récord<b id="c-record">–</b></div>
+  </div>
+
+  <!-- Pantalla de inicio (13.2): se ve UNA sola vez, al abrir el juego -->
+  <div class="pant-menu" id="pantalla-inicio" hidden>
+    <div class="ini-menu">
+      <button class="b3d txt b-morado ini-libre" id="btn-inicio-libre" type="button"><span class="b-ico">♾️</span><span>Modo libre</span></button>
+      <button class="b3d txt b-verde ini-jugar" id="btn-inicio-jugar" type="button"><span class="b-ico">▶</span><span>Jugar</span></button>
+      <button class="b3d txt b-azul ini-mapa" id="btn-inicio-mapa" type="button"><span class="b-ico">🗺️</span><span>Mapa</span></button>
+      <button class="b3d txt b-cielo ini-ajustes" id="btn-inicio-ajustes" type="button"><span class="b-ico">⚙️</span><span>Ajustes</span></button>
+    </div>
+  </div>
+
+  <!-- Modo libre (13.7): dificultad con 5 emojis, nota, récord y Jugar. Este tablero es fijo (10×15), así que no hay grupo «Tablero» -->
+  <div class="pant-menu" id="pantalla-libre" hidden>
+    <h2>♾️ Modo libre</h2>
+    <p class="modo-grupo">Dificultad</p>
+    <div class="modo-fila dif-fila" id="dif-fila" role="group" aria-label="Dificultad"></div>
+    <p class="dif-nombre" id="dif-nombre"></p>
+    <p class="libre-nota" id="libre-nota"></p>
+    <p class="libre-record" id="libre-record"></p>
+    <div class="libre-jugar">
+      <button class="b3d txt grande b-verde" id="btn-libre-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
+    </div>
+  </div>
+
   <canvas id="tablero" hidden role="img" aria-label="Tablero de bloques de colores de 10 por 15"></canvas>
   <div class="fin" id="fin" hidden role="dialog" aria-label="Fin de la ronda">
     <div class="caja"><div>⏱️ ¡Se acabó el tiempo!</div><b id="fin-puntos"></b><div id="fin-record"></div></div>
     <button class="b3d txt grande b-verde" id="b-otra" type="button"><span class="b-ico">🔄</span> Jugar otra vez</button>
-    <div class="fila"><button class="b3d txt b-azul" id="b-menu" type="button">Menú</button></div>
+    <div class="fila"><button class="b3d txt b-cielo" id="b-cambiar" type="button"><span class="b-ico">⚙️</span> Cambiar dificultad</button></div>
   </div>
   <div class="aviso-niv" id="aviso" role="status" hidden></div>
 
