@@ -5,54 +5,111 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Agario</title>
-  <meta name="theme-color" content="#000000" />
+  <meta name="theme-color" content="#d9a866" />
+  <script>try{if(localStorage.getItem("fondo_madera")==="oscura")document.documentElement.classList.add("oscura")}catch(e){}</script> <!-- evita el parpadeo de la madera clara en modo oscuro -->
+  <!-- Instalar SOLO este juego (13.9): manifest e iconos propios (no el del portal) y service worker propio (sw-agario.js, lo registra juego-agario.js) -->
+  <link rel="manifest" href="manifest-agario.webmanifest" />
+  <link rel="apple-touch-icon" href="icono-180-agario.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Agario" />
+  <script>
+    // Chrome avisa que se puede instalar con «beforeinstallprompt», a veces ANTES de que cargue el módulo del juego: se guarda aquí para el botón «Instalar».
+    window.__pwa = { evento: null };
+    addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); window.__pwa.evento = e; });
+  </script>
   <link rel="stylesheet" href="../compartido/estilos.css" />
   <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    html.inmersivo { --fondo-juego: #0d0e11; }
-    body.inmersivo { font-family: system-ui, sans-serif; color: #fff; touch-action: none; }
+    /* Inicio con mapa (ESTANDARES-juegos.md, sección 13): casi todos los estilos viven en compartido/inmersivo.css (bloque «INICIO CON MAPA»).
+       El fondo (madera clara u oscura) lo pone inmersivo.css; el canvas es transparente (se ve la madera fuera de la arena). */
     canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-    .hud { z-index: 9; }  /* por encima de las pantallas de inicio y fin: así el ← siempre se puede tocar */
-    .hud-izq { flex-wrap: wrap; max-width: calc(100vw - 20px); gap: 8px 10px; }
+    canvas[hidden] { display: none; }
+
+    /* ✂️ Dividir: abajo a la izquierda, a la derecha del botón 🌙/☀️ de la madera */
+    .hud-abajo { left: calc(max(10px, env(safe-area-inset-left)) + 52px); }
     .b3d.dividir { display: none; }
     .b3d.dividir.activo { display: inline-flex; }
-    .velo { position: fixed; inset: 0; z-index: 8; display: none; flex-direction: column; align-items: center; justify-content: flex-start; gap: 12px; padding: 60px 24px 24px; overflow-y: auto; text-align: center; background: rgba(8, 9, 12, .78); }
-    .velo > :first-child { margin-top: auto; }   /* centrado vertical que, si no cabe (celular acostado), se desplaza en vez de cortarse */
-    .velo > :last-child { margin-bottom: auto; }
-    @media (max-height: 520px) { .velo { padding-top: 56px; gap: 8px; } .velo h2 { font-size: 24px; } .velo p { max-width: 560px; font-size: 14px; line-height: 1.35; } }
-    .velo.activo { display: flex; }
-    .velo h2 { margin: 0; font-size: 32px; }
-    .velo p { margin: 0; max-width: 340px; line-height: 1.45; opacity: .92; }
-    .velo input { font: inherit; font-size: 18px; padding: 10px 14px; width: 240px; text-align: center; color: #fff; background: #23252b; border: 2px solid #4a4e58; border-radius: 12px; -webkit-user-select: text; user-select: text; }
+
+    /* Cuadros Masa · Tiempo · Récord (estándar 13.6): no tapan los toques, el dedo sigue moviendo la célula */
+    .cuadros-datos { pointer-events: none; }
+    .cuadros-datos[hidden] { display: none; }
+
+    /* Pantalla de inicio (13.2) y Modo libre (13.7) */
+    #pantalla-inicio { justify-content: flex-start; }
+    #pantalla-libre { gap: 10px; }
+    #pantalla-libre input { width: min(240px, 80vw); }
+    #pantalla-libre h2 { font-size: 1.4rem; }
+    #sesion { display: inline-block; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 30px; }   /* nombre largo: se recorta con «…» */
+    #sesion:empty { display: none; }
+    #sesion.tocable { cursor: pointer; }   /* en la app instalada sola: tocar «Iniciar sesión» abre el acceso con Google */
     input:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+
+    /* Fin de la partida (sección 6: el tablero es toda la ventana, así que la ventana la cubre sin velo oscuro) */
+    #fin .sobre-texto p { margin: 4px 0 0; max-width: 360px; line-height: 1.4; font-size: .9rem; }
+    @media (orientation: landscape) and (max-height: 560px) { #pantalla-libre, #pantalla-inicio { padding-top: calc(96px + env(safe-area-inset-top, 0px)); } }
   </style>
 </head>
 <body class="inmersivo" data-pantalla-auto>
-  <canvas id="lienzo"></canvas>
-  <div class="hud hud-izq">
-    <a class="b3d chico b-gris" href="../index.html" aria-label="Volver al portal"><span class="b-ico">←</span></a>
-    <span class="chip" id="masa"></span>
-    <span class="chip" id="record"></span>
+  <canvas id="lienzo" hidden></canvas>
+
+  <!-- Navegación (13.3): botones cuadrados solo con icono. «Juegos» siempre; ☰ según la pantalla (lo rotula juego-agario.js) -->
+  <nav class="nav-juego cuadrada" aria-label="Navegación">
+    <a class="b3d chico b-azuloscuro" id="btn-portal" href="../" title="Juegos: volver al portal" aria-label="Juegos: volver al portal"><span class="b-ico">🎮</span></a>
+    <button class="b3d chico b-verdeclaro" id="btn-menu" type="button" title="Volver al menú principal" aria-label="Volver al menú principal" hidden><span class="b-ico">☰</span></button>
+  </nav>
+  <!-- Arriba a la derecha, en columna: sesión y, debajo, monedas (dentro de una partida las monedas pasan a la barra de arriba) -->
+  <div class="hud hud-der columna"><span class="chip" id="sesion"></span><span class="chip chip-monedas" id="monedas" title="Monedas que dan los niveles (todavía no hay niveles)"></span></div>
+  <!-- Dentro de una partida (13.6): 🗺️ (solo en niveles) y botón verde con el nombre; al tocarlo abre la pausa -->
+  <div class="barra-nivel" id="barra-fila" hidden>
+    <button class="b3d b-azul btn-mapa" id="btn-mapa-juego" type="button" title="Mapa" aria-label="Mapa"><span class="b-ico">🗺️</span></button>
+    <button class="b3d txt b-verde nombre" id="barra-juego" type="button" title="Pausa" hidden><span id="nombre-nivel"></span></button>
+  </div>
+  <div class="cuadros-datos" id="cuadros" hidden>
+    <div>Masa<b id="masa">0</b></div>
+    <div>Tiempo<b id="tiempo">0:00</b></div>
+    <div>Récord<b id="record">–</b></div>
   </div>
   <div class="hud hud-abajo">
     <button class="b3d grande b-morado dividir" id="dividir" type="button" aria-label="Dividir" title="Dividir (barra espaciadora)"><span class="b-ico">✂️</span></button>
   </div>
 
-  <div id="inicio" class="velo activo">
-    <h2>🟣 Agario</h2>
-    <p>Come puntitos y células más pequeñas para crecer. Si una más grande que tú te toca, te come. Hay 45 bots jugando en un mapa enorme.</p>
-    <p>Las <b style="color:#7fd4ff">bolas azules</b> brillantes sueltan un montón de puntitos al tocarlas, y los <b style="color:#c58bff">portales</b> morados te llevan a otra parte del mapa (se ven en el minimapa).</p>
-    <p><b>Celular:</b> arrastra el dedo para moverte y toca ✂️ para dividirte.<br><b>Computadora:</b> mueve el mouse o usa las flechas/WASD; barra espaciadora para dividirte.</p>
-    <input id="nombre" maxlength="14" placeholder="Tu nombre" autocomplete="off" />
-    <button class="b3d txt grande b-verde" id="jugar" type="button" style="--t:56px"><span class="b-ico">▶</span>&nbsp;Jugar</button>
-  </div>
-  <div id="fin" class="velo">
-    <h2>Te comieron</h2>
-    <p id="finTexto"></p>
-    <button class="b3d txt grande b-verde" id="otra" type="button" style="--t:56px"><span class="b-ico">🔄</span>&nbsp;Jugar otra vez</button>
-  </div>
+  <main>
+    <!-- Pantalla de inicio (13.2): se ve UNA sola vez al abrir el juego; después el menú principal es el mapa -->
+    <section class="pant-menu" id="pantalla-inicio" hidden>
+      <div class="ini-menu">
+        <button class="b3d txt b-morado ini-libre" id="btn-inicio-libre" type="button"><span class="b-ico">♾️</span><span>Modo libre</span></button>
+        <button class="b3d txt b-verde ini-jugar" id="btn-inicio-jugar" type="button"><span class="b-ico">▶</span><span>Jugar</span></button>
+        <button class="b3d txt b-azul ini-mapa" id="btn-inicio-mapa" type="button"><span class="b-ico">🗺️</span><span>Mapa</span></button>
+        <button class="b3d txt b-cielo ini-ajustes" id="btn-inicio-ajustes" type="button"><span class="b-ico">⚙️</span><span>Ajustes</span></button>
+      </div>
+    </section>
+
+    <!-- Modo libre (13.7): la partida de siempre, tú y los bots en el mapa enorme -->
+    <section class="pant-menu" id="pantalla-libre" hidden>
+      <h2>♾️ Modo libre</h2>
+      <p class="modo-grupo">Dificultad</p>
+      <div class="modo-fila dif-fila" id="dif-fila" role="group" aria-label="Dificultad"></div>
+      <p class="dif-nombre" id="dif-nombre"></p>
+      <p class="modo-grupo">Tu nombre</p>
+      <input id="nombre" maxlength="14" placeholder="Tu nombre" autocomplete="off" />
+      <p class="libre-nota" id="nota-libre"></p>
+      <p class="libre-record" id="libre-record"></p>
+      <div class="libre-jugar">
+        <button class="b3d txt grande b-verde" id="btn-libre-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
+      </div>
+    </section>
+
+    <!-- Fin de la partida del Modo libre -->
+    <section class="sobre-tablero" id="fin" hidden>
+      <div class="sobre-texto"><h2>Te comieron</h2><p id="finTexto"></p></div>
+      <button class="b3d txt grande b-verde" id="otra" type="button" style="--t:56px"><span class="b-ico">🔄</span>&nbsp;Jugar otra vez</button>
+      <div class="sobre-fila"><button class="b3d txt b-cielo" id="fin-cambiar" type="button"><span class="b-ico">⚙️</span>&nbsp;Cambiar dificultad</button></div>
+    </section>
+  </main>
 
   <script type="module" src="juego-agario.js"></script>
   <script type="module" src="../compartido/pantalla-completa.js"></script>
+  <script type="module" src="../compartido/fondo-madera.js"></script>
 </body>
 </html>

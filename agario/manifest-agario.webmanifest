@@ -1,0 +1,37 @@
+{
+  "id": "juego-agario-el-polo",
+  "name": "Agario",
+  "short_name": "Agario",
+  "description": "Agario: come puntitos y células más chicas para crecer en un mapa enorme con bots; mapa de países y modo libre.",
+  "lang": "es",
+  "start_url": "./index-agario.html?app=1",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#d9a866",
+  "theme_color": "#d9a866",
+  "icons": [
+    {
+      "src": "icono-192-agario.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icono-512-agario.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icono-maskable-512-agario.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": [
+    "games",
+    "entertainment"
+  ]
+}

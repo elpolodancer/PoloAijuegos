@@ -1,12 +1,13 @@
 // Ruta: agario/juego-agario.js
-// «Agario»: tú y 45 bots en un mapa enorme. Come puntitos y células más pequeñas para crecer; si te toca una mucho más grande, te come.
-// Los ajustes están aquí arriba.
+// «Agario»: tú y un montón de bots en un mapa enorme. Come puntitos y células más pequeñas para crecer; si te toca una mucho más grande, te come.
+// Se puede instalar SOLO este juego (sw-agario.js + manifest-agario.webmanifest, ⚙️ Ajustes). Inicio con mapa (ESTANDARES-juegos.md, sección 13): pantalla de inicio (una vez) → mapa de 195 países × 20 niveles (los niveles todavía no están creados: 🚧) · ♾️ Modo libre (la partida de siempre, con 5 dificultades).
+// Los ajustes del juego están aquí arriba; el código del inicio, el mapa, la pausa y Ajustes está al final del archivo.
 
 const ID = "agario";
 
 // ---------- AJUSTES ----------
 const MUNDO = 6000;              // el mapa mide MUNDO x MUNDO (en píxeles del juego)
-const NUM_BOTS = 45;             // bots que juegan solos
+const NUM_BOTS = 45;             // bots que juegan solos en dificultad «Normal» (las otras dificultades: ver DIFICULTADES más abajo)
 const NUM_COMIDA = 2600;         // puntitos de comida repartidos por el mapa
 const MASA_INICIAL = 10;         // masa con la que empiezas
 const MASA_COMIDA = 1;           // masa que da cada puntito
@@ -53,11 +54,38 @@ const NOMBRES = [
   "Cenzontle", "Armadillo", "Cacomixtle", "Tepezcuintle", "Gallito",
 ];
 
-// ---------- Perfil (puntos totales del portal) ----------
-// Se carga aparte para que el juego funcione aunque falle Firebase.
-// Los puntos se anotan en el dispositivo (cola) y se envían cuando haya internet y sesión.
-import { encolarPuntos } from "../compartido/cola-puntos.js";
+// ---------- Módulos del portal ----------
+// Inicio con mapa (ESTANDARES-juegos.md, sección 13). jugador.js y progreso.js se cargan aparte con import() y try/catch: el juego abre aunque falle Firebase.
+import { encolarPuntos, leerCola, guardarCola } from "../compartido/cola-puntos.js";
+import { crearEtapas } from "../compartido/etapas-mapa.js";
+import { montarMapa } from "../compartido/mapa-niveles.js";
+import { crearMenuPausa } from "../compartido/menu-pausa.js";
+import { NIVELES, POR_ETAPA, monedasDe } from "./niveles-agario.js";
+
+const MOSTRAR_BORRAR_HISTORIAL = false;   // BOTÓN DE PRUEBAS en ⚙️ Ajustes («Borrar todo el historial y reiniciar»). Ponlo en true solo mientras pruebas; debe quedar en false al publicar (13.8)
+const PUNTOS_LIBRE = true;                // true = el Modo libre sigue dando puntos de perfil por masa máxima (Agario premia por partida: sección 12). false = sin puntos (estándar 7.2)
+let reiniciando = false;                  // true mientras se borra el historial: la sincronización con la nube no vuelve a traer lo borrado
 let enviadosPerfil = 0;
+const ETAPAS = crearEtapas({ porEtapa: POR_ETAPA, soloPaises: true });   // 195 países (México primero) × 20 niveles = 3 900 (estándar A-bis)
+const TOTAL = ETAPAS.total;
+
+// ---------- Dificultades del Modo libre (las 5 estándar, 7.2) ----------
+// Cambian cuántos bots hay, cuánto te persiguen a TI y qué tan rápidos son (1 = igual que tú). «Normal» es el juego de siempre.
+const DIFICULTADES = [
+  { emoji: "😁", nombre: "Muy fácil", bots: 25, ganas: 0.15, vel: 0.86, nota: "Pocos bots, lentos y casi no te persiguen." },
+  { emoji: "😬", nombre: "Fácil", bots: 35, ganas: 0.3, vel: 0.91, nota: "Menos bots y te persiguen poco." },
+  { emoji: "😐", nombre: "Normal", bots: NUM_BOTS, ganas: GANAS_JUGADOR, vel: VEL_BOTS, nota: "Como siempre: " + NUM_BOTS + " bots." },
+  { emoji: "😡", nombre: "Difícil", bots: 55, ganas: 0.8, vel: 1, nota: "Más bots, te persiguen más y corren igual que tú." },
+  { emoji: "😈", nombre: "Demoníaco", bots: 70, ganas: 1, vel: 1.05, nota: "70 bots que te cazan y son más rápidos que tú." },
+];
+let cfg = DIFICULTADES[2];               // la dificultad de la partida en curso
+let libreDif = 2;                        // la elegida en la pantalla del Modo libre
+let difJugada = 2, recordIni = 0;        // dificultad de la partida en curso y récord que tenía al empezar
+
+// ---------- Estado de pantallas ----------
+let modo = "libre";                      // "libre" (partida sin fin) | "nivel" (niveles del mapa; todavía no hay)
+let pantalla = "pantalla-inicio";        // "pantalla-inicio" | "pantalla-libre" | "pantalla-niveles" (el mapa) | "juego"
+let pausado = false;
 
 // ---------- Elementos ----------
 const lienzo = document.getElementById("lienzo");
@@ -72,20 +100,39 @@ function ajustar() {
 window.addEventListener("resize", ajustar);
 ajustar();
 
-let record = 0;
-try { record = Number(localStorage.getItem("agario_record")) || 0; } catch (e) {}
-const pintarRecord = () => { $("record").textContent = "Récord: " + Math.round(record); };
-pintarRecord();
-// El récord se sincroniza con la cuenta de Google (se queda el mayor entre este dispositivo y la nube)
-let nube = null;
-import("../compartido/progreso.js").then((m) => {
-  nube = m.conectar(ID, {
-    clave: "agario_record",
-    fusionar: (a, b) => (a == null && b == null ? null : Math.max(Number(a) || 0, Number(b) || 0)),
-    alCambiar: (v) => { record = Number(v) || 0; pintarRecord(); },
-  });
-}).catch(() => {});
-try { $("nombre").value = localStorage.getItem("agario_nombre") || ""; } catch (e) {}
+// ---------- Progreso (local primero; se sincroniza con la cuenta de Google si hay internet y sesión) ----------
+// { v: 1, hechos: NÚMERO = nivel más alto pasado (0 = ninguno; los niveles se abren en orden), libre: { "<dificultad 0-4>": masa máxima } }
+// El récord de antes (clave «agario_record», un solo número) pasa a «Normal» (2), que era la dificultad que ya jugaban; también se lee así de la nube.
+const VERSION_PROG = 1;
+const CLAVE = ID + "_progreso";
+function limpiar(p) {
+  if (typeof p === "number") p = { libre: { 2: p } };          // formato viejo: solo el récord
+  if (!p || typeof p !== "object") return null;
+  const libre = {};
+  for (let d = 0; d < DIFICULTADES.length; d++) { const m = Math.round(Number(p.libre && p.libre[d])); if (m > 0) libre[d] = m; }
+  return { v: VERSION_PROG, hechos: Math.max(0, Math.min(TOTAL, Math.floor(Number(p.hechos)) || 0)), libre };
+}
+let prog = { v: VERSION_PROG, hechos: 0, libre: {} }, nube = null;
+try { prog = limpiar(JSON.parse(localStorage.getItem(CLAVE))) || prog; } catch (e) {}
+try {
+  const viejo = Math.round(Number(localStorage.getItem("agario_record")) || 0);
+  if (viejo > 0) { if (viejo > (prog.libre[2] || 0)) prog.libre[2] = viejo; localStorage.setItem(CLAVE, JSON.stringify(prog)); localStorage.removeItem("agario_record"); }
+} catch (e) {}
+let sucio = false, tGuardar = 0;          // el récord se anota en memoria al instante y se guarda cada 2 s (y al morir o salir)
+function guardarProg() {
+  sucio = false;
+  try { localStorage.setItem(CLAVE, JSON.stringify(prog)); } catch (e) {}
+  if (nube) nube.guardado();
+}
+const hechoMax = () => prog.hechos;       // nivel más alto terminado (0 = ninguno)
+
+// Modo libre: última dificultad elegida (clave terminada en _v1 para que entre en la copia de seguridad de compartido/almacen.js)
+const CLAVE_LIBRE = "agario_libre_v1";
+try { const g = JSON.parse(localStorage.getItem(CLAVE_LIBRE)); if (g && DIFICULTADES[g.d]) libreDif = g.d; } catch (e) {}
+const guardarLibre = () => { try { localStorage.setItem(CLAVE_LIBRE, JSON.stringify({ d: libreDif })); } catch (e) {} };
+
+// Récord de la dificultad de la partida (cuadro «Récord» de arriba)
+const pintarRecord = () => { const r = prog.libre[difJugada] || 0; $("record").textContent = r > 0 ? String(r) : "–"; };
 
 // ---------- Estado ----------
 const radio = (m) => 4 * Math.sqrt(m);
@@ -182,7 +229,7 @@ function puntoLibre() {
 // ---------- Bots ----------
 function nuevoBot(i) {
   return {
-    tipo: "bot", nombre: NOMBRES[i % NOMBRES.length], h: Math.floor(Math.random() * 360),
+    tipo: "bot", nombre: NOMBRES[i % NOMBRES.length] + (i >= NOMBRES.length ? " " + (Math.floor(i / NOMBRES.length) + 1) : ""), h: Math.floor(Math.random() * 360),
     celda: null, reaparece: Math.random() * 2, prox: 0, dx: 0, dy: 0,
     agresivo: 0.4 + Math.random() * 0.6, vaga: { x: MUNDO / 2, y: MUNDO / 2, hasta: 0 },
     caza: null, noCaza: Math.random() * 3, divListo: 0, dividido: false,
@@ -230,7 +277,7 @@ function pensar(b) {
     else if (t > z.fin || dz > alcance * 0.85 + z.o.r || c.m <= z.o.m * FACTOR_COMER * 1.04) { b.caza = null; b.noCaza = t + azar(REPOSO_CAZA[0], REPOSO_CAZA[1]); }
     else objetivo = z.o;
   } else if (presa && t >= b.noCaza) {
-    const ganas = b.agresivo * (presa.dueno === jug ? GANAS_JUGADOR : 1);
+    const ganas = b.agresivo * (presa.dueno === jug ? cfg.ganas : 1);
     if (Math.random() < ganas) { b.caza = { o: presa, fin: t + azar(2.5, TIEMPO_CAZA_MAX) }; objetivo = presa; }
     else b.noCaza = t + azar(2, 4);
   }
@@ -454,7 +501,7 @@ window.addEventListener("blur", () => { for (const k in teclas) teclas[k] = fals
 $("dividir").addEventListener("pointerdown", (e) => { e.preventDefault(); dividir(); });
 
 function dividir() {
-  if (estado !== "jugando") return;
+  if (estado !== "jugando" || pausado) return;
   const mias = cuerpos.filter((c) => c.dueno === jug && !c.muerto);
   let total = mias.length;
   for (const c of mias) {
@@ -472,28 +519,39 @@ function dividir() {
 function crearMundo() {
   cuerpos = [];
   crearComida();
-  bots = Array.from({ length: NUM_BOTS }, (_, i) => nuevoBot(i));
+  bots = Array.from({ length: cfg.bots }, (_, i) => nuevoBot(i));
   bots.forEach(aparecerBot);
   orbes = Array.from({ length: NUM_ORBES }, () => nuevoOrbe());
   portales = []; chispas = [];
 }
 
+let txMasa = "", txTiempo = "";
+function pintarDatos(total) {              // cuadros Masa y Tiempo: solo se escribe en el DOM cuando cambian
+  const a = String(Math.round(total)), s = Math.round(t - t0), b = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  if (a !== txMasa) { txMasa = a; $("masa").textContent = a; }
+  if (b !== txTiempo) { txTiempo = b; $("tiempo").textContent = b; }
+}
+
 function iniciar() {
-  let nombre = ($("nombre").value || "").trim().slice(0, 14) || "Jugador";
+  const nombre = ($("nombre").value || "").trim().slice(0, 14) || "Jugador";
   try { localStorage.setItem("agario_nombre", nombre); } catch (e) {}
-  for (const c of cuerpos) if (c.dueno === jug) c.muerto = true;
-  cuerpos = cuerpos.filter((c) => !c.muerto);
+  crearMundo();                            // mundo nuevo en cada partida (el de antes quedaba corriendo detrás del menú)
   jug = { tipo: "jugador", nombre, h: Math.floor(Math.random() * 360), tpListo: 0 };
+  jugCeldas = []; tabla = []; rango = 0; tTabla = 0;
   const p = puntoLibre();
   celda(jug, p.x, p.y, MASA_INICIAL);
-  cam.x = p.x; cam.y = p.y;
-  estado = "jugando"; t0 = t; maxMasa = MASA_INICIAL; comidos = 0; enviadosPerfil = 0;
-  tPortal = t + azar(6, 12);
-  $("inicio").classList.remove("activo"); $("fin").classList.remove("activo");
+  cam.x = p.x; cam.y = p.y; cam.z = 0.6;
+  estado = "jugando"; pausado = false; t0 = t; maxMasa = MASA_INICIAL; comidos = 0; enviadosPerfil = 0;
+  difJugada = libreDif; recordIni = prog.libre[difJugada] || 0;
+  tPortal = t + azar(6, 12); tExtras = 0;
+  txMasa = txTiempo = "";
+  $("fin").hidden = true;
   $("dividir").classList.add("activo");
+  pintarRecord(); pintarBotonMenu();
 }
 
 function enviarPerfil() {
+  if (modo !== "libre" || !PUNTOS_LIBRE) return 0;
   const debe = Math.max(0, Math.floor(maxMasa / PUNTOS_POR_MASA) - 1) - enviadosPerfil;
   if (debe <= 0) return 0;
   enviadosPerfil += debe;
@@ -503,21 +561,23 @@ function enviarPerfil() {
 }
 
 function morir() {
-  estado = "fin";
+  estado = "fin"; pausado = false;
   $("dividir").classList.remove("activo");
-  const pts = Math.max(0, Math.floor(maxMasa / PUNTOS_POR_MASA) - 1);
+  const pts = modo === "libre" && PUNTOS_LIBRE ? Math.max(0, Math.floor(maxMasa / PUNTOS_POR_MASA) - 1) : 0;
   enviarPerfil();
+  guardarProg();
   const seg = Math.round(t - t0);
   $("finTexto").textContent = "Masa máxima: " + Math.round(maxMasa) + " · Tiempo: " + Math.floor(seg / 60) + ":" + String(seg % 60).padStart(2, "0") +
     " · Bots comidos: " + comidos + (pts ? " · +" + pts + " puntos para tu perfil (se envían cuando haya internet y hayas entrado con Google)" : "") +
-    (maxMasa >= record && maxMasa > MASA_INICIAL ? ". ¡Nuevo récord!" : ".");
-  $("fin").classList.add("activo");
+    (maxMasa > recordIni && maxMasa > MASA_INICIAL ? ". ¡Nuevo récord!" : ".");
+  $("fin").hidden = false;
+  pintarBotonMenu();
 }
-$("jugar").addEventListener("click", iniciar);
-$("otra").addEventListener("click", iniciar);
-$("nombre").addEventListener("keydown", (e) => { if (e.key === "Enter") iniciar(); });
-document.addEventListener("visibilitychange", () => { if (document.hidden && estado === "jugando") enviarPerfil(); });
-window.addEventListener("pagehide", () => { if (estado === "jugando") enviarPerfil(); });
+// Dejar la partida (por ☰, «Salir…» o cualquier cambio de pantalla): se anotan los puntos y el récord y se quita el mundo
+function abandonar() {
+  enviarPerfil(); guardarProg();
+  estado = "inicio"; pausado = false; cuerpos = []; jugCeldas = [];
+}
 
 // Pedazos de un mismo dueño: se empujan mientras corre el tiempo de fusión y después se atraen y se juntan
 function juntarPiezas(piezas, dt) {
@@ -566,7 +626,7 @@ function actualizar(dt) {
     let dx, dy, esc;
     if (c.dueno === jug) { dx = el ? ent.x / el : 0; dy = el ? ent.y / el : 0; esc = Math.min(1, el); }
     else {
-      dx = c.dueno.dx; dy = c.dueno.dy; esc = VEL_BOTS;
+      dx = c.dueno.dx; dy = c.dueno.dy; esc = cfg.vel;
       const mp = c.dueno.celda;
       if (mp && c !== mp && c.fusion <= 0) {                // pedazo suelto de un bot: vuelve con el principal
         const ex = mp.x - c.x, ey = mp.y - c.y, l = Math.hypot(ex, ey) || 1;
@@ -615,9 +675,11 @@ function actualizar(dt) {
   if (estado === "jugando") {
     const total = jugCeldas.reduce((s, c) => s + c.m, 0);
     if (total > maxMasa) maxMasa = total;
-    if (maxMasa > record) { record = maxMasa; try { localStorage.setItem("agario_record", String(Math.round(record))); } catch (e) {} pintarRecord(); if (nube) nube.guardado(); }
+    const rec = Math.round(maxMasa);
+    if (rec > (prog.libre[difJugada] || 0)) { prog.libre[difJugada] = rec; sucio = true; pintarRecord(); }   // récord de esta dificultad
+    if (sucio && t >= tGuardar) { tGuardar = t + 2; guardarProg(); }
     if (!jugCeldas.length) morir();
-    else $("masa").textContent = "Masa: " + Math.round(total) + (rango ? " · Puesto " + rango : "");
+    else pintarDatos(total);
   }
 
   actualizarExtras(dt);
@@ -703,7 +765,7 @@ function dibujarChispas() {
 // ---------- Dibujo ----------
 function dibujar() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = "#070b18"; ctx.fillRect(0, 0, W, H);
+  ctx.clearRect(0, 0, W, H);                                // el canvas es transparente: fuera de la arena se ve la madera (sección 2)
 
   const z = cam.z;
   ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * (W / 2 - cam.x * z), dpr * (H / 2 - cam.y * z));
@@ -760,8 +822,9 @@ function dibujar() {
   // Capa de pantalla
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   // Tabla de posiciones
-  const bx = W - 160, by = 10 + 0;
-  ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.beginPath(); ctx.roundRect(bx - 6, by, 156, 22 + tabla.length * 18, 10); ctx.fill();
+  const alto = 22 + tabla.length * 18, aLaDerecha = W >= 640 || W > H;   // en celular vertical la tabla va abajo a la izquierda (arriba no cabe junto a la barra y los cuadros)
+  const bx = aLaDerecha ? W - 160 : 16, by = aLaDerecha ? 48 : H - 100 - alto;
+  ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.beginPath(); ctx.roundRect(bx - 6, by, 156, alto, 10); ctx.fill();
   ctx.font = "700 13px system-ui, sans-serif"; ctx.textBaseline = "middle"; ctx.textAlign = "center";
   ctx.fillStyle = "#fff"; ctx.fillText("Mejores", bx + 72, by + 12);
   tabla.forEach((f, i) => {
@@ -796,6 +859,329 @@ function dibujar() {
   }
 }
 
+
+// ============================================================================================================================================
+// INICIO CON MAPA (ESTANDARES-juegos.md, sección 13): pantalla de inicio · mapa de países · Modo libre · pausa · Ajustes · sesión y nube
+// ============================================================================================================================================
+
+// Aviso corto flotante (el juego no usa alert ni confirm)
+let avisoT = 0;
+function aviso(texto) {
+  let a = $("aviso-flotante");
+  if (!a) {
+    a = document.createElement("div");
+    a.id = "aviso-flotante";
+    a.setAttribute("role", "status");
+    a.style.cssText = "position:fixed;left:50%;bottom:calc(70px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:2147481000;max-width:calc(100% - 32px);padding:10px 16px;border-radius:14px;background:#1e2025;color:#f1f2f4;border:1px solid #7c5cff;font:700 .9rem system-ui,sans-serif;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.45)";
+    document.body.appendChild(a);
+  }
+  a.textContent = texto; a.hidden = false;
+  clearTimeout(avisoT); avisoT = setTimeout(() => { a.hidden = true; }, 2600);
+}
+
+// ----- Monedas (chip dorado, sección 3): las dan los niveles, solo la primera vez. Aún no hay niveles, así que valen 0 -----
+const fmtNum = (x) => Number(x).toLocaleString("es-MX");
+function totalMonedas() { let s = 0; for (let i = 0; i < prog.hechos; i++) s += monedasDe(i); return s; }
+function pintarMonedas() {
+  const ico = document.createElement("span");
+  ico.className = "moneda";                                  // moneda dibujada con CSS (compartido/inmersivo.css)
+  $("monedas").replaceChildren(ico, document.createTextNode(fmtNum(totalMonedas())));
+}
+// El chip vive arriba a la derecha (bajo la sesión) y, dentro de una partida, pasa a la izquierda de la barra de arriba al centro
+function ubicarMonedas() {
+  const chip = $("monedas"), enBarra = !$("barra-fila").hidden;
+  const destino = enBarra ? $("barra-fila") : document.querySelector(".hud-der");
+  if (chip.parentNode === destino) return;
+  if (enBarra) destino.prepend(chip); else destino.appendChild(chip);
+}
+
+// ----- Mapa de niveles (13.4): 195 países × 20 niveles. Se ve el país donde va el jugador; 🗺️ Mapa = el mundo con los países abiertos -----
+let mapaEnPrincipal = true;                                   // ¿el mapa está en su vista principal (la del país)? Ahí el ☰ no se ve: el mapa ES el menú principal
+const mapa = montarMapa({
+  prefijo: ID,
+  etapas: ETAPAS,
+  etiquetaContinuar: () => (hechoMax() === 0 ? "▶ Jugar" : "▶ Continuar"),
+  unPais: true,
+  columnas: 4,                                                // los 20 niveles de un país: 4 columnas × 5 filas
+  botonesExtra: [{ icono: "♾️", texto: "Modo libre", clase: "b-morado", fn: () => mostrar("pantalla-libre") }],
+  alInfo: () => abrirInfo(),                                  // ℹ️ Info: cómo se juega
+  alCambiarVista: (esPrincipal) => { mapaEnPrincipal = esPrincipal; pintarBotonMenu(); },
+  progreso: () => { const h = hechoMax(); return { hecho: h, max: Math.min(TOTAL, h + 1) }; },
+  jugarNivel: (n) => jugarNivel(n - 1),
+  infoNivel: (n) => (NIVELES[n - 1] ? { sub: "", aria: "" } : { sub: "🚧", aria: "todavía no está creado" }),   // 🚧 mientras el nivel no exista
+});
+// n = nivel cuya etapa se abre (por defecto, el que toca); alcanzado = true abre la vista principal de su zona (se ve subir el agua)
+function abrirMapa(n, alcanzado) { mostrar("pantalla-niveles"); mapa.abrir(n || Math.min(TOTAL, hechoMax() + 1), alcanzado); }
+
+// ----- Pantallas -----
+// «pantalla-inicio» se ve UNA sola vez, al abrir. Después el menú principal es el MAPA: «inicio» siempre significa abrir el mapa (13.1).
+function pintarBotonMenu() {
+  const enMapa = mapa.abierto(), enJuego = pantalla === "juego";
+  $("btn-menu").hidden = !$("pantalla-inicio").hidden || (enMapa && mapaEnPrincipal);   // oculto en el inicio y en la vista principal del mapa; en sus vistas internas vuelve «Atrás»
+  const texto = enMapa ? "Atrás" : enJuego && modo === "libre" && estado === "jugando" ? "Pausa" : "Volver al menú principal";
+  $("btn-menu").innerHTML = '<span class="b-ico">☰</span>';   // cuadrado, solo icono: el texto va en title y aria-label
+  $("btn-menu").title = texto; $("btn-menu").setAttribute("aria-label", texto);
+}
+function mostrar(nombre) {
+  if (nombre === "inicio") { abrirMapa(); return; }
+  const enJuego = nombre === "juego";
+  if (!enJuego && estado !== "inicio") abandonar();
+  pantalla = nombre;
+  for (const p of ["pantalla-inicio", "pantalla-libre"]) $(p).hidden = p !== nombre;
+  if (nombre !== "pantalla-niveles") mapa.cerrar();
+  lienzo.hidden = !enJuego;
+  $("barra-fila").hidden = $("barra-juego").hidden = $("cuadros").hidden = !enJuego;
+  $("btn-mapa-juego").hidden = modo === "libre";              // el 🗺️ solo en los niveles
+  if (!enJuego) { $("fin").hidden = true; $("dividir").classList.remove("activo"); }
+  ubicarMonedas(); pintarMonedas(); pintarBotonMenu();
+  if (nombre === "pantalla-libre") pintarLibre();
+}
+
+// ----- Modo libre (13.7): Dificultad (5 emojis), nombre y ▶ Jugar -----
+function pintarLibre() {
+  const df = $("dif-fila");
+  df.replaceChildren();
+  DIFICULTADES.forEach((d, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "b3d txt " + (i === libreDif ? "b-oro on" : "b-cielo");
+    b.innerHTML = '<span class="b-ico">' + d.emoji + "</span>";
+    b.title = d.nombre; b.setAttribute("aria-label", d.nombre); b.setAttribute("aria-pressed", String(i === libreDif));
+    b.addEventListener("click", () => { libreDif = i; guardarLibre(); pintarLibre(); });
+    df.appendChild(b);
+  });
+  const d = DIFICULTADES[libreDif];
+  $("dif-nombre").textContent = d.emoji + " " + d.nombre + " · " + d.nota;
+  $("nota-libre").textContent = PUNTOS_LIBRE
+    ? "Sumas puntos para tu perfil según tu masa máxima (1 por cada " + PUNTOS_POR_MASA + " de masa, menos el primero). No da monedas."
+    : "Aquí no hay monedas ni puntos de perfil: solo se guarda tu masa máxima.";
+  const r = prog.libre[libreDif];
+  $("libre-record").textContent = r ? "🏆 Récord " + d.emoji + ": " + fmtNum(r) + " de masa" : "🏆 Aún sin récord en esta dificultad";
+}
+
+// ----- Empezar una partida -----
+function jugarNivel(i) {
+  if (!(i >= 0 && i < TOTAL) || i > hechoMax()) return;
+  if (!NIVELES[i]) { aviso("🚧 Los niveles todavía no están creados"); return; }
+  aviso("🚧 Este nivel todavía no se puede jugar");           // las mecánicas de los niveles se definen después (sección 10); aquí se armará la partida con modo = "nivel"
+}
+function jugarLibre() {
+  modo = "libre"; cfg = DIFICULTADES[libreDif]; guardarLibre();
+  mostrar("juego");
+  $("nombre-nivel").textContent = "♾️ Modo libre " + cfg.emoji;
+  $("barra-juego").setAttribute("aria-label", "Modo libre " + cfg.nombre);
+  iniciar();
+}
+
+// ----- Ventanas con el estilo de la pausa (.pausa-fondo + .pausa-panel): Ajustes e Info. No usan confirm() -----
+function ventana(titulo, alCerrar) {
+  const el = (tag, clase, texto) => { const x = document.createElement(tag); if (clase) x.className = clase; if (texto != null) x.textContent = texto; return x; };
+  const foco = document.activeElement;
+  const fondo = el("div", "pausa-fondo");
+  fondo.setAttribute("role", "dialog"); fondo.setAttribute("aria-modal", "true"); fondo.setAttribute("aria-label", titulo);
+  const panel = el("div", "pausa-panel aj-panel");
+  const nota = el("p", "aj-nota"); nota.setAttribute("role", "status"); nota.hidden = true;
+  const lista = el("div", "pausa-opciones");
+  panel.append(el("h2", "", titulo), nota, lista);
+  fondo.appendChild(panel);
+  document.body.appendChild(fondo);
+  let ocupado = false;
+  const tecla = (e) => { if (e.key === "Escape" && !ocupado) { e.preventDefault(); e.stopPropagation(); cerrar(); } };
+  function cerrar() {
+    fondo.remove(); removeEventListener("keydown", tecla, true);
+    try { if (foco && foco.focus) foco.focus({ preventScroll: true }); } catch (e) {}
+    if (alCerrar) alCerrar();
+  }
+  addEventListener("keydown", tecla, true);
+  fondo.addEventListener("click", (e) => { if (e.target === fondo && !ocupado) cerrar(); });
+  const boton = (icono, texto, clase, fn) => {
+    const b = el("button", "b3d txt " + clase); b.type = "button";
+    b.append(el("span", "b-ico", icono), el("span", "", texto));
+    b.addEventListener("click", fn);
+    lista.appendChild(b);
+    return b;
+  };
+  const texto = (t) => { const p = el("p", "aj-nota", t); panel.insertBefore(p, lista); };
+  const decir = (t) => { nota.textContent = t; nota.hidden = !t; };
+  const cerrarB = () => { const c = boton("", "Cerrar", "b-cielo", () => cerrar()); c.firstChild.remove(); return c; };
+  try { setTimeout(() => { const b = lista.querySelector("button"); if (b) b.focus({ preventScroll: true }); }, 0); } catch (e) {}
+  return { boton, texto, decir, cerrar, cerrarB, lista, ocupado: (v) => { ocupado = v; } };
+}
+
+// ℹ️ Cómo se juega (desde el mapa y desde la pausa)
+function abrirInfo(alCerrar) {
+  const v = ventana("ℹ️ Cómo se juega", alCerrar);
+  v.texto("Come puntitos y células más pequeñas para crecer. Si una más grande que tú te toca, te come. Hay bots jugando en un mapa enorme.");
+  v.texto("Las bolas azules brillantes sueltan un montón de puntitos al tocarlas, y los portales morados te llevan a otra parte del mapa (se ven en el minimapa).");
+  v.texto("Celular: arrastra el dedo para moverte y toca ✂️ para dividirte. Computadora: mueve el mouse o usa las flechas/WASD; barra espaciadora para dividirte.");
+  v.boton("", "Entendido", "b-verde", () => v.cerrar()).firstChild.remove();
+}
+
+// ----- Instalar SOLO este juego (manifest-agario.webmanifest + sw-agario.js; no baja ningún otro juego del portal) -----
+// ES_APP_SOLA = abierto desde SU PROPIO ícono instalado (start_url trae «?app=1»; se recuerda en sessionStorage por si se recarga). Ahí el portal no existe:
+// se oculta 🎮 (llevaría fuera del alcance de la app) y «Sin sesión» pasa a ser un botón para iniciar sesión (sin portal no habría dónde hacerlo).
+// Abierto dentro de la app del portal o en el navegador, todo sigue como siempre.
+const ES_APP_SOLA = (() => {
+  try { if (new URLSearchParams(location.search).has("app")) sessionStorage.setItem("agario_app", "1"); } catch (e) {}
+  let marca = false; try { marca = sessionStorage.getItem("agario_app") === "1"; } catch (e) {}
+  return marca && (matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: fullscreen)").matches || navigator.standalone === true);
+})();
+if (ES_APP_SOLA) $("btn-portal").hidden = true;
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw-agario.js", { scope: "./" }).catch(() => {});
+
+const yaEnApp = matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: fullscreen)").matches || navigator.standalone === true;
+let eventoInstalar = (window.__pwa && window.__pwa.evento) || null;
+let notaInstalar = () => {};                      // la fija la ventana de Ajustes mientras está abierta (muestra el mensaje ahí dentro)
+addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); eventoInstalar = e; });
+addEventListener("appinstalled", () => { eventoInstalar = null; notaInstalar("✅ Listo: busca «Agario» en tu pantalla de inicio."); });
+async function instalarJuego() {
+  if (eventoInstalar) { const e = eventoInstalar; eventoInstalar = null; e.prompt(); await e.userChoice.catch(() => {}); return; }
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const otraApp = /FBAN|FBAV|Instagram|WhatsApp|MicroMessenger|TikTok|Snapchat|Line\/|; wv\)/i.test(navigator.userAgent);
+  notaInstalar(ios ? "En iPhone/iPad: toca Compartir (el cuadro con la flecha) y luego «Agregar a pantalla de inicio»."
+    : otraApp ? "Estás en el navegador interno de otra app (WhatsApp, Facebook, Instagram…) y ahí no se puede instalar. Toca ⋮ y elige «Abrir en Chrome»."
+    : "Abre el menú de Chrome (⋮) y elige «Instalar aplicación» o «Agregar a la pantalla de inicio». Si no aparece, comprueba que no estés en modo incógnito y que Chrome esté actualizado.");
+}
+
+// ----- BORRAR TODO EL HISTORIAL (solo pruebas: ver MOSTRAR_BORRAR_HISTORIAL) -----
+// Borra en este dispositivo el progreso (niveles, monedas, récords), la dificultad elegida y los puntos pendientes de este juego y, con sesión, deja vacío el progreso de la cuenta
+// (si no, la sincronización lo volvería a traer). NO toca los puntos que el perfil del portal ya recibió. Devuelve true (también en la cuenta), false (no se pudo en la cuenta) o null (sin sesión).
+async function borrarHistorial() {
+  reiniciando = true;
+  const vacio = { v: VERSION_PROG, hechos: 0, libre: {} };
+  prog = vacio;
+  try { for (const k of [CLAVE, CLAVE_LIBRE, "agario_record"]) localStorage.removeItem(k); } catch (e) {}
+  try { guardarCola(leerCola().filter((e) => e.j !== ID)); } catch (e) {}
+  try {
+    const { auth, db } = await import("../compartido/firebase.js");
+    if (!auth || !auth.currentUser || !db) return null;
+    const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js");
+    const ref = doc(db, "progreso", auth.currentUser.uid, "juegos", ID);
+    await Promise.race([setDoc(ref, { datos: JSON.stringify(vacio), actualizado: serverTimestamp() }), new Promise((_, no) => setTimeout(() => no(new Error("lento")), 8000))]);
+    return true;
+  } catch (e) { console.warn("borrar historial (nube):", e.code || e.message); return false; }
+}
+
+// ----- ⚙️ Ajustes (13.8), solo desde la pantalla de inicio: instalar solo este juego, copia de seguridad y, mientras duren las pruebas, borrar el historial -----
+let ajustesAbierto = false;
+function abrirAjustes() {
+  if (ajustesAbierto) return;
+  ajustesAbierto = true;
+  const v = ventana("⚙️ Ajustes", () => { ajustesAbierto = false; notaInstalar = () => {}; });
+  notaInstalar = v.decir;
+  if (!yaEnApp) v.boton("📲", "Instalar solo este juego", "b-azulmarino", instalarJuego);   // ya dentro de una app instalada no tiene sentido ofrecerlo
+  v.boton("💾", "Copia de seguridad", "b-azul", async () => {
+    v.cerrar();
+    try { (await import("../compartido/almacen.js")).abrirPanelCopias(); } catch (e) { aviso("No se pudo abrir la copia de seguridad."); }
+  });
+  if (MOSTRAR_BORRAR_HISTORIAL) {
+    const TXT = "Borrar todo el historial y reiniciar";
+    let ocupado = false;
+    const borrar = v.boton("🗑️", TXT, "b-rojo", async () => {
+      if (ocupado) return;
+      if (!borrar.dataset.seguro) {                          // primer toque: pide confirmar (sin confirm())
+        borrar.dataset.seguro = "1"; borrar.lastChild.textContent = "¿Seguro? Toca otra vez para borrar TODO";
+        v.decir("Se borran niveles, monedas y récords (en este dispositivo y en tu cuenta). Es solo para pruebas.");
+        setTimeout(() => { if (!ocupado) { delete borrar.dataset.seguro; borrar.lastChild.textContent = TXT; } }, 5000);
+        return;
+      }
+      ocupado = true; v.ocupado(true);
+      for (const b of v.lista.querySelectorAll("button")) b.disabled = true;
+      v.decir("Borrando…");
+      const enNube = await borrarHistorial();
+      v.decir(enNube === false ? "Se borró en este dispositivo, pero no se pudo borrar en tu cuenta: al iniciar sesión se volverá a bajar. Reinténtalo con internet." : "✅ Listo. Reiniciando el juego…");
+      setTimeout(() => location.reload(), enNube === false ? 3500 : 900);
+    });
+  }
+  v.cerrarB();
+}
+
+// ----- Pausa (13.6 y 13.7) -----
+// Mientras la ventana está abierta el mundo se congela (pausado) y sigue donde iba al reanudar.
+const alAbrirPausa = () => { pausado = true; joy = null; };
+const alContinuarPausa = () => { pausado = false; };
+const pausaLibre = crearMenuPausa({                          // Modo libre: botón verde con el nombre o ☰
+  titulo: "Pausa",
+  textoContinuar: "Seguir jugando",
+  textoSalir: "Salir a elegir dificultad",
+  ayudaSalir: "La partida termina; se guarda tu masa máxima.",
+  puedeAbrir: () => pantalla === "juego" && modo === "libre" && estado === "jugando",
+  alAbrir: alAbrirPausa,
+  alContinuar: alContinuarPausa,
+  extras: () => [{ icono: "ℹ️", texto: "Cómo se juega", clase: "b-cielo", alElegir: () => abrirInfo(() => pausaLibre.abrir()) }],   // al cerrar Info vuelve la pausa (el mundo sigue congelado)
+  alSalir: () => { pausado = false; mostrar("pantalla-libre"); },
+});
+const pausaSalir = crearMenuPausa({                          // niveles (cuando existan): «¿Salir?»
+  titulo: "¿Salir?",
+  textoContinuar: "Seguir jugando",
+  textoSalir: "Salir al mapa",
+  ayudaSalir: "Se pierde lo avanzado en este nivel.",
+  puedeAbrir: () => pantalla === "juego" && modo === "nivel" && estado === "jugando",
+  alAbrir: alAbrirPausa,
+  alContinuar: alContinuarPausa,
+  alSalir: () => { pausado = false; mostrar("inicio"); },
+});
+$("barra-juego").addEventListener("click", () => (modo === "libre" ? pausaLibre : pausaSalir).abrir());
+$("btn-mapa-juego").addEventListener("click", () => pausaSalir.abrir());
+
+// ----- Botones -----
+// Jugar = el nivel que toca; mientras no se haya pasado ninguno abre el mapa en el nivel 1 (con ▶ Jugar en su centro).
+$("btn-inicio-jugar").addEventListener("click", () => { if (hechoMax() === 0) abrirMapa(1); else jugarNivel(Math.min(TOTAL, hechoMax() + 1) - 1); });
+$("btn-inicio-libre").addEventListener("click", () => mostrar("pantalla-libre"));
+$("btn-inicio-mapa").addEventListener("click", () => abrirMapa());
+$("btn-inicio-ajustes").addEventListener("click", abrirAjustes);
+$("btn-libre-jugar").addEventListener("click", jugarLibre);
+$("otra").addEventListener("click", jugarLibre);                                  // misma dificultad y nombre
+$("fin-cambiar").addEventListener("click", () => mostrar("pantalla-libre"));
+$("nombre").addEventListener("keydown", (e) => { if (e.key === "Enter") jugarLibre(); });
+// ☰ (13.3): vista interna del mapa → «Atrás»; partida libre → Pausa; nivel → «¿Salir?»; el resto → menú principal (el mapa)
+$("btn-menu").addEventListener("click", () => {
+  if (mapa.abierto() && !mapa.esPrincipal()) mapa.principal();
+  else if (pantalla === "juego" && modo === "libre" && estado === "jugando") pausaLibre.abrir();
+  else if (pantalla === "juego" && modo === "nivel") pausaSalir.abrir();
+  else mostrar("inicio");
+});
+function volcar() { if (estado === "jugando") enviarPerfil(); if (sucio) guardarProg(); }
+document.addEventListener("visibilitychange", () => { if (document.hidden) volcar(); });
+window.addEventListener("pagehide", volcar);
+
+// ----- Sesión y nube (opcionales: si Firebase no carga, el juego igual funciona) -----
+let haySesion = false;
+import("../compartido/jugador.js").then(({ alCambiarSesion }) =>
+  alCambiarSesion((u) => {
+    haySesion = !!u;
+    $("sesion").textContent = u ? (u.displayName || "Jugador") : ES_APP_SOLA ? "👤 Iniciar sesión" : "Sin sesión";
+    $("sesion").classList.toggle("tocable", ES_APP_SOLA && !u);
+  })
+).catch(() => {});
+$("sesion").addEventListener("click", async () => {   // solo en la app instalada sola: abre el acceso con Google
+  if (!ES_APP_SOLA || haySesion) return;
+  try { await (await import("../compartido/jugador.js")).entrar(); }
+  catch (e) { aviso("No se pudo iniciar sesión. Revisa tu conexión."); }
+});
+// Niveles pasados: gana el más alto. Récords del Modo libre: gana el mayor de cada dificultad.
+const mayor = (x, y) => Math.max(Number(x) || 0, Number(y) || 0);
+import("../compartido/progreso.js").then((m) => {
+  nube = m.conectar(ID, {
+    clave: CLAVE,
+    fusionar: (a, b) => {
+      if (reiniciando) return null;                           // se está borrando todo: no se une nada
+      a = limpiar(a); b = limpiar(b);                         // también entiende el formato viejo (solo un número)
+      if (!a && !b) return null;
+      const libre = {};
+      for (let d = 0; d < DIFICULTADES.length; d++) { const r = mayor(a && a.libre[d], b && b.libre[d]); if (r > 0) libre[d] = r; }
+      return { v: VERSION_PROG, hechos: mayor(a && a.hechos, b && b.hechos), libre };
+    },
+    alCambiar: (v) => {
+      prog = limpiar(v) || prog;
+      mapa.refrescar();                                       // si el mapa está abierto, se redibuja con el progreso de la cuenta
+      if (pantalla === "pantalla-libre") pintarLibre();
+      pintarMonedas(); pintarRecord();
+    },
+  });
+  nube.guardado(); // sube lo que ya hubiera en el dispositivo
+}).catch(() => {});
+
 // ---------- Ciclo ----------
 let ultimo = 0;
 function cuadro(ahora) {
@@ -803,9 +1189,11 @@ function cuadro(ahora) {
   if (!ultimo) ultimo = ahora;
   const dt = Math.min(0.05, (ahora - ultimo) / 1000);
   ultimo = ahora;
-  actualizar(dt);
+  if (pantalla !== "juego") return;                           // en el inicio, el Modo libre y el mapa no se calcula ni se dibuja nada
+  if (!pausado) actualizar(dt);
   dibujar();
 }
 
-crearMundo();
+try { $("nombre").value = localStorage.getItem("agario_nombre") || ""; } catch (e) {}
+mostrar("pantalla-inicio");                                   // única vez que se ve: al abrir el juego
 requestAnimationFrame(cuadro);
