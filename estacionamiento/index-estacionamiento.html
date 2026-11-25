@@ -1,5 +1,7 @@
 <!doctype html>
 <!-- Ruta: estacionamiento/index-estacionamiento.html -->
+<!-- Inicio con mapa (ESTANDARES-juegos.md, sección 13): pantalla de inicio (Modo libre · Jugar · Mapa · Ajustes), mapa de un solo país como menú principal,
+     barra de nivel arriba al centro, tres cuadros de datos y Modo libre con partidas guardadas. Los estilos del estándar viven en compartido/inmersivo.css (bloque «INICIO CON MAPA»). -->
 <html lang="es" class="inmersivo">
 <head>
   <meta charset="utf-8" />
@@ -11,113 +13,106 @@
   <link rel="stylesheet" href="../compartido/estilos.css" />
   <link rel="stylesheet" href="../compartido/inmersivo.css" />
   <style>
-    /* El fondo de madera lo pone compartido/fondo-madera.js; este color solo se ve un instante antes de que cargue */
+    /* El fondo (madera clara u oscura) lo pone compartido/fondo-madera.js; este color solo se ve un instante antes de que cargue */
     html.inmersivo { --fondo-juego: #d9a866; }
     html.inmersivo.oscura { --fondo-juego: #1d2024; }
     body.inmersivo { background: transparent; }
     .b3d:disabled { filter: grayscale(.85) brightness(.7); }
 
-    /* El estacionamiento ocupa toda la pantalla (se mueve con el dedo y se acerca con pellizco); los botones flotan encima.
-       El lienzo es TRANSPARENTE para que se vea la madera: el JS debe limpiar con clearRect, no pintar un fondo. */
-    #escena { position: absolute; inset: 0; }
+    /* El estacionamiento ocupa toda la pantalla; los botones flotan encima. El lienzo es TRANSPARENTE para que se vea la madera: el JS limpia con clearRect.
+       Solo se ve dentro de una partida (el JS pone/quita «hidden»). El tablero se encuadra en la zona que dejan libre la barra de arriba, los cuadros de datos y los boosts (zonaTablero en el JS). */
+    #escena { position: fixed; inset: 0; z-index: 1; }
     #lienzo { display: block; width: 100%; height: 100%; background: transparent; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
 
-    /* Arriba a la izquierda va la navegación estándar (.nav-juego); los contadores y el nivel pasan al centro */
-    .hud-centro { top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); }
-    /* Rótulo del nivel (arriba al centro): botón verde claro al doble de tamaño (68 px). No es pulsable */
-    .b3d.b-nivel { --c1: #e6ffd9; --c2: #9be88a; --c3: #3f9c3d; pointer-events: none; font-size: 30px; padding: 0 26px; color: #1f5a1d; text-shadow: 0 2px 0 rgba(255,255,255,.7); }
-    .b3d.b-nivel .b-ico { font-size: 1em; text-shadow: 0 2px 0 rgba(255,255,255,.7); }
-    .b3d.b-nivel small { margin-right: 8px; font-size: .55em; font-weight: 800; }
-    /* Fila de información, debajo del botón ☰ Pausa: monedas (dorado) · tamaño del tablero (negro) · movimientos (madera).
-       Los tres son «fichas» del mismo tamaño: 51 px de alto (68 − 25 %) */
-    .hud-info { top: calc(max(8px, env(safe-area-inset-top)) + 92px); left: max(8px, env(safe-area-inset-left)); max-width: calc(100vw - 70px); flex-wrap: wrap; gap: 8px; }
-    .chip-info { height: 51px; padding: 0 20px; font-size: 22.5px; white-space: nowrap; border-width: 2px; }
-    .chip.chip-info small { margin-right: 8px; font-size: 16px; }
-    /* Dorado */
-    .chip-monedas { color: #5a3300; text-shadow: 0 2px 0 rgba(255,255,255,.55); border-color: #a85d00;
-      background: linear-gradient(180deg, #fff08c 0%, #ffb020 55%, #e08a00 130%); box-shadow: 0 4px 0 #a85d00, inset 0 2px 0 rgba(255,255,255,.65); }
-    /* Madera (la del fondo, clara u oscura según el modo) */
-    .chip-madera { color: var(--txt-fondo, #4a2a10); text-shadow: var(--sombra-txt, 0 2px 0 rgba(255,240,210,.6));
-      background: url("../imagenes/fondomaderaclara.webp") center / cover no-repeat, #d9a866;
-      border-color: rgba(74,42,16,.6); box-shadow: 0 4px 0 rgba(74,42,16,.55), inset 0 2px 0 rgba(255,255,255,.35); }
-    html.oscura .chip-madera { background: url("../imagenes/fondomaderaoscura.webp") center / cover no-repeat, #1d2024; border-color: rgba(0,0,0,.7); box-shadow: 0 4px 0 rgba(0,0,0,.6), inset 0 2px 0 rgba(255,255,255,.12); }
-    .chip-madera small { color: var(--txt-fondo-suave, #6b4423); }
-    /* Negro: tamaño del tablero, con una etiqueta chiquita arriba y el número (más pequeño) abajo */
-    .chip-tam { flex-direction: column; justify-content: center; gap: 1px; padding: 0 16px; line-height: 1; color: #f1f2f4; text-shadow: 0 2px 0 rgba(0,0,0,.6);
-      background: linear-gradient(180deg, #3b3e45, #0d0e10); border-color: #000; box-shadow: 0 4px 0 #000, inset 0 2px 0 rgba(255,255,255,.18); }
-    .chip.chip-tam small { margin: 0; font-size: 9px; font-weight: 700; letter-spacing: .02em; color: #c9ccd3; text-shadow: none; }
-    .chip-tam b { font-size: 17px; }
-    /* Corazones: rojo */
-    .chip-vidas { color: #fff; text-shadow: 0 2px 0 rgba(90,0,0,.6); border-color: #7d0f1a;
-      background: linear-gradient(180deg, #ff8a95 0%, #e0283c 60%, #b3121f 130%); box-shadow: 0 4px 0 #7d0f1a, inset 0 2px 0 rgba(255,255,255,.45); }
-    .chip-vidas.poco { animation: latido .8s ease-in-out infinite; }
-    @keyframes latido { 50% { transform: scale(1.08); } }
-    @media (prefers-reduced-motion: reduce) { .chip-vidas.poco { animation: none; } }
-    /* Reiniciar: 25 % más grande que el resto de los botones chicos (40 → 50 px) */
-    #reiniciar { --t: 50px; border-radius: 15px; }
-    /* Moneda dibujada con CSS: el emoji 🪙 no se ve en sistemas viejos */
-    .moneda { position: relative; display: inline-block; flex: none; width: 1em; height: 1em; margin-right: 10px; border-radius: 50%; box-sizing: border-box;
-      background: radial-gradient(circle at 35% 30%, #fff7b8, #ffc928 55%, #d59100); border: .09em solid #a86a00; box-shadow: 0 .06em 0 rgba(0,0,0,.25), inset 0 .05em 0 rgba(255,255,255,.6); }
-    .moneda::after { content: "$"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: .62em; font-weight: 900; color: #a86a00; text-shadow: 0 1px 0 rgba(255,255,255,.55); }
-    .b-info .moneda { width: 1.15em; height: 1.15em; margin: 0 0 -.25em 3px; border-width: 1px; }
-    @media (max-aspect-ratio: 1/1) { .hud-centro { left: calc(56px + env(safe-area-inset-left, 0px)); transform: none; max-width: none; } } /* en vertical el nivel va a la derecha de los botones 🎮 y ☰ (cuadrados) */
-    /* Fuera de una partida (inicio y mapa) no se ven el lienzo ni los marcadores de la partida (el lienzo conserva su tamaño: visibility, no display) */
-    body.fuera #escena { visibility: hidden; }
-    body.fuera .hud-centro, body.fuera .hud-info, body.fuera .hud-abajo, body.fuera #reiniciar { display: none; }
-    /* Chip de sesión (arriba a la derecha): el nombre largo se recorta con «…» */
-    #sesion:empty { display: none; }
-    #sesion { display: block; line-height: 34px; max-width: 38vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    /* Abajo a la izquierda queda 🌙/☀️ y abajo a la derecha ⛶, así que el selector de nivel / boosts va al centro */
-    .hud-abajo { left: 50%; transform: translateX(-50%); gap: 8px; }
-    .chip small { margin-right: 5px; }
+    /* Cuadro de corazones: late cuando quedan 3 o menos */
+    #vidas.poco b { animation: latido .8s ease-in-out infinite; }
+    @keyframes latido { 50% { transform: scale(1.12); } }
+    @media (prefers-reduced-motion: reduce) { #vidas.poco b { animation: none; } }
 
-    #msg { position: fixed; z-index: 6; left: 50%; top: calc(158px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); width: max-content; max-width: 92vw; padding: 6px 14px; text-align: center; color: #f1f2f4; background: rgba(10,10,12,.82); border: 1px solid var(--borde); border-radius: 16px; font-size: .9rem; pointer-events: none; opacity: 0; transition: opacity .2s; }
+    /* Boosts abajo al centro (⛶ va abajo a la derecha) */
+    .hud-abajo { left: 50%; transform: translateX(-50%); gap: 8px; z-index: 6; }
+
+    #msg { position: fixed; z-index: 6; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: max-content; max-width: 92vw; padding: 6px 14px; text-align: center; color: #f1f2f4; background: rgba(10,10,12,.82); border: 1px solid var(--borde); border-radius: 16px; font-size: .9rem; pointer-events: none; opacity: 0; transition: opacity .2s; }
     #msg.ver { opacity: 1; }
-
-    /* Fin de nivel: estándar «sobre el tablero» (.sobre-tablero en compartido/inmersivo.css); juego-estacionamiento.js lo coloca encima del tablero */
-    @media (max-aspect-ratio: 1/1) { #msg { top: calc(220px + env(safe-area-inset-top, 0px)); } }
     @media (prefers-reduced-motion: reduce) { #msg { transition: none; } }
+
+    /* La sesión puede tener un nombre largo: se recorta con «…» para no tapar el chip de monedas */
+    #sesion { display: inline-block; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 30px; }
+    #sesion:empty { display: none; }
+
+    /* Pantalla de inicio y Modo libre: usan .pant-menu de compartido/inmersivo.css */
+    #pantalla-libre { gap: 10px; }
+    #pantalla-libre h2 { margin: 0; font-size: 1.4rem; }
+    .libre-jugar .b3d > span { position: relative; }
+
+    /* Ventana «Partidas guardadas» (usa .pausa-fondo y .pausa-panel de compartido/inmersivo.css) */
+    .pausa-panel.pg-panel { width: min(100%, 420px); }
+    .pg-nota { margin: 0 0 10px; color: #b0b4bd; font-size: .85rem; line-height: 1.3; }
+    .pg-lista { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+    .pg-fila { display: flex; gap: 8px; align-items: flex-start; }
+    .pausa-panel .pg-main { --t: 54px; flex: 1 1 auto; min-width: 0; justify-content: flex-start; height: auto; min-height: var(--t); padding: 6px 12px; white-space: normal; text-align: left; line-height: 1.2; font-size: 15px; border-radius: 15px; }
+    .pg-main > span { position: relative; }
+    .pg-main .b-ico { margin-right: 8px; }
+    .pg-main .pg-texto { display: flex; flex-direction: column; align-items: flex-start; }
+    .pg-main .pg-texto small { font-size: .75rem; font-weight: 600; opacity: .9; }
+    .pausa-panel .pg-borrar { --t: 54px; flex: none; height: var(--t); padding: 0 12px; font-size: 15px; border-radius: 15px; }
+    .pg-borrar > span { position: relative; }
   </style>
 </head>
-<body class="inmersivo fuera" data-pantalla-auto data-madera-boton="oculto">
-  <main id="escena">
+<body class="inmersivo" data-pantalla-auto data-madera-boton="oculto"> <!-- oculto: sin el botón 🌙/☀️ flotante (el cambio de madera está en ⚙️ Ajustes) -->
+  <!-- Navegación estándar 13.3: 🎮 y ☰ cuadrados, solo icono. ☰ se oculta en la pantalla de inicio y en la vista principal del mapa -->
+  <nav class="nav-juego cuadrada" aria-label="Navegación">
+    <a class="b3d chico b-azuloscuro" id="btn-portal" href="../" title="Juegos: volver al portal" aria-label="Juegos: volver al portal"><span class="b-ico">🎮</span></a>
+    <button class="b3d chico b-verdeclaro" id="btn-menu" type="button" title="Volver al menú principal" aria-label="Volver al menú principal" hidden><span class="b-ico">☰</span></button>
+  </nav>
+  <!-- Arriba a la derecha, en columna: sesión y, debajo, monedas (dentro de una partida las monedas pasan a la barra de nivel) -->
+  <div class="hud hud-der columna"><span class="chip" id="sesion"></span><span class="chip chip-monedas" id="monedas" title="Monedas: 20 por nivel medio y 35 por nivel difícil, solo la primera vez"></span></div>
+
+  <!-- Dentro de una partida: monedas · 🗺️ · botón verde con el nombre del nivel (al tocarlo pregunta «¿Salir?») -->
+  <div class="barra-nivel" id="barra-nivel" hidden>
+    <button class="b3d b-azul btn-mapa" id="btn-mapa-juego" type="button" title="Mapa" aria-label="Mapa"><span class="b-ico">🗺️</span></button>
+    <button class="b3d txt b-verde nombre" id="barra-juego" type="button" title="Salir al mapa"><span id="nombre-nivel"></span></button>
+  </div>
+  <!-- Tres cuadros azules, cada uno más oscuro que el anterior -->
+  <div class="cuadros-datos" id="cuadros" hidden>
+    <div>Movimientos<b id="movs">0</b></div>
+    <div id="vidas" title="Corazones: pierdes uno al tocar un auto que tiene otro enfrente">Corazones ❤️<b id="vidas-txt">0</b></div>
+    <div>Autos<b id="autos-txt">0</b></div>
+  </div>
+
+  <main id="escena" hidden>
     <canvas id="lienzo" class="lienzo"></canvas>
   </main>
   <div id="msg" role="status" aria-live="polite"></div>
+  <div class="hud hud-abajo" id="boosts" hidden></div>
 
-  <!-- Pantalla de inicio (se ve UNA sola vez, al abrir el juego): ♾️ Modo libre · ▶ Jugar · 🗺️ Mapa · ⚙️ Ajustes. Estilos .ini-* en compartido/inmersivo.css -->
-  <section class="pant-menu" id="pantalla-inicio" hidden>
+  <!-- Pantalla de inicio (13.2): se ve UNA sola vez, al abrir el juego. Modo libre · Jugar (el doble de alto) · Mapa · Ajustes -->
+  <div class="pant-menu" id="pantalla-inicio" hidden>
     <div class="ini-menu">
-      <button class="b3d txt ini-libre b-morado" id="btn-inicio-libre" type="button"><span class="b-ico">♾️</span> Modo libre</button>
-      <button class="b3d txt ini-jugar b-verde" id="btn-inicio-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
-      <button class="b3d txt ini-mapa b-azul" id="btn-inicio-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
-      <button class="b3d txt ini-ajustes b-cielo" id="btn-inicio-ajustes" type="button"><span class="b-ico">⚙️</span> Ajustes</button>
+      <button class="b3d txt b-morado ini-libre" id="btn-inicio-libre" type="button"><span class="b-ico">♾️</span><span>Modo libre</span></button>
+      <button class="b3d txt b-verde ini-jugar" id="btn-inicio-jugar" type="button"><span class="b-ico">▶</span><span>Jugar</span></button>
+      <button class="b3d txt b-azul ini-mapa" id="btn-inicio-mapa" type="button"><span class="b-ico">🗺️</span><span>Mapa</span></button>
+      <button class="b3d txt b-cielo ini-ajustes" id="btn-inicio-ajustes" type="button"><span class="b-ico">⚙️</span><span>Ajustes</span></button>
     </div>
-  </section>
-
-  <!-- Navegación estándar cuadrada (solo icono): 🎮 vuelve al portal; ☰ es «Pausa» en una partida, «Atrás» en las vistas internas del mapa y no se ve en el inicio ni en el mapa principal -->
-  <nav class="nav-juego cuadrada" aria-label="Navegación">
-    <a class="b3d chico b-azuloscuro" href="../" title="Volver al portal de juegos" aria-label="Volver al portal de juegos"><span class="b-ico">🎮</span></a>
-    <button class="b3d chico b-verdeclaro" id="btn-menu" type="button" title="Pausa" aria-label="Pausa" hidden><span class="b-ico">☰</span></button>
-  </nav>
-
-  <!-- Capas flotantes -->
-  <div class="hud hud-centro">
-    <span class="b3d txt grande b-nivel" id="chip-nivel"><span class="b-ico"><small>Nivel</small><b id="nivel-num">1</b></span></span>
   </div>
-  <!-- Debajo de «☰ Pausa»: monedas (lo pone el JS al principio) · tamaño del tablero · movimientos -->
-  <div class="hud hud-info" id="fila-info">
-    <span class="chip chip-info chip-tam" id="tam" title="Tamaño del tablero"><small>Tamaño del tablero</small><b id="tam-txt"></b></span>
-    <span class="chip chip-info chip-vidas" id="vidas" title="Corazones: pierdes uno al tocar un auto que tiene otro enfrente"><small>❤️</small><b id="vidas-txt">0</b></span>
-    <span class="chip chip-info chip-madera"><small>Movs</small><b id="movs">0</b></span>
-  </div>
-  <!-- Arriba a la derecha: chip de sesión (el primero), debajo el de monedas en el inicio y el mapa (lo mueve el JS) y 🔄 solo dentro de una partida -->
-  <div class="hud hud-der columna">
-    <span class="chip" id="sesion"></span>
-    <button class="b3d chico b-verde" id="reiniciar" type="button" title="Reiniciar nivel" aria-label="Reiniciar nivel"><span class="b-ico">🔄</span></button>
-  </div>
-  <div class="hud hud-abajo" id="boosts"></div>
 
+  <!-- Modo libre (13.7): dificultad (😐 medio · 😡 difícil), tablero (5×5 a 10×10), récord y partidas guardadas. No da monedas ni puntos -->
+  <div class="pant-menu" id="pantalla-libre" hidden>
+    <h2>♾️ Modo libre</h2>
+    <p class="modo-grupo">Dificultad</p>
+    <div class="modo-fila dif-fila" id="dif-fila" role="group" aria-label="Dificultad"></div>
+    <p class="dif-nombre" id="dif-nombre"></p>
+    <p class="modo-grupo">Tablero</p>
+    <div class="modo-fila" id="tam-fila" role="group" aria-label="Tamaño del tablero"></div>
+    <p class="libre-nota" id="nota-libre"></p>
+    <p class="libre-record" id="libre-record"></p>
+    <div class="libre-jugar">
+      <button class="b3d txt grande b-verde" id="btn-libre-jugar" type="button"><span class="b-ico">▶</span> Jugar</button>
+      <button class="b3d txt grande b-azul" id="btn-libre-guardadas" type="button"><span class="b-ico">💾</span> <span>Partidas guardadas <span id="cuenta-guardadas"></span></span></button>
+    </div>
+  </div>
+
+  <!-- Fin de nivel: estándar «sobre el tablero» (.sobre-tablero en compartido/inmersivo.css); juego-estacionamiento.js lo coloca encima del tablero -->
   <div id="victoria" class="sobre-tablero" hidden>
     <div class="sobre-texto">
       <h2 id="vtitulo">¡Nivel completado!</h2>
@@ -126,11 +121,11 @@
     <button class="b3d txt grande b-verde" id="siguiente" type="button">Siguiente nivel ▶</button>
     <div class="sobre-fila">
       <button class="b3d txt b-cielo" id="repetir" type="button">Repetir nivel</button>
-      <button class="b3d txt b-azul" id="al-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+      <button class="b3d txt b-azul" id="al-mapa" type="button"><span class="b-ico">🗺️</span> <span id="al-mapa-txt">Mapa</span></button>
     </div>
   </div>
 
-  <!-- Sin corazones: también va «sobre el tablero» (lo coloca juego-estacionamiento.js igual que la ventana de victoria) -->
+  <!-- Sin corazones: también va «sobre el tablero» -->
   <div id="derrota" class="sobre-tablero" hidden>
     <div class="sobre-texto">
       <h2>¡Sin corazones! 💔</h2>
@@ -139,12 +134,12 @@
     <button class="b3d txt grande b-rojo" id="d-vida" type="button"></button>
     <div class="sobre-fila">
       <button class="b3d txt b-cielo" id="d-repetir" type="button">Reintentar nivel</button>
-      <button class="b3d txt b-azul" id="d-mapa" type="button"><span class="b-ico">🗺️</span> Mapa</button>
+      <button class="b3d txt b-azul" id="d-mapa" type="button"><span class="b-ico">🗺️</span> <span id="d-mapa-txt">Mapa</span></button>
     </div>
   </div>
 
   <script type="module" src="juego-estacionamiento.js"></script>
-  <!-- El menú de pausa, el mapa y el botón ☰ los crea juego-estacionamiento.js -->
+  <!-- El menú de pausa, el mapa, Ajustes y la lista de partidas los crea juego-estacionamiento.js -->
   <script type="module" src="../compartido/pantalla-completa.js"></script>
   <script type="module" src="../compartido/fondo-madera.js"></script>
 </body>

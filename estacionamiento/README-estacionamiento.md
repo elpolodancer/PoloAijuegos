@@ -8,37 +8,24 @@ Todo lo que dice «Meta» es la visión final; lo que dice «Hoy» es lo que exi
 Puzle isométrico: un estacionamiento cuadrado lleno de autos. Cada auto tiene una flecha; al tocarlo avanza hacia donde apunta y sale por la orilla. Se gana cuando no queda ningún auto. Si un auto tiene otro enfrente, no puede salir hasta que lo despejes.
 
 - **Hoy (verificado en el código):** tablero de tamaño variable por nivel (de 5×5 a 10×10, siempre lleno), generado con semilla; todos los niveles tienen solución.
-- **Meta:** **3 900 niveles** en el mapa (195 países × 20; desde el 24-nov-2026, ver sección 15). El generador sigue pudiendo hacer los 22 600 de antes.
+- **Total: 3 900 niveles** (desde el 24 nov 2026; antes eran 22 600): **195 países × 20 niveles**, empezando por México (país 1 = niveles 1–20). Mapa solo de países (`ESTANDARES-juegos.md`, sección 4 A-bis). Ver la sección 15.
 
-| Bloque | Niveles | Cuenta |
-|---|---|---|
-| México | 3 200 | 32 estados × 100 niveles |
-| Mundo | 19 400 | 194 países × 100 niveles |
-
-> Supuesto: «19400» son los niveles de todos los países juntos (194 × 100), sin contar México.
-
-Los niveles se desbloquean **en orden**. Los de países **no se mencionan ni se ven** hasta terminar los 3 200 de México.
+Los niveles se desbloquean **en orden**; cada país se abre al terminar los 20 del anterior (los países bloqueados no se listan).
 
 ## 2. El mapa (pantalla de progreso)
 
-> **Desactualizado desde el 24-nov-2026:** el mapa ya es el estándar de un solo país (`compartido/mapa-niveles.js`, `unPais`) y ya no hay estados de México. Ver sección 15. Lo que sigue describe el mapa anterior.
+Es el **mapa estándar de un solo país** (`compartido/mapa-niveles.js` con `unPais: true`, el mismo de Deslizante); el juego ya no tiene mapa propio.
 
-Es el menú principal del juego. Estilo parecido al mapa de Paperio.
-
-- Fondo **blanco**.
-- Al inicio solo se ve **México, de cerca**, nada más. El jugador no sabe que hay más mundo.
-- Cada estado terminado (100 niveles) hace subir un **líquido azul claro, tipo agua**, dentro de la silueta del país.
-- El ascenso se divide en **32 escalones** (uno por estado). Con los 3 200 niveles terminados, México queda lleno.
-- El agua **se mueve como agua real**, con un poco de oleaje y disturbio (decorativo, y debe respetar `prefers-reduced-motion`).
-- Al terminar los 3 200, **se desbloquea el mapa mundial** (los 194 países, mismo efecto de agua por país, 100 niveles cada uno).
-
-Pendientes por decidir: orden de los 32 estados; si el agua sube por escalón de estado o de forma continua nivel a nivel dentro del estado; cómo se elige un país en el mapa mundial.
+- La vista principal es la **silueta del país donde va el jugador** (tierra verde con pasto, árboles y banderita), que se llena de **agua** un poco con cada nivel pasado; al pasar los 20 queda llena. El agua respeta `prefers-reduced-motion`.
+- Botones: ◀ ▶ (países abiertos), 🗂️ **Niveles** (los 20 niveles del país, en 4 columnas; verde = medio, azul = difícil, con el tamaño del tablero), 🗺️ **Mapa** (el mundo con solo los países desbloqueados), **Continuar** e ℹ️ **Info**.
+- Orden de los países: `PAISES_MUNDO` de `compartido/etapas-mapa.js` (México primero, luego Latinoamérica…). No se cambia.
+- Al ganar un nivel, «Mapa» abre la botella del país para ver subir el agua.
 
 ## 3. Tamaño y dificultad de los niveles (rediseño «divertido y satisfactorio»)
 
 Principio: **los niveles no deben ser complicados; deben ser divertidos, entretenidos y satisfactorios.** Por eso ya no hay tableros grandes ni dificultades altas.
 
-- **Tamaño estándar: 10×10, siempre COMPLETAMENTE lleno** (100 % de las casillas ocupadas). Solo los **10 primeros niveles** van subiendo para aprender jugando: 6×6, 6×6, 7×7, 7×7, 8×8, 8×8, 9×9, 9×9, 10×10, 10×10. Del 11 al 22 600 todos son 10×10.
+- **Tamaño estándar: 10×10, siempre COMPLETAMENTE lleno** (100 % de las casillas ocupadas). Solo los **10 primeros niveles** van subiendo para aprender jugando: 6×6, 6×6, 7×7, 7×7, 8×8, 8×8, 9×9, 9×9, 10×10, 10×10. Del 11 al 3 900 todos son 10×10.
 - **Dificultad: solo 1 y 2** (de una escala original de 5; las 3, 4 y 5 se descartaron). Ver sección 14.
 - Todos los jugadores ven el mismo nivel N (todo sale de una semilla fija).
 
@@ -47,7 +34,7 @@ Principio: **los niveles no deben ser complicados; deben ser divertidos, entrete
 | 1 | Medio | ≥ 40 % de los autos pueden salir desde el primer toque · ninguna «ola» con menos de 3 autos · cadena de autos que se estorban ≤ 4 | 20 | 15 |
 | 2 | Difícil | ≥ 28 % libres al inicio · ola mínima ≥ 2 · cadena ≤ 6 | 35 | 8 |
 
-**Sorteo de la dificultad (hecho, sin generar tableros):** `dificultades-estacionamiento.js` guarda la dificultad de cada uno de los 22 600 niveles (una línea de 100 dígitos por etapa; `1` = medio, `2` = difícil). Lo escribe `node sorteo-dificultades.mjs` con semilla fija (siempre da lo mismo). Reglas: los niveles 1–10 son siempre medios; cada etapa tiene un número EXACTO de difíciles, de 15 en la primera etapa a 50 en la última (226); nunca más de 3 difíciles seguidos. Resultado: **15 255 medios y 7 345 difíciles (32.5 %)**; en México (3 200 niveles) 557 difíciles. Para cambiar un nivel a mano, cambia su dígito en esa línea.
+**Sorteo de la dificultad (hecho, sin generar tableros):** `dificultades-estacionamiento.js` guarda la dificultad de cada uno de los 3 900 niveles (39 líneas de 100 dígitos, un **tramo** de 100 niveles seguidos por línea —no coincide con un país, que tiene 20—; `1` = medio, `2` = difícil). Lo escribe `node sorteo-dificultades.mjs` con semilla fija (siempre da lo mismo). Reglas: los niveles 1–10 son siempre medios; cada tramo tiene un número EXACTO de difíciles, de 15 en el primero a 50 en el último (el 39); nunca más de 3 difíciles seguidos. Resultado: **2 632 medios y 1 268 difíciles (32.5 %)**; en México (niveles 1–20) 3 difíciles. Para cambiar un nivel a mano, cambia su dígito en esa línea.
 
 ## 4. Monedas
 
@@ -96,11 +83,11 @@ Menú de pausa (`compartido/menu-pausa.js`): **▶ Continuar**, **🔄 Reiniciar
 | Archivo | Para qué |
 |---|---|
 | `index-estacionamiento.html` | Página, HUD y botones |
-| `juego-estacionamiento.js` | Juego: dibujo, controles, vía de salida, progreso. Ya usa tamaño de tablero variable |
-| `niveles-estacionamiento.js` | **Generador** de los 22 600 niveles (tamaños, autos, dificultad, monedas). No usa `document`: se prueba en Node |
+| `juego-estacionamiento.js` | Juego: dibujo, controles, salida de los autos en línea recta, progreso, Modo libre, partidas guardadas y Ajustes |
+| `niveles-estacionamiento.js` | **Generador** de los 3 900 niveles (tamaños, autos, dificultad, monedas). No usa `document`: se prueba en Node |
+| `dificultades-estacionamiento.js` | Sorteo de la dificultad de cada nivel (39 tramos de 100). Lo escribe `sorteo-dificultades.mjs` (solo consola) |
 | `probar-niveles-estacionamiento.mjs` | Pruebas automáticas del generador (`node probar-niveles-estacionamiento.mjs`, Node 22+, junto a `niveles-estacionamiento.js`) |
-| ~~`mapa-estacionamiento.js`~~, ~~`etapas-estacionamiento.js`~~, ~~`geografia-estacionamiento.js`~~ | **Ya no se usan** (24-nov-2026): el juego importa `compartido/mapa-niveles.js` y `compartido/etapas-mapa.js`. Se pueden borrar del repositorio |
-| `dificultades-estacionamiento.js` | Sorteo fijo de la dificultad de cada nivel (lo escribe `sorteo-dificultades.mjs`); lo importa `niveles-estacionamiento.js` |
+| ~~`mapa-estacionamiento.js`, `etapas-estacionamiento.js`, `geografia-estacionamiento.js`~~ | **Borrados el 24 nov 2026**: el mapa es el compartido (`compartido/mapa-niveles.js`, `etapas-mapa.js`, `contornos-paises.js`, `posiciones-paises.js`) |
 
 Cuando el juego crezca conviene separar también `monedas.js` (premios, tienda y boosts). El mapa, las etapas y la geografía están pensados para reutilizarse en otros juegos: ver `ESTANDARES-juegos.md`.
 Recordatorio: `niveles-estacionamiento.js` debe ir en la lista `ARCHIVOS` de `sw.js` (y subir `VERSION`) para que funcione sin internet.
@@ -108,8 +95,8 @@ Recordatorio: `niveles-estacionamiento.js` debe ir en la lista `ARCHIVOS` de `sw
 ## 8. Notas técnicas para las próximas sesiones
 
 1. **Niveles generados, no escritos a mano.** ✅ Hecho en `niveles-estacionamiento.js` (ver sección 10).
-2. **Rendimiento.** Con tableros de máximo 10×10 (100 casillas) ya no es un problema; la vista es fija (sin zoom ni arrastre) y la vía completa ocupa todo el ancho de la pantalla.
-3. **Guardado «local primero».** Guardar en `localStorage` y sincronizar con `compartido/progreso.js`. Como los niveles se abren en orden, basta guardar **«nivel más alto completado»** (no una lista de 22 600 booleanos). Las monedas se gastan, así que no se pueden fusionar con `unirMaximos`: hace falta una regla propia (por ejemplo, ganar la partida con `t` más reciente con `unirRecientes`).
+2. **Rendimiento.** Con tableros de máximo 10×10 (100 casillas) ya no es un problema; la vista es fija (sin zoom ni arrastre) y el tablero ocupa todo el ancho de la zona libre.
+3. **Guardado «local primero».** Guardar en `localStorage` y sincronizar con `compartido/progreso.js`. Como los niveles se abren en orden, basta guardar **«nivel más alto completado»** (no una lista de 3 900 booleanos). Las monedas se gastan, así que no se pueden fusionar con `unirMaximos`: hace falta una regla propia (por ejemplo, ganar la partida con `t` más reciente con `unirRecientes`).
 4. **Registro del juego.** Cuando esté listo: quitar `estacionamiento` de `EN_DESARROLLO` en `juegos.js`, anotar sus archivos en `ARCHIVOS` de `sw.js` y subir `VERSION`.
 5. **Puntos al perfil.** Desde el 21 nov 2026: **1 punto por nivel pasado por primera vez**, con `encolarNivel("estacionamiento")` de `compartido/cola-puntos.js` (estándar, sección 12 de `ESTANDARES-juegos.md`). Antes se daban 200 (medio) o 350 (difícil) con `encolarPuntos`. Las monedas (20 o 35) no cambian.
 
@@ -120,19 +107,18 @@ Recordatorio: `niveles-estacionamiento.js` debe ir en la lista `ARCHIVOS` de `sw
 3. Monedas (cartera, premio al terminar un nivel) y boosts.
 4. Mapa de México con agua.
 5. Guardado y sincronización de monedas y boosts.
-6. Mapa mundial y desbloqueo tras el nivel 3 200.
+6. ✅ Mapa de un solo país con el mundo de países desbloqueados (24 nov 2026, sección 15).
 7. ~~Optimización para 50×50~~ (ya no aplica: máximo 10×10).
 
 ## 10. El generador (`niveles-estacionamiento.js`)
 
-`configNivel(n)` devuelve `{ n, zona, etapa, k, tam, seed, obj, p3, enredo, premio, dif }` y `generarNivel(cfg)` los autos. Todo depende solo de `n`, así que todos los jugadores ven el mismo tablero.
+`configNivel(n)` devuelve `{ n, etapa, k, tam, dificultad, seed, obj, p3, enredo, extra, premio, corazones }` y `generarNivel(cfg)` los autos. Todo depende solo de `n`, así que todos los jugadores ven el mismo tablero.
 
-- **Zona y etapa:** niveles 1–3200 = México (`etapa` 0–31 = estado, `k` 1–100); 3201–22600 = mundo (`etapa` 0–193 = país). El orden de estados y países queda para el mapa.
+- **Etapa:** `etapa` 0–194 = país (0 = México) y `k` 1–20 = nivel dentro del país (niveles 1–20 = México, 21–40 = el país 2…). El orden de los países lo da el mapa (`PAISES_MUNDO`).
 - **Tamaño:** todos 10×10, salvo los 10 primeros niveles (6, 6, 7, 7, 8, 8, 9, 9, 10, 10). Constantes `TAM_ESTANDAR` y `TAMS_INICIALES`.
-- **Países:** ya no tienen reparto de tamaños propio (los 194 países usan el mismo estándar 10×10).
 - **Dificultad (`dificultad`, 1 o 2):** tabla `DIFICULTADES` en `niveles-estacionamiento.js` (proporción de autos largos `p3`, «enredo», monedas y los mínimos que debe cumplir el tablero). Cuál nivel es medio y cuál difícil sale del sorteo (sección 3).
-- **Tablero siempre COMPLETAMENTE lleno y amable.** `generarNivel` **tesela** el tablero con autos de 2 y 3 casillas y lo **desarma** prefiriendo los autos con menos estorbos (`desarmar`). Si sobra una casilla suelta, se atora y habría un hueco, o el tablero no cumple lo que pide su dificultad (`analizar`: autos libres al inicio, ola más chica y cadena más larga), se **descarta y se genera otro** con el siguiente tramo del mismo azar (máx. 3 000 intentos). Medido en los 22 600 niveles: 100 % llenos, 100 % resolubles, 0 fuera de meta. Un 10×10 trae ~43 autos.
-- **Solución garantizada:** el orden en que se desarma el tablero es una solución (el primero en salir recibe el id más alto); se comprueba con `esResoluble` quitando los autos del último al primero. Probado en los 22 600 niveles. Si algún día el desarmado se atorara, se descarta un auto al azar (queda un hueco); en las pruebas no ha pasado.
+- **Tablero siempre COMPLETAMENTE lleno y amable.** `generarNivel` **tesela** el tablero con autos de 2 y 3 casillas y lo **desarma** prefiriendo los autos con menos estorbos (`desarmar`). Si sobra una casilla suelta, se atora y habría un hueco, o el tablero no cumple lo que pide su dificultad (`analizar`: autos libres al inicio, ola más chica y cadena más larga), se **descarta y se genera otro** con el siguiente tramo del mismo azar (máx. 3 000 intentos). Medido en los 3 900 niveles: 100 % llenos, 100 % resolubles, 0 fuera de meta. Un 10×10 trae ~43 autos.
+- **Solución garantizada:** el orden en que se desarma el tablero es una solución (el primero en salir recibe el id más alto); se comprueba con `esResoluble` quitando los autos del último al primero. Probado en los 3 900 niveles. Si algún día el desarmado se atorara, se descarta un auto al azar (queda un hueco); en las pruebas no ha pasado.
 - **Monedas por nivel** (`premioMonedas(dificultad)`): 20 (medio) / 35 (difícil). El color de los botones del mapa sale de eso (🟩 / 🟦).
 - **Velocidad:** media 0.4 ms por nivel, máximo ~13 ms.
 
@@ -145,14 +131,14 @@ Para ajustar la dificultad, los números a tocar están en `DIFICULTADES` y en `
 2. ✅ `NIVELES` de 5 entradas reemplazado por `configNivel(n)`.
 3. ✅ Fondo transparente (`clearRect`).
 4. ✅ Puntos: **1 punto por nivel pasado por primera vez** (`encolarNivel`, ver sección 8, punto 5). Antes fueron `100 × nivel` y luego `10 × monedas`.
-5. **Selector de nivel.** Es provisional (◀ Nivel ▶ con tamaño y premio). El mapa lo reemplaza.
+5. **Selector de nivel.** ✅ Lo reemplazó el mapa (de un solo país desde el 24 nov 2026).
 6. ✅ **Rendimiento.** Con máximo 10×10 ya no hace falta optimizar el dibujo.
 7. **Progreso.** `prog = { max, hecho }` con `unirMaximos` sirve tal cual para «nivel más alto». Las monedas y boosts necesitan otra regla de fusión (se gastan).
 
 
 ## 12. Menú de inicio: «Continuar» y «Juego libre / infinito» (por hacer)
 
-Hoy el juego abre directo en el mapa de México y ahí solo hay **▶ Continuar · nivel N** (más «Info» y, al terminar México, «Mundo»). Cambio pedido:
+Hoy el juego abre directo en el mapa (la botella del país donde va el jugador; en su día era México de cerca) y ahí solo hay **▶ Continuar · nivel N** (más «Info» y, al terminar México, «Mundo»). Cambio pedido:
 
 - Añadir el botón **♾️ Juego libre** (también se puede rotular «Infinito») **a la derecha de «Continuar · nivel N»**, en la vista principal del mapa (México y, ya desbloqueado, Mundo). Orden de la fila: `▶ Continuar` · `♾️ Juego libre` · `ℹ️ Info` · `🌍 Mundo`.
 - **Qué es:** tableros al azar sin fin, sin pasar por el mapa ni por la lista de niveles. Se elige el tamaño (5×5 a 10×10) y salen tableros nuevos con solución garantizada (el mismo generador, con una semilla al azar en lugar del número de nivel).
@@ -191,33 +177,88 @@ Hoy el juego abre directo en el mapa de México y ahí solo hay **▶ Continuar 
 - **Jugar los 10 primeros niveles** y ajustar a gusto: cambiar `TAMS_INICIALES`, el tope `MAX_CADENA` de `semillas-iniciales.mjs`, o correr el buscador de nuevo y pegar el resultado en `SEMILLAS_INICIALES`.
 - **Revisar los niveles 11–100** (primer estado, Quintana Roo): ¿se sienten divertidos? Si hace falta, subir `minLibres` de la dificultad 1 o cambiar el número de difíciles por etapa en `sorteo-dificultades.mjs` (`DIF_PRIMERA`, `DIF_ULTIMA`).
 - **Decidir si la dificultad 2 debe notarse más.** Hoy la diferencia es sutil (libres al inicio 45 % vs 38 %, cadena más larga media 3.0 vs 3.6) porque en un tablero lleno de 10×10 la geometría limita mucho. Ideas: más autos largos (`p3`), exigir menos autos libres (`minLibres`), o más 3 autos en cadena.
-- **Mapa:** el número chico de cada botón ya es siempre «10×10» (salvo los 10 primeros); considerar mostrar otra cosa (por ejemplo ⭐ medio / ⭐⭐ difícil).
+- **Mapa:** el número chico de cada botón ya es siempre «10×10» (salvo los 10 primeros); considerar mostrar otra cosa (por ejemplo ⭐ medio / ⭐⭐ difícil). (El botón sigue mostrando el tamaño, con el mapa compartido.)
 - **Limpieza del README:** las secciones 11 y 12 mencionan «10×10 a 50×50» en pasos ya hechos; el modo ♾️ Juego libre (sección 12) debe ofrecer dificultad 1 o 2 en vez de tamaños 10 a 50.
-- Pasos de siempre del README: monedas y boosts guardados con sincronización, mapa mundial tras el nivel 3 200, registro en `juegos.js` y `sw.js` (subir `VERSION`).
+- Pasos de siempre del README: monedas y boosts guardados con sincronización, registro en `juegos.js` y `sw.js` (subir `VERSION`).
 - **El «cambio grande»** que el dueño del proyecto quiere hacer después: aún no explicado; anotarlo aquí cuando lo cuente.
 
 ### Descartado ❌
 Tableros de 11×11 a 50×50 y las dificultades 3, 4 y 5. Las funciones `tamanoMexico`, `tamanosPais`, `REPARTO_PAIS` y `TRAMOS_MEXICO` se borraron de `niveles-estacionamiento.js`.
 
-## 15. Inicio con mapa y 3 900 niveles (24-nov-2026)
+## 15. Cambio a 3 900 niveles: mapa solo de países (24 nov 2026)
 
-**Qué cambió** (estándar de `ESTANDARES-juegos.md`, sección 13, el mismo de Puzle deslizante):
-- **Pantalla de inicio** (se ve una sola vez al abrir): ♾️ Modo libre · ▶ Jugar · 🗺️ Mapa · ⚙️ Ajustes (`#pantalla-inicio`, clases `.pant-menu` / `.ini-*` de `compartido/inmersivo.css`). ▶ Jugar abre el nivel `hecho + 1`; si no se ha pasado ninguno, abre el mapa en el nivel 1.
-- **Navegación cuadrada** (🎮 y ☰, solo icono). El ☰ no se ve en el inicio ni en la vista del país del mapa; dice «Atrás» en las vistas internas del mapa y «Pausa» en una partida.
-- **Mapa estándar de un solo país:** `crearEtapas({ porEtapa: 20, soloPaises: true })` + `montarMapa({ unPais: true, columnas: 4 })`. México es un país más (los estados desaparecen): 195 países × 20 = **3 900 niveles**, con el orden `PAISES_MUNDO` de `compartido/etapas-mapa.js`.
-- **Pantallas del código** (`mostrar("inicio" | "mapa" | "juego")`): fuera de una partida el lienzo y los marcadores se ocultan con la clase `fuera` del `<body>`. El chip de monedas va arriba a la derecha en el inicio y el mapa, y baja a la fila de información dentro de una partida. Chip de sesión arriba a la derecha (se oculta si está vacío).
-- **⚙️ Ajustes:** madera clara/oscura y Cerrar. El botón flotante 🌙/☀️ ahora está oculto (`data-madera-boton="oculto"`).
-- El rótulo «Nivel N» dentro de la partida muestra el número dentro del país (1 a 20) y su `title` dice el país.
-- `sw.js` v226: se quitan `etapas-`, `geografia-` y `mapa-estacionamiento.js` de la lista y se agrega `dificultades-estacionamiento.js` (faltaba, y `niveles-estacionamiento.js` lo importa: sin internet por primera vez habría fallado).
+**Decisión del dueño del proyecto:** pasar de 22 600 niveles (32 estados + 194 países × 100) a **3 900** según el estándar nuevo (`ESTANDARES-juegos.md`, sección 4 A-bis): México deja de ser 32 estados y es **un país más** (el 1.º), 195 países × 20 niveles.
 
-**Qué NO cambió:** los tableros. Dependen solo del número de nivel, así que los niveles 1 a 3 900 son los mismos de antes (solo cambia a qué país pertenecen: el nivel 1 ahora es México 1, antes Quintana Roo 1). Los niveles 3 901 a 22 600 ya no se alcanzan desde el mapa.
+### Qué cambió ✅
+- `niveles-estacionamiento.js`: `NIVELES_POR_ETAPA = 20`, `PAISES = 195`, `TOTAL_NIVELES = 3 900`; `configNivel` ya no tiene `zona` (solo `etapa` 0–194 y `k` 1–20). Se quitaron `ESTADOS` y `NIVELES_MEXICO`. Semillas y tamaños de los niveles 1–3 900 **no cambiaron** (los 10 primeros siguen con sus semillas a mano).
+- `sorteo-dificultades.mjs` / `dificultades-estacionamiento.js`: se volvió a sortear en **39 tramos de 100** (15 → 50 difíciles por tramo, misma curva que antes pero llegando a 50 en el nivel 3 900). Total 1 268 difíciles (32.5 %). Los niveles 1–100 salieron idénticos; **1 188 de los 3 900 niveles cambiaron de dificultad** (el primero, el 146) y con eso su tablero, premio (20/35) y corazones (15/8). Para conservar la dificultad que tenían, bastaría que `SORTEO` fuera los primeros 3 900 dígitos del archivo viejo, pero entonces la curva acabaría en ≈ 21 difíciles por tramo y no en 50.
+- `juego-estacionamiento.js`: usa `compartido/mapa-niveles.js` con `crearEtapas({ porEtapa: 20, soloPaises: true })` y `unPais: true` (prefijo `estacionamiento-paises`, 4 columnas, color por dificultad con `infoNivel`). El progreso guardado se recorta a 3 900 (`normalizarProg`). «Mapa» al ganar abre la botella del país para ver subir el agua.
+- Archivos **borrados**: `mapa-estacionamiento.js`, `etapas-estacionamiento.js`, `geografia-estacionamiento.js`. `sw.js` (VERSION 226): lista `["juego.js", "niveles.js", "dificultades-estacionamiento.js"]`.
+- `probar-niveles-estacionamiento.mjs`: comprueba la numeración (y que coincide con `crearEtapas`), el sorteo (15 / 50, máx. 3 seguidos) y los 3 900 niveles. Resultado: **Todo correcto** (0 no resolubles, 0 no llenos, 0 fuera de meta).
 
-**Monedas y avance guardado:** `prog.hecho` NO se recorta a 3 900 (puede traer más de cuando había 22 600 niveles); las monedas se calculan con él (`premiosHasta` sigue usando `TOTAL_NIVELES` = 22 600), así que el saldo de quien ya jugaba no baja. Solo el mapa y el avance de niveles usan `TOTAL` = 3 900.
+### Efecto en quien ya tenía progreso (el juego ya estaba publicado)
+- El número de nivel se conserva: quien iba en el 120 sigue en el 120 (ahora es el país 6). Quien pasó del 3 900 queda en «todo terminado».
+- Las **monedas ganadas** salen de `prog.hecho` y los premios de cada nivel, así que su saldo cambia un poco (con 1 000 niveles pasados: +540; con 3 900: +8 520). Lo gastado no cambia. Los puntos del portal ya enviados no se tocan (nadie pierde ni gana puntos).
 
-**Pendiente ⏳:**
-1. **Modo libre:** el botón ya está en el inicio y en el mapa pero solo avisa «🚧 Próximamente» (sección 12).
-2. **Dificultad:** el sorteo (sección 3) se hizo para 22 600 niveles (de 15 % a 50 % difíciles a lo largo de las 226 etapas de 100). Con 3 900 niveles el tramo final ya no llega a la parte más difícil. Decidir si se vuelve a sortear: cambiaría el tablero de los niveles ya jugados.
-3. **Instalar solo este juego (13.9, opcional):** falta `manifest-estacionamiento.webmanifest`, `sw-estacionamiento.js`, iconos y el botón en Ajustes.
-4. **Copia de seguridad (`compartido/almacen.js`):** la clave de progreso es `estacionamiento-progreso` y no termina en `_v1`, así que la copia no la incluye; agregar las claves `estacionamiento-progreso`, `estacionamiento-cartera` y `estacionamiento-dispositivo` a `CLAVES_EXTRA` o renombrarlas con `_v1`.
-5. **Probar en celular real** (se probó en un navegador de escritorio simulando celular vertical y horizontal). En horizontal, las fichas de información (❤️ y Movs) quedan encima del tablero: no se tocó esa parte.
-6. Borrar `etapas-estacionamiento.js`, `geografia-estacionamiento.js` y `mapa-estacionamiento.js` del repositorio.
+### Pendiente ⏳
+- Probar en navegador y celular real el mapa nuevo dentro del juego (la lógica de niveles sí se probó en Node; el mapa y el flujo ganar → Mapa → Continuar no).
+- ✅ Inicio estándar con mapa hecho (sección 16).
+- Imagen de tarjeta.
+
+## 16. Inicio con mapa (estándar de la sección 13 de `ESTANDARES-juegos.md`, 24 nov 2026)
+
+Estacionamiento sigue el estándar «estilo Deslizante». Lo que cambió respecto a la versión anterior (que abría directo en el mapa, con «☰ Pausa», botones 🔄 y 🎮 alargados):
+
+### Flujo
+`Abrir el juego → Pantalla de inicio (una sola vez) → [♾️ Modo libre | ▶ Jugar | 🗺️ Mapa | ⚙️ Ajustes]`. El **mapa de un país es el menú principal** (☰, «Salir al mapa» y los botones de fin de nivel llevan al mapa, nunca al inicio). «Jugar» abre el nivel que toca; mientras no se haya pasado ninguno, abre el mapa en el nivel 1 (el botón del centro del país dice «▶ Jugar» y luego «▶ Continuar»).
+
+### Dentro de un nivel (13.6)
+- Barra arriba al centro: chip de monedas · 🗺️ · botón verde «Nivel N» (sin el tamaño). Tocar el verde, el 🗺️ o el ☰ abre «¿Salir?» (▶ Seguir jugando · 🚪 Salir al mapa). **Ya no hay botón 🔄**: se reinicia con «Repetir nivel» al ganar o «Reintentar nivel» al perder.
+- Tres cuadros azules: **Movimientos · Corazones ❤️ · Autos** (los que faltan por sacar). Los corazones laten con 3 o menos.
+- El tablero se encuadra en la zona libre entre la barra/cuadros y los boosts (`zonaTablero()`); en celular horizontal bajo, barra y cuadros pasan a una columna a la izquierda.
+- Con la ventana de pausa abierta **todo se congela** (autos, animaciones, toques).
+- Fin de nivel: sigue siendo la ventana «sobre el tablero» (sección 6), con Siguiente nivel · Repetir nivel · 🗺️ Mapa.
+
+### ♾️ Modo libre (13.7)
+- Dificultad: **😐 Medio** o **😡 Difícil** (solo hay 2; el estándar trae 5 emojis). Tablero: **5×5, 6×6, 7×7, 8×8, 9×9 o 10×10**. Cada «Jugar» genera un tablero nuevo con una semilla al azar (el mismo generador, siempre lleno y con solución).
+- **No da monedas ni puntos de portal**; los boosts sí gastan monedas. Récord = **tableros resueltos por combinación** (`"10-1"` = 10×10 medio).
+- **Pausa del Modo libre** (☰ «Pausa» o el botón verde): ▶ Seguir jugando · 💾 Guardar partida · 🚪 Salir a elegir tablero.
+- **Partidas guardadas** (hasta 20, solo en el dispositivo): clave `estacionamiento_partidas_v1` = `{ v, t, partidas: [{ id, g, tam, dif, seed, q, v, mov }] }`. Como el tablero sale de su semilla, basta anotar cuáles autos ya salieron (`q`); al cargar se regenera y se quitan. Se validan al leer. Al terminar una partida guardada se borra de la lista.
+- Al ganar: «Otro tablero ▶» · «Repetir tablero» · «⚙️ Cambiar tablero».
+
+### Datos que se guardan (todo local primero, con `conectar()`)
+| Clave de `localStorage` | Documento en la nube | Contenido | Regla de unión |
+|---|---|---|---|
+| `estacionamiento-progreso` | `estacionamiento` | `{ max, hecho }` | el mayor de cada uno |
+| `estacionamiento-cartera` | `estacionamiento-cartera` | gastado / compradas / usadas por dispositivo | el mayor por dispositivo |
+| `estacionamiento_libre_v1` | `estacionamiento-libre` | `{ v, dif, tam, ganados }` | de cada combinación, el mayor |
+| `estacionamiento_partidas_v1` | (no se sube) | partidas guardadas | — |
+
+### ⚙️ Ajustes (13.8)
+🌙/☀️ **Madera clara/oscura** (el botón flotante está oculto con `data-madera-boton="oculto"`) · 💾 **Copia de seguridad** (`compartido/almacen.js`) · Cerrar. El botón «🗑️ Borrar todo el historial» existe pero `MOSTRAR_BORRAR_HISTORIAL = false` (el juego ya está publicado). **No** lleva «Instalar solo este juego» (13.9, opcional): no hay `manifest-estacionamiento.webmanifest` ni `sw-estacionamiento.js`.
+
+### Copia de seguridad
+`compartido/almacen.js` solo toma claves que terminan en `_v1`, `_v2`… (más `CLAVES_EXTRA`). Se agregaron a `CLAVES_EXTRA`: `estacionamiento-progreso`, `estacionamiento-cartera` y `deslizante_progreso` (el progreso principal de estos juegos no termina en `_vN`; sin esto la copia solo llevaría sus partidas guardadas y el Modo libre).
+
+### Verificado ✅ (arnés en Node con un DOM simulado, NO en un navegador)
+Inicio y chips; Jugar con y sin progreso; progreso de la versión de 22 600 niveles (se recorta a 3 900: 97 020 monedas ganadas y «Nivel 3900»); pausa «¿Salir?» (sin Guardar ni Reiniciar); Modo libre completo (elegir, jugar, guardar, salir, cargar, victoria que quita la partida de la lista y suma el récord, derrota con «Reintentar tablero» y «Cambiar tablero»); Ajustes (sin «Borrar»); el mapa abre desde el inicio. `probar-niveles-estacionamiento.mjs`: los 3 900 niveles y 1 200 tableros libres (5×5 a 10×10) correctos.
+
+### Pendiente ⏳ (probar en celular real)
+- Vertical y horizontal: que el tablero quede bien encuadrado entre la barra, los cuadros y los boosts (`zonaTablero()` usa márgenes fijos: 190 px arriba en celular vertical, 140 en pantalla ancha, 84 abajo; en horizontal bajo, 250 px a la izquierda).
+- La ventana «Partidas guardadas» y Ajustes (estilos `.pg-*` van en el HTML, no en `inmersivo.css`; si otro juego los usa conviene pasarlos al CSS compartido).
+- Mapa dentro del juego: «Continuar» en el centro del país, ♾️ Modo libre como botón extra, color de los niveles por dificultad.
+- 📲 Instalar solo este juego (13.9): no hecho.
+
+## 17. Salida en línea recta (24 nov 2026, `sw.js` v229)
+
+**Por qué:** al salir, cada auto daba un giro a la derecha por una vía que rodeaba el tablero (con cuadros «SALIDA» en las esquinas y flechas amarillas). Si se tocaba rápido otro auto que debía pasar por esa zona, aparecía «La vía de salida está ocupada» y no podía salir.
+
+**Qué cambió** (solo `juego-estacionamiento.js`; el HTML, el generador y los niveles no cambian):
+- Ya no hay vía alrededor del tablero, ni cuadros «SALIDA», ni flechas amarillas. Queda el tablero con una sombra suave sobre la madera.
+- Cada auto sale **en línea recta por su propia fila o columna**, siguiendo su flecha, y se desvanece al salir del tablero (`planear` devuelve `{ n, pts, acum, enBorde, tFin }`; la ruta tiene dos puntos).
+- Se quitaron `viaOcupada`, `cobertura` y el aviso «La vía de salida está ocupada»: tocar autos rápido nunca los bloquea. Tocar un auto con otro enfrente sigue costando un corazón.
+- El tablero se encuadra con media casilla de margen (`N + 1`, antes `N + 2` por la vía) dentro de la zona libre que dejan la barra de nivel, los cuadros de datos y los boosts (`zonaTablero`).
+- Textos de la ventana Info actualizados.
+- Probado en un navegador (celular simulado) con TODOS los archivos de la otra sesión: 8 autos tocados casi a la vez salen sin bloqueo y siempre derechos; un nivel de México y uno de Modo libre se resuelven hasta la ventana de victoria sin perder corazones. No probado en celular real.
+
+**Nota:** dos autos que salen en direcciones perpendiculares podrían cruzarse por la misma casilla dentro del tablero y verse encimados un instante (ya pasaba antes). No se tocó.

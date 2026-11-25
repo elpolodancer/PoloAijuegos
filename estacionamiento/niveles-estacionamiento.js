@@ -1,17 +1,17 @@
 // Ruta: estacionamiento/niveles-estacionamiento.js
-// Generador de los 22 600 niveles del Estacionamiento (tableros de 10×10 —los 10 primeros suben de 6×6—, siempre completamente llenos, dificultad 1 o 2: ver generarNivel). No toca la página (no usa document), así que se puede probar en Node.
-//   - configNivel(n)   → { n, zona, etapa, k, tam, dificultad, seed, obj, p3, enredo, extra, premio, corazones }  (todo sale del número de nivel: iguales para todos)
+// Generador de los 3 900 niveles del Estacionamiento (tableros de 10×10 —los 10 primeros suben de 6×6—, siempre completamente llenos, dificultad 1 o 2: ver generarNivel). No toca la página (no usa document), así que se puede probar en Node.
+//   - configNivel(n)   → { n, etapa, k, tam, dificultad, seed, obj, p3, enredo, extra, premio, corazones }  (todo sale del número de nivel: iguales para todos)
 //   - generarNivel(cfg) → lista de autos del nivel; SIEMPRE tiene solución (se resuelve quitando los autos del último al primero)
 //
-// Niveles: 1–3200 = México (32 estados × 100) · 3201–22600 = mundo (194 países × 100). Ver README, secciones 1 a 4.
+// MAPA SOLO DE PAÍSES (estándar de ESTANDARES-juegos.md, A-bis; cambio del 24 nov 2026): 195 países × 20 niveles = 3 900. México es el país 1 (niveles 1–20); el orden
+// de los países es PAISES_MUNDO de compartido/etapas-mapa.js (crearEtapas({ porEtapa: 20, soloPaises: true })). Antes eran 22 600 (32 estados + 194 países, 100 niveles cada uno).
+// Los niveles 1 a 3 900 conservan su semilla (seed) y su tamaño: el tablero de un nivel solo cambia si el nuevo sorteo le cambió la dificultad (ver dificultades-estacionamiento.js).
 
 import { dificultadSorteada } from "./dificultades-estacionamiento.js"; // sorteo fijo de la dificultad de cada nivel (1 = medio, 2 = difícil)
 
-export const NIVELES_POR_ETAPA = 100;
-export const ESTADOS = 32;
-export const PAISES = 194;
-export const NIVELES_MEXICO = ESTADOS * NIVELES_POR_ETAPA;              // 3 200
-export const TOTAL_NIVELES = NIVELES_MEXICO + PAISES * NIVELES_POR_ETAPA; // 22 600
+export const NIVELES_POR_ETAPA = 20;                                // niveles de cada país
+export const PAISES = 195;                                          // 195 países reconocidos, México primero (compartido/etapas-mapa.js: PAISES_MUNDO)
+export const TOTAL_NIVELES = PAISES * NIVELES_POR_ETAPA;            // 3 900
 
 // ----- Tamaño y dificultad (versión «divertido y satisfactorio») -----
 // Estándar: todos los tableros son de 10×10 y quedan COMPLETAMENTE llenos. Solo los 10 primeros niveles van subiendo (6×6 → 10×10)
@@ -57,28 +57,29 @@ const acotar = (v, a, b) => Math.max(a, Math.min(b, v));
 export function configNivel(n) {
   n = Math.floor(Number(n));
   if (!(n >= 1 && n <= TOTAL_NIVELES)) throw new RangeError("Nivel fuera de rango: " + n);
-  let zona, etapa, k;
-  if (n <= NIVELES_MEXICO) {
-    zona = "mexico";
-    etapa = Math.floor((n - 1) / NIVELES_POR_ETAPA); // 0..31 = índice del estado
-    k = ((n - 1) % NIVELES_POR_ETAPA) + 1;           // 1..100 dentro del estado
-  } else {
-    zona = "mundo";
-    const m = n - NIVELES_MEXICO - 1;
-    etapa = Math.floor(m / NIVELES_POR_ETAPA);       // 0..193 = índice del país
-    k = (m % NIVELES_POR_ETAPA) + 1;
-  }
+  const etapa = Math.floor((n - 1) / NIVELES_POR_ETAPA); // 0..194 = índice del país (0 = México)
+  const k = ((n - 1) % NIVELES_POR_ETAPA) + 1;           // 1..20 dentro del país
   const inicial = n <= TAMS_INICIALES.length;
   const tam = inicial ? TAMS_INICIALES[n - 1] : TAM_ESTANDAR;
   const dificultad = dificultadSorteada(n);
   const { p3, enredo, extra, premio, corazones } = DIFICULTADES[dificultad];
   return {
-    n, zona, etapa, k, tam, dificultad,
+    n, etapa, k, tam, dificultad,
     seed: (inicial && SEMILLAS_INICIALES[n - 1]) || mezclar(n, 12345),
     p3, enredo, extra,
     obj: Math.round((tam * tam) / (2 + p3)), // autos aproximados (informativo: el tablero se llena por completo)
     premio, corazones,
   };
+}
+
+// ----- Modo libre (tableros al azar sin fin): misma forma que configNivel, con una semilla cualquiera y sin premio (no da monedas ni puntos) -----
+// tam = 5..10 (TAMS_LIBRE), dificultad = 1 (medio) o 2 (difícil). Los tableros salen del mismo generador: llenos, con solución y «amables» para su dificultad.
+export const TAMS_LIBRE = [5, 6, 7, 8, 9, 10];
+export function configLibre(tam, dificultad, seed) {
+  tam = Math.floor(Number(tam)); dificultad = Math.floor(Number(dificultad)); seed = Math.floor(Number(seed)) >>> 0;
+  if (!TAMS_LIBRE.includes(tam) || !DIFICULTADES[dificultad]) throw new RangeError("Modo libre: tablero o dificultad fuera de rango");
+  const { p3, enredo, extra, corazones } = DIFICULTADES[dificultad];
+  return { n: 0, etapa: 0, k: 0, tam, dificultad, seed, p3, enredo, extra, obj: Math.round((tam * tam) / (2 + p3)), premio: 0, corazones };
 }
 
 // ----- Generador del tablero -----
